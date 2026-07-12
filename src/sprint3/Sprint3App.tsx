@@ -1,0 +1,3273 @@
+import { useEffect, useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
+import {
+  FlatList,
+  Image,
+  Platform,
+  Pressable,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import { StatusBar } from 'expo-status-bar';
+import {
+  Archive,
+  AlertCircle,
+  Bell,
+  ChevronLeft,
+  Edit3,
+  Flag,
+  Heart,
+  HeartHandshake,
+  Home,
+  LogOut,
+  MapPin,
+  MessageCircle,
+  PackageOpen,
+  Plus,
+  Search,
+  Settings,
+  ShieldCheck,
+  Trash2,
+  User,
+} from 'lucide-react-native';
+import { AuthProvider } from '../auth';
+import {
+  Avatar,
+  Badge,
+  Button,
+  Card,
+  CategoryChip,
+  CategorySelector,
+  ConditionBadge,
+  ConditionSelector,
+  DistanceFilter,
+  EmptyState,
+  ErrorState,
+  FavoriteButton,
+  FilterChip,
+  ImageUploader,
+  ListingCard,
+  ListingGallery,
+  LoadingSpinner,
+  LocationPicker,
+  PriceInput,
+  PriceTag,
+  ProfileActionButton,
+  ProfileHeader,
+  RescueHubBanner,
+  ReviewCard,
+  SearchBar,
+  StatsCard,
+  TextArea,
+  TextInput,
+  ToggleSwitch,
+  UserListingGrid,
+} from '../components';
+import { CONDITIONS } from '../constants/categories';
+import { findManualLocationByZipCode } from '../constants/location';
+import { colors, radius, sizes, spacing, typography } from '../constants/theme';
+import { rescueOrganizations } from '../data/mockData';
+import { useAuth } from '../hooks/useAuth';
+import { useCategories, useTopLevelCategories } from '../hooks/useCategories';
+import { useCreateListing } from '../hooks/useCreateListing';
+import { useFavorites } from '../hooks/useFavorites';
+import { useFavoriteStatus } from '../hooks/useFavoriteStatus';
+import { useListing } from '../hooks/useListing';
+import { useListings } from '../hooks/useListings';
+import { useLocation } from '../hooks/useLocation';
+import { useMyListings, useUserListings } from '../hooks/useMyListings';
+import { useNotifications } from '../hooks/useNotifications';
+import { useProfile } from '../hooks/useProfile';
+import { usePublicRescueProfile } from '../hooks/usePublicRescueProfile';
+import { useRescueActions, useRescueDashboard } from '../hooks/useRescueDashboard';
+import { useReviews } from '../hooks/useReviews';
+import { useSavedSearches } from '../hooks/useSavedSearches';
+import { useUnreadMessages } from '../hooks/useUnreadMessages';
+import { useUpdateListing } from '../hooks/useUpdateListing';
+import { useUpdateProfile } from '../hooks/useUpdateProfile';
+import { QueryClientProvider } from '../lib/queryClient';
+import type {
+  CreateListingInput,
+  CreateSavedSearchInput,
+  ListingDetail,
+  ListingQueryParams,
+  ListingType,
+  Profile,
+  PublicProfile,
+  RescueProfile,
+  RescueSignupInput,
+  SavedSearch,
+  UpdateListingInput,
+} from '../services/types';
+import type { Category, IconComponent, Listing, ListingCondition, ListingStatus, RescueNeedUrgency, RescueOrganizationType } from '../types';
+import { handleAppError } from '../utils/errorHandler';
+import { validateCreateListingInput } from '../validation/createListing';
+
+type SprintTab = 'home' | 'search' | 'sell' | 'favorites' | 'profile';
+type SprintRoute =
+  | { name: 'tabs'; tab: SprintTab }
+  | { name: 'listing-detail'; listingId: string }
+  | { name: 'create-listing' }
+  | { name: 'edit-listing'; listingId: string }
+  | { name: 'edit-profile' }
+  | { name: 'public-profile'; userId: string }
+  | { name: 'my-listings' };
+
+type Notice = {
+  title: string;
+  body: string;
+};
+
+const tabs: Array<{ key: SprintTab; label: string; icon: typeof Home }> = [
+  { key: 'home', label: 'Home', icon: Home },
+  { key: 'search', label: 'Search', icon: Search },
+  { key: 'sell', label: 'Sell', icon: Plus },
+  { key: 'favorites', label: 'Favorites', icon: Heart },
+  { key: 'profile', label: 'Profile', icon: User },
+];
+
+const emptyCreateListing: CreateListingInput = {
+  title: '',
+  description: '',
+  category: 'Dogs',
+  condition: 'Good',
+  listing_type: 'sale',
+  price: '',
+  images: [],
+  city: 'Austin',
+  state: 'TX',
+  zip_code: '78701',
+  latitude: 30.2672,
+  longitude: -97.7431,
+  pickup_available: true,
+  porch_pickup_available: false,
+  meetup_available: true,
+  shipping_available: false,
+  shipping_payer: 'buyer',
+  shipping_cost_estimate: '',
+  handling_time: '',
+  ship_from_zip_code: '',
+  brand: '',
+  item_dimensions: '',
+  pet_size: '',
+  condition_notes: '',
+  availability_notes: '',
+  reason_for_listing: '',
+  safety_confirmed: false,
+};
+
+export function Sprint3App() {
+  return (
+    <QueryClientProvider>
+      <AuthProvider>
+        <Sprint3Experience />
+      </AuthProvider>
+    </QueryClientProvider>
+  );
+}
+
+function Sprint3Experience() {
+  const [route, setRoute] = useState<SprintRoute>({ name: 'tabs', tab: 'home' });
+
+  const openTab = (tab: SprintTab) => setRoute({ name: 'tabs', tab });
+  const openListing = (listingId: string) => setRoute({ name: 'listing-detail', listingId });
+  const openCreateListing = () => setRoute({ name: 'create-listing' });
+  const openEditListing = (listingId: string) => setRoute({ name: 'edit-listing', listingId });
+  const openPublicProfile = (userId: string) => setRoute({ name: 'public-profile', userId });
+
+  if (route.name === 'listing-detail') {
+    return (
+      <ListingDetailScreen
+        listingId={route.listingId}
+        onBack={() => openTab('home')}
+        onOpenSeller={openPublicProfile}
+      />
+    );
+  }
+
+  if (route.name === 'create-listing') {
+    return (
+      <CreateListingScreen
+        onBack={() => openTab('sell')}
+        onCreated={(listingId) => openListing(listingId)}
+      />
+    );
+  }
+
+  if (route.name === 'edit-listing') {
+    return (
+      <EditListingScreen
+        listingId={route.listingId}
+        onBack={() => setRoute({ name: 'my-listings' })}
+        onSaved={(listingId) => openListing(listingId)}
+      />
+    );
+  }
+
+  if (route.name === 'edit-profile') {
+    return <EditProfileScreen onBack={() => openTab('profile')} />;
+  }
+
+  if (route.name === 'public-profile') {
+    return (
+      <PublicProfileScreen
+        userId={route.userId}
+        onBack={() => openTab('profile')}
+        onOpenListing={openListing}
+      />
+    );
+  }
+
+  if (route.name === 'my-listings') {
+    return (
+      <MyListingsScreen
+        onBack={() => openTab('profile')}
+        onOpenListing={openListing}
+        onEditListing={openEditListing}
+      />
+    );
+  }
+
+  return (
+    <TabsShell activeTab={route.tab} onChangeTab={openTab}>
+      {route.tab === 'home' ? <HomeScreen onOpenListing={openListing} onOpenProfile={() => openTab('profile')} /> : null}
+      {route.tab === 'search' ? <SearchScreen onOpenListing={openListing} onOpenProfile={() => openTab('profile')} /> : null}
+      {route.tab === 'sell' ? <SellScreen onCreateListing={openCreateListing} onOpenProfile={() => openTab('profile')} /> : null}
+      {route.tab === 'favorites' ? (
+        <FavoritesScreen onOpenListing={openListing} onOpenProfile={() => openTab('profile')} />
+      ) : null}
+      {route.tab === 'profile' ? (
+        <ProfileScreen
+          onEditProfile={() => setRoute({ name: 'edit-profile' })}
+          onMyListings={() => setRoute({ name: 'my-listings' })}
+          onOpenListing={openListing}
+        />
+      ) : null}
+    </TabsShell>
+  );
+}
+
+function TabsShell({
+  activeTab,
+  onChangeTab,
+  children,
+}: {
+  activeTab: SprintTab;
+  onChangeTab: (tab: SprintTab) => void;
+  children: ReactNode;
+}) {
+  return (
+    <SafeAreaView style={styles.app}>
+      <StatusBar style="dark" />
+      <View style={styles.tabContent}>{children}</View>
+      <View style={styles.tabBar}>
+        {tabs.map((tab) => {
+          const Icon = tab.icon;
+          const selected = tab.key === activeTab;
+          return (
+            <Pressable
+              key={tab.key}
+              accessibilityRole="button"
+              accessibilityLabel={tab.label}
+              onPress={() => onChangeTab(tab.key)}
+              style={styles.tabButton}
+            >
+              <Icon size={22} color={selected ? colors.primary : colors.textSecondary} />
+              <Text style={[styles.tabLabel, selected && styles.tabLabelActive]}>{tab.label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </SafeAreaView>
+  );
+}
+
+export function HomeScreen({
+  onOpenListing,
+  onOpenProfile,
+  onMessages,
+  onNotifications,
+  onOpenRescueHub,
+}: {
+  onOpenListing: (listingId: string) => void;
+  onOpenProfile: () => void;
+  onMessages?: () => void;
+  onNotifications?: () => void;
+  onOpenRescueHub?: () => void;
+}) {
+  const auth = useAuth();
+  const [search, setSearch] = useState('');
+  const [categoryId, setCategoryId] = useState<string | undefined>();
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const {
+    location,
+    loading: locationLoading,
+    error: locationError,
+    setRadiusMiles,
+    requestCurrentLocation,
+    setManualLocation,
+  } = useLocation();
+  const categories = useTopLevelCategories();
+  const favorites = useFavorites(Boolean(auth.user));
+  const unreadMessages = useUnreadMessages(Boolean(auth.user) && Boolean(onMessages));
+  const notifications = useNotifications(Boolean(auth.user) && Boolean(onNotifications));
+  const params = useMemo<ListingQueryParams>(
+    () => ({
+      search,
+      categoryId,
+      latitude: location.latitude,
+      longitude: location.longitude,
+      radiusMiles: location.radiusMiles,
+      limit: 20,
+    }),
+    [categoryId, location.latitude, location.longitude, location.radiusMiles, search]
+  );
+  const listings = useListings(params);
+  const recentListings = useListings(useMemo(
+    () => ({
+      latitude: location.latitude,
+      longitude: location.longitude,
+      radiusMiles: location.radiusMiles,
+      limit: 5,
+    }),
+    [location.latitude, location.longitude, location.radiusMiles]
+  ));
+
+  const items = listings.data?.items ?? [];
+  const recentItems = recentListings.data?.items ?? [];
+  const greeting = auth.profile?.display_name ? `Hello, ${auth.profile.display_name.split(' ')[0]}` : 'Welcome to ReTail';
+  const favoriteIds = (favorites.data ?? []).map((listing) => listing.id);
+  const unreadTotal = unreadMessages.data?.total ?? 0;
+  const unreadNotificationTotal = notifications.unreadCount ?? 0;
+  const locationLabel = [location.city, location.state].filter(Boolean).join(', ');
+  const urgentNeedCount = rescueOrganizations.reduce(
+    (total, rescue) => total + rescue.urgentNeeds.filter((need) => need.urgency === 'High').length,
+    0
+  );
+
+  const handleFavorite = async (listingId: string) => {
+    if (auth.isGuest) {
+      setNotice({ title: 'Create an account to save listings.', body: 'Log in or create an account to keep favorite items.' });
+      return;
+    }
+
+    try {
+      if (favorites.isFavorite(listingId)) {
+        await favorites.removeFavorite(listingId);
+      } else {
+        await favorites.saveFavorite(listingId);
+      }
+    } catch (error) {
+      setNotice({ title: 'Favorite was not updated', body: handleAppError(error).userMessage });
+    }
+  };
+
+  return (
+    <FlatList
+      style={styles.listScreen}
+      contentContainerStyle={styles.listContent}
+      data={items}
+      keyExtractor={(item) => item.id}
+      ListHeaderComponent={
+        <View style={styles.stackLarge}>
+          <View style={styles.headerBlock}>
+            <View style={styles.homeHeaderRow}>
+              <View style={styles.homeHeaderText}>
+                <Text style={styles.eyebrow}>Secondhand Pet Marketplace</Text>
+                <Text style={styles.title}>{greeting}</Text>
+                <View style={styles.locationRow}>
+                  <MapPin size={16} color={colors.textSecondary} />
+                  <Text style={styles.metaText}>{locationLabel || 'Choose a location'}</Text>
+                </View>
+              </View>
+              <View style={styles.homeActionCluster}>
+                {onNotifications ? (
+                  <HeaderShortcut
+                    label={unreadNotificationTotal > 0 ? `Notifications, ${unreadNotificationTotal} unread` : 'Notifications'}
+                    icon={Bell}
+                    count={unreadNotificationTotal}
+                    onPress={onNotifications}
+                  />
+                ) : null}
+                {onMessages ? (
+                  <HeaderShortcut
+                    label={unreadTotal > 0 ? `Messages, ${unreadTotal} unread` : 'Messages'}
+                    icon={MessageCircle}
+                    count={unreadTotal}
+                    onPress={onMessages}
+                  />
+                ) : null}
+              </View>
+            </View>
+          </View>
+
+          {notice ? <NoticeCard notice={notice} actionLabel="Profile" onAction={onOpenProfile} /> : null}
+
+          {onOpenRescueHub ? (
+            <RescueHubBanner
+              rescueCount={rescueOrganizations.length}
+              urgentNeedCount={urgentNeedCount}
+              onPress={onOpenRescueHub}
+            />
+          ) : null}
+
+          <SearchBar value={search} onChangeText={setSearch} onClear={() => setSearch('')} />
+
+          <DistanceFilter
+            city={location.city}
+            state={location.state}
+            radiusMiles={location.radiusMiles}
+            loading={locationLoading}
+            error={locationError}
+            onRadiusChange={setRadiusMiles}
+            onUseCurrentLocation={requestCurrentLocation}
+            onManualLocationSelect={setManualLocation}
+          />
+
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipScroller}>
+            <CategoryChip label="All" selected={!categoryId} onPress={() => setCategoryId(undefined)} />
+            {(categories.data ?? []).map((category) => (
+              <CategoryChip
+                key={category.id}
+                label={category.name}
+                selected={categoryId === category.slug}
+                onPress={() => setCategoryId(category.slug)}
+              />
+            ))}
+          </ScrollView>
+
+          <SectionTitle title="Recently added" hint={`${recentItems.length} listings`} />
+          <View style={styles.marketplaceGrid}>
+            {recentListings.isLoading ? <LoadingCards /> : null}
+            {!recentListings.isLoading && recentItems.slice(0, 3).map((listing) => (
+              <View key={listing.id} style={styles.marketplaceGridTile}>
+                <ListingCard
+                  listing={listing}
+                  variant="grid"
+                  isFavorite={favoriteIds.includes(listing.id)}
+                  onOpen={() => onOpenListing(listing.id)}
+                  onFavorite={() => void handleFavorite(listing.id)}
+                />
+              </View>
+            ))}
+          </View>
+
+          <SectionTitle title="Nearby listings" hint={`${items.length} within ${location.radiusMiles} mi`} />
+          {listings.isLoading ? <LoadingCards /> : null}
+          {listings.isError ? <ErrorState message={handleAppError(listings.error).userMessage} onRetry={listings.refetch} /> : null}
+        </View>
+      }
+      numColumns={2}
+      columnWrapperStyle={styles.marketplaceGridRow}
+      renderItem={({ item, index }) => (
+        <View style={[styles.marketplaceGridItem, index % 2 === 0 ? styles.marketplaceGridItemLeft : styles.marketplaceGridItemRight]}>
+          <ListingCard
+            listing={item}
+            variant="grid"
+            isFavorite={favoriteIds.includes(item.id)}
+            onOpen={() => onOpenListing(item.id)}
+            onFavorite={() => void handleFavorite(item.id)}
+          />
+        </View>
+      )}
+      ItemSeparatorComponent={() => <View style={styles.gridSeparator} />}
+      ListEmptyComponent={
+        !listings.isLoading && !listings.isError ? (
+          <EmptyState title="No listings nearby yet" body="Try another nearby area, expand the distance, or check back soon." icon={Search} />
+        ) : null
+      }
+    />
+  );
+}
+
+export function SearchScreen({
+  onOpenListing,
+  onOpenProfile,
+}: {
+  onOpenListing: (listingId: string) => void;
+  onOpenProfile: () => void;
+}) {
+  const auth = useAuth();
+  const [search, setSearch] = useState('');
+  const [categoryId, setCategoryId] = useState<string | undefined>();
+  const [condition, setCondition] = useState<ListingCondition | undefined>();
+  const [listingType, setListingType] = useState<ListingType | undefined>();
+  const [minPrice, setMinPrice] = useState('');
+  const [maxPrice, setMaxPrice] = useState('');
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const {
+    location,
+    loading: locationLoading,
+    error: locationError,
+    setRadiusMiles,
+    requestCurrentLocation,
+    setManualLocation,
+  } = useLocation();
+  const categories = useTopLevelCategories();
+  const favorites = useFavorites(Boolean(auth.user));
+  const savedSearches = useSavedSearches(Boolean(auth.user));
+  const selectedCategory = useMemo(
+    () => (categories.data ?? []).find((category) => category.slug === categoryId),
+    [categories.data, categoryId]
+  );
+  const parsedMinPrice = parseSearchPrice(minPrice);
+  const parsedMaxPrice = parseSearchPrice(maxPrice);
+  const params = useMemo<ListingQueryParams>(
+    () => ({
+      search,
+      categoryId,
+      condition,
+      listingType,
+      latitude: location.latitude,
+      longitude: location.longitude,
+      radiusMiles: location.radiusMiles,
+      minPrice: parsedMinPrice,
+      maxPrice: parsedMaxPrice,
+      limit: 20,
+    }),
+    [categoryId, condition, listingType, location.latitude, location.longitude, location.radiusMiles, parsedMaxPrice, parsedMinPrice, search]
+  );
+  const listings = useListings(params);
+  const favoriteIds = (favorites.data ?? []).map((listing) => listing.id);
+
+  const buildSavedSearchInput = (): CreateSavedSearchInput => ({
+    name: savedSearchName({
+      search,
+      categoryName: selectedCategory?.name,
+      listingType,
+      condition,
+      minPrice: parsedMinPrice,
+      maxPrice: parsedMaxPrice,
+      city: location.city,
+    }),
+    search_query: search.trim() || undefined,
+    category_slug: categoryId,
+    category_name: selectedCategory?.name,
+    condition,
+    listing_type: listingType,
+    min_price: parsedMinPrice,
+    max_price: parsedMaxPrice,
+    radius_miles: location.radiusMiles,
+    city: location.city,
+    state: location.state,
+    zip_code: location.zipCode,
+    latitude: location.latitude,
+    longitude: location.longitude,
+    notifications_enabled: true,
+  });
+
+  const saveSearchAlert = async () => {
+    if (auth.isGuest) {
+      setNotice({ title: 'Create an account to save search alerts.', body: 'Saved searches can notify you when matching pet supplies are listed.' });
+      return;
+    }
+
+    try {
+      const savedSearch = await savedSearches.saveSearch(buildSavedSearchInput());
+      setNotice({ title: 'Search alert saved', body: `We will watch for new listings that match "${savedSearch.name}".` });
+    } catch (error) {
+      setNotice({ title: 'Search alert was not saved', body: handleAppError(error).userMessage });
+    }
+  };
+
+  const applySavedSearch = (savedSearch: SavedSearch) => {
+    setSearch(savedSearch.search_query ?? '');
+    setCategoryId(savedSearch.category_slug);
+    setCondition(savedSearch.condition);
+    setListingType(savedSearch.listing_type);
+    setMinPrice(savedSearch.min_price === undefined ? '' : String(savedSearch.min_price));
+    setMaxPrice(savedSearch.max_price === undefined ? '' : String(savedSearch.max_price));
+    setRadiusMiles(savedSearch.radius_miles);
+
+    if (savedSearch.city || savedSearch.state || savedSearch.latitude || savedSearch.longitude) {
+      setManualLocation({
+        city: savedSearch.city ?? location.city,
+        state: savedSearch.state ?? location.state,
+        zipCode: savedSearch.zip_code,
+        latitude: savedSearch.latitude,
+        longitude: savedSearch.longitude,
+        radiusMiles: savedSearch.radius_miles,
+      });
+    }
+
+    setNotice({ title: 'Saved search applied', body: `Showing results for "${savedSearch.name}".` });
+  };
+
+  const toggleSavedSearchAlert = async (savedSearch: SavedSearch) => {
+    try {
+      await savedSearches.setAlertsEnabled(savedSearch.id, !savedSearch.notifications_enabled);
+    } catch (error) {
+      setNotice({ title: 'Alert was not updated', body: handleAppError(error).userMessage });
+    }
+  };
+
+  const removeSavedSearch = async (savedSearch: SavedSearch) => {
+    try {
+      await savedSearches.removeSearch(savedSearch.id);
+      setNotice({ title: 'Saved search removed', body: `"${savedSearch.name}" was removed from your alerts.` });
+    } catch (error) {
+      setNotice({ title: 'Saved search was not removed', body: handleAppError(error).userMessage });
+    }
+  };
+
+  const handleFavorite = async (listingId: string) => {
+    if (auth.isGuest) {
+      setNotice({ title: 'Create an account to save listings.', body: 'Saved listings live in your Favorites tab.' });
+      return;
+    }
+
+    try {
+      if (favorites.isFavorite(listingId)) {
+        await favorites.removeFavorite(listingId);
+      } else {
+        await favorites.saveFavorite(listingId);
+      }
+    } catch (error) {
+      setNotice({ title: 'Favorite was not updated', body: handleAppError(error).userMessage });
+    }
+  };
+
+  return (
+    <FlatList
+      style={styles.listScreen}
+      contentContainerStyle={styles.listContent}
+      data={listings.data?.items ?? []}
+      keyExtractor={(item) => item.id}
+      ListHeaderComponent={
+        <View style={styles.stackLarge}>
+          <View style={styles.headerBlock}>
+            <Text style={styles.title}>Search</Text>
+            <Text style={styles.body}>Find pet supplies by keyword, category, price, condition, and listing type.</Text>
+          </View>
+          {notice ? <NoticeCard notice={notice} actionLabel="Profile" onAction={onOpenProfile} /> : null}
+          <SearchBar value={search} onChangeText={setSearch} onClear={() => setSearch('')} />
+          <DistanceFilter
+            city={location.city}
+            state={location.state}
+            radiusMiles={location.radiusMiles}
+            loading={locationLoading}
+            error={locationError}
+            onRadiusChange={setRadiusMiles}
+            onUseCurrentLocation={requestCurrentLocation}
+            onManualLocationSelect={setManualLocation}
+          />
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipScroller}>
+            <CategoryChip label="All" selected={!categoryId} onPress={() => setCategoryId(undefined)} />
+            {(categories.data ?? []).map((category) => (
+              <CategoryChip
+                key={category.id}
+                label={category.name}
+                selected={categoryId === category.slug}
+                onPress={() => setCategoryId(category.slug)}
+              />
+            ))}
+          </ScrollView>
+          <View style={styles.inputGrid}>
+            <TextInput label="Min Price" value={minPrice} onChangeText={setMinPrice} placeholder="$0" keyboardType="numeric" />
+            <TextInput label="Max Price" value={maxPrice} onChangeText={setMaxPrice} placeholder="$100" keyboardType="numeric" />
+          </View>
+          <Text style={styles.filterLabel}>Condition</Text>
+          <View style={styles.wrapRow}>
+            <FilterChip label="Any" selected={!condition} onPress={() => setCondition(undefined)} />
+            {CONDITIONS.map((item) => (
+              <FilterChip key={item} label={item} selected={condition === item} onPress={() => setCondition(item)} />
+            ))}
+          </View>
+          <Text style={styles.filterLabel}>Listing Type</Text>
+          <View style={styles.wrapRow}>
+            <FilterChip label="Any" selected={!listingType} onPress={() => setListingType(undefined)} />
+            <FilterChip label="Sale" selected={listingType === 'sale'} onPress={() => setListingType('sale')} />
+            <FilterChip label="Free" selected={listingType === 'free'} onPress={() => setListingType('free')} />
+            <FilterChip label="Donation" selected={listingType === 'donation'} onPress={() => setListingType('donation')} />
+          </View>
+          <Card>
+            <View style={styles.stack}>
+              <Text style={styles.cardTitle}>Saved search alerts</Text>
+              <Text style={styles.body}>Save this search and ReTail will alert you when new matching listings appear.</Text>
+              <Button
+                title="Save Search Alert"
+                icon={Bell}
+                variant="outline"
+                onPress={() => void saveSearchAlert()}
+                loading={savedSearches.actionLoading}
+                fullWidth
+              />
+              {savedSearches.actionError ? <Text style={styles.errorText}>{savedSearches.actionError}</Text> : null}
+            </View>
+          </Card>
+          {!auth.isGuest && savedSearches.data.length > 0 ? (
+            <View style={styles.stack}>
+              <SectionTitle title="Your alerts" hint={`${savedSearches.data.length} saved`} />
+              {savedSearches.data.map((savedSearch) => (
+                <SavedSearchAlertCard
+                  key={savedSearch.id}
+                  savedSearch={savedSearch}
+                  onApply={() => applySavedSearch(savedSearch)}
+                  onToggle={() => void toggleSavedSearchAlert(savedSearch)}
+                  onRemove={() => void removeSavedSearch(savedSearch)}
+                />
+              ))}
+            </View>
+          ) : null}
+          <SectionTitle title="Results" hint={`${listings.data?.total ?? 0} within ${location.radiusMiles} mi`} />
+          {listings.isLoading ? <LoadingCards /> : null}
+          {listings.isError ? <ErrorState message={handleAppError(listings.error).userMessage} onRetry={listings.refetch} /> : null}
+        </View>
+      }
+      numColumns={2}
+      columnWrapperStyle={styles.marketplaceGridRow}
+      renderItem={({ item, index }) => (
+        <View style={[styles.marketplaceGridItem, index % 2 === 0 ? styles.marketplaceGridItemLeft : styles.marketplaceGridItemRight]}>
+          <ListingCard
+            listing={item}
+            variant="grid"
+            isFavorite={favoriteIds.includes(item.id)}
+            onOpen={() => onOpenListing(item.id)}
+            onFavorite={() => void handleFavorite(item.id)}
+          />
+        </View>
+      )}
+      ItemSeparatorComponent={() => <View style={styles.gridSeparator} />}
+      ListEmptyComponent={
+        !listings.isLoading && !listings.isError ? (
+          <EmptyState title="No results found" body="Broaden your search, choose another nearby area, expand the distance, or remove filters." icon={Search} />
+        ) : null
+      }
+    />
+  );
+}
+
+function SavedSearchAlertCard({
+  savedSearch,
+  onApply,
+  onToggle,
+  onRemove,
+}: {
+  savedSearch: SavedSearch;
+  onApply: () => void;
+  onToggle: () => void;
+  onRemove: () => void;
+}) {
+  return (
+    <Card>
+      <View style={styles.stack}>
+        <View style={styles.rowBetween}>
+          <View style={styles.flexOne}>
+            <Text style={styles.bodyStrong}>{savedSearch.name}</Text>
+            <Text style={styles.metaText}>{savedSearchSummary(savedSearch)}</Text>
+          </View>
+          <Badge label={savedSearch.notifications_enabled ? 'Alerts On' : 'Paused'} tone={savedSearch.notifications_enabled ? 'success' : 'neutral'} />
+        </View>
+        <View style={styles.actionGrid}>
+          <Button title="Search" icon={Search} variant="outline" onPress={onApply} fullWidth />
+          <Button
+            title={savedSearch.notifications_enabled ? 'Pause' : 'Resume'}
+            icon={Bell}
+            variant="ghost"
+            onPress={onToggle}
+            fullWidth
+          />
+          <Button title="Remove" icon={Trash2} variant="ghost" onPress={onRemove} fullWidth />
+        </View>
+      </View>
+    </Card>
+  );
+}
+
+function parseSearchPrice(value: string): number | undefined {
+  if (!value.trim()) {
+    return undefined;
+  }
+
+  const parsed = Number(value.replace(/[^0-9.]/g, ''));
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function savedSearchName(input: {
+  search: string;
+  categoryName?: string;
+  listingType?: ListingType;
+  condition?: ListingCondition;
+  minPrice?: number;
+  maxPrice?: number;
+  city?: string;
+}): string {
+  const parts = [
+    input.search.trim(),
+    input.categoryName,
+    input.listingType ? listingTypeLabel(input.listingType) : undefined,
+    input.condition,
+  ].filter(Boolean);
+
+  if (input.minPrice !== undefined || input.maxPrice !== undefined) {
+    parts.push(priceRangeLabel(input.minPrice, input.maxPrice));
+  }
+
+  const base = parts.length > 0 ? parts.join(' - ') : 'Pet supplies';
+  return input.city ? `${base} near ${input.city}` : base;
+}
+
+function savedSearchSummary(savedSearch: SavedSearch): string {
+  const parts = [
+    savedSearch.search_query ? `"${savedSearch.search_query}"` : undefined,
+    savedSearch.category_name,
+    savedSearch.listing_type ? listingTypeLabel(savedSearch.listing_type) : undefined,
+    savedSearch.condition,
+    savedSearch.min_price !== undefined || savedSearch.max_price !== undefined
+      ? priceRangeLabel(savedSearch.min_price, savedSearch.max_price)
+      : undefined,
+    `${savedSearch.radius_miles} mi`,
+    [savedSearch.city, savedSearch.state].filter(Boolean).join(', '),
+  ].filter(Boolean);
+
+  return parts.join(' - ');
+}
+
+function listingTypeLabel(listingType: ListingType): string {
+  if (listingType === 'free') {
+    return 'Free';
+  }
+
+  if (listingType === 'donation') {
+    return 'Donation';
+  }
+
+  return 'Sale';
+}
+
+function priceRangeLabel(minPrice?: number, maxPrice?: number): string {
+  if (minPrice !== undefined && maxPrice !== undefined) {
+    return `$${minPrice}-$${maxPrice}`;
+  }
+
+  if (minPrice !== undefined) {
+    return `$${minPrice}+`;
+  }
+
+  if (maxPrice !== undefined) {
+    return `Under $${maxPrice}`;
+  }
+
+  return 'Any price';
+}
+
+export function SellScreen({
+  onCreateListing,
+  onOpenProfile,
+}: {
+  onCreateListing: () => void;
+  onOpenProfile: () => void;
+}) {
+  const auth = useAuth();
+
+  if (auth.isGuest) {
+    return (
+      <ScreenFrame>
+        <Card>
+          <View style={styles.stack}>
+            <Text style={styles.cardTitle}>Create an account to list pet supplies.</Text>
+            <Text style={styles.body}>ReTail requires an account before you can sell or donate items locally.</Text>
+            <Button title="Log In or Create Account" onPress={onOpenProfile} fullWidth />
+          </View>
+        </Card>
+      </ScreenFrame>
+    );
+  }
+
+  return (
+    <ScreenFrame>
+      <Card>
+        <View style={styles.stack}>
+          <Text style={styles.cardTitle}>Create listing</Text>
+          <Text style={styles.body}>Add photos, details, price or donation status, and pickup location.</Text>
+          <Button title="Start Listing" onPress={onCreateListing} fullWidth />
+        </View>
+      </Card>
+    </ScreenFrame>
+  );
+}
+
+export function FavoritesScreen({
+  onOpenListing,
+  onOpenProfile,
+}: {
+  onOpenListing: (listingId: string) => void;
+  onOpenProfile: () => void;
+}) {
+  const auth = useAuth();
+  const favorites = useFavorites(Boolean(auth.user));
+  const favoriteIds = (favorites.data ?? []).map((listing) => listing.id);
+  const [notice, setNotice] = useState<Notice | null>(null);
+
+  if (auth.isGuest) {
+    return (
+      <ScreenFrame>
+        <Card>
+          <View style={styles.stack}>
+            <Text style={styles.cardTitle}>Create an account to save listings.</Text>
+            <Text style={styles.body}>Favorites help you compare pet supplies and come back later.</Text>
+            <Button title="Log In or Create Account" onPress={onOpenProfile} fullWidth />
+          </View>
+        </Card>
+      </ScreenFrame>
+    );
+  }
+
+  const removeFavorite = async (listingId: string) => {
+    try {
+      await favorites.removeFavorite(listingId);
+    } catch (error) {
+      setNotice({ title: 'Favorite was not removed', body: handleAppError(error).userMessage });
+    }
+  };
+
+  return (
+    <FlatList
+      style={styles.listScreen}
+      contentContainerStyle={styles.listContent}
+      data={favorites.data ?? []}
+      keyExtractor={(item) => item.id}
+      ListHeaderComponent={
+        <View style={styles.stackLarge}>
+          <View style={styles.headerBlock}>
+            <Text style={styles.title}>Favorites</Text>
+            <Text style={styles.body}>Saved listings you want to revisit.</Text>
+          </View>
+          {notice ? <NoticeCard notice={notice} /> : null}
+          {favorites.isLoading ? <LoadingCards /> : null}
+          {favorites.isError ? <ErrorState message={handleAppError(favorites.error).userMessage} onRetry={favorites.refetch} /> : null}
+        </View>
+      }
+      numColumns={2}
+      columnWrapperStyle={styles.marketplaceGridRow}
+      renderItem={({ item, index }) => (
+        <View style={[styles.marketplaceGridItem, index % 2 === 0 ? styles.marketplaceGridItemLeft : styles.marketplaceGridItemRight]}>
+          <ListingCard
+            listing={item}
+            variant="grid"
+            isFavorite={favoriteIds.includes(item.id)}
+            onOpen={() => onOpenListing(item.id)}
+            onFavorite={() => void removeFavorite(item.id)}
+          />
+        </View>
+      )}
+      ItemSeparatorComponent={() => <View style={styles.gridSeparator} />}
+      ListEmptyComponent={
+        !favorites.isLoading && !favorites.isError ? (
+          <EmptyState title="No saved listings yet" body="Save items you love and find them here later." icon={Heart} />
+        ) : null
+      }
+    />
+  );
+}
+
+export function CreateListingScreen({
+  onBack,
+  onCreated,
+}: {
+  onBack: () => void;
+  onCreated: (listingId: string) => void;
+}) {
+  const mutation = useCreateListing();
+  const [form, setForm] = useState<CreateListingInput>(emptyCreateListing);
+  const [errors, setErrors] = useState<ReturnType<typeof validateCreateListingInput>['errors']>({});
+  const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState(0);
+
+  const update = <FieldName extends keyof CreateListingInput>(field: FieldName, value: CreateListingInput[FieldName]) => {
+    setForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const submit = async () => {
+    const validation = validateCreateListingInput(form);
+    if (!validation.isValid) {
+      setErrors(validation.errors);
+      return;
+    }
+
+    setErrors({});
+    setUploading(true);
+    setProgress(25);
+
+    try {
+      setProgress(70);
+      const listing = await mutation.createListing(form);
+      setProgress(100);
+      setForm(emptyCreateListing);
+      onCreated(listing.id);
+    } catch {
+      return;
+    } finally {
+      setUploading(false);
+      setProgress(0);
+    }
+  };
+
+  return (
+    <SafeAreaView style={styles.app}>
+      <StatusBar style="dark" />
+      <ScrollView style={styles.listScreen} contentContainerStyle={styles.listContent} keyboardShouldPersistTaps="handled">
+        <BackButton onPress={onBack} />
+        <View style={styles.headerBlock}>
+          <Text style={styles.title}>Create listing</Text>
+          <Text style={styles.body}>Sell or donate pet supplies nearby.</Text>
+        </View>
+
+        <ListingForm
+          form={form}
+          errors={errors}
+          uploading={uploading}
+          progress={progress}
+          onChange={update}
+        />
+        {mutation.error ? <Text style={styles.errorText}>{mutation.error}</Text> : null}
+        <Button title="Publish Listing" onPress={submit} loading={mutation.loading || uploading} fullWidth />
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+export function ListingDetailScreen({
+  listingId,
+  onBack,
+  onOpenSeller,
+  onMessageSeller,
+  onReportListing,
+  onReviewListing,
+}: {
+  listingId: string;
+  onBack: () => void;
+  onOpenSeller: (userId: string) => void;
+  onMessageSeller?: (listingId: string, sellerId: string) => void | Promise<void>;
+  onReportListing?: (listingId: string) => void;
+  onReviewListing?: (listingId: string, revieweeId: string) => void;
+}) {
+  const auth = useAuth();
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const listing = useListing(listingId);
+
+  if (listing.isLoading) {
+    return (
+      <ScreenFrame>
+        <LoadingSpinner />
+      </ScreenFrame>
+    );
+  }
+
+  if (listing.isError || !listing.data) {
+    return (
+      <ScreenFrame>
+        <ErrorState message={handleAppError(listing.error).userMessage} onRetry={listing.refetch} onBack={onBack} />
+      </ScreenFrame>
+    );
+  }
+
+  return (
+    <ListingDetailContent
+      detail={listing.data}
+      isGuest={auth.isGuest}
+      currentUserId={auth.user?.id}
+      notice={notice}
+      setNotice={setNotice}
+      onBack={onBack}
+      onOpenSeller={onOpenSeller}
+      onMessageSeller={onMessageSeller}
+      onReportListing={onReportListing}
+      onReviewListing={onReviewListing}
+    />
+  );
+}
+
+function ListingDetailContent({
+  detail,
+  isGuest,
+  currentUserId,
+  notice,
+  setNotice,
+  onBack,
+  onOpenSeller,
+  onMessageSeller,
+  onReportListing,
+  onReviewListing,
+}: {
+  detail: ListingDetail;
+  isGuest: boolean;
+  currentUserId?: string;
+  notice: Notice | null;
+  setNotice: (notice: Notice | null) => void;
+  onBack: () => void;
+  onOpenSeller: (userId: string) => void;
+  onMessageSeller?: (listingId: string, sellerId: string) => void | Promise<void>;
+  onReportListing?: (listingId: string) => void;
+  onReviewListing?: (listingId: string, revieweeId: string) => void;
+}) {
+  const item = detail.listing;
+  const favorite = useFavoriteStatus(item.id, item.favoritedBy);
+  const owner = detail.seller.id === currentUserId;
+
+  const toggleFavorite = async () => {
+    if (isGuest) {
+      setNotice({ title: 'Create an account to save listings.', body: 'Log in or create an account to add this item to Favorites.' });
+      return;
+    }
+
+    if (owner) {
+      setNotice({ title: 'This is your listing', body: 'You cannot save your own listing to Favorites.' });
+      return;
+    }
+
+    try {
+      await favorite.toggleFavorite();
+    } catch (error) {
+      setNotice({ title: 'Favorite was not updated', body: handleAppError(error).userMessage });
+    }
+  };
+
+  return (
+    <SafeAreaView style={styles.app}>
+      <StatusBar style="dark" />
+      <ScrollView style={styles.listScreen} contentContainerStyle={styles.detailContent}>
+        <View>
+          <ListingGallery images={detail.images} fallbackImage={item.image} title={item.title} />
+          <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={onBack} style={styles.backFloating}>
+            <ChevronLeft size={24} color={colors.textPrimary} />
+          </Pressable>
+        </View>
+
+        <View style={styles.detailHeader}>
+          <View style={styles.priceFavoriteRow}>
+            <PriceTag value={item.price} />
+            <FavoriteButton
+              selected={favorite.isFavorited}
+              count={favorite.favoriteCount}
+              disabled={owner}
+              onPress={() => void toggleFavorite()}
+            />
+          </View>
+          <Text style={styles.detailTitle}>{item.title}</Text>
+          <View style={styles.locationRow}>
+            <MapPin size={16} color={colors.textSecondary} />
+            <Text style={styles.metaText}>{item.distance} - {item.location}</Text>
+          </View>
+          <View style={styles.wrapRow}>
+            <ConditionBadge condition={item.condition} />
+            <FilterChip label={item.category} selected onPress={() => undefined} />
+          </View>
+        </View>
+
+        {notice ? <NoticeCard notice={notice} /> : null}
+
+        <Card>
+          <View style={styles.stack}>
+            <Text style={styles.cardTitle}>Description</Text>
+            <Text style={styles.bodyStrong}>{item.description}</Text>
+          </View>
+        </Card>
+
+        {listingItemDetailRows(item).length > 0 ? (
+          <Card>
+            <View style={styles.stack}>
+              <Text style={styles.cardTitle}>Item details</Text>
+              <View style={styles.detailInfoRows}>
+                {listingItemDetailRows(item).map((row) => (
+                  <View key={row.label} style={styles.detailInfoRow}>
+                    <Text style={styles.metaText}>{row.label}</Text>
+                    <Text style={styles.bodyStrong}>{row.value}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          </Card>
+        ) : null}
+
+        <Card>
+          <View style={styles.stack}>
+            <Text style={styles.cardTitle}>Getting the item</Text>
+            <View style={styles.gettingOptionList}>
+              {listingGettingOptions(item).map((option) => {
+                const Icon = option.icon;
+
+                return (
+                  <View key={option.title} style={styles.gettingOptionRow}>
+                    <View style={styles.gettingOptionIcon}>
+                      <Icon size={18} color={colors.primary} />
+                    </View>
+                    <View style={styles.gettingOptionCopy}>
+                      <Text style={styles.bodyStrong}>{option.title}</Text>
+                      <Text style={styles.metaText}>{option.description}</Text>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+            <Text style={styles.body}>Message the seller to confirm exact timing, address, meetup spot, or shipping details.</Text>
+          </View>
+        </Card>
+
+        <Pressable accessibilityRole="button" accessibilityLabel="Open seller profile" onPress={() => onOpenSeller(detail.seller.id)}>
+          <Card>
+            <View style={styles.stack}>
+              <Text style={styles.cardTitle}>Seller</Text>
+              <Text style={styles.bodyStrong}>{detail.seller.display_name}</Text>
+              <Text style={styles.body}>{profileLocation(detail.seller)}</Text>
+              <Text style={styles.body}>{ratingLabel(detail.seller)} - {detail.seller.review_count} reviews</Text>
+            </View>
+          </Card>
+        </Pressable>
+
+        <View style={styles.actionGrid}>
+          <Button
+            title="Message Seller"
+            icon={MessageCircle}
+            onPress={() => {
+              if (onMessageSeller) {
+                void Promise.resolve(onMessageSeller(item.id, detail.seller.id)).catch((error) => {
+                  setNotice({ title: 'Messaging is unavailable', body: handleAppError(error).userMessage });
+                });
+                return;
+              }
+
+              setNotice({ title: 'Messaging unavailable', body: 'Log in and open a marketplace listing to contact the seller.' });
+            }}
+            fullWidth
+          />
+          <Button
+            title="Report"
+            icon={Flag}
+            variant="ghost"
+            onPress={() => {
+              if (onReportListing) {
+                onReportListing(item.id);
+                return;
+              }
+              setNotice({ title: 'Report listing', body: 'Log in to report spam, fraud, harassment, or inappropriate content.' });
+            }}
+            fullWidth
+          />
+          {['Sold', 'Donated'].includes(item.status) && onReviewListing ? (
+            <Button
+              title="Leave Review"
+              icon={Heart}
+              variant="outline"
+              onPress={() => onReviewListing(item.id, detail.seller.id)}
+              fullWidth
+            />
+          ) : null}
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+export function ProfileScreen({
+  onEditProfile,
+  onMyListings,
+  onOpenListing,
+  onMessages,
+  onNotifications,
+  onSettings,
+  onAdmin,
+}: {
+  onEditProfile: () => void;
+  onMyListings: () => void;
+  onOpenListing: (listingId: string) => void;
+  onMessages?: () => void;
+  onNotifications?: () => void;
+  onSettings?: () => void;
+  onAdmin?: () => void;
+}) {
+  const auth = useAuth();
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [username, setUsername] = useState('');
+  const [accountType, setAccountType] = useState<'regular' | 'rescue'>('regular');
+  const [rescueOrganizationName, setRescueOrganizationName] = useState('');
+  const [rescueAnimals, setRescueAnimals] = useState('');
+  const [rescueCity, setRescueCity] = useState('');
+  const [rescueState, setRescueState] = useState('');
+  const [rescueZipCode, setRescueZipCode] = useState('');
+  const [rescueAddressLine1, setRescueAddressLine1] = useState('');
+  const [rescueAddressLine2, setRescueAddressLine2] = useState('');
+  const [rescueContactPerson, setRescueContactPerson] = useState('');
+  const [rescueContactPhone, setRescueContactPhone] = useState('');
+  const [rescueWebsite, setRescueWebsite] = useState('');
+  const [rescueOrganizationType, setRescueOrganizationType] = useState<RescueOrganizationType>('Foster-based');
+  const [rescueHas501c3, setRescueHas501c3] = useState(false);
+  const [rescueEin, setRescueEin] = useState('');
+  const myListings = useMyListings();
+  const reviews = useReviews(auth.profile?.id ?? '');
+
+  const submitAuth = async () => {
+    setBusy(true);
+    setNotice(null);
+    try {
+      if (authMode === 'register') {
+        const rescueProfile = accountType === 'rescue'
+          ? buildRescueSignupInput({
+            organizationName: rescueOrganizationName,
+            animalsRescued: rescueAnimals,
+            city: rescueCity,
+            state: rescueState,
+            zipCode: rescueZipCode,
+            addressLine1: rescueAddressLine1,
+            addressLine2: rescueAddressLine2,
+            contactPerson: rescueContactPerson,
+            contactEmail: email,
+            contactPhone: rescueContactPhone,
+            organizationType: rescueOrganizationType,
+            has501c3: rescueHas501c3,
+            ein: rescueEin,
+            websiteUrl: rescueWebsite,
+          })
+          : undefined;
+
+        await auth.signUp({
+          email,
+          password,
+          displayName: accountType === 'rescue' ? rescueContactPerson || displayName || rescueOrganizationName : displayName,
+          username: username || (accountType === 'rescue' ? rescueOrganizationName : displayName),
+          accountType,
+          rescueProfile,
+        });
+        setNotice({ title: 'Check your email', body: 'Verify your email address, then log in to finish setting up ReTail.' });
+        return;
+      }
+
+      await auth.signIn({ email, password });
+    } catch (error) {
+      setNotice({
+        title: authMode === 'register' ? 'Account was not created' : 'Login failed',
+        body: handleAppError(error).userMessage,
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const signOut = async () => {
+    await auth.signOut();
+  };
+
+  if (auth.isGuest || !auth.profile) {
+    return (
+      <ScreenFrame>
+        <Card>
+          <View style={styles.stack}>
+            <Text style={styles.cardTitle}>{authMode === 'register' ? 'Create your ReTail account.' : 'Log in to ReTail.'}</Text>
+            <Text style={styles.body}>Create listings, save favorites, and manage your profile from here.</Text>
+            <View style={styles.wrapRow}>
+              <FilterChip label="Log In" selected={authMode === 'login'} onPress={() => setAuthMode('login')} />
+              <FilterChip label="Create Account" selected={authMode === 'register'} onPress={() => setAuthMode('register')} />
+            </View>
+            {authMode === 'register' ? (
+              <>
+                <View style={styles.wrapRow}>
+                  <FilterChip label="Regular User" selected={accountType === 'regular'} onPress={() => setAccountType('regular')} />
+                  <FilterChip label="Animal Rescue" selected={accountType === 'rescue'} onPress={() => setAccountType('rescue')} />
+                </View>
+                {accountType === 'rescue' ? (
+                  <RescueSignupFields
+                    organizationName={rescueOrganizationName}
+                    animalsRescued={rescueAnimals}
+                    city={rescueCity}
+                    state={rescueState}
+                    zipCode={rescueZipCode}
+                    addressLine1={rescueAddressLine1}
+                    addressLine2={rescueAddressLine2}
+                    contactPerson={rescueContactPerson}
+                    contactPhone={rescueContactPhone}
+                    websiteUrl={rescueWebsite}
+                    organizationType={rescueOrganizationType}
+                    has501c3={rescueHas501c3}
+                    ein={rescueEin}
+                    onOrganizationName={setRescueOrganizationName}
+                    onAnimalsRescued={setRescueAnimals}
+                    onCity={setRescueCity}
+                    onState={setRescueState}
+                    onZipCode={setRescueZipCode}
+                    onAddressLine1={setRescueAddressLine1}
+                    onAddressLine2={setRescueAddressLine2}
+                    onContactPerson={setRescueContactPerson}
+                    onContactPhone={setRescueContactPhone}
+                    onWebsiteUrl={setRescueWebsite}
+                    onOrganizationType={setRescueOrganizationType}
+                    onHas501c3={setRescueHas501c3}
+                    onEin={setRescueEin}
+                  />
+                ) : (
+                  <TextInput label="Display Name" value={displayName} onChangeText={setDisplayName} placeholder="Rachel C." />
+                )}
+                <TextInput label="Username" value={username} onChangeText={setUsername} placeholder="retail_rachel" autoCapitalize="none" />
+              </>
+            ) : null}
+            <TextInput
+              label="Email"
+              value={email}
+              onChangeText={setEmail}
+              placeholder="you@example.com"
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+            <TextInput label="Password" value={password} onChangeText={setPassword} placeholder="Password" secureTextEntry />
+            {notice ? <NoticeCard notice={notice} /> : null}
+            <Button
+              title={authMode === 'register' ? 'Create Account' : 'Log In'}
+              onPress={() => void submitAuth()}
+              loading={busy || auth.loading}
+              fullWidth
+            />
+          </View>
+        </Card>
+      </ScreenFrame>
+    );
+  }
+
+  if (auth.profile.account_type === 'rescue') {
+    return (
+      <RescueDashboardScreen
+        profile={auth.profile}
+        onEditProfile={onEditProfile}
+        onSettings={onSettings}
+        onMessages={onMessages}
+        onNotifications={onNotifications}
+        onAdmin={onAdmin}
+        onSignOut={signOut}
+      />
+    );
+  }
+
+  const activeListings = (myListings.data ?? []).filter((listing) => listing.status === 'Active').slice(0, 3);
+
+  return (
+    <ScrollView style={styles.listScreen} contentContainerStyle={styles.listContent}>
+      <ProfileHeader
+        name={auth.profile.display_name}
+        handle={`@${auth.profile.username}`}
+        location={profileLocation(auth.profile)}
+        bio={auth.profile.bio}
+        rating={ratingLabel(auth.profile)}
+        initials={initialsFor(auth.profile.display_name)}
+        avatarUrl={auth.profile.avatar_url}
+        verified={auth.profile.is_verified}
+      />
+      <StatsCard
+        stats={[
+          { label: 'Listings', value: auth.profile.listings_count },
+          { label: 'Sales', value: auth.profile.completed_sales_count },
+          { label: 'Reviews', value: auth.profile.review_count },
+        ]}
+      />
+      <View style={styles.actionGrid}>
+        <Button title="Edit Profile" icon={Edit3} onPress={onEditProfile} fullWidth />
+        <Button title="My Listings" icon={PackageOpen} variant="outline" onPress={onMyListings} fullWidth />
+        {onMessages ? <Button title="Messages" icon={MessageCircle} variant="outline" onPress={onMessages} fullWidth /> : null}
+        {onNotifications ? <Button title="Notifications" icon={Bell} variant="outline" onPress={onNotifications} fullWidth /> : null}
+        {onSettings ? <Button title="Settings" icon={Settings} variant="outline" onPress={onSettings} fullWidth /> : null}
+        {auth.profile.is_admin && onAdmin ? <Button title="Admin Review" icon={ShieldCheck} variant="outline" onPress={onAdmin} fullWidth /> : null}
+        <Button title="Log Out" icon={LogOut} variant="outline" onPress={signOut} fullWidth />
+      </View>
+      {notice ? <NoticeCard notice={notice} /> : null}
+      <SectionTitle title="Reviews" hint={`${reviews.data?.length ?? 0} total`} />
+      {reviews.isLoading ? <LoadingCards /> : null}
+      {(reviews.data ?? []).slice(0, 3).map((review) => (
+        <ReviewCard
+          key={review.id}
+          reviewer={review.reviewer_name ?? 'ReTail user'}
+          rating={review.rating}
+          comment={review.comment}
+          date={formatReviewDate(review.created_at)}
+        />
+      ))}
+      <SectionTitle title="My Listings" hint={`${myListings.data?.length ?? 0} total`} />
+      {myListings.isLoading ? <LoadingCards /> : null}
+      <UserListingGrid
+        listings={activeListings}
+        onOpenListing={onOpenListing}
+        emptyTitle="You have no active listings yet"
+        emptyBody="Create your first listing from the Sell tab."
+      />
+    </ScrollView>
+  );
+}
+
+function RescueSignupFields({
+  organizationName,
+  animalsRescued,
+  city,
+  state,
+  zipCode,
+  addressLine1,
+  addressLine2,
+  contactPerson,
+  contactPhone,
+  websiteUrl,
+  organizationType,
+  has501c3,
+  ein,
+  onOrganizationName,
+  onAnimalsRescued,
+  onCity,
+  onState,
+  onZipCode,
+  onAddressLine1,
+  onAddressLine2,
+  onContactPerson,
+  onContactPhone,
+  onWebsiteUrl,
+  onOrganizationType,
+  onHas501c3,
+  onEin,
+}: {
+  organizationName: string;
+  animalsRescued: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  addressLine1: string;
+  addressLine2: string;
+  contactPerson: string;
+  contactPhone: string;
+  websiteUrl: string;
+  organizationType: RescueOrganizationType;
+  has501c3: boolean;
+  ein: string;
+  onOrganizationName: (value: string) => void;
+  onAnimalsRescued: (value: string) => void;
+  onCity: (value: string) => void;
+  onState: (value: string) => void;
+  onZipCode: (value: string) => void;
+  onAddressLine1: (value: string) => void;
+  onAddressLine2: (value: string) => void;
+  onContactPerson: (value: string) => void;
+  onContactPhone: (value: string) => void;
+  onWebsiteUrl: (value: string) => void;
+  onOrganizationType: (value: RescueOrganizationType) => void;
+  onHas501c3: (value: boolean) => void;
+  onEin: (value: string) => void;
+}) {
+  return (
+    <View style={styles.stack}>
+      <Text style={styles.filterLabel}>Rescue verification details</Text>
+      <TextInput label="Organization Name" value={organizationName} onChangeText={onOrganizationName} placeholder="Green Paws Rescue" />
+      <TextInput label="Animals Rescued" value={animalsRescued} onChangeText={onAnimalsRescued} placeholder="Dogs, cats, rabbits" />
+      <View style={styles.inputGrid}>
+        <TextInput label="City" value={city} onChangeText={onCity} placeholder="Austin" />
+        <TextInput label="State" value={state} onChangeText={onState} placeholder="TX" autoCapitalize="characters" />
+      </View>
+      <TextInput label="Zip Code" value={zipCode} onChangeText={onZipCode} placeholder="Optional public zip code" keyboardType="number-pad" />
+      <TextInput label="Public Address" value={addressLine1} onChangeText={onAddressLine1} placeholder="Optional drop-off or facility address" />
+      <TextInput label="Address Line 2" value={addressLine2} onChangeText={onAddressLine2} placeholder="Suite, unit, or notes" />
+      <TextInput label="Contact Person" value={contactPerson} onChangeText={onContactPerson} placeholder="Avery M." />
+      <TextInput label="Contact Phone" value={contactPhone} onChangeText={onContactPhone} placeholder="Optional" keyboardType="phone-pad" />
+      <TextInput label="Website or Social Link" value={websiteUrl} onChangeText={onWebsiteUrl} placeholder="Optional" autoCapitalize="none" />
+      <Text style={styles.filterLabel}>Rescue setup</Text>
+      <View style={styles.wrapRow}>
+        {(['Foster-based', 'Physical location', 'Hybrid'] as RescueOrganizationType[]).map((option) => (
+          <FilterChip key={option} label={option} selected={organizationType === option} onPress={() => onOrganizationType(option)} />
+        ))}
+      </View>
+      <Text style={styles.filterLabel}>501(c)(3) status</Text>
+      <View style={styles.wrapRow}>
+        <FilterChip label="Yes" selected={has501c3} onPress={() => onHas501c3(true)} />
+        <FilterChip label="No / Pending" selected={!has501c3} onPress={() => onHas501c3(false)} />
+      </View>
+      {has501c3 ? (
+        <TextInput label="EIN" value={ein} onChangeText={onEin} placeholder="Optional for verification" />
+      ) : null}
+    </View>
+  );
+}
+
+function RescueDashboardScreen({
+  profile,
+  onEditProfile,
+  onSettings,
+  onMessages,
+  onNotifications,
+  onAdmin,
+  onSignOut,
+}: {
+  profile: Profile;
+  onEditProfile: () => void;
+  onSettings?: () => void;
+  onMessages?: () => void;
+  onNotifications?: () => void;
+  onAdmin?: () => void;
+  onSignOut: () => void;
+}) {
+  const dashboard = useRescueDashboard(true);
+  const actions = useRescueActions();
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const [needItem, setNeedItem] = useState('');
+  const [needQuantity, setNeedQuantity] = useState('');
+  const [needUrgency, setNeedUrgency] = useState<RescueNeedUrgency>('High');
+  const [wishlistItem, setWishlistItem] = useState('');
+  const [wishlistQuantity, setWishlistQuantity] = useState('');
+  const [wishlistPriority, setWishlistPriority] = useState<RescueNeedUrgency>('Medium');
+
+  const rescueProfile = dashboard.data?.profile ?? null;
+  const urgentNeeds = dashboard.data?.urgentNeeds ?? [];
+  const wishlistItems = dashboard.data?.wishlistItems ?? [];
+
+  const addNeed = async () => {
+    try {
+      await actions.addUrgentNeed({ item: needItem, quantity: needQuantity, urgency: needUrgency });
+      setNeedItem('');
+      setNeedQuantity('');
+      setNotice({ title: 'Urgent need added', body: 'It will appear on your rescue profile once your organization is verified.' });
+      await dashboard.refetch();
+    } catch (error) {
+      setNotice({ title: 'Need was not added', body: handleAppError(error).userMessage });
+    }
+  };
+
+  const addWishlistItem = async () => {
+    try {
+      await actions.addWishlistItem({ item: wishlistItem, quantity: wishlistQuantity, priority: wishlistPriority });
+      setWishlistItem('');
+      setWishlistQuantity('');
+      setNotice({ title: 'Wishlist item added', body: 'People browsing Rescue Hub will be able to see it after verification.' });
+      await dashboard.refetch();
+    } catch (error) {
+      setNotice({ title: 'Wishlist item was not added', body: handleAppError(error).userMessage });
+    }
+  };
+
+  if (dashboard.isLoading) {
+    return (
+      <ScreenFrame>
+        <LoadingSpinner />
+      </ScreenFrame>
+    );
+  }
+
+  if (dashboard.isError) {
+    return (
+      <ScreenFrame>
+        <ErrorState message={handleAppError(dashboard.error).userMessage} onRetry={dashboard.refetch} />
+      </ScreenFrame>
+    );
+  }
+
+  if (!rescueProfile) {
+    return <RescueProfileSetupScreen onSaved={dashboard.refetch} onSignOut={onSignOut} />;
+  }
+
+  return (
+    <ScrollView style={styles.listScreen} contentContainerStyle={styles.listContent}>
+      <ProfileHeader
+        name={rescueProfile.name}
+        handle={`@${profile.username}`}
+        location={[rescueProfile.city, rescueProfile.state].filter(Boolean).join(', ')}
+        bio={rescueProfile.summary}
+        rating={verificationLabel(rescueProfile.verification_status)}
+        initials={initialsFor(rescueProfile.name)}
+        avatarUrl={profile.avatar_url}
+        verified={rescueProfile.is_verified}
+      />
+
+      <Card>
+        <View style={styles.stack}>
+          <View style={styles.locationRow}>
+            <ShieldCheck size={20} color={rescueProfile.is_verified ? colors.primary : colors.warning} />
+            <Text style={styles.cardTitle}>{verificationLabel(rescueProfile.verification_status)}</Text>
+          </View>
+          <Text style={styles.body}>
+            {rescueProfile.is_verified
+              ? 'Your rescue can appear publicly in Rescue Hub.'
+              : 'Your rescue profile is saved. Public Rescue Hub visibility begins after verification approval.'}
+          </Text>
+          <Text style={styles.bodyStrong}>
+            {rescueOrganizationTypeLabel(rescueProfile.organization_type)} - {rescueProfile.has_501c3 ? '501(c)(3)' : '501(c)(3) not confirmed'}
+          </Text>
+          {rescueProfile.website_url ? <Text style={styles.body}>Website: {rescueProfile.website_url}</Text> : null}
+          {rescuePublicAddress(rescueProfile) ? <Text style={styles.body}>Public address: {rescuePublicAddress(rescueProfile)}</Text> : null}
+        </View>
+      </Card>
+
+      <StatsCard
+        stats={[
+          { label: 'Urgent Needs', value: urgentNeeds.length },
+          { label: 'Wishlist', value: wishlistItems.length },
+        ]}
+      />
+
+      <View style={styles.actionGrid}>
+        <Button title="Edit Profile" icon={Edit3} onPress={onEditProfile} fullWidth />
+        {onMessages ? <Button title="Messages" icon={MessageCircle} variant="outline" onPress={onMessages} fullWidth /> : null}
+        {onNotifications ? <Button title="Notifications" icon={Bell} variant="outline" onPress={onNotifications} fullWidth /> : null}
+        {onSettings ? <Button title="Settings" icon={Settings} variant="outline" onPress={onSettings} fullWidth /> : null}
+        {profile.is_admin && onAdmin ? <Button title="Admin Review" icon={ShieldCheck} variant="outline" onPress={onAdmin} fullWidth /> : null}
+        <Button title="Log Out" icon={LogOut} variant="outline" onPress={onSignOut} fullWidth />
+      </View>
+
+      {notice ? <NoticeCard notice={notice} /> : null}
+      {actions.error ? <Text style={styles.errorText}>{actions.error}</Text> : null}
+
+      <Card>
+        <View style={styles.stack}>
+          <View style={styles.locationRow}>
+            <AlertCircle size={20} color={colors.warning} />
+            <Text style={styles.cardTitle}>Add urgent need</Text>
+          </View>
+          <TextInput label="Needed Item" value={needItem} onChangeText={setNeedItem} placeholder="Small crates" />
+          <TextInput label="Quantity" value={needQuantity} onChangeText={setNeedQuantity} placeholder="4 needed" />
+          <View style={styles.wrapRow}>
+            {(['High', 'Medium', 'Low'] as RescueNeedUrgency[]).map((option) => (
+              <FilterChip key={option} label={option} selected={needUrgency === option} onPress={() => setNeedUrgency(option)} />
+            ))}
+          </View>
+          <Button title="Add Urgent Need" onPress={() => void addNeed()} loading={actions.loading} fullWidth />
+        </View>
+      </Card>
+
+      <Card>
+        <View style={styles.stack}>
+          <View style={styles.locationRow}>
+            <HeartHandshake size={20} color={colors.primary} />
+            <Text style={styles.cardTitle}>Add wishlist item</Text>
+          </View>
+          <TextInput label="Wishlist Item" value={wishlistItem} onChangeText={setWishlistItem} placeholder="Washable blankets" />
+          <TextInput label="Quantity" value={wishlistQuantity} onChangeText={setWishlistQuantity} placeholder="12 requested" />
+          <View style={styles.wrapRow}>
+            {(['High', 'Medium', 'Low'] as RescueNeedUrgency[]).map((option) => (
+              <FilterChip key={option} label={option} selected={wishlistPriority === option} onPress={() => setWishlistPriority(option)} />
+            ))}
+          </View>
+          <Button title="Add Wishlist Item" variant="secondary" onPress={() => void addWishlistItem()} loading={actions.loading} fullWidth />
+        </View>
+      </Card>
+
+      <SectionTitle title="Current urgent needs" hint={`${urgentNeeds.length} active`} />
+      <RescueDashboardItemList
+        items={urgentNeeds.map((need) => ({
+          id: need.id,
+          item: need.item,
+          quantity: need.quantity,
+          urgency: need.urgency,
+        }))}
+        emptyTitle="No urgent needs yet"
+      />
+
+      <SectionTitle title="Wishlist" hint={`${wishlistItems.length} active`} />
+      <RescueDashboardItemList
+        items={wishlistItems.map((item) => ({
+          id: item.id,
+          item: item.item,
+          quantity: item.quantity,
+          urgency: item.priority,
+        }))}
+        emptyTitle="No wishlist items yet"
+      />
+    </ScrollView>
+  );
+}
+
+function RescueProfileSetupScreen({ onSaved, onSignOut }: { onSaved: () => Promise<void>; onSignOut: () => void }) {
+  const actions = useRescueActions();
+  const [organizationName, setOrganizationName] = useState('');
+  const [animalsRescued, setAnimalsRescued] = useState('');
+  const [city, setCity] = useState('');
+  const [state, setState] = useState('');
+  const [zipCode, setZipCode] = useState('');
+  const [addressLine1, setAddressLine1] = useState('');
+  const [addressLine2, setAddressLine2] = useState('');
+  const [contactPerson, setContactPerson] = useState('');
+  const [contactPhone, setContactPhone] = useState('');
+  const [websiteUrl, setWebsiteUrl] = useState('');
+  const [organizationType, setOrganizationType] = useState<RescueOrganizationType>('Foster-based');
+  const [has501c3, setHas501c3] = useState(false);
+  const [ein, setEin] = useState('');
+  const [notice, setNotice] = useState<Notice | null>(null);
+
+  const save = async () => {
+    try {
+      await actions.saveProfile(buildRescueSignupInput({
+        organizationName,
+        animalsRescued,
+        city,
+        state,
+        zipCode,
+        addressLine1,
+        addressLine2,
+        contactPerson,
+        organizationType,
+        has501c3,
+        ein,
+        websiteUrl,
+      }));
+      setNotice({ title: 'Rescue profile saved', body: 'Your profile is pending verification.' });
+      await onSaved();
+    } catch (error) {
+      setNotice({ title: 'Profile was not saved', body: handleAppError(error).userMessage });
+    }
+  };
+
+  return (
+    <ScreenFrame>
+      <Card>
+        <View style={styles.stack}>
+          <Text style={styles.cardTitle}>Finish rescue verification</Text>
+          <Text style={styles.body}>Add your organization details so ReTail can review and show your needs in Rescue Hub.</Text>
+          <RescueSignupFields
+            organizationName={organizationName}
+            animalsRescued={animalsRescued}
+            city={city}
+            state={state}
+            zipCode={zipCode}
+            addressLine1={addressLine1}
+            addressLine2={addressLine2}
+            contactPerson={contactPerson}
+            contactPhone={contactPhone}
+            websiteUrl={websiteUrl}
+            organizationType={organizationType}
+            has501c3={has501c3}
+            ein={ein}
+            onOrganizationName={setOrganizationName}
+            onAnimalsRescued={setAnimalsRescued}
+            onCity={setCity}
+            onState={setState}
+            onZipCode={setZipCode}
+            onAddressLine1={setAddressLine1}
+            onAddressLine2={setAddressLine2}
+            onContactPerson={setContactPerson}
+            onContactPhone={setContactPhone}
+            onWebsiteUrl={setWebsiteUrl}
+            onOrganizationType={setOrganizationType}
+            onHas501c3={setHas501c3}
+            onEin={setEin}
+          />
+          {notice ? <NoticeCard notice={notice} /> : null}
+          {actions.error ? <Text style={styles.errorText}>{actions.error}</Text> : null}
+          <Button title="Save Rescue Profile" onPress={() => void save()} loading={actions.loading} fullWidth />
+          <Button title="Log Out" variant="outline" onPress={onSignOut} fullWidth />
+        </View>
+      </Card>
+    </ScreenFrame>
+  );
+}
+
+function RescueDashboardItemList({
+  items,
+  emptyTitle,
+}: {
+  items: Array<{ id: string; item: string; quantity?: string; urgency: RescueNeedUrgency }>;
+  emptyTitle: string;
+}) {
+  if (items.length === 0) {
+    return <EmptyState title={emptyTitle} body="Add items from your rescue dashboard." icon={HeartHandshake} />;
+  }
+
+  return (
+    <View style={styles.cardStack}>
+      {items.map((item) => (
+        <Card key={item.id}>
+          <View style={styles.needRow}>
+            <View style={styles.needCopy}>
+              <Text style={styles.bodyStrong}>{item.item}</Text>
+              <Text style={styles.metaText}>{item.quantity || 'Quantity flexible'}</Text>
+            </View>
+            <ConditionBadge condition={item.urgency} />
+          </View>
+        </Card>
+      ))}
+    </View>
+  );
+}
+
+function buildRescueSignupInput(input: RescueSignupInput): RescueSignupInput {
+  return {
+    ...input,
+    organizationName: input.organizationName.trim(),
+    animalsRescued: input.animalsRescued.trim(),
+    city: input.city.trim(),
+    state: input.state.trim(),
+    zipCode: input.zipCode?.trim() || undefined,
+    addressLine1: input.addressLine1?.trim() || undefined,
+    addressLine2: input.addressLine2?.trim() || undefined,
+    contactPerson: input.contactPerson.trim(),
+    contactEmail: input.contactEmail?.trim() || undefined,
+    contactPhone: input.contactPhone?.trim() || undefined,
+    ein: input.ein?.trim() || undefined,
+    websiteUrl: input.websiteUrl?.trim() || undefined,
+  };
+}
+
+function rescuePublicAddress(rescueProfile: RescueProfile): string {
+  if (!rescueProfile.address_line1) {
+    return '';
+  }
+
+  return [
+    rescueProfile.address_line1,
+    rescueProfile.address_line2,
+    [[rescueProfile.city, rescueProfile.state].filter(Boolean).join(', '), rescueProfile.zip_code].filter(Boolean).join(' '),
+  ].filter(Boolean).join(', ');
+}
+
+function rescuePublicProfileHasContact(rescueProfile: RescueProfile): boolean {
+  return Boolean(rescueProfile.website_url || rescuePublicAddress(rescueProfile));
+}
+
+function verificationLabel(status: string) {
+  if (status === 'verified') {
+    return 'Verified Rescue';
+  }
+
+  if (status === 'rejected') {
+    return 'Verification Needs Review';
+  }
+
+  return 'Verification Pending';
+}
+
+function rescueOrganizationTypeLabel(value: string) {
+  if (value === 'physical_location') {
+    return 'Physical location';
+  }
+
+  if (value === 'hybrid') {
+    return 'Hybrid';
+  }
+
+  return 'Foster-based';
+}
+
+export function EditProfileScreen({ onBack }: { onBack: () => void }) {
+  const auth = useAuth();
+  const mutation = useUpdateProfile();
+  const isRescueProfile = auth.profile?.account_type === 'rescue';
+  const rescueDashboard = useRescueDashboard(Boolean(isRescueProfile));
+  const rescueActions = useRescueActions();
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const [form, setForm] = useState({
+    avatar_url: auth.profile?.avatar_url ?? '',
+    display_name: auth.profile?.display_name ?? '',
+    username: auth.profile?.username ?? '',
+    bio: auth.profile?.bio ?? '',
+    city: auth.profile?.city ?? '',
+    state: auth.profile?.state ?? '',
+    zip_code: auth.profile?.zip_code ?? '',
+  });
+  const [rescueForm, setRescueForm] = useState<RescueSignupInput>({
+    organizationName: '',
+    animalsRescued: '',
+    city: '',
+    state: '',
+    zipCode: '',
+    addressLine1: '',
+    addressLine2: '',
+    contactPerson: '',
+    contactPhone: '',
+    organizationType: 'Foster-based',
+    has501c3: false,
+    ein: '',
+    websiteUrl: '',
+  });
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const rescueProfile = rescueDashboard.data?.profile ?? null;
+
+  useEffect(() => {
+    if (!rescueProfile) {
+      return;
+    }
+
+    setRescueForm({
+      organizationName: rescueProfile.name,
+      animalsRescued: rescueProfile.animals_rescued.join(', '),
+      city: rescueProfile.city,
+      state: rescueProfile.state,
+      zipCode: rescueProfile.zip_code ?? '',
+      addressLine1: rescueProfile.address_line1 ?? '',
+      addressLine2: rescueProfile.address_line2 ?? '',
+      contactPerson: rescueProfile.contact_person,
+      contactEmail: rescueProfile.contact_email,
+      contactPhone: rescueProfile.contact_phone ?? '',
+      organizationType: rescueOrganizationTypeLabel(rescueProfile.organization_type),
+      has501c3: rescueProfile.has_501c3,
+      ein: rescueProfile.ein ?? '',
+      websiteUrl: rescueProfile.website_url ?? '',
+      summary: rescueProfile.summary,
+    });
+  }, [rescueProfile]);
+
+  const update = (field: keyof typeof form, value: string) => {
+    setForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const updateRescue = <Key extends keyof RescueSignupInput>(field: Key, value: RescueSignupInput[Key]) => {
+    setRescueForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const chooseAvatar = () => {
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/jpeg,image/png,image/webp';
+      input.onchange = async () => {
+        const file = input.files?.[0];
+        if (!file) {
+          return;
+        }
+        const uri = URL.createObjectURL(file);
+        update('avatar_url', uri);
+        try {
+          const avatarUrl = await mutation.uploadAvatar(uri);
+          update('avatar_url', avatarUrl);
+          setNotice({ title: 'Profile photo updated', body: 'Your new profile picture has been saved.' });
+        } catch (error) {
+          setNotice({ title: 'Photo was not uploaded', body: handleAppError(error).userMessage });
+        }
+      };
+      input.click();
+      return;
+    }
+
+    const fallbackAvatar = 'https://images.unsplash.com/photo-1601758174114-e711c0cbaa69?auto=format&fit=crop&w=600&q=80';
+    update('avatar_url', fallbackAvatar);
+    void mutation.uploadAvatar(fallbackAvatar).then((avatarUrl) => {
+      update('avatar_url', avatarUrl);
+      setNotice({ title: 'Profile photo updated', body: 'Your new profile picture has been saved.' });
+    }).catch((error) => {
+      setNotice({ title: 'Photo was not uploaded', body: handleAppError(error).userMessage });
+    });
+  };
+
+  const save = async () => {
+    const nextErrors: Record<string, string> = {};
+    if (!form.display_name.trim()) {
+      nextErrors.display_name = 'Display name is required.';
+    }
+    if (!form.username.trim()) {
+      nextErrors.username = 'Username is required.';
+    }
+    setErrors(nextErrors);
+
+    if (Object.keys(nextErrors).length > 0) {
+      return;
+    }
+
+    try {
+      await mutation.updateProfile(form);
+      if (isRescueProfile) {
+        if (!rescueProfile) {
+          setNotice({ title: 'Rescue profile is still loading', body: 'Please try saving again in a moment.' });
+          return;
+        }
+
+        await rescueActions.saveProfile(buildRescueSignupInput(rescueForm));
+        await rescueDashboard.refetch();
+      }
+      setNotice({ title: 'Profile updated', body: 'Your profile changes have been saved.' });
+    } catch (error) {
+      setNotice({ title: 'Profile was not updated', body: handleAppError(error).userMessage });
+    }
+  };
+
+  return (
+    <SafeAreaView style={styles.app}>
+      <StatusBar style="dark" />
+      <ScrollView style={styles.listScreen} contentContainerStyle={styles.listContent} keyboardShouldPersistTaps="handled">
+        <BackButton onPress={onBack} />
+        <View style={styles.headerBlock}>
+          <Text style={styles.title}>Edit Profile</Text>
+          <Text style={styles.body}>Keep your public marketplace profile clear and trustworthy.</Text>
+        </View>
+        <View style={styles.avatarEditRow}>
+          <Avatar image={form.avatar_url} initials={initialsFor(form.display_name || 'User')} verified={auth.profile?.is_verified} size="lg" />
+          <Button title="Upload Avatar" variant="outline" onPress={chooseAvatar} loading={mutation.loading} />
+        </View>
+        <TextInput label="Display Name" value={form.display_name} onChangeText={(value) => update('display_name', value)} error={errors.display_name} />
+        <TextInput label="Username" value={form.username} onChangeText={(value) => update('username', value)} error={errors.username} autoCapitalize="none" />
+        <TextArea label="Bio" value={form.bio} onChangeText={(value) => update('bio', value)} placeholder="Tell pet owners what to expect." />
+        <LocationPicker
+          city={form.city}
+          state={form.state}
+          onCityChange={(value) => update('city', value)}
+          onStateChange={(value) => update('state', value)}
+        />
+        <TextInput label="Zip Code" value={form.zip_code} onChangeText={(value) => update('zip_code', value)} keyboardType="numeric" />
+        {isRescueProfile ? (
+          <Card>
+            <View style={styles.stack}>
+              <View style={styles.locationRow}>
+                <HeartHandshake size={20} color={colors.primary} />
+                <Text style={styles.cardTitle}>Public rescue details</Text>
+              </View>
+              <Text style={styles.body}>
+                Website and address are public on your rescue profile and Rescue Hub. Use a facility, office, or drop-off address rather than a private home address.
+              </Text>
+              {rescueDashboard.isLoading ? <LoadingSpinner /> : null}
+              {rescueDashboard.isError ? <ErrorState message={handleAppError(rescueDashboard.error).userMessage} onRetry={rescueDashboard.refetch} /> : null}
+              {!rescueDashboard.isLoading ? (
+                <RescueSignupFields
+                  organizationName={rescueForm.organizationName}
+                  animalsRescued={rescueForm.animalsRescued}
+                  city={rescueForm.city}
+                  state={rescueForm.state}
+                  zipCode={rescueForm.zipCode ?? ''}
+                  addressLine1={rescueForm.addressLine1 ?? ''}
+                  addressLine2={rescueForm.addressLine2 ?? ''}
+                  contactPerson={rescueForm.contactPerson}
+                  contactPhone={rescueForm.contactPhone ?? ''}
+                  websiteUrl={rescueForm.websiteUrl ?? ''}
+                  organizationType={rescueForm.organizationType}
+                  has501c3={rescueForm.has501c3}
+                  ein={rescueForm.ein ?? ''}
+                  onOrganizationName={(value) => updateRescue('organizationName', value)}
+                  onAnimalsRescued={(value) => updateRescue('animalsRescued', value)}
+                  onCity={(value) => updateRescue('city', value)}
+                  onState={(value) => updateRescue('state', value)}
+                  onZipCode={(value) => updateRescue('zipCode', value)}
+                  onAddressLine1={(value) => updateRescue('addressLine1', value)}
+                  onAddressLine2={(value) => updateRescue('addressLine2', value)}
+                  onContactPerson={(value) => updateRescue('contactPerson', value)}
+                  onContactPhone={(value) => updateRescue('contactPhone', value)}
+                  onWebsiteUrl={(value) => updateRescue('websiteUrl', value)}
+                  onOrganizationType={(value) => updateRescue('organizationType', value)}
+                  onHas501c3={(value) => updateRescue('has501c3', value)}
+                  onEin={(value) => updateRescue('ein', value)}
+                />
+              ) : null}
+            </View>
+          </Card>
+        ) : null}
+        {mutation.error ? <Text style={styles.errorText}>{mutation.error}</Text> : null}
+        {rescueActions.error ? <Text style={styles.errorText}>{rescueActions.error}</Text> : null}
+        {notice ? <NoticeCard notice={notice} /> : null}
+        <Button title="Save Changes" onPress={save} loading={mutation.loading || rescueActions.loading} fullWidth />
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+export function PublicProfileScreen({
+  userId,
+  onBack,
+  onOpenListing,
+  onReportUser,
+}: {
+  userId: string;
+  onBack: () => void;
+  onOpenListing: (listingId: string) => void;
+  onReportUser?: (userId: string) => void;
+}) {
+  const auth = useAuth();
+  const profile = useProfile(userId);
+  const publicRescueProfile = usePublicRescueProfile(userId, profile.data?.account_type === 'rescue');
+  const listings = useUserListings(userId);
+  const reviews = useReviews(userId);
+  const favorites = useFavorites(Boolean(auth.user));
+  const [notice, setNotice] = useState<Notice | null>(null);
+
+  if (profile.isLoading) {
+    return (
+      <ScreenFrame>
+        <LoadingSpinner />
+      </ScreenFrame>
+    );
+  }
+
+  if (profile.isError || !profile.data) {
+    return (
+      <ScreenFrame>
+        <ErrorState message={handleAppError(profile.error).userMessage} onRetry={profile.refetch} onBack={onBack} />
+      </ScreenFrame>
+    );
+  }
+
+  const publicProfile = profile.data as PublicProfile;
+  const activeListings = (listings.data ?? []).filter((listing) => listing.status === 'Active');
+  const favoriteIds = (favorites.data ?? []).map((listing) => listing.id);
+
+  const handleFavorite = async (listingId: string) => {
+    if (auth.isGuest) {
+      setNotice({ title: 'Create an account to save listings.', body: 'Saved listings live in your Favorites tab.' });
+      return;
+    }
+
+    try {
+      if (favorites.isFavorite(listingId)) {
+        await favorites.removeFavorite(listingId);
+      } else {
+        await favorites.saveFavorite(listingId);
+      }
+    } catch (error) {
+      setNotice({ title: 'Favorite was not updated', body: handleAppError(error).userMessage });
+    }
+  };
+
+  return (
+    <SafeAreaView style={styles.app}>
+      <StatusBar style="dark" />
+      <ScrollView style={styles.listScreen} contentContainerStyle={styles.listContent}>
+        <BackButton onPress={onBack} />
+        <ProfileHeader
+          name={publicProfile.display_name}
+          handle={`@${publicProfile.username}`}
+          location={profileLocation(publicProfile)}
+          bio={publicProfile.bio}
+          rating={ratingLabel(publicProfile)}
+          initials={initialsFor(publicProfile.display_name)}
+          avatarUrl={publicProfile.avatar_url}
+          verified={publicProfile.is_verified}
+        />
+        {publicRescueProfile.data && rescuePublicProfileHasContact(publicRescueProfile.data) ? (
+          <Card>
+            <View style={styles.stack}>
+              <View style={styles.locationRow}>
+                <HeartHandshake size={20} color={colors.primary} />
+                <Text style={styles.cardTitle}>Rescue details</Text>
+              </View>
+              <Text style={styles.bodyStrong}>
+                {rescueOrganizationTypeLabel(publicRescueProfile.data.organization_type)} -{' '}
+                {publicRescueProfile.data.has_501c3 ? '501(c)(3)' : '501(c)(3) not confirmed'}
+              </Text>
+              {publicRescueProfile.data.website_url ? <Text style={styles.body}>Website: {publicRescueProfile.data.website_url}</Text> : null}
+              {rescuePublicAddress(publicRescueProfile.data) ? (
+                <Text style={styles.body}>Public address: {rescuePublicAddress(publicRescueProfile.data)}</Text>
+              ) : null}
+            </View>
+          </Card>
+        ) : null}
+        <StatsCard
+          stats={[
+            { label: 'Listings', value: publicProfile.listings_count },
+            { label: 'Sales', value: publicProfile.completed_sales_count },
+            { label: 'Reviews', value: publicProfile.review_count },
+          ]}
+        />
+        <View style={styles.actionGrid}>
+          {onReportUser ? <Button title="Report User" icon={Flag} variant="ghost" onPress={() => onReportUser(userId)} fullWidth /> : null}
+        </View>
+        {notice ? <NoticeCard notice={notice} /> : null}
+        <SectionTitle title="Reviews" hint={`${reviews.data?.length ?? 0} total`} />
+        {reviews.isLoading ? <LoadingCards /> : null}
+        {(reviews.data ?? []).slice(0, 4).map((review) => (
+          <ReviewCard
+            key={review.id}
+            reviewer={review.reviewer_name ?? 'ReTail user'}
+            rating={review.rating}
+            comment={review.comment}
+            date={formatReviewDate(review.created_at)}
+          />
+        ))}
+        <SectionTitle title="Active listings" hint={`${activeListings.length} available`} />
+        {listings.isLoading ? <LoadingCards /> : null}
+        <UserListingGrid
+          listings={activeListings}
+          favoriteIds={favoriteIds}
+          onOpenListing={onOpenListing}
+          onFavorite={(listingId) => void handleFavorite(listingId)}
+          emptyTitle="No active listings"
+          emptyBody="This seller does not have active listings right now."
+        />
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+export function MyListingsScreen({
+  onBack,
+  onOpenListing,
+  onEditListing,
+}: {
+  onBack: () => void;
+  onOpenListing: (listingId: string) => void;
+  onEditListing: (listingId: string) => void;
+}) {
+  const listings = useMyListings();
+  const [confirm, setConfirm] = useState<{
+    title: string;
+    body: string;
+    action: () => Promise<void>;
+  } | null>(null);
+  const [notice, setNotice] = useState<Notice | null>(null);
+
+  const runConfirmed = async () => {
+    if (!confirm) {
+      return;
+    }
+
+    try {
+      await confirm.action();
+      setNotice({ title: 'Listing updated', body: 'Your listing management change has been saved.' });
+    } catch (error) {
+      setNotice({ title: 'Listing was not updated', body: handleAppError(error).userMessage });
+    } finally {
+      setConfirm(null);
+    }
+  };
+
+  const ask = (title: string, body: string, action: () => Promise<void>) => {
+    setConfirm({ title, body, action });
+  };
+
+  const groups: Array<{ status: ListingStatus; title: string }> = [
+    { status: 'Active', title: 'Active' },
+    { status: 'Pending', title: 'Pending' },
+    { status: 'Sold', title: 'Sold' },
+    { status: 'Donated', title: 'Donated' },
+    { status: 'Archived', title: 'Archived' },
+  ];
+
+  const allListings = listings.data ?? [];
+
+  return (
+    <SafeAreaView style={styles.app}>
+      <StatusBar style="dark" />
+      <ScrollView style={styles.listScreen} contentContainerStyle={styles.listContent}>
+        <BackButton onPress={onBack} />
+        <View style={styles.headerBlock}>
+          <Text style={styles.title}>My Listings</Text>
+          <Text style={styles.body}>Manage active, sold, donated, and archived items.</Text>
+        </View>
+        {notice ? <NoticeCard notice={notice} /> : null}
+        {confirm ? (
+          <Card>
+            <View style={styles.stack}>
+              <Text style={styles.cardTitle}>{confirm.title}</Text>
+              <Text style={styles.body}>{confirm.body}</Text>
+              <View style={styles.actionGrid}>
+                <Button title="Cancel" variant="outline" onPress={() => setConfirm(null)} fullWidth />
+                <Button title="Confirm" variant="danger" onPress={() => void runConfirmed()} fullWidth />
+              </View>
+            </View>
+          </Card>
+        ) : null}
+        {listings.isLoading ? <LoadingCards /> : null}
+        {listings.isError ? <ErrorState message={handleAppError(listings.error).userMessage} onRetry={listings.refetch} /> : null}
+        {!listings.isLoading && allListings.length === 0 ? (
+          <EmptyState title="You have not listed anything yet" body="Create your first listing from the Sell tab." icon={PackageOpen} />
+        ) : null}
+        {groups.map((group) => {
+          const groupListings = allListings.filter((listing) => listing.status === group.status);
+
+          if (!groupListings.length) {
+            return null;
+          }
+
+          return (
+            <UserListingGrid
+              key={group.status}
+              title={group.title}
+              listings={groupListings}
+              onOpenListing={onOpenListing}
+              actions={[
+                {
+                  label: 'Edit',
+                  onPress: (listing) => onEditListing(listing.id),
+                  disabled: (listing) => ['Sold', 'Donated', 'Removed'].includes(listing.status),
+                },
+                {
+                  label: 'Archive',
+                  onPress: (listing) =>
+                    ask('Archive listing?', 'Archived listings leave the marketplace feed but remain in My Listings.', () =>
+                      listings.archiveListing(listing.id)
+                    ),
+                  disabled: (listing) => ['Sold', 'Donated', 'Archived', 'Removed'].includes(listing.status),
+                },
+                {
+                  label: 'Mark Sold',
+                  onPress: (listing) =>
+                    ask('Mark listing sold?', 'This will remove the item from active marketplace results.', () =>
+                      listings.markListingSold(listing.id)
+                    ),
+                  disabled: (listing) => ['Sold', 'Donated', 'Archived', 'Removed'].includes(listing.status),
+                },
+                {
+                  label: 'Mark Donated',
+                  onPress: (listing) =>
+                    ask('Mark listing donated?', 'This records the item as donated and removes it from active results.', () =>
+                      listings.markListingDonated(listing.id)
+                    ),
+                  disabled: (listing) => ['Sold', 'Donated', 'Archived', 'Removed'].includes(listing.status),
+                },
+                {
+                  label: 'Delete',
+                  tone: 'danger',
+                  onPress: (listing) =>
+                    ask('Delete listing?', 'This removes the listing from public marketplace results.', () =>
+                      listings.deleteListing(listing.id)
+                    ),
+                  disabled: (listing) => listing.status === 'Removed',
+                },
+              ]}
+            />
+          );
+        })}
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+export function EditListingScreen({
+  listingId,
+  onBack,
+  onSaved,
+}: {
+  listingId: string;
+  onBack: () => void;
+  onSaved: (listingId: string) => void;
+}) {
+  const auth = useAuth();
+  const listing = useListing(listingId);
+
+  if (listing.isLoading) {
+    return (
+      <ScreenFrame>
+        <LoadingSpinner />
+      </ScreenFrame>
+    );
+  }
+
+  if (listing.isError || !listing.data) {
+    return (
+      <ScreenFrame>
+        <ErrorState message={handleAppError(listing.error).userMessage} onRetry={listing.refetch} onBack={onBack} />
+      </ScreenFrame>
+    );
+  }
+
+  if (listing.data.seller.id !== auth.user?.id) {
+    return (
+      <ScreenFrame>
+        <ErrorState message="You can only edit listings you created." onBack={onBack} />
+      </ScreenFrame>
+    );
+  }
+
+  return <EditListingForm detail={listing.data} onBack={onBack} onSaved={onSaved} />;
+}
+
+function EditListingForm({
+  detail,
+  onBack,
+  onSaved,
+}: {
+  detail: ListingDetail;
+  onBack: () => void;
+  onSaved: (listingId: string) => void;
+}) {
+  const mutation = useUpdateListing();
+  const item = detail.listing;
+  const editable = !['Sold', 'Donated', 'Removed'].includes(item.status);
+  const [form, setForm] = useState<CreateListingInput>({
+    title: item.title,
+    description: item.description,
+    category: item.category,
+    condition: item.condition,
+    listing_type: listingTypeFor(item.price),
+    price: listingTypeFor(item.price) === 'sale' ? item.price : '',
+    images: detail.images.map((image) => image.image_url),
+    city: cityFor(item.location),
+    state: stateFor(item.location),
+    zip_code: item.zipCode ?? zipCodeFor(item.location),
+    latitude: item.latitude,
+    longitude: item.longitude,
+    pickup_available: item.pickup,
+    porch_pickup_available: item.porchPickup,
+    meetup_available: item.meetup,
+    shipping_available: item.shipping,
+    shipping_payer: item.shippingPayer ?? 'buyer',
+    shipping_cost_estimate: item.shippingCostEstimate ?? '',
+    handling_time: item.handlingTime ?? '',
+    ship_from_zip_code: item.shipFromZipCode ?? item.zipCode ?? '',
+    brand: item.brand ?? '',
+    item_dimensions: item.itemDimensions ?? '',
+    pet_size: item.petSize ?? '',
+    condition_notes: item.conditionNotes ?? '',
+    availability_notes: item.availabilityNotes ?? '',
+    reason_for_listing: item.reasonForListing ?? '',
+    safety_confirmed: item.safetyConfirmed ?? true,
+  });
+  const [errors, setErrors] = useState<ReturnType<typeof validateCreateListingInput>['errors']>({});
+  const [notice, setNotice] = useState<Notice | null>(null);
+
+  const update = <FieldName extends keyof CreateListingInput>(field: FieldName, value: CreateListingInput[FieldName]) => {
+    setForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const save = async () => {
+    const validation = validateCreateListingInput(form);
+    if (!validation.isValid) {
+      setErrors(validation.errors);
+      return;
+    }
+
+    const input: UpdateListingInput = form;
+
+    try {
+      const updated = await mutation.updateListing(item.id, input);
+      onSaved(updated.id);
+    } catch (error) {
+      setNotice({ title: 'Listing was not updated', body: handleAppError(error).userMessage });
+    }
+  };
+
+  return (
+    <SafeAreaView style={styles.app}>
+      <StatusBar style="dark" />
+      <ScrollView style={styles.listScreen} contentContainerStyle={styles.listContent} keyboardShouldPersistTaps="handled">
+        <BackButton onPress={onBack} />
+        <View style={styles.headerBlock}>
+          <Text style={styles.title}>Edit Listing</Text>
+          <Text style={styles.body}>Update the photos, details, price, and how buyers can get the item.</Text>
+        </View>
+        {!editable ? (
+          <NoticeCard notice={{ title: 'Listing cannot be edited', body: 'Sold, donated, or deleted listings cannot be edited.' }} />
+        ) : null}
+        {notice ? <NoticeCard notice={notice} /> : null}
+        <ListingForm
+          form={form}
+          errors={errors}
+          uploading={false}
+          progress={0}
+          onChange={update}
+        />
+        {mutation.error ? <Text style={styles.errorText}>{mutation.error}</Text> : null}
+        <Button title="Save Listing" onPress={save} loading={mutation.loading} disabled={!editable} fullWidth />
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+function ListingForm({
+  form,
+  errors,
+  uploading,
+  progress,
+  onChange,
+}: {
+  form: CreateListingInput;
+  errors: ReturnType<typeof validateCreateListingInput>['errors'];
+  uploading: boolean;
+  progress: number;
+  onChange: <FieldName extends keyof CreateListingInput>(field: FieldName, value: CreateListingInput[FieldName]) => void;
+}) {
+  const updateZipCode = (zipCode: string) => {
+    onChange('zip_code', zipCode);
+    const matchedLocation = findManualLocationByZipCode(zipCode);
+
+    if (!matchedLocation) {
+      return;
+    }
+
+    onChange('city', matchedLocation.city);
+    onChange('state', matchedLocation.state);
+    onChange('latitude', matchedLocation.latitude);
+    onChange('longitude', matchedLocation.longitude);
+  };
+
+  return (
+    <>
+      <ImageUploader
+        images={form.images}
+        onChange={(images) => onChange('images', images)}
+        error={errors.images}
+        uploading={uploading}
+        progress={progress}
+      />
+      <TextInput
+        label="Title"
+        value={form.title}
+        onChangeText={(value) => onChange('title', value)}
+        placeholder="Large crate, cat tree, aquarium filter..."
+        error={errors.title}
+      />
+      <TextArea
+        label="Description"
+        value={form.description}
+        onChangeText={(value) => onChange('description', value)}
+        placeholder="Condition, size, pickup notes..."
+        error={errors.description}
+      />
+      <Text style={styles.filterLabel}>Item details</Text>
+      <TextInput
+        label="Brand"
+        value={form.brand ?? ''}
+        onChangeText={(value) => onChange('brand', value)}
+        placeholder="Frisco, Kong, Fluval..."
+        helperText="Optional, but helpful for buyers comparing items."
+      />
+      <TextInput
+        label="Size or dimensions"
+        value={form.item_dimensions ?? ''}
+        onChangeText={(value) => onChange('item_dimensions', value)}
+        placeholder="36 in crate, 20 gal tank, medium harness..."
+      />
+      <TextInput
+        label="Pet size fit"
+        value={form.pet_size ?? ''}
+        onChangeText={(value) => onChange('pet_size', value)}
+        placeholder="Small dogs, kittens, bearded dragons..."
+      />
+      <TextArea
+        label="Condition notes"
+        value={form.condition_notes ?? ''}
+        onChangeText={(value) => onChange('condition_notes', value)}
+        placeholder="Washed cover, small scratch, missing scoop..."
+      />
+      <TextInput
+        label="Availability"
+        value={form.availability_notes ?? ''}
+        onChangeText={(value) => onChange('availability_notes', value)}
+        placeholder="Weekends, evenings after 5, flexible..."
+      />
+      <TextInput
+        label="Reason for listing"
+        value={form.reason_for_listing ?? ''}
+        onChangeText={(value) => onChange('reason_for_listing', value)}
+        placeholder="Pet outgrew it, upgraded, foster supplies..."
+      />
+      <CategorySelector value={form.category as Category} onChange={(category) => onChange('category', category)} error={errors.category} />
+      <ConditionSelector value={form.condition} onChange={(condition) => onChange('condition', condition)} error={errors.condition} />
+      <Text style={styles.filterLabel}>Listing Type</Text>
+      <View style={styles.wrapRow}>
+        <FilterChip label="Sale" selected={form.listing_type === 'sale'} onPress={() => onChange('listing_type', 'sale')} />
+        <FilterChip label="Free" selected={form.listing_type === 'free'} onPress={() => onChange('listing_type', 'free')} />
+        <FilterChip label="Donation" selected={form.listing_type === 'donation'} onPress={() => onChange('listing_type', 'donation')} />
+      </View>
+      {form.listing_type === 'sale' ? (
+        <PriceInput value={String(form.price ?? '')} onChangeText={(value) => onChange('price', value)} error={errors.price} />
+      ) : null}
+      <LocationPicker
+        city={form.city}
+        state={form.state}
+        onCityChange={(value) => onChange('city', value)}
+        onStateChange={(value) => onChange('state', value)}
+        cityError={errors.city}
+        stateError={errors.state}
+      />
+      <TextInput
+        label="Zip Code"
+        value={form.zip_code ?? ''}
+        onChangeText={updateZipCode}
+        placeholder="78701"
+        keyboardType="number-pad"
+        helperText="Used for nearby search and approximate pickup or meetup area."
+        error={errors.zip_code}
+      />
+      <Text style={styles.filterLabel}>How buyers can get it</Text>
+      <Text style={styles.body}>Choose any options you are comfortable offering. You can work out the exact details in chat.</Text>
+      <ToggleSwitch
+        label="Porch pickup"
+        helperText="Buyer picks up from a safe agreed location without a scheduled meetup."
+        value={Boolean(form.porch_pickup_available)}
+        onValueChange={(value) => onChange('porch_pickup_available', value)}
+      />
+      <ToggleSwitch
+        label="Meet up"
+        helperText="Meet the buyer at a public or agreed location."
+        value={Boolean(form.meetup_available)}
+        onValueChange={(value) => onChange('meetup_available', value)}
+      />
+      <ToggleSwitch
+        label="Shipping"
+        helperText="Seller and buyer arrange shipping details in messages."
+        value={Boolean(form.shipping_available)}
+        onValueChange={(value) => onChange('shipping_available', value)}
+      />
+      {form.shipping_available ? (
+        <>
+          <Text style={styles.filterLabel}>Shipping details</Text>
+          <View style={styles.wrapRow}>
+            <FilterChip
+              label="Buyer pays"
+              selected={(form.shipping_payer ?? 'buyer') === 'buyer'}
+              onPress={() => onChange('shipping_payer', 'buyer')}
+            />
+            <FilterChip
+              label="Seller includes"
+              selected={form.shipping_payer === 'seller'}
+              onPress={() => onChange('shipping_payer', 'seller')}
+            />
+            <FilterChip
+              label="Discuss in chat"
+              selected={form.shipping_payer === 'discuss'}
+              onPress={() => onChange('shipping_payer', 'discuss')}
+            />
+          </View>
+          <TextInput
+            label="Estimated shipping cost"
+            value={String(form.shipping_cost_estimate ?? '')}
+            onChangeText={(value) => onChange('shipping_cost_estimate', value)}
+            placeholder="$8"
+            helperText="Optional estimate. Final shipping can be confirmed in chat."
+            error={errors.shipping_cost_estimate}
+          />
+          <TextInput
+            label="Handling time"
+            value={form.handling_time ?? ''}
+            onChangeText={(value) => onChange('handling_time', value)}
+            placeholder="Ships within 2 days"
+          />
+          <TextInput
+            label="Ship-from zip code"
+            value={form.ship_from_zip_code ?? ''}
+            onChangeText={(value) => onChange('ship_from_zip_code', value)}
+            placeholder={form.zip_code || '78701'}
+            keyboardType="number-pad"
+            helperText="Publicly shown as a zip code only, not your exact address."
+            error={errors.ship_from_zip_code}
+          />
+        </>
+      ) : null}
+      {errors.getting_options ? <Text style={styles.errorText}>{errors.getting_options}</Text> : null}
+      <ToggleSwitch
+        label="Safety confirmation"
+        helperText="I am not listing live animals, prescription medication, recalled products, or prohibited items."
+        value={Boolean(form.safety_confirmed)}
+        onValueChange={(value) => onChange('safety_confirmed', value)}
+      />
+      {errors.safety_confirmation ? <Text style={styles.errorText}>{errors.safety_confirmation}</Text> : null}
+    </>
+  );
+}
+
+function NoticeCard({
+  notice,
+  actionLabel,
+  onAction,
+}: {
+  notice: Notice;
+  actionLabel?: string;
+  onAction?: () => void;
+}) {
+  return (
+    <Card>
+      <View style={styles.stack}>
+        <Text style={styles.cardTitle}>{notice.title}</Text>
+        <Text style={styles.body}>{notice.body}</Text>
+        {actionLabel && onAction ? <Button title={actionLabel} variant="outline" onPress={onAction} fullWidth /> : null}
+      </View>
+    </Card>
+  );
+}
+
+function ScreenFrame({ children }: { children: ReactNode }) {
+  return (
+    <SafeAreaView style={styles.app}>
+      <StatusBar style="dark" />
+      <ScrollView style={styles.listScreen} contentContainerStyle={styles.listContent}>
+        {children}
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+function BackButton({ onPress }: { onPress: () => void }) {
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={onPress} style={styles.backInline}>
+      <ChevronLeft size={22} color={colors.primary} />
+      <Text style={styles.backText}>Back</Text>
+    </Pressable>
+  );
+}
+
+function HeaderShortcut({
+  label,
+  icon: Icon,
+  count,
+  onPress,
+}: {
+  label: string;
+  icon: IconComponent;
+  count: number;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={styles.messageShortcut}>
+      <Icon size={22} color={colors.primary} />
+      {count > 0 ? (
+        <View style={styles.messageShortcutBadge}>
+          <Text style={styles.messageShortcutBadgeText}>{count > 99 ? '99+' : count}</Text>
+        </View>
+      ) : null}
+    </Pressable>
+  );
+}
+
+function SectionTitle({ title, hint }: { title: string; hint?: string }) {
+  return (
+    <View style={styles.sectionTitleRow}>
+      <Text style={styles.sectionTitle}>{title}</Text>
+      {hint ? <Text style={styles.metaText}>{hint}</Text> : null}
+    </View>
+  );
+}
+
+function LoadingCards() {
+  return (
+    <View style={styles.cardStack}>
+      {[0, 1].map((item) => (
+        <View key={item} style={styles.skeletonCard}>
+          <View style={styles.skeletonImage} />
+          <View style={styles.skeletonLineWide} />
+          <View style={styles.skeletonLine} />
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function initialsFor(name: string) {
+  return name
+    .split(' ')
+    .filter(Boolean)
+    .map((part) => part[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+}
+
+function profileLocation(profile: Pick<Profile | PublicProfile, 'city' | 'state'>) {
+  return [profile.city, profile.state].filter(Boolean).join(', ') || 'Location not set';
+}
+
+function ratingLabel(profile: Pick<Profile | PublicProfile, 'buyer_rating' | 'seller_rating' | 'review_count'>) {
+  if (!profile.review_count) {
+    return 'No reviews yet';
+  }
+
+  const average = ((profile.buyer_rating + profile.seller_rating) / 2).toFixed(1);
+  return `${average} average rating`;
+}
+
+function formatReviewDate(date: string) {
+  return new Date(date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function listingItemDetailRows(item: Listing): Array<{ label: string; value: string }> {
+  return [
+    { label: 'Brand', value: item.brand },
+    { label: 'Size / dimensions', value: item.itemDimensions },
+    { label: 'Pet size fit', value: item.petSize },
+    { label: 'Condition notes', value: item.conditionNotes },
+    { label: 'Availability', value: item.availabilityNotes },
+    { label: 'Reason for listing', value: item.reasonForListing },
+  ].filter((row): row is { label: string; value: string } => Boolean(row.value));
+}
+
+function listingGettingOptions(item: Listing): Array<{ title: string; description: string; icon: IconComponent }> {
+  const options: Array<{ title: string; description: string; icon: IconComponent }> = [];
+
+  if (item.porchPickup) {
+    options.push({
+      title: 'Porch pickup',
+      description: 'Pickup from a safe agreed location without a scheduled meetup.',
+      icon: Home,
+    });
+  }
+
+  if (item.meetup || (item.pickup && !item.porchPickup)) {
+    options.push({
+      title: 'Meet up',
+      description: 'Meet at a public or agreed location.',
+      icon: MapPin,
+    });
+  }
+
+  if (item.shipping) {
+    options.push({
+      title: 'Shipping',
+      description: shippingDescription(item),
+      icon: PackageOpen,
+    });
+  }
+
+  if (options.length === 0) {
+    options.push({
+      title: 'Ask seller',
+      description: 'Message the seller to confirm how this item can be exchanged.',
+      icon: MessageCircle,
+    });
+  }
+
+  return options;
+}
+
+function shippingDescription(item: Listing) {
+  const details = [shippingPayerLabel(item.shippingPayer)];
+
+  if (item.shippingCostEstimate) {
+    details.push(`Estimated ${item.shippingCostEstimate}`);
+  }
+
+  if (item.handlingTime) {
+    details.push(item.handlingTime);
+  }
+
+  if (item.shipFromZipCode) {
+    details.push(`Ships from ${item.shipFromZipCode}`);
+  }
+
+  return `${details.filter(Boolean).join(' - ')}. Confirm final details in chat.`;
+}
+
+function shippingPayerLabel(value: Listing['shippingPayer']) {
+  if (value === 'seller') {
+    return 'Seller includes shipping';
+  }
+
+  if (value === 'discuss') {
+    return 'Shipping cost discussed in chat';
+  }
+
+  return 'Buyer pays shipping';
+}
+
+function listingTypeFor(price: string): ListingType {
+  const normalized = price.toLowerCase();
+
+  if (normalized === 'free') {
+    return 'free';
+  }
+
+  if (normalized === 'donation') {
+    return 'donation';
+  }
+
+  return 'sale';
+}
+
+function cityFor(location: string) {
+  return location.split(',')[0]?.trim() || '';
+}
+
+function stateFor(location: string) {
+  return location.split(',')[1]?.replace(/\b\d{5}\b/g, '').trim() || '';
+}
+
+function zipCodeFor(location: string) {
+  return location.match(/\b\d{5}\b/)?.[0] ?? '';
+}
+
+const styles = StyleSheet.create({
+  app: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  tabContent: {
+    flex: 1,
+  },
+  tabBar: {
+    minHeight: sizes.tabBarHeight,
+    flexDirection: 'row',
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.sm,
+    paddingTop: spacing.sm,
+  },
+  tabButton: {
+    flex: 1,
+    minHeight: sizes.touchTarget,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+  },
+  tabLabel: {
+    color: colors.textSecondary,
+    ...typography.caption,
+  },
+  tabLabelActive: {
+    color: colors.primary,
+  },
+  listScreen: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  listContent: {
+    padding: spacing.md,
+    paddingBottom: spacing.xxl,
+    gap: spacing.lg,
+  },
+  detailContent: {
+    paddingBottom: spacing.xxl,
+    gap: spacing.lg,
+  },
+  headerBlock: {
+    gap: spacing.xs,
+  },
+  homeHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  homeHeaderText: {
+    flex: 1,
+    gap: spacing.xs,
+  },
+  homeActionCluster: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  messageShortcut: {
+    width: sizes.touchTarget,
+    height: sizes.touchTarget,
+    borderRadius: radius.medium,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  messageShortcutBadge: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    minWidth: 22,
+    height: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xs,
+    borderRadius: radius.pill,
+    backgroundColor: colors.error,
+  },
+  messageShortcutBadgeText: {
+    color: colors.white,
+    ...typography.caption,
+  },
+  eyebrow: {
+    color: colors.primary,
+    ...typography.small,
+  },
+  title: {
+    color: colors.textPrimary,
+    ...typography.display,
+    lineHeight: 38,
+  },
+  detailTitle: {
+    color: colors.textPrimary,
+    ...typography.title,
+    lineHeight: 30,
+  },
+  body: {
+    color: colors.textSecondary,
+    ...typography.body,
+    lineHeight: 23,
+  },
+  bodyStrong: {
+    color: colors.textPrimary,
+    ...typography.body,
+    lineHeight: 23,
+  },
+  cardTitle: {
+    color: colors.textPrimary,
+    ...typography.sectionTitle,
+  },
+  stack: {
+    gap: spacing.md,
+  },
+  stackLarge: {
+    gap: spacing.lg,
+  },
+  cardStack: {
+    gap: spacing.md,
+  },
+  rowBetween: {
+    minHeight: sizes.touchTarget,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  flexOne: {
+    flex: 1,
+    minWidth: 0,
+  },
+  marketplaceGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginHorizontal: -spacing.xs,
+    rowGap: spacing.md,
+  },
+  marketplaceGridTile: {
+    width: '50%',
+    paddingHorizontal: spacing.xs,
+  },
+  marketplaceGridRow: {
+    alignItems: 'stretch',
+  },
+  marketplaceGridItem: {
+    width: '50%',
+    minWidth: 0,
+  },
+  marketplaceGridItemLeft: {
+    paddingRight: spacing.xs,
+  },
+  marketplaceGridItemRight: {
+    paddingLeft: spacing.xs,
+  },
+  gridSeparator: {
+    height: spacing.md,
+  },
+  separator: {
+    height: spacing.md,
+  },
+  chipScroller: {
+    gap: spacing.sm,
+    paddingRight: spacing.md,
+  },
+  inputGrid: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  wrapRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  gettingOptionList: {
+    gap: spacing.sm,
+  },
+  gettingOptionRow: {
+    minHeight: 58,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  gettingOptionIcon: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.medium,
+    backgroundColor: colors.primarySoft,
+  },
+  gettingOptionCopy: {
+    flex: 1,
+    gap: spacing.xs,
+  },
+  detailInfoRows: {
+    gap: spacing.sm,
+  },
+  detailInfoRow: {
+    gap: spacing.xs,
+    paddingBottom: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  needRow: {
+    minHeight: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  needCopy: {
+    flex: 1,
+    gap: spacing.xs,
+  },
+  filterLabel: {
+    color: colors.textPrimary,
+    ...typography.button,
+  },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  metaText: {
+    flexShrink: 1,
+    color: colors.textSecondary,
+    ...typography.small,
+    lineHeight: 19,
+  },
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  sectionTitle: {
+    color: colors.textPrimary,
+    ...typography.sectionTitle,
+  },
+  backInline: {
+    minHeight: sizes.touchTarget,
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: spacing.xs,
+  },
+  backText: {
+    color: colors.primary,
+    ...typography.button,
+  },
+  backFloating: {
+    position: 'absolute',
+    top: spacing.md,
+    left: spacing.md,
+    width: sizes.iconButton,
+    height: sizes.iconButton,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  detailHeader: {
+    paddingHorizontal: spacing.md,
+    gap: spacing.sm,
+  },
+  priceFavoriteRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  actionGrid: {
+    gap: spacing.sm,
+  },
+  avatarEditRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  errorText: {
+    color: colors.error,
+    ...typography.small,
+  },
+  skeletonCard: {
+    overflow: 'hidden',
+    borderRadius: radius.large,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    paddingBottom: spacing.md,
+    gap: spacing.sm,
+  },
+  skeletonImage: {
+    height: sizes.listingImage,
+    backgroundColor: colors.primarySoft,
+  },
+  skeletonLineWide: {
+    height: 16,
+    marginHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    backgroundColor: colors.border,
+  },
+  skeletonLine: {
+    width: '55%',
+    height: 16,
+    marginHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    backgroundColor: colors.border,
+  },
+  listingThumb: {
+    width: 76,
+    height: 76,
+    borderRadius: radius.medium,
+  },
+});

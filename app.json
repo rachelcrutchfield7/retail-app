@@ -1,0 +1,72 @@
+{
+  "expo": {
+    "name": "ReTail",
+    "slug": "retail",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "icon": "./assets/app-icon.png",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#F8F3EA",
+      "dark": {
+        "image": "./assets/dark-splash.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#1F2933"
+      }
+    },
+    "ios": {
+      "supportsTablet": true,
+      "icon": "./assets/app-icon.png",
+      "bundleIdentifier": "com.raecrutchfield.retail",
+      "infoPlist": {
+        "NSCameraUsageDescription": "ReTail uses the camera so you can add photos to listings and messages.",
+        "NSPhotoLibraryUsageDescription": "ReTail uses your photo library so you can upload listing and message photos.",
+        "NSLocationWhenInUseUsageDescription": "ReTail uses approximate location to show nearby pet supply listings."
+      },
+      "privacyManifests": {
+        "NSPrivacyCollectedDataTypes": [
+          {
+            "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeEmailAddress",
+            "NSPrivacyCollectedDataTypeLinked": true,
+            "NSPrivacyCollectedDataTypeTracking": false,
+            "NSPrivacyCollectedDataTypePurposes": [
+              "NSPrivacyCollectedDataTypePurposeAppFunctionality"
+            ]
+          }
+        ],
+        "NSPrivacyTracking": false
+      }
+    },
+    "android": {
+      "package": "com.raecrutchfield.retail",
+      "permissions": [
+        "CAMERA",
+        "READ_MEDIA_IMAGES",
+        "ACCESS_COARSE_LOCATION",
+        "POST_NOTIFICATIONS"
+      ],
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#F8FAF6"
+      }
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single"
+    },
+    "plugins": [
+      "expo-status-bar",
+      "expo-notifications"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "288a25e1-5824-4f77-a3f4-0607df5f7d89"
+      }
+    }
+  }
+}
