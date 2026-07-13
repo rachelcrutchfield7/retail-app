@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Alert, FlatList, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, FlatList, Image, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { ChevronLeft, Flag, Heart, Home, MapPin, MessageCircle, Plus, Search, User } from 'lucide-react-native';
 import { AuthProvider, useAuth } from '../auth';
@@ -167,8 +167,6 @@ export function HomeScreen({ onOpenListing }: { onOpenListing: (listingId: strin
 
   const items = listings.data?.items ?? [];
   const recentItems = recentListings.data?.items ?? [];
-  const greeting = auth.profile?.display_name ? `Hello, ${auth.profile.display_name.split(' ')[0]}` : 'Welcome to ReTail';
-
   return (
     <FlatList
       style={styles.listScreen}
@@ -178,8 +176,13 @@ export function HomeScreen({ onOpenListing }: { onOpenListing: (listingId: strin
       ListHeaderComponent={
         <View style={styles.stackLarge}>
           <View style={styles.headerBlock}>
+            <Image
+              source={require('../../assets/retail-logo-header.png')}
+              style={styles.homeHeaderLogo}
+              resizeMode="contain"
+              accessibilityLabel="ReTail"
+            />
             <Text style={styles.eyebrow}>Secondhand Pet Marketplace</Text>
-            <Text style={styles.title}>{greeting}</Text>
             <View style={styles.locationRow}>
               <MapPin size={16} color={colors.textSecondary} />
               <Text style={styles.metaText}>Austin, TX</Text>
@@ -746,6 +749,11 @@ const styles = StyleSheet.create({
   },
   headerBlock: {
     gap: spacing.sm,
+  },
+  homeHeaderLogo: {
+    width: 154,
+    height: 62,
+    alignSelf: 'flex-start',
   },
   eyebrow: {
     color: colors.primary,

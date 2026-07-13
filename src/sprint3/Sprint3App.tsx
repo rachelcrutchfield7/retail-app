@@ -338,7 +338,6 @@ export function HomeScreen({
 
   const items = listings.data?.items ?? [];
   const recentItems = recentListings.data?.items ?? [];
-  const greeting = auth.profile?.display_name ? `Hello, ${auth.profile.display_name.split(' ')[0]}` : 'Welcome to ReTail';
   const favoriteIds = (favorites.data ?? []).map((listing) => listing.id);
   const unreadTotal = unreadMessages.data?.total ?? 0;
   const unreadNotificationTotal = notifications.unreadCount ?? 0;
@@ -376,8 +375,13 @@ export function HomeScreen({
           <View style={styles.headerBlock}>
             <View style={styles.homeHeaderRow}>
               <View style={styles.homeHeaderText}>
+                <Image
+                  source={require('../../assets/retail-logo-header.png')}
+                  style={styles.homeHeaderLogo}
+                  resizeMode="contain"
+                  accessibilityLabel="ReTail"
+                />
                 <Text style={styles.eyebrow}>Secondhand Pet Marketplace</Text>
-                <Text style={styles.title}>{greeting}</Text>
                 <View style={styles.locationRow}>
                   <MapPin size={16} color={colors.textSecondary} />
                   <Text style={styles.metaText}>{locationLabel || 'Choose a location'}</Text>
@@ -3006,6 +3010,11 @@ const styles = StyleSheet.create({
   homeHeaderText: {
     flex: 1,
     gap: spacing.xs,
+  },
+  homeHeaderLogo: {
+    width: 154,
+    height: 62,
+    alignSelf: 'flex-start',
   },
   homeActionCluster: {
     flexDirection: 'row',
