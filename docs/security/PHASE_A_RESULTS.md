@@ -1,6 +1,6 @@
 # ReTail Security Remediation Phase A Results
 
-Date: 2026-07-13
+Date: 2026-07-14
 Branch: security-phase-a
 
 ## Scope
@@ -83,22 +83,31 @@ Runtime config now rejects obvious server-only Supabase credentials in public Ex
 
 ## Secret Scan
 
-Gitleaks:
+Established scanner:
 
-- Not installed locally.
+- Gitleaks Action v2.3.9, pinned to `ff98106e4c7b2bc287b24eaf42907196329070c7`.
+- Gitleaks binary version configured in CI: `8.24.3`.
+- The workflow disables PR comments and SARIF artifact upload for Gitleaks findings.
+- Local `gitleaks` command availability: not installed globally; pinned `8.24.3` binary was downloaded to `/private/tmp` for verification only.
+- Local full working-tree scan: found ignored local `.env.local` and `.expo/dev/logs/*.log` copies of public Supabase Expo keys. Values were redacted. These files are not staged or tracked.
+- Local clean staged-source current-tree scan: passed.
+- Local Git-history scan: passed.
+- CI current-tree scan: pending the verification patch workflow run.
+- CI Git-history scan: pending the verification patch workflow run.
 
-Configured fallback scanner:
+Project-specific supplemental scanner:
 
 - `pnpm security:secrets`: passed.
 - `pnpm security:secrets:history`: passed.
 
 Suspected real credentials found:
 
-- None.
+- None in tracked source or Git history.
+- Local ignored files contain public Supabase client keys, which are intentionally public/publishable but should remain uncommitted.
 
 Credential rotation required:
 
-- No, based on current working-tree and git-history scans.
+- No. No service-role key, database password, private signing key, Stripe secret key, or other server-only credential was found.
 
 Notes:
 
@@ -147,16 +156,41 @@ Analytics:
 
 ## CI
 
-Added `.github/workflows/security.yml` with:
+`.github/workflows/security.yml` includes:
 
 - frozen pnpm install
 - Expo dependency compatibility check
 - typecheck
 - test suite
-- production dependency audit
-- configured secret scan
+- lint
+- production dependency audit gate
+- custom working-tree secret scan
+- custom Git-history secret scan
+- Gitleaks established secret scan
+- Gitleaks current-tree scan
+- Gitleaks Git-history scan
+- web export
+
+Workflow triggers include:
+
+- pushes to `main`
+- pushes to `security-*` branches
+- pull requests targeting `main`
+- pull requests targeting `security-audit`
+- manual workflow dispatch
+
+Supply-chain pinning:
+
+- `actions/checkout` v4.2.2 pinned to `11bd71901bbe5b1630ceea73d27597364c9af683`.
+- `pnpm/action-setup` v4.1.0 pinned to `a7487c7e89a18df4991f7f222e4898a00d66ddda`.
+- `actions/setup-node` v4.4.0 pinned to `49933ea5288caeca8642d1e84afbd3f7d6820020`.
+- `gitleaks/gitleaks-action` v2.3.9 pinned to `ff98106e4c7b2bc287b24eaf42907196329070c7`.
 
 No live Supabase credentials are required by the workflow.
+
+Verification patch workflow result:
+
+- Pending until the verification patch is pushed to `origin/security-phase-a` and GitHub Actions completes.
 
 ## Verification Results
 
@@ -167,8 +201,7 @@ Final verification was run with `CI=true` where needed because pnpm treats this 
 - `pnpm exec expo-doctor`: passed, 20/20 checks.
 - `pnpm typecheck`: passed.
 - `pnpm test`: passed, 117 tests total, 107 passed, 10 live Supabase tests skipped by default.
-- `pnpm audit --prod`: failed with one moderate transitive advisory.
-- `pnpm audit`: failed with the same one moderate transitive advisory.
+- `pnpm security:audit`: passed the High/Critical gate while reporting one Moderate transitive advisory.
 - `pnpm export:web`: passed.
 - `pnpm security:secrets`: passed.
 - `pnpm security:secrets:history`: passed.
@@ -188,7 +221,17 @@ Unresolved production advisory:
 Decision:
 
 - Not force-fixed in Phase A because this would require overriding or upgrading Expo-managed transitive dependencies. No direct app dependency currently pins the vulnerable package.
+- The `security:audit` gate now fails for production High or Critical advisories only.
+- Moderate and Low advisories remain visible in logs and in this report.
+- The accepted Moderate advisory remains visible and documented.
+- Critical advisory count: 0.
+- High advisory count: 0.
+- Moderate advisory count: 1.
 - No high or critical advisories remain unresolved.
+
+Verification patch commit:
+
+- Pending until commit creation.
 
 ## Expo Compatibility
 

@@ -4,10 +4,19 @@ on:
   push:
     branches:
       - main
+      - "security-*"
   pull_request:
     branches:
       - main
+      - security-audit
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   phase-a-baseline:
@@ -20,15 +29,35 @@ jobs:
       EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED: "false"
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4.2.2
+        # actions/checkout v4.2.2
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+
+      - name: Gitleaks established secret scan
+        # gitleaks/gitleaks-action v2.3.9
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_VERSION: 8.24.3
+          GITLEAKS_ENABLE_COMMENTS: "false"
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "false"
+
+      - name: Gitleaks current tree scan
+        run: gitleaks detect --source . --no-git --redact --no-banner --verbose
+
+      - name: Gitleaks Git history scan
+        run: gitleaks detect --source . --redact --no-banner --verbose --log-opts="--all"
 
       - name: Set up PNPM
-        uses: pnpm/action-setup@v4.1.0
+        # pnpm/action-setup v4.1.0
+        uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda
         with:
           version: 11.10.0
 
       - name: Set up Node
-        uses: actions/setup-node@v4.4.0
+        # actions/setup-node v4.4.0
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 24
           cache: pnpm
@@ -45,8 +74,17 @@ jobs:
       - name: Tests
         run: pnpm test
 
+      - name: Lint
+        run: pnpm lint
+
       - name: Production dependency audit
         run: pnpm security:audit
 
-      - name: Secret scan
+      - name: Custom working-tree secret scan
         run: pnpm security:secrets
+
+      - name: Custom Git-history secret scan
+        run: pnpm security:secrets:history
+
+      - name: Web export
+        run: pnpm export:web

@@ -16,7 +16,7 @@
     "lint:fix": "node scripts/lint.mjs --fix",
     "format": "node scripts/format-check.mjs",
     "format:fix": "node scripts/format-check.mjs --fix",
-    "security:audit": "pnpm audit --prod",
+    "security:audit": "node scripts/dependency-audit.mjs",
     "security:secrets": "node scripts/secret-scan.mjs",
     "security:secrets:history": "node scripts/secret-scan.mjs --git-history",
     "build:preview:ios": "eas build --profile preview --platform ios",

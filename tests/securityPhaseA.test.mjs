@@ -156,6 +156,31 @@ test('auth listener covers session changes and removes private realtime/cache st
   assert.match(realtimeService, /removeAllRealtimeSubscriptions/);
 });
 
+test('Phase A dependency audit gate blocks high and critical production findings only', () => {
+  const packageJson = JSON.parse(read('package.json'));
+  const auditScript = read('scripts/dependency-audit.mjs');
+
+  assert.equal(packageJson.scripts['security:audit'], 'node scripts/dependency-audit.mjs');
+  assert.match(auditScript, /pnpm', \['audit', '--prod', '--json'\]/);
+  assert.match(auditScript, /failSeverities = new Set\(\['high', 'critical'\]\)/);
+  assert.match(auditScript, /Production dependency security gate passed/);
+  assert.doesNotMatch(packageJson.scripts['security:audit'], /\|\| true/);
+});
+
+test('Phase A workflow runs custom and established secret scans on security branches', () => {
+  const workflow = read('.github/workflows/security.yml');
+
+  assert.match(workflow, /security-\*/);
+  assert.match(workflow, /fetch-depth: 0/);
+  assert.match(workflow, /gitleaks\/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7/);
+  assert.match(workflow, /GITLEAKS_VERSION: 8\.24\.3/);
+  assert.match(workflow, /gitleaks detect --source \. --no-git --redact/);
+  assert.match(workflow, /gitleaks detect --source \. --redact --no-banner --verbose --log-opts="--all"/);
+  assert.match(workflow, /pnpm security:secrets/);
+  assert.match(workflow, /pnpm security:secrets:history/);
+  assert.doesNotMatch(workflow, /@(main|master|latest)\b/);
+});
+
 test('logging and analytics redact sensitive metadata', () => {
   const redacted = redactContext({
     email: 'rachel@example.com',
