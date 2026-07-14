@@ -49,6 +49,11 @@ export function clearQueryData(key?: readonly unknown[] | string): void {
   queryClient.clear();
 }
 
+export async function clearAllQueryData(): Promise<void> {
+  await queryClient.cancelQueries();
+  queryClient.clear();
+}
+
 export function invalidateQuery(key: readonly unknown[] | string): void {
   void queryClient.invalidateQueries({ queryKey: normalizeQueryKey(key) });
 }

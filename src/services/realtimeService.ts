@@ -10,6 +10,7 @@ type MessagingListener = (event: MessagingEvent) => void;
 type RealtimeChannel = ReturnType<typeof supabase.channel>;
 
 const localListeners = new Set<MessagingListener>();
+const activeChannels = new Set<RealtimeChannel>();
 let realtimeSubscriptionId = 0;
 
 function nextChannelName(prefix: string, scope: string): string {
@@ -23,8 +24,23 @@ function notify(event: MessagingEvent): void {
 
 function removeChannels(channels: RealtimeChannel[]): void {
   channels.forEach((channel) => {
+    activeChannels.delete(channel);
     void supabase.removeChannel(channel);
   });
+}
+
+function trackChannel(channel: RealtimeChannel): RealtimeChannel {
+  activeChannels.add(channel);
+  return channel;
+}
+
+export function removeAllRealtimeSubscriptions(): void {
+  removeChannels([...activeChannels]);
+  localListeners.clear();
+}
+
+export function getActiveRealtimeSubscriptionCountForTests(): number {
+  return activeChannels.size;
 }
 
 function eventTypeFromMessageEvent(eventType: string): 'message_created' | 'message_updated' | 'message_deleted' {
@@ -49,7 +65,7 @@ export function subscribeToConversationMessages(
 
   localListeners.add(listener);
 
-  const channel = supabase
+  const channel = trackChannel(supabase
     .channel(nextChannelName('retail-conversation-messages', conversationId))
     .on(
       'postgres_changes',
@@ -81,13 +97,13 @@ export function subscribeToConversationMessages(
       () => {
         listener({ type: 'conversation_updated', conversationId });
       }
-    );
+    ));
 
   void channel.subscribe();
 
   return () => {
     localListeners.delete(listener);
-    void supabase.removeChannel(channel);
+    removeChannels([channel]);
   };
 }
 
@@ -117,7 +133,7 @@ export function subscribeToUserConversations(userId: string, listener: Messaging
 
   localListeners.add(listener);
 
-  const buyerChannel = supabase
+  const buyerChannel = trackChannel(supabase
     .channel(nextChannelName('retail-user-buyer-conversations', userId))
     .on(
       'postgres_changes',
@@ -133,9 +149,9 @@ export function subscribeToUserConversations(userId: string, listener: Messaging
         const conversationId = String(next?.id ?? previous?.id ?? '');
         listener({ type: payload.eventType === 'INSERT' ? 'conversation_created' : 'conversation_updated', conversationId });
       }
-    );
+    ));
 
-  const sellerChannel = supabase
+  const sellerChannel = trackChannel(supabase
     .channel(nextChannelName('retail-user-seller-conversations', userId))
     .on(
       'postgres_changes',
@@ -151,7 +167,7 @@ export function subscribeToUserConversations(userId: string, listener: Messaging
         const conversationId = String(next?.id ?? previous?.id ?? '');
         listener({ type: payload.eventType === 'INSERT' ? 'conversation_created' : 'conversation_updated', conversationId });
       }
-    );
+    ));
 
   const channels = [buyerChannel, sellerChannel];
   channels.forEach((channel) => {
@@ -171,7 +187,7 @@ export function subscribeToUserNotifications(userId: string, listener: Messaging
 
   localListeners.add(listener);
 
-  const channel = supabase
+  const channel = trackChannel(supabase
     .channel(nextChannelName('retail-user-notifications', userId))
     .on(
       'postgres_changes',
@@ -192,13 +208,13 @@ export function subscribeToUserNotifications(userId: string, listener: Messaging
             : 'notification_created';
         listener({ type, notificationId });
       }
-    );
+    ));
 
   void channel.subscribe();
 
   return () => {
     localListeners.delete(listener);
-    void supabase.removeChannel(channel);
+    removeChannels([channel]);
   };
 }
 

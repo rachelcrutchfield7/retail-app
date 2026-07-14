@@ -10,10 +10,27 @@ export type LogEntry = {
   createdAt: string;
 };
 
-const sensitiveKeyPattern = /(password|token|secret|email|phone|message|comment|details|latitude|longitude)/i;
+const sensitiveKeyPattern = /(address|auth|body|comment|credential|detail|email|jwt|latitude|longitude|message|password|phone|secret|token)/i;
+const sensitiveStringPattern = /(sb_secret_[A-Za-z0-9_-]+|service[_-]?role|sk_(live|test)_[A-Za-z0-9]+|eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)/;
 const entries: LogEntry[] = [];
 
-function redactContext(context?: LogContext): LogContext | undefined {
+function redactValue(value: unknown): unknown {
+  if (typeof value === 'string') {
+    return sensitiveStringPattern.test(value) ? '[redacted]' : value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => redactValue(item));
+  }
+
+  if (value && typeof value === 'object') {
+    return redactContext(value as LogContext);
+  }
+
+  return value;
+}
+
+export function redactContext(context?: LogContext): LogContext | undefined {
   if (!context) {
     return undefined;
   }
@@ -21,7 +38,7 @@ function redactContext(context?: LogContext): LogContext | undefined {
   return Object.fromEntries(
     Object.entries(context).map(([key, value]) => [
       key,
-      sensitiveKeyPattern.test(key) ? '[redacted]' : value,
+      sensitiveKeyPattern.test(key) ? '[redacted]' : redactValue(value),
     ])
   );
 }

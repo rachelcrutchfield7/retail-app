@@ -1,0 +1,52 @@
+name: ReTail Security Baseline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  phase-a-baseline:
+    name: Phase A security checks
+    runs-on: ubuntu-latest
+    env:
+      EXPO_PUBLIC_APP_ENV: ci
+      EXPO_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-public-anon-key
+      EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED: "false"
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4.2.2
+
+      - name: Set up PNPM
+        uses: pnpm/action-setup@v4.1.0
+        with:
+          version: 11.10.0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4.4.0
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Expo dependency check
+        run: pnpm exec expo install --check
+
+      - name: TypeScript check
+        run: pnpm typecheck
+
+      - name: Tests
+        run: pnpm test
+
+      - name: Production dependency audit
+        run: pnpm security:audit
+
+      - name: Secret scan
+        run: pnpm security:secrets

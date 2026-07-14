@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-import { config, hasSupabaseConfig, isClientSafeSupabaseKey } from '../constants/config';
+import { config, hasSupabaseConfig, getUnsafePublicSupabaseCredentialReason } from '../constants/config';
 import { createServiceError } from '../services/errors';
 
 export type SupabaseRuntimeConfig = {
@@ -19,7 +19,14 @@ const memoryStorage = new Map<string, string>();
 type SecureStoreModule = typeof import('expo-secure-store');
 let secureStoreImport: Promise<SecureStoreModule> | null = null;
 
-function usesNativeSecureStorage(): boolean {
+export type SupabaseSessionStorageOptions = {
+  isNativeSecureStorage?: () => boolean;
+  loadSecureStore?: () => Promise<SecureStoreModule>;
+  webStorage?: Storage | null;
+  fallbackStorage?: Map<string, string>;
+};
+
+export function usesNativeSecureStorage(): boolean {
   const maybeNavigator = globalThis.navigator as { product?: string } | undefined;
   return maybeNavigator?.product === 'ReactNative';
 }
@@ -29,50 +36,79 @@ function getSecureStore(): Promise<SecureStoreModule> {
   return secureStoreImport;
 }
 
-const supabaseSessionStorage: SupabaseStorageAdapter = {
-  async getItem(key) {
-    if (usesNativeSecureStorage()) {
-      const secureStore = await getSecureStore();
-      return secureStore.getItemAsync(key);
+export function createSupabaseSessionStorage(options: SupabaseSessionStorageOptions = {}): SupabaseStorageAdapter {
+  const isNative = options.isNativeSecureStorage ?? usesNativeSecureStorage;
+  const loadStore = options.loadSecureStore ?? getSecureStore;
+  const fallbackStorage = options.fallbackStorage ?? memoryStorage;
+
+  function getWebStorage(): Storage | null {
+    if (options.webStorage !== undefined) {
+      return options.webStorage;
     }
 
     if (typeof globalThis !== 'undefined' && 'localStorage' in globalThis && globalThis.localStorage) {
-      return globalThis.localStorage.getItem(key);
+      return globalThis.localStorage;
     }
 
-    return memoryStorage.get(key) ?? null;
-  },
-  async setItem(key, value) {
-    if (usesNativeSecureStorage()) {
-      const secureStore = await getSecureStore();
-      await secureStore.setItemAsync(key, value, {
-        keychainAccessible: secureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY,
-      });
-      return;
-    }
+    return null;
+  }
 
-    if (typeof globalThis !== 'undefined' && 'localStorage' in globalThis && globalThis.localStorage) {
-      globalThis.localStorage.setItem(key, value);
-      return;
-    }
+  return {
+    async getItem(key) {
+      if (isNative()) {
+        try {
+          const secureStore = await loadStore();
+          return await secureStore.getItemAsync(key);
+        } catch {
+          return fallbackStorage.get(key) ?? null;
+        }
+      }
 
-    memoryStorage.set(key, value);
-  },
-  async removeItem(key) {
-    if (usesNativeSecureStorage()) {
-      const secureStore = await getSecureStore();
-      await secureStore.deleteItemAsync(key);
-      return;
-    }
+      return getWebStorage()?.getItem(key) ?? fallbackStorage.get(key) ?? null;
+    },
+    async setItem(key, value) {
+      if (isNative()) {
+        try {
+          const secureStore = await loadStore();
+          await secureStore.setItemAsync(key, value, {
+            keychainAccessible: secureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY,
+          });
+          fallbackStorage.delete(key);
+          return;
+        } catch {
+          fallbackStorage.set(key, value);
+          return;
+        }
+      }
 
-    if (typeof globalThis !== 'undefined' && 'localStorage' in globalThis && globalThis.localStorage) {
-      globalThis.localStorage.removeItem(key);
-      return;
-    }
+      const webStorage = getWebStorage();
+      if (webStorage) {
+        webStorage.setItem(key, value);
+        fallbackStorage.delete(key);
+        return;
+      }
 
-    memoryStorage.delete(key);
-  },
-};
+      fallbackStorage.set(key, value);
+    },
+    async removeItem(key) {
+      fallbackStorage.delete(key);
+
+      if (isNative()) {
+        try {
+          const secureStore = await loadStore();
+          await secureStore.deleteItemAsync(key);
+        } catch {
+          // SecureStore may be unavailable during tests or device restore edge cases.
+        }
+        return;
+      }
+
+      getWebStorage()?.removeItem(key);
+    },
+  };
+}
+
+const supabaseSessionStorage = createSupabaseSessionStorage();
 
 export function getSupabaseRuntimeConfig(): SupabaseRuntimeConfig {
   return {
@@ -93,11 +129,11 @@ function assertSupabaseConfigured(): SupabaseRuntimeConfig {
     );
   }
 
-  if (!isClientSafeSupabaseKey(runtimeConfig.anonKey)) {
+  if (getUnsafePublicSupabaseCredentialReason(runtimeConfig.anonKey)) {
     throw createServiceError(
       'UNSAFE_SUPABASE_KEY',
-      'A secret Supabase credential was supplied through a public environment variable.',
-      'The app is using an unsafe Supabase key. Replace it with the public anon or publishable key before continuing.'
+      'A server-only Supabase credential appears to be configured in the public application environment.',
+      'The app is using an unsafe Supabase key. Replace it with the public anon key before continuing.'
     );
   }
 
@@ -123,6 +159,10 @@ export function createSupabaseClient(): SupabaseClient {
   });
 
   return client;
+}
+
+export function resetSupabaseClientForTests(): void {
+  client = null;
 }
 
 export const supabase = new Proxy({} as SupabaseClient, {

@@ -4,6 +4,12 @@ import { join, relative } from 'node:path';
 const root = process.cwd();
 const ignoredDirs = new Set(['.git', '.expo', 'dist', 'node_modules', 'web-build']);
 const scannedExtensions = new Set(['.js', '.mjs', '.ts', '.tsx', '.json', '.sql', '.md', '.txt']);
+const secretPatternReferenceFiles = new Set([
+  'docs/security/SECURITY_AUDIT.md',
+  'scripts/lint.mjs',
+  'scripts/secret-scan.mjs',
+  'src/lib/logger.ts',
+]);
 const secretPatterns = [
   /service[_-]?role\s*[:=]/i,
   /sb_secret_/i,
@@ -53,7 +59,7 @@ for (const group of ['dependencies', 'devDependencies']) {
 for (const filePath of walk(root)) {
   const relativePath = relative(root, filePath);
 
-  if (relativePath === 'scripts/lint.mjs') {
+  if (secretPatternReferenceFiles.has(relativePath)) {
     continue;
   }
 

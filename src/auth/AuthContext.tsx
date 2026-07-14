@@ -12,8 +12,11 @@ import { getCurrentProfile } from '../services/profileService';
 import type { AccountType, Profile, Session, User } from '../services/types';
 import type { RescueSignupInput } from '../services/types';
 import { setAuthStoreState } from '../store/authStore';
-import { clearQueryData } from '../lib/queryClient';
+import { clearAllQueryData, clearQueryData } from '../lib/queryClient';
 import { supabase } from '../lib/supabase';
+import { resetAnalyticsUser } from '../lib/analytics';
+import { logger } from '../lib/logger';
+import { removeAllRealtimeSubscriptions } from '../services/realtimeService';
 
 export type AuthState = {
   user: User | null;
@@ -47,11 +50,23 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 function logAuthLoadError(error: unknown, context: string): void {
   if (isAppServiceError(error)) {
-    console.warn(`[ReTail Auth] ${context}`, error.appError);
+    logger.warning(`[ReTail Auth] ${context}`, {
+      code: error.appError.code,
+      userMessage: error.appError.userMessage,
+    });
     return;
   }
 
-  console.warn(`[ReTail Auth] ${context}`, error);
+  logger.warning(`[ReTail Auth] ${context}`, {
+    errorType: error instanceof Error ? error.name : typeof error,
+  });
+}
+
+async function clearPrivateAuthState(): Promise<void> {
+  removeAllRealtimeSubscriptions();
+  resetAnalyticsUser();
+  await clearAllQueryData();
+  clearQueryData();
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -149,15 +164,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, activeSupabaseSession) => {
       if (event === 'SIGNED_OUT' || !activeSupabaseSession) {
-        clearQueryData();
-        setSession(null);
-        setUser(null);
-        setProfile(null);
-        setLoading(false);
+        void clearPrivateAuthState().finally(() => {
+          setSession(null);
+          setUser(null);
+          setProfile(null);
+          setLoading(false);
+        });
         return;
       }
 
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED' || event === 'PASSWORD_RECOVERY') {
         void refreshProfile();
       }
     });
@@ -171,6 +187,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (input: SignInInput) => {
       setLoading(true);
       try {
+        await clearPrivateAuthState();
         const nextSession = await signInWithEmail(input.email, input.password);
         await refreshProfile();
         return nextSession;
@@ -206,7 +223,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     try {
       await clearAuthSession();
-      clearQueryData();
+      await clearPrivateAuthState();
       setSession(null);
       setUser(null);
       setProfile(null);
