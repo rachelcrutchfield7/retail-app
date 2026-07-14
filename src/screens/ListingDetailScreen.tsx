@@ -1,9 +1,9 @@
-import { ChevronLeft, Flag, Heart, MapPin, MessageCircle, Star } from 'lucide-react-native';
+import { ChevronLeft, Flag, Heart, MapPin, MessageCircle, Pencil, Star } from 'lucide-react-native';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { colors, radius, sizes, spacing, typography } from '../constants/theme';
 import { InfoTile, StatusPill } from '../components';
 import type { Listing } from '../types.ts';
-import { initials } from '../utils/format';
+import { initials, listingLocationLabel } from '../utils/format';
 
 type ListingDetailScreenProps = {
   listing: Listing;
@@ -12,6 +12,8 @@ type ListingDetailScreenProps = {
   onFavorite: () => void;
   onMessage: () => void;
   onReport: () => void;
+  onEdit?: () => void;
+  canEdit?: boolean;
 };
 
 export function ListingDetailScreen({
@@ -21,6 +23,8 @@ export function ListingDetailScreen({
   onFavorite,
   onMessage,
   onReport,
+  onEdit,
+  canEdit = false,
 }: ListingDetailScreenProps) {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.detailContent}>
@@ -46,9 +50,7 @@ export function ListingDetailScreen({
         <Text style={styles.detailTitle}>{listing.title}</Text>
         <View style={styles.metaRow}>
           <MapPin size={16} color={colors.textSecondary} />
-          <Text style={styles.metaText}>
-            {listing.distance} - {listing.location}
-          </Text>
+          <Text style={styles.metaText}>{listingLocationLabel(listing)}</Text>
         </View>
       </View>
 
@@ -94,9 +96,9 @@ export function ListingDetailScreen({
       </Pressable>
 
       <View style={styles.actionRow}>
-        <Pressable style={styles.primaryButton} onPress={onMessage}>
-          <MessageCircle size={19} color={colors.white} />
-          <Text style={styles.primaryButtonText}>Message seller</Text>
+        <Pressable style={styles.primaryButton} onPress={canEdit && onEdit ? onEdit : onMessage}>
+          {canEdit ? <Pencil size={19} color={colors.white} /> : <MessageCircle size={19} color={colors.white} />}
+          <Text style={styles.primaryButtonText}>{canEdit ? 'Edit listing' : 'Message seller'}</Text>
         </Pressable>
         <Pressable style={styles.secondaryButton} onPress={onFavorite}>
           <Heart size={19} color={colors.textPrimary} />

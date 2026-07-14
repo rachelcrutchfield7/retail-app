@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { FlatList, Image, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, FlatList, Image, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import {
   Bell,
@@ -17,6 +17,7 @@ import {
   Star,
   Trash2,
   User,
+  Wallet,
 } from 'lucide-react-native';
 import { AuthProvider } from '../auth';
 import {
@@ -30,8 +31,10 @@ import {
   LoadingSpinner,
   MessageInput,
   OfferMessageCard,
+  OfflineBanner,
   PaymentChoiceCard,
   SearchBar,
+  StarRatingInput,
   TextArea,
   TextInput,
   TypingIndicator,
@@ -42,6 +45,7 @@ import { colors, radius, sizes, spacing, typography } from '../constants/theme';
 import { useAdminListingReports } from '../hooks/useAdminListingReports';
 import { useAdminRescueApprovals } from '../hooks/useAdminRescueApprovals';
 import { useAuth } from '../hooks/useAuth';
+import { useBlockUser } from '../hooks/useBlockUser';
 import {
   useConversation,
   useConversations,
@@ -78,6 +82,7 @@ import {
   makeOffer,
   parseOfferMessage,
 } from '../services/offerService';
+import { reportReasons } from '../services/reportService';
 import { useListing } from '../hooks/useListing';
 import type { AdminListingReport, Message, Notification, ReportReason, RescueProfile, ReportStatus } from '../services/types';
 import { handleAppError } from '../utils/errorHandler';
@@ -93,13 +98,13 @@ type SprintRoute =
   | { name: 'my-listings' }
   | { name: 'messages' }
   | { name: 'conversation'; conversationId: string }
-  | { name: 'payment-options'; listingId: string; conversationId?: string }
+  | { name: 'payment-options'; listingId: string; conversationId?: string; agreedAmount?: string }
   | { name: 'notifications' }
   | { name: 'rescue-hub' }
   | { name: 'settings' }
   | { name: 'admin' }
   | { name: 'report'; targetType: 'listing' | 'user' | 'message'; targetId: string; title: string }
-  | { name: 'review'; listingId: string; revieweeId: string };
+  | { name: 'review'; listingId: string; revieweeId: string; transactionId?: string };
 
 const tabs: Array<{ key: SprintTab; label: string; icon: typeof Home }> = [
   { key: 'home', label: 'Home', icon: Home },
@@ -113,7 +118,10 @@ export function Sprint4App() {
   return (
     <QueryClientProvider>
       <AuthProvider>
-        <Sprint4Experience />
+        <>
+          <Sprint4Experience />
+          <OfflineBanner />
+        </>
       </AuthProvider>
     </QueryClientProvider>
   );
@@ -131,14 +139,16 @@ function Sprint4Experience() {
   const openPublicProfile = (userId: string) => setRoute({ name: 'public-profile', userId });
   const openMessages = () => setRoute({ name: 'messages' });
   const openConversation = (conversationId: string) => setRoute({ name: 'conversation', conversationId });
-  const openPaymentOptions = (listingId: string, conversationId?: string) => setRoute({ name: 'payment-options', listingId, conversationId });
+  const openPaymentOptions = (listingId: string, conversationId?: string, agreedAmount?: string) =>
+    setRoute({ name: 'payment-options', listingId, conversationId, agreedAmount });
   const openNotifications = () => setRoute({ name: 'notifications' });
   const openRescueHub = () => setRoute({ name: 'rescue-hub' });
   const openSettings = () => setRoute({ name: 'settings' });
   const openAdmin = () => setRoute({ name: 'admin' });
   const openReport = (targetType: 'listing' | 'user' | 'message', targetId: string, title: string) =>
     setRoute({ name: 'report', targetType, targetId, title });
-  const openReview = (listingId: string, revieweeId: string) => setRoute({ name: 'review', listingId, revieweeId });
+  const openReview = (listingId: string, revieweeId: string, transactionId?: string) =>
+    setRoute({ name: 'review', listingId, revieweeId, transactionId });
 
   const startConversation = async (listingId: string, sellerId: string) => {
     if (auth.isGuest) {
@@ -159,6 +169,7 @@ function Sprint4Experience() {
         onMessageSeller={startConversation}
         onReportListing={(listingId) => openReport('listing', listingId, 'Report listing')}
         onReviewListing={openReview}
+        onEditListing={openEditListing}
       />
     );
   }
@@ -212,7 +223,7 @@ function Sprint4Experience() {
         conversationId={route.conversationId}
         onBack={openMessages}
         onOpenListing={openListing}
-        onPaymentOptions={(listingId) => openPaymentOptions(listingId, route.conversationId)}
+        onPaymentOptions={(listingId, agreedAmount) => openPaymentOptions(listingId, route.conversationId, agreedAmount)}
         onReportMessage={(messageId) => openReport('message', messageId, 'Report message')}
         onReview={openReview}
       />
@@ -223,6 +234,7 @@ function Sprint4Experience() {
     return (
       <PaymentOptionsScreen
         listingId={route.listingId}
+        agreedAmount={route.agreedAmount}
         onBack={() => route.conversationId ? openConversation(route.conversationId) : openListing(route.listingId)}
       />
     );
@@ -263,7 +275,7 @@ function Sprint4Experience() {
   }
 
   if (route.name === 'review') {
-    return <ReviewScreen listingId={route.listingId} revieweeId={route.revieweeId} onBack={() => openTab('home')} />;
+    return <ReviewScreen listingId={route.listingId} revieweeId={route.revieweeId} transactionId={route.transactionId} onBack={() => openTab('home')} />;
   }
 
   return (
@@ -289,6 +301,7 @@ function Sprint4Experience() {
           onNotifications={openNotifications}
           onSettings={openSettings}
           onAdmin={openAdmin}
+          onReviewTransaction={openReview}
         />
       ) : null}
     </TabsShell>
@@ -403,7 +416,7 @@ export function ConversationScreen({
   conversationId: string;
   onBack: () => void;
   onOpenListing: (listingId: string) => void;
-  onPaymentOptions?: (listingId: string) => void;
+  onPaymentOptions?: (listingId: string, agreedAmount?: string) => void;
   onReportMessage?: (messageId: string) => void;
   onReview?: (listingId: string, revieweeId: string) => void;
 }) {
@@ -411,6 +424,7 @@ export function ConversationScreen({
   const conversation = useConversation(conversationId);
   const messages = useMessages(conversationId);
   const sender = useSendMessage(conversationId);
+  const blocker = useBlockUser();
   const offline = useOfflineStatus();
   const [text, setText] = useState('');
   const [imageUri, setImageUri] = useState<string | null>(null);
@@ -419,6 +433,9 @@ export function ConversationScreen({
   const [offerOpen, setOfferOpen] = useState(false);
   const [counterOfferFor, setCounterOfferFor] = useState<string | null>(null);
   const [counterAmount, setCounterAmount] = useState('');
+  const messageListRef = useRef<FlatList<MessageListItem>>(null);
+  const messageItems = useMemo(() => buildMessageList(messages.data ?? []), [messages.data]);
+  const lastMessageKey = messageItems.at(-1)?.key ?? 'empty';
 
   const chooseImage = () => {
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
@@ -439,6 +456,11 @@ export function ConversationScreen({
   };
 
   const send = async () => {
+    if (conversation.data?.messagingBlocked) {
+      setNotice('Messaging is unavailable because one of the participants has blocked the other.');
+      return;
+    }
+
     if (offline) {
       setNotice('Messages are unavailable while offline.');
       return;
@@ -459,6 +481,11 @@ export function ConversationScreen({
   };
 
   const submitOffer = async () => {
+    if (conversation.data?.messagingBlocked) {
+      setNotice('Messaging is unavailable because one of the participants has blocked the other.');
+      return;
+    }
+
     if (offline) {
       setNotice('Offers are unavailable while offline.');
       return;
@@ -474,6 +501,18 @@ export function ConversationScreen({
       setNotice(handleAppError(error).userMessage);
     }
   };
+
+  useEffect(() => {
+    if (conversation.isLoading || messages.isLoading || messageItems.length === 0) {
+      return undefined;
+    }
+
+    const timeout = setTimeout(() => {
+      messageListRef.current?.scrollToEnd({ animated: false });
+    }, 0);
+
+    return () => clearTimeout(timeout);
+  }, [conversation.isLoading, conversationId, lastMessageKey, messageItems.length, messages.isLoading]);
 
   if (conversation.isLoading || messages.isLoading) {
     return (
@@ -491,65 +530,86 @@ export function ConversationScreen({
     );
   }
 
-  const messageItems = buildMessageList(messages.data ?? []);
   const conversationDetail = conversation.data;
   const paidListing = isPaidListing(conversationDetail.listingSummary);
   const isSeller = conversationDetail.sellerId === auth.user?.id;
-  const canMakeOffer = paidListing && !isSeller;
+  const acceptedOffer = findLatestAcceptedOffer(messages.data ?? []);
+  const acceptedAmount = acceptedOffer?.amount;
+  const canMakeOffer = paidListing && !isSeller && !acceptedAmount;
   const latestReportableMessage = [...(messages.data ?? [])]
     .reverse()
     .find((message) => message.sender_id !== auth.user?.id && message.message_type !== 'system');
   const canReview = ['Sold', 'Donated'].includes(conversationDetail.listingSummary.status);
+  const messagingBlocked = Boolean(conversationDetail.messagingBlocked);
+  const arrangeOutsideReTail = () => {
+    recordOutsidePaymentChoice({
+      listing: conversationDetail.listingSummary,
+      sellerName: conversationDetail.otherUser.display_name,
+      buyerId: auth.user?.id,
+      agreedAmount: acceptedAmount,
+    });
 
-  return (
-    <SafeAreaView style={styles.app}>
-      <StatusBar style="dark" />
-      <View style={styles.conversationHeader}>
-        <BackButton onPress={onBack} />
-        <View style={styles.conversationListingRow}>
-          <Image source={{ uri: conversationDetail.listingThumbnail ?? conversationDetail.listingSummary.image }} style={styles.listingThumb} />
-          <View style={styles.conversationHeaderText}>
-            <Text style={styles.cardTitle}>{conversationDetail.otherUser.display_name}</Text>
-            <Text numberOfLines={1} style={styles.body}>{conversationDetail.listingSummary.title}</Text>
-          </View>
-          <View style={styles.conversationActions}>
-            <Button title="View Listing" variant="outline" onPress={() => onOpenListing(conversationDetail.listingId)} />
-            {isPaidListing(conversationDetail.listingSummary) && onPaymentOptions ? (
-              <Button title="Payment Options" variant="outline" icon={CreditCard} onPress={() => onPaymentOptions(conversationDetail.listingId)} />
-            ) : null}
-            {canReview && onReview ? (
-              <Button title="Review" variant="outline" icon={Star} onPress={() => onReview(conversationDetail.listingId, conversationDetail.otherUser.id)} />
-            ) : null}
-            {latestReportableMessage && onReportMessage ? (
-              <Button title="Report" variant="ghost" icon={Flag} onPress={() => onReportMessage(latestReportableMessage.id)} />
-            ) : null}
-          </View>
-        </View>
-      </View>
-
+    setNotice('Outside payments are not covered by ReTail. If you use cash, Venmo, Cash App, PayPal, or another method, ReTail cannot help with payment disputes.');
+  };
+  const messageListHeader = (
+    <View style={styles.messageListHeader}>
       {messages.isError ? <ErrorState message={handleAppError(messages.error).userMessage} onRetry={messages.refetch} /> : null}
       {notice ? <Text style={styles.inlineError}>{notice}</Text> : null}
-
+      {messagingBlocked ? (
+        <Card>
+          <Text style={styles.body}>Messaging is unavailable because one of the participants has blocked the other.</Text>
+        </Card>
+      ) : null}
       {paidListing ? (
         <Card>
           <View style={styles.stack}>
-            <Text style={styles.cardTitle}>Messaging options</Text>
-            <Text style={styles.body}>
-              Agree on details here first, then use payment options when you are ready to complete the transaction.
-            </Text>
-            <View style={styles.conversationOptionGrid}>
-              {onPaymentOptions ? (
-                <Button title="Payment Options" variant="outline" icon={CreditCard} onPress={() => onPaymentOptions(conversationDetail.listingId)} fullWidth />
-              ) : null}
-              {canMakeOffer ? (
+            <Text style={styles.cardTitle}>{acceptedAmount ? 'Offer accepted' : 'Deal options'}</Text>
+            {acceptedAmount ? (
+              <Text style={styles.body}>
+                Accepted price: {acceptedAmount}. Use ReTail Protected Checkout for a payment record and receipt, or arrange payment outside ReTail if both sides prefer.
+              </Text>
+            ) : (
+              <Text style={styles.body}>
+                Message first, agree on the details, then make or respond to an offer. Checkout options appear after an offer is accepted.
+              </Text>
+            )}
+            {acceptedAmount ? (
+              <View style={styles.conversationOptionGrid}>
+                {onPaymentOptions ? (
+                  <Button
+                    title="ReTail Protected Checkout"
+                    icon={CreditCard}
+                    onPress={() => onPaymentOptions(conversationDetail.listingId, acceptedAmount)}
+                    fullWidth
+                  />
+                ) : null}
+                <Button
+                  title="Arrange Outside ReTail"
+                  variant="outline"
+                  icon={Wallet}
+                  onPress={arrangeOutsideReTail}
+                  fullWidth
+                />
+                <Text style={styles.metaText}>
+                  Outside payments are not covered by ReTail payment dispute support.
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.conversationOptionGrid}>
+                {canMakeOffer ? (
                 <Button
                   title={offerOpen ? 'Hide Offer Form' : 'Make Offer'}
                   variant="secondary"
                   onPress={() => setOfferOpen((current) => !current)}
                   fullWidth
                 />
-              ) : null}
-            </View>
+                ) : (
+                  <Text style={styles.metaText}>
+                    {isSeller ? 'Review offers in the conversation and choose accept, decline, or counter.' : 'Checkout will unlock after the seller accepts an offer.'}
+                  </Text>
+                )}
+              </View>
+            )}
             {offerOpen && canMakeOffer ? (
               <View style={styles.offerForm}>
                 <TextInput
@@ -565,11 +625,83 @@ export function ConversationScreen({
           </View>
         </Card>
       ) : null}
+      {messages.hasNextPage ? (
+        <Button
+          title={messages.isFetchingNextPage ? 'Loading older messages...' : 'Load Older Messages'}
+          variant="outline"
+          onPress={() => void messages.fetchNextPage()}
+          disabled={messages.isFetchingNextPage}
+        />
+      ) : null}
+    </View>
+  );
+
+  const confirmBlockUser = () => {
+    Alert.alert(
+      'Block this user?',
+      'They will no longer be able to message you. Existing conversation history will remain available for safety and moderation.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Block',
+          style: 'destructive',
+          onPress: () => {
+            void blocker.blockUser(conversationDetail.otherUser.id)
+              .then(() => {
+                setNotice('This user has been blocked. Existing conversation history is still visible.');
+                return conversation.refetch();
+              })
+              .catch((error) => setNotice(handleAppError(error).userMessage));
+          },
+        },
+      ]
+    );
+  };
+
+  return (
+    <SafeAreaView style={styles.app}>
+      <StatusBar style="dark" />
+      <View style={styles.conversationHeader}>
+        <BackButton onPress={onBack} />
+        <View style={styles.conversationListingRow}>
+          <Image source={{ uri: conversationDetail.listingThumbnail ?? conversationDetail.listingSummary.image }} style={styles.listingThumb} />
+          <View style={styles.conversationHeaderText}>
+            <Text style={styles.cardTitle}>{conversationDetail.otherUser.display_name}</Text>
+            <Text numberOfLines={1} style={styles.body}>{conversationDetail.listingSummary.title}</Text>
+          </View>
+          <View style={styles.conversationActions}>
+            <Button title="View Listing" variant="outline" onPress={() => onOpenListing(conversationDetail.listingId)} />
+            {acceptedAmount && onPaymentOptions ? (
+              <Button title="Checkout" variant="outline" icon={CreditCard} onPress={() => onPaymentOptions(conversationDetail.listingId, acceptedAmount)} />
+            ) : null}
+            {canReview && onReview ? (
+              <Button title="Review" variant="outline" icon={Star} onPress={() => onReview(conversationDetail.listingId, conversationDetail.otherUser.id)} />
+            ) : null}
+            {latestReportableMessage && onReportMessage ? (
+              <Button title="Report" variant="ghost" icon={Flag} onPress={() => onReportMessage(latestReportableMessage.id)} />
+            ) : null}
+            {!messagingBlocked ? (
+              <Button title="Block" variant="ghost" icon={ShieldCheck} onPress={confirmBlockUser} />
+            ) : null}
+          </View>
+        </View>
+      </View>
 
       <FlatList
+        ref={messageListRef}
+        style={styles.messageListFrame}
         data={messageItems}
         keyExtractor={(item) => item.key}
-        contentContainerStyle={styles.messageList}
+        contentContainerStyle={[styles.messageList, messageItems.length === 0 && styles.messageListEmpty]}
+        keyboardShouldPersistTaps="handled"
+        onContentSizeChange={() => {
+          if (!messages.isFetchingNextPage) {
+            messageListRef.current?.scrollToEnd({ animated: false });
+          }
+        }}
+        onLayout={() => {
+          messageListRef.current?.scrollToEnd({ animated: false });
+        }}
         renderItem={({ item, index }) => {
           if (item.kind === 'date') {
             return <DateSeparator label={item.label} />;
@@ -624,6 +756,7 @@ export function ConversationScreen({
             />
           );
         }}
+        ListHeaderComponent={messageListHeader}
         ListEmptyComponent={
           <EmptyState title="No messages yet" body="Send the first message to coordinate pickup, meetup, or shipping." icon={MessageCircle} />
         }
@@ -636,7 +769,12 @@ export function ConversationScreen({
         onRemoveImage={() => setImageUri(null)}
         onAttach={chooseImage}
         onSend={() => void send()}
-        disabled={offline}
+        disabled={offline || messagingBlocked}
+        disabledMessage={
+          messagingBlocked
+            ? 'Messaging is unavailable because one of the participants has blocked the other.'
+            : 'Messages are unavailable while offline.'
+        }
         sending={sender.loading}
         error={sender.error}
       />
@@ -646,9 +784,11 @@ export function ConversationScreen({
 
 export function PaymentOptionsScreen({
   listingId,
+  agreedAmount,
   onBack,
 }: {
   listingId: string;
+  agreedAmount?: string;
   onBack: () => void;
 }) {
   const auth = useAuth();
@@ -676,6 +816,7 @@ export function PaymentOptionsScreen({
   const seller = listing.data.seller;
   const owner = seller.id === auth.user?.id;
   const paidListing = isPaidListing(item);
+  const checkoutAmount = agreedAmount ?? item.price;
 
   const payWithStripe = async () => {
     if (auth.isGuest) {
@@ -693,6 +834,7 @@ export function PaymentOptionsScreen({
         listing: item,
         sellerName: seller.display_name,
         buyerId: auth.user?.id,
+        agreedAmount: checkoutAmount,
       });
     } catch (error) {
       setNotice({ title: 'Stripe checkout not ready', body: handleAppError(error).userMessage });
@@ -709,11 +851,12 @@ export function PaymentOptionsScreen({
       listing: item,
       sellerName: seller.display_name,
       buyerId: auth.user?.id,
+      agreedAmount: checkoutAmount,
     });
 
     setNotice({
       title: 'Outside payments are not covered',
-      body: 'If you pay with cash, Venmo, Cash App, PayPal, or another method outside ReTail, ReTail cannot help recover funds or cover scams.',
+      body: 'If you use cash, Venmo, Cash App, PayPal, or another method outside ReTail, ReTail cannot help with payment disputes.',
     });
   };
 
@@ -722,8 +865,8 @@ export function PaymentOptionsScreen({
       <BackButton onPress={onBack} />
       <View style={styles.stackLarge}>
         <View style={styles.stack}>
-          <Text style={styles.title}>Payment Options</Text>
-          <Text style={styles.body}>Choose the safest way to pay for {item.title}.</Text>
+          <Text style={styles.title}>Checkout</Text>
+          <Text style={styles.body}>Choose how to complete the agreed payment for {item.title}.</Text>
         </View>
 
         {notice ? (
@@ -737,7 +880,7 @@ export function PaymentOptionsScreen({
 
         {paidListing ? (
           <PaymentChoiceCard
-            price={item.price}
+            price={checkoutAmount}
             sellerName={seller.display_name}
             protectedCheckoutReady={paymentReadiness.protectedCheckoutEnabled}
             disabled={owner}
@@ -862,22 +1005,18 @@ export function NotificationsScreen({
             </Pressable>
           )}
           ItemSeparatorComponent={() => <View style={styles.separator} />}
-          ListEmptyComponent={<EmptyState title="No notifications" body="You are all caught up." icon={Bell} />}
+          ListEmptyComponent={
+            <EmptyState
+              title="You're all caught up"
+              body="Messages, reviews, and marketplace updates will appear here."
+              icon={Bell}
+            />
+          }
         />
       )}
     </SafeAreaView>
   );
 }
-
-const reportReasons: ReportReason[] = [
-  'Spam',
-  'Fraud',
-  'Prohibited Item',
-  'Harassment',
-  'Inappropriate Content',
-  'Duplicate Listing',
-  'Other',
-];
 
 export function ReportScreen({
   targetType,
@@ -948,10 +1087,12 @@ export function ReportScreen({
 export function ReviewScreen({
   listingId,
   revieweeId,
+  transactionId,
   onBack,
 }: {
   listingId: string;
   revieweeId: string;
+  transactionId?: string;
   onBack: () => void;
 }) {
   const review = useCreateReview(revieweeId);
@@ -961,7 +1102,7 @@ export function ReviewScreen({
 
   const submit = async () => {
     try {
-      await review.submitReview({ listingId, revieweeId, rating, comment });
+      await review.submitReview({ listingId, revieweeId, transactionId, rating, comment });
       setNotice('Review submitted. Thank you for helping other pet owners build trust.');
     } catch (error) {
       setNotice(handleAppError(error).userMessage);
@@ -978,29 +1119,18 @@ export function ReviewScreen({
       <Card>
         <View style={styles.stack}>
           <Text style={styles.cardTitle}>Rating</Text>
-          <View style={styles.starPicker} accessibilityLabel={`${rating} star rating selected`}>
-            {[1, 2, 3, 4, 5].map((value) => (
-              <Pressable
-                key={value}
-                accessibilityRole="button"
-                accessibilityLabel={`${value} stars`}
-                onPress={() => setRating(value)}
-                style={styles.starButton}
-              >
-                <Star size={30} color={colors.warning} fill={value <= rating ? colors.warning : 'transparent'} />
-              </Pressable>
-            ))}
-          </View>
+          <StarRatingInput value={rating} onChange={setRating} />
         </View>
       </Card>
       <TextArea
         label="Comment"
         value={comment}
-        onChangeText={setComment}
+        onChangeText={(value) => setComment(value.slice(0, 1000))}
         placeholder="Share a short, respectful note about the transaction."
       />
+      <Text style={styles.metaText}>{comment.length}/1000 characters</Text>
       {notice ? <NoticeCard title={notice.includes('submitted') ? 'Review saved' : 'Review not saved'} body={notice} /> : null}
-      <Button title="Submit Review" icon={Star} onPress={submit} fullWidth />
+      <Button title="Submit Review" icon={Star} onPress={submit} loading={review.loading} fullWidth />
     </ScreenFrame>
   );
 }
@@ -1008,8 +1138,52 @@ export function ReviewScreen({
 export function SettingsScreen({ onBack }: { onBack: () => void }) {
   const auth = useAuth();
   const settings = useSettings(Boolean(auth.user));
+  const blockedAccounts = useBlockUser();
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [settingsNotice, setSettingsNotice] = useState<{ title: string; body: string } | null>(null);
   const version = '1.0.0';
+
+  useEffect(() => {
+    if (settings.data?.account.email) {
+      setEmail(settings.data.account.email);
+    }
+  }, [settings.data?.account.email]);
+
+  const changeEmail = async () => {
+    try {
+      await settings.updateEmail(email);
+      setSettingsNotice({
+        title: 'Email update started',
+        body: 'Check your email to confirm the change.',
+      });
+    } catch (error) {
+      setSettingsNotice({ title: 'Email was not updated', body: handleAppError(error).userMessage });
+    }
+  };
+
+  const changePassword = async () => {
+    try {
+      await settings.updatePassword(password);
+      setPassword('');
+      setSettingsNotice({
+        title: 'Password updated',
+        body: 'Your password has been changed.',
+      });
+    } catch (error) {
+      setSettingsNotice({ title: 'Password was not updated', body: handleAppError(error).userMessage });
+    }
+  };
+
+  const deleteAccount = async () => {
+    try {
+      await settings.deleteAccount();
+    } catch (error) {
+      setSettingsNotice({ title: 'Account was not deleted', body: handleAppError(error).userMessage });
+    }
+  };
 
   if (auth.isGuest) {
     return (
@@ -1041,6 +1215,7 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
         <Text style={styles.title}>Settings</Text>
         <Text style={styles.body}>Manage notifications, privacy, account safety, and app information.</Text>
       </View>
+      {settingsNotice ? <NoticeCard title={settingsNotice.title} body={settingsNotice.body} /> : null}
 
       <SectionCard title="Notification Settings">
         <ToggleSwitch label="New messages" value={settings.data.notifications.messages} onValueChange={(messages) => void settings.updateNotifications({ messages })} />
@@ -1048,6 +1223,8 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
         <ToggleSwitch label="Reviews" value={settings.data.notifications.reviews} onValueChange={(reviews) => void settings.updateNotifications({ reviews })} />
         <ToggleSwitch label="Listing updates" value={settings.data.notifications.listingUpdates} onValueChange={(listingUpdates) => void settings.updateNotifications({ listingUpdates })} />
         <ToggleSwitch label="System notices" value={settings.data.notifications.system} onValueChange={(system) => void settings.updateNotifications({ system })} />
+        <ToggleSwitch label="Future push: messages" value={Boolean(settings.data.notifications.pushMessages)} onValueChange={(pushMessages) => void settings.updateNotifications({ pushMessages })} />
+        <ToggleSwitch label="Future push: reviews" value={Boolean(settings.data.notifications.pushReviews)} onValueChange={(pushReviews) => void settings.updateNotifications({ pushReviews })} />
       </SectionCard>
 
       <SectionCard title="Privacy Settings">
@@ -1057,21 +1234,80 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
       </SectionCard>
 
       <SectionCard title="Account Settings">
-        <Text style={styles.bodyStrong}>{settings.data.account.email}</Text>
+        <TextInput
+          label="Email"
+          value={email}
+          onChangeText={setEmail}
+          placeholder="you@example.com"
+          keyboardType="email-address"
+          autoCapitalize="none"
+        />
+        <Button title="Update Email" variant="outline" onPress={() => void changeEmail()} fullWidth />
+        <TextInput
+          label="New Password"
+          value={password}
+          onChangeText={setPassword}
+          placeholder="At least 8 characters"
+          secureTextEntry
+        />
+        <Button title="Change Password" variant="outline" onPress={() => void changePassword()} disabled={password.length === 0} fullWidth />
         <Text style={styles.body}>Account type: {settings.data.account.accountType}</Text>
         <Text style={styles.body}>Email verified: {settings.data.account.emailVerified ? 'Yes' : 'No'}</Text>
         {confirmDelete ? (
           <Card>
             <View style={styles.stack}>
               <Text style={styles.cardTitle}>Delete account?</Text>
-              <Text style={styles.body}>Your profile will be anonymized and active listings will be archived.</Text>
-              <Button title="Delete Account" variant="danger" onPress={() => void settings.deleteAccount()} fullWidth />
+              <Text style={styles.body}>
+                Your public profile will be anonymized, active listings will be archived, device tokens and favorites will be removed,
+                and moderation or transaction records may be retained for safety.
+              </Text>
+              <TextInput
+                label="Type DELETE to confirm"
+                value={deleteConfirmation}
+                onChangeText={setDeleteConfirmation}
+                placeholder="DELETE"
+                autoCapitalize="characters"
+              />
+              <Button
+                title="Delete Account"
+                variant="danger"
+                disabled={deleteConfirmation !== 'DELETE'}
+                onPress={() => void deleteAccount()}
+                fullWidth
+              />
               <Button title="Cancel" variant="outline" onPress={() => setConfirmDelete(false)} fullWidth />
             </View>
           </Card>
         ) : (
           <Button title="Delete Account" variant="danger" onPress={() => setConfirmDelete(true)} fullWidth />
         )}
+      </SectionCard>
+
+      <SectionCard title="Blocked Accounts">
+        <Text style={styles.body}>Blocked users cannot message you or start new conversations. Existing conversation history remains available for safety.</Text>
+        {blockedAccounts.isLoading ? <LoadingSpinner /> : null}
+        {blockedAccounts.error ? <Text style={styles.inlineError}>{blockedAccounts.error}</Text> : null}
+        {!blockedAccounts.isLoading && blockedAccounts.blockedUsers.length === 0 ? (
+          <Text style={styles.body}>No blocked accounts.</Text>
+        ) : null}
+        {blockedAccounts.blockedUsers.map((blockedUser) => (
+          <Card key={blockedUser.id}>
+            <View style={styles.notificationRow}>
+              <View style={styles.notificationText}>
+                <Text style={styles.cardTitle}>{blockedUser.blockedProfile?.display_name ?? 'Blocked user'}</Text>
+                <Text style={styles.body}>
+                  {blockedUser.blockedProfile?.username ? `@${blockedUser.blockedProfile.username}` : 'Limited profile available'}
+                </Text>
+              </View>
+              <Button
+                title="Unblock"
+                variant="outline"
+                onPress={() => void blockedAccounts.unblockUser(blockedUser.blocked_id)}
+                loading={blockedAccounts.isUnblocking}
+              />
+            </View>
+          </Card>
+        ))}
       </SectionCard>
 
       <SectionCard title="Legal & Safety">
@@ -1104,7 +1340,7 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
 
       <SectionCard title="About ReTail">
         <Text style={styles.body}>Version {version}</Text>
-        <Text style={styles.body}>A local marketplace for buying, selling, and donating pet supplies.</Text>
+        <Text style={styles.body}>Secondhand Pet Marketplace for buying, selling, donating, and supporting local rescues.</Text>
       </SectionCard>
     </ScreenFrame>
   );
@@ -1354,6 +1590,13 @@ function buildMessageList(messages: Message[]): MessageListItem[] {
   return items;
 }
 
+function findLatestAcceptedOffer(messages: Message[]) {
+  return [...messages]
+    .reverse()
+    .map(parseOfferMessage)
+    .find((offer) => offer?.kind === 'offer_response' && offer.status === 'accepted') ?? null;
+}
+
 function adminStatusLabel(rescue: RescueProfile): string {
   if (rescue.verification_status === 'verified') {
     return 'Verified';
@@ -1585,9 +1828,21 @@ const styles = StyleSheet.create({
     borderRadius: radius.medium,
     backgroundColor: colors.primarySoft,
   },
+  messageListFrame: {
+    flex: 1,
+    minHeight: 0,
+  },
   messageList: {
+    flexGrow: 1,
     padding: spacing.md,
     paddingBottom: spacing.xl,
+  },
+  messageListHeader: {
+    gap: spacing.md,
+    marginBottom: spacing.md,
+  },
+  messageListEmpty: {
+    justifyContent: 'center',
   },
   notificationList: {
     padding: spacing.md,

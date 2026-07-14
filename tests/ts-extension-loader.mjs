@@ -11,6 +11,10 @@ export async function resolve(specifier, context, defaultResolve) {
       throw error;
     }
 
-    return defaultResolve(`${specifier}.ts`, context, defaultResolve);
+    try {
+      return await defaultResolve(`${specifier}.js`, context, defaultResolve);
+    } catch {
+      return defaultResolve(`${specifier}.ts`, context, defaultResolve);
+    }
   }
 }

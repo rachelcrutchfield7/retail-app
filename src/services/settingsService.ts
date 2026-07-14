@@ -1,12 +1,10 @@
-import { supabase } from '../lib/supabase';
-import { signOut } from './authService';
 import {
   getNotificationPreferences,
   updateNotificationPreferences,
 } from './notificationService';
 import type { NotificationPreferences, PrivacySettings } from './types';
 import { createServiceError } from './errors';
-import { ensureCurrentProfile, getSupabaseAuthUser, throwSupabaseError } from './supabaseData';
+import { ensureCurrentProfile, getSupabaseAuthUser } from './supabaseData';
 
 const defaultPrivacySettings: PrivacySettings = {
   showCityState: true,
@@ -63,36 +61,6 @@ export async function getSettings(): Promise<{
     notifications: await getNotificationPreferences(),
     privacy: await getPrivacySettings(),
   };
-}
-
-export async function deleteAccount(): Promise<void> {
-  const profile = await ensureCurrentProfile();
-  const timestamp = new Date().toISOString();
-  const { error: profileError } = await supabase
-    .from('profiles')
-    .update({
-      display_name: 'Deleted User',
-      bio: null,
-      avatar_url: null,
-      deleted_at: timestamp,
-    })
-    .eq('id', profile.id);
-
-  if (profileError) {
-    throwSupabaseError(profileError, 'We could not delete your account.');
-  }
-
-  const { error: listingError } = await supabase
-    .from('listings')
-    .update({ status: 'archived' })
-    .eq('seller_id', profile.id)
-    .eq('status', 'active');
-
-  if (listingError) {
-    throwSupabaseError(listingError, 'We could not archive your active listings.');
-  }
-
-  await signOut();
 }
 
 export { getNotificationPreferences, updateNotificationPreferences };

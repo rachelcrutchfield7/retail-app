@@ -1,0 +1,15 @@
+-- ReTail Sprint 5 Step 1
+-- Run this first in Supabase SQL Editor.
+-- After it succeeds, run sprint5_step2_trust_settings.txt.
+
+do $$ begin
+  alter type report_reason add value if not exists 'hate_speech';
+  alter type report_reason add value if not exists 'stolen_goods';
+exception when undefined_object then null;
+end $$;
+
+do $$ begin
+  alter type notification_type add value if not exists 'transaction_completed';
+  alter type notification_type add value if not exists 'listing_donated';
+exception when undefined_object then null;
+end $$;

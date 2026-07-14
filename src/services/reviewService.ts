@@ -2,7 +2,8 @@ import { createServiceError } from './errors';
 import { supabase } from '../lib/supabase';
 import { createReviewNotification } from './notificationService';
 import { trackEvent } from '../lib/analytics';
-import type { CreateReviewInput, Review } from './types';
+import { getPendingReviews as getPendingTransactionReviews, toTransaction } from './transactionService';
+import type { CreateReviewInput, PendingReview, Review, ReviewSummary } from './types';
 import { ensureCurrentProfile, throwSupabaseError } from './supabaseData';
 
 type TransactionRow = {
@@ -54,6 +55,7 @@ async function completedTransactionFor(reviewerId: string, revieweeId: string, l
 function toReview(row: Record<string, unknown>, reviewerName?: string, revieweeName?: string): Review {
   return {
     id: String(row.id),
+    transaction_id: typeof row.transaction_id === 'string' ? row.transaction_id : undefined,
     reviewer_id: String(row.reviewer_id),
     reviewee_id: String(row.reviewee_id),
     listing_id: typeof row.listing_id === 'string' ? row.listing_id : undefined,
@@ -78,14 +80,29 @@ export async function createReview(input: CreateReviewInput): Promise<Review> {
     throw createServiceError('SELF_REVIEW_NOT_ALLOWED', 'User attempted to review themselves', 'You cannot review yourself.');
   }
 
-  const transaction = await completedTransactionFor(profile.id, input.revieweeId, input.listingId);
+  if (input.comment && input.comment.length > 1000) {
+    throw createServiceError('REVIEW_COMMENT_TOO_LONG', 'Review comment exceeded 1000 characters', 'Keep your review under 1,000 characters.');
+  }
+
+  const transaction = input.transactionId
+    ? await getCompletedTransactionForReview(profile.id, input.revieweeId, input.transactionId)
+    : await completedTransactionFor(profile.id, input.revieweeId, input.listingId);
+
+  if (await hasReviewedTransaction(profile.id, transaction.id)) {
+    throw createServiceError(
+      'REVIEW_ALREADY_SUBMITTED',
+      `User ${profile.id} already reviewed transaction ${transaction.id}`,
+      'You already reviewed this transaction.'
+    );
+  }
+
   const { data, error } = await supabase
     .from('reviews')
     .insert({
       transaction_id: transaction.id,
       reviewer_id: profile.id,
       reviewee_id: input.revieweeId,
-      listing_id: input.listingId,
+      listing_id: input.listingId ?? transaction.listing_id,
       rating: input.rating,
       comment: input.comment?.trim() || null,
     })
@@ -100,17 +117,51 @@ export async function createReview(input: CreateReviewInput): Promise<Review> {
   const revieweeName = await displayNameFor(input.revieweeId);
   const review = toReview(data as Record<string, unknown>, reviewerName, revieweeName);
   await createReviewNotification(input.revieweeId, review.id, reviewerName).catch(() => null);
-  trackEvent('Review Left', { reviewId: review.id, rating: review.rating });
+  trackEvent('review_submitted', { reviewId: review.id, rating: review.rating });
   return review;
 }
 
-export async function getUserReviews(userId: string): Promise<Review[]> {
+async function getCompletedTransactionForReview(reviewerId: string, revieweeId: string, transactionId: string): Promise<TransactionRow> {
   const { data, error } = await supabase
+    .from('transactions')
+    .select('*')
+    .eq('id', transactionId)
+    .eq('status', 'completed')
+    .maybeSingle();
+
+  if (error) {
+    throwSupabaseError(error, 'We could not verify that transaction.');
+  }
+
+  if (!data) {
+    throw createServiceError('TRANSACTION_NOT_COMPLETED', `Transaction ${transactionId} was not completed`, 'Reviews are available after a completed transaction.');
+  }
+
+  const transaction = toTransaction(data as Record<string, unknown>);
+  const isParticipant = transaction.buyer_id === reviewerId || transaction.seller_id === reviewerId;
+  const isReviewingOtherParticipant = transaction.buyer_id === revieweeId || transaction.seller_id === revieweeId;
+
+  if (!isParticipant || !isReviewingOtherParticipant || reviewerId === revieweeId) {
+    throw createServiceError('REVIEW_NOT_ALLOWED', `User ${reviewerId} cannot review ${revieweeId}`, 'You can only review the other person in a completed transaction.');
+  }
+
+  return transaction;
+}
+
+export async function getReviewsForUser(userId: string, cursor?: string): Promise<Review[]> {
+  let query = supabase
     .from('reviews')
     .select('*')
     .eq('reviewee_id', userId)
     .is('deleted_at', null)
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .limit(20);
+
+  if (cursor) {
+    query = query.lt('created_at', cursor);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     throwSupabaseError(error, 'We could not load reviews.');
@@ -125,4 +176,56 @@ export async function getUserReviews(userId: string): Promise<Review[]> {
       )
     )
   );
+}
+
+export async function getUserReviews(userId: string): Promise<Review[]> {
+  return getReviewsForUser(userId);
+}
+
+export async function getReviewSummary(userId: string): Promise<ReviewSummary> {
+  const reviews = await getReviewsForUser(userId);
+  const distribution: ReviewSummary['distribution'] = {
+    1: 0,
+    2: 0,
+    3: 0,
+    4: 0,
+    5: 0,
+  };
+
+  reviews.forEach((review) => {
+    const rating = Math.max(1, Math.min(5, Math.round(review.rating))) as 1 | 2 | 3 | 4 | 5;
+    distribution[rating] += 1;
+  });
+
+  const reviewCount = reviews.length;
+  const averageRating = reviewCount
+    ? reviews.reduce((total, review) => total + review.rating, 0) / reviewCount
+    : 0;
+
+  return {
+    averageRating,
+    reviewCount,
+    distribution,
+  };
+}
+
+export async function hasReviewedTransaction(userId: string, transactionId: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('reviews')
+    .select('id')
+    .eq('reviewer_id', userId)
+    .eq('transaction_id', transactionId)
+    .is('deleted_at', null)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throwSupabaseError(error, 'We could not check your existing review.');
+  }
+
+  return Boolean(data);
+}
+
+export async function getPendingReviews(userId?: string): Promise<PendingReview[]> {
+  return getPendingTransactionReviews(userId);
 }

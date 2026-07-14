@@ -12,6 +12,8 @@ import { getCurrentProfile } from '../services/profileService';
 import type { AccountType, Profile, Session, User } from '../services/types';
 import type { RescueSignupInput } from '../services/types';
 import { setAuthStoreState } from '../store/authStore';
+import { clearQueryData } from '../lib/queryClient';
+import { supabase } from '../lib/supabase';
 
 export type AuthState = {
   user: User | null;
@@ -142,6 +144,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  useEffect(() => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, activeSupabaseSession) => {
+      if (event === 'SIGNED_OUT' || !activeSupabaseSession) {
+        clearQueryData();
+        setSession(null);
+        setUser(null);
+        setProfile(null);
+        setLoading(false);
+        return;
+      }
+
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+        void refreshProfile();
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [refreshProfile]);
+
   const signIn = useCallback(
     async (input: SignInInput) => {
       setLoading(true);
@@ -181,6 +206,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     try {
       await clearAuthSession();
+      clearQueryData();
       setSession(null);
       setUser(null);
       setProfile(null);

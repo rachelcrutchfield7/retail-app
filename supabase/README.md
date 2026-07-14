@@ -10,6 +10,9 @@ Use this order:
 2. `policies.sql`
 3. `storage.sql`
 4. `seed.sql`
+5. Feature patches: `distance.sql`, `rescue_accounts.sql`, `listing_getting_options.sql`, `listing_detail_fields.sql`, `realtime_messaging.sql`, `report_uniqueness.sql`
+6. Sprint 5 trust SQL: `sprint5_step1_enum_values.txt`, then `sprint5_step2_trust_settings.txt`
+7. Security gate SQL: `sprint55_security_remediation.sql`
 
 After running `schema.sql`, confirm the core tables exist with:
 

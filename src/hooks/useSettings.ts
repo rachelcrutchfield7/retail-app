@@ -2,6 +2,10 @@ import { useCallback } from 'react';
 import { clearQueryData, getQueryData, setQueryData } from '../lib/queryClient';
 import {
   deleteAccount,
+  updateEmail,
+  updatePassword,
+} from '../services/accountService';
+import {
   getSettings,
   updateNotificationPreferences,
   updatePrivacySettings,
@@ -47,10 +51,30 @@ export function useSettings(autoLoad = true) {
     [resource]
   );
 
+  const changeEmail = useCallback(
+    async (email: string) => {
+      await updateEmail({ email });
+      clearQueryData(settingsKey);
+      await resource.refresh();
+    },
+    [resource]
+  );
+
+  const changePassword = useCallback(
+    async (password: string) => {
+      await updatePassword({ password });
+      clearQueryData(settingsKey);
+      await resource.refresh();
+    },
+    [resource]
+  );
+
   return {
     ...resource,
     updateNotifications,
     updatePrivacy,
+    updateEmail: changeEmail,
+    updatePassword: changePassword,
     deleteAccount,
   };
 }

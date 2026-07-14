@@ -1,12 +1,15 @@
 import { Heart } from 'lucide-react-native';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { colors, sizes, spacing, typography } from '../constants/theme';
-import { EmptyState, ListingCard, LockedScreen } from '../components';
+import { EmptyState, ErrorState, ListingCard, LoadingSpinner, LockedScreen } from '../components';
 import type { Listing } from '../types.ts';
 
 type FavoritesScreenProps = {
   isSignedIn: boolean;
   listings: Listing[];
+  isLoading?: boolean;
+  errorMessage?: string;
+  onRetry?: () => void;
   onOpenListing: (listing: Listing) => void;
   onFavorite: (listingId: string) => void;
   onSignIn: () => void;
@@ -15,6 +18,9 @@ type FavoritesScreenProps = {
 export function FavoritesScreen({
   isSignedIn,
   listings,
+  isLoading = false,
+  errorMessage,
+  onRetry,
   onOpenListing,
   onFavorite,
   onSignIn,
@@ -35,7 +41,11 @@ export function FavoritesScreen({
     <ScrollView style={styles.screen} contentContainerStyle={styles.screenContent}>
       <Text style={styles.title}>Favorites</Text>
       <Text style={styles.subhead}>Listings you have saved for later.</Text>
-      {listings.length === 0 ? (
+      {isLoading ? (
+        <LoadingSpinner />
+      ) : errorMessage ? (
+        <ErrorState message={errorMessage} onRetry={onRetry} />
+      ) : listings.length === 0 ? (
         <EmptyState title="No saved listings yet" body="Tap the heart on any listing to save it here." icon={Heart} />
       ) : (
         <View style={styles.listGrid}>

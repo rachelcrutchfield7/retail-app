@@ -1,54 +1,54 @@
+import { QueryClient as TanStackQueryClient, QueryClientProvider as TanStackQueryClientProvider } from '@tanstack/react-query';
 import { createContext, createElement } from 'react';
 import type { ReactNode } from 'react';
 
-type QueryCacheEntry<T> = {
-  value: T;
-  updatedAt: number;
-};
+export type QueryClient = TanStackQueryClient;
 
-const queryCache = new Map<string, QueryCacheEntry<unknown>>();
-
-export type QueryClient = {
-  getQueryData: typeof getQueryData;
-  setQueryData: typeof setQueryData;
-  invalidateQuery: typeof invalidateQuery;
-  clearQueryData: typeof clearQueryData;
-};
-
-export const queryClient: QueryClient = {
-  getQueryData,
-  setQueryData,
-  invalidateQuery,
-  clearQueryData,
-};
+export const queryClient = new TanStackQueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      staleTime: 60 * 1000,
+      gcTime: Infinity,
+    },
+  },
+});
 
 export const QueryClientContext = createContext<QueryClient>(queryClient);
 
 export function QueryClientProvider({ children }: { children: ReactNode }) {
-  return createElement(QueryClientContext.Provider, { value: queryClient }, children);
+  return createElement(
+    QueryClientContext.Provider,
+    { value: queryClient },
+    createElement(TanStackQueryClientProvider, { client: queryClient }, children)
+  );
 }
 
 export function serializeQueryKey(key: readonly unknown[] | string): string {
   return typeof key === 'string' ? key : JSON.stringify(key);
 }
 
+function normalizeQueryKey(key: readonly unknown[] | string): readonly unknown[] {
+  return typeof key === 'string' ? [key] : key;
+}
+
 export function setQueryData<T>(key: readonly unknown[] | string, value: T): void {
-  queryCache.set(serializeQueryKey(key), { value, updatedAt: Date.now() });
+  queryClient.setQueryData(normalizeQueryKey(key), value);
 }
 
 export function getQueryData<T>(key: readonly unknown[] | string): T | undefined {
-  return queryCache.get(serializeQueryKey(key))?.value as T | undefined;
+  return queryClient.getQueryData<T>(normalizeQueryKey(key));
 }
 
 export function clearQueryData(key?: readonly unknown[] | string): void {
   if (key) {
-    queryCache.delete(serializeQueryKey(key));
+    queryClient.removeQueries({ queryKey: normalizeQueryKey(key), exact: true });
     return;
   }
 
-  queryCache.clear();
+  queryClient.clear();
 }
 
 export function invalidateQuery(key: readonly unknown[] | string): void {
-  clearQueryData(key);
+  void queryClient.invalidateQueries({ queryKey: normalizeQueryKey(key) });
 }

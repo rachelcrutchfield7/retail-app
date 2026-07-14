@@ -2,10 +2,18 @@ import { useMemo, useState } from 'react';
 import { Alert, SafeAreaView, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { AuthModal, ReportListingModal, TabBar } from './components';
-import type { AuthPrompt } from './components';
+import type { AuthModalSubmission, AuthPrompt } from './components';
 import { colors } from './constants/theme';
-import { emptyListingForm, seedListings } from './data/mockData';
+import { emptyListingForm, listingImages } from './data/mockData';
 import { AuthProvider, useAuth } from './auth';
+import { QueryClientProvider } from './lib/queryClient';
+import { useCreateListing } from './hooks/useCreateListing';
+import { useFavorites } from './hooks/useFavorites';
+import { useListings } from './hooks/useListings';
+import { useLocation } from './hooks/useLocation';
+import { useProfile } from './hooks/useProfile';
+import { useReports } from './hooks/useReports';
+import { useUpdateListing } from './hooks/useUpdateListing';
 import {
   BrowseScreen,
   CreateListingScreen,
@@ -21,52 +29,67 @@ import type {
   Listing,
   ListingForm,
   ListingReportReason,
-  ListingReportSubmission,
   TabKey,
 } from './types';
-import { createLocalListing } from './utils/listings';
+import type { CreateListingInput, Profile, UpdateListingInput } from './services/types';
+import { handleAppError } from './utils/errorHandler';
 import { REQUIRED_LISTING_DETAILS_MESSAGE, validateListingForm } from './validation/listings';
 
 export function AppShell() {
   return (
-    <AuthProvider>
-      <AppExperience />
-    </AuthProvider>
+    <QueryClientProvider>
+      <AuthProvider>
+        <AppExperience />
+      </AuthProvider>
+    </QueryClientProvider>
   );
 }
 
 function AppExperience() {
   const auth = useAuth();
   const [activeTab, setActiveTab] = useState<TabKey>('browse');
-  const [listings, setListings] = useState<Listing[]>(seedListings);
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<CategoryFilter>('All');
-  const [favorites, setFavorites] = useState<Set<string>>(new Set(['l1', 'l4']));
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
   const [reportingListing, setReportingListing] = useState<Listing | null>(null);
   const [pendingReportListing, setPendingReportListing] = useState<Listing | null>(null);
-  const [listingReports, setListingReports] = useState<ListingReportSubmission[]>([]);
+  const [reportedListingIds, setReportedListingIds] = useState<Set<string>>(new Set());
+  const [editingListing, setEditingListing] = useState<Listing | null>(null);
   const [showRescueHub, setShowRescueHub] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   const [authPrompt, setAuthPrompt] = useState<AuthPrompt | undefined>();
   const [form, setForm] = useState<ListingForm>(emptyListingForm);
   const [messageText, setMessageText] = useState('');
   const isSignedIn = !auth.isGuest;
-  const accountType: AccountType = auth.profile?.account_type === 'rescue' ? 'rescue' : 'regular';
-
-  const visibleListings = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-    return listings.filter((listing) => {
-      const matchesCategory = category === 'All' || listing.category === category;
-      const searchableListing = `${listing.title} ${listing.description} ${listing.category} ${listing.condition}`;
-      const matchesQuery = !normalizedQuery || searchableListing.toLowerCase().includes(normalizedQuery);
-      return matchesCategory && matchesQuery;
-    });
-  }, [category, listings, query]);
+  const { location } = useLocation();
+  const listingParams = useMemo(
+    () => ({
+      search: query.trim() || undefined,
+      categoryId: categoryToSlug(category),
+      latitude: location.latitude,
+      longitude: location.longitude,
+      radiusMiles: location.radiusMiles,
+      limit: 20,
+    }),
+    [category, location.latitude, location.longitude, location.radiusMiles, query]
+  );
+  const listings = useListings(listingParams);
+  const favorites = useFavorites(Boolean(auth.user));
+  const profile = useProfile();
+  const createListing = useCreateListing();
+  const updateListing = useUpdateListing();
+  const reports = useReports();
+  const currentProfile = (profile.data ?? auth.profile) as Profile | null;
+  const accountType: AccountType = currentProfile?.account_type === 'rescue' ? 'rescue' : 'regular';
+  const visibleListings = listings.data?.items ?? [];
 
   const favoriteListings = useMemo(
-    () => listings.filter((listing) => favorites.has(listing.id)),
-    [favorites, listings]
+    () => favorites.data ?? [],
+    [favorites.data]
+  );
+  const favoriteIds = useMemo(
+    () => new Set((favorites.data ?? []).map((listing) => listing.id)),
+    [favorites.data]
   );
 
   const requestAuth = (prompt?: AuthPrompt) => {
@@ -74,9 +97,9 @@ function AppExperience() {
     setShowAuth(true);
   };
 
-  const requireAccount = (nextAction: () => void, prompt?: AuthPrompt) => {
+  const requireAccount = (nextAction: () => void | Promise<void>, prompt?: AuthPrompt) => {
     if (isSignedIn) {
-      nextAction();
+      void nextAction();
       return;
     }
     requestAuth(prompt);
@@ -84,16 +107,13 @@ function AppExperience() {
 
   const toggleFavorite = (listingId: string) => {
     requireAccount(
-      () => {
-        setFavorites((current) => {
-          const next = new Set(current);
-          if (next.has(listingId)) {
-            next.delete(listingId);
-          } else {
-            next.add(listingId);
-          }
-          return next;
-        });
+      async () => {
+        try {
+          const listing = [selectedListing, ...visibleListings, ...favoriteListings].find((item) => item?.id === listingId);
+          await favorites.toggleFavorite(listingId, listing ?? undefined);
+        } catch (error) {
+          Alert.alert('Favorite not saved', handleAppError(error).userMessage);
+        }
       },
       {
         title: 'Save this listing',
@@ -104,18 +124,34 @@ function AppExperience() {
 
   const publishListing = () => {
     requireAccount(
-      () => {
+      async () => {
         const validation = validateListingForm(form);
         if (!validation.isValid) {
           Alert.alert('Add a little more detail', REQUIRED_LISTING_DETAILS_MESSAGE);
           return;
         }
 
-        const newListing = createLocalListing({ form, listingCount: listings.length });
-        setListings((current) => [newListing, ...current]);
-        setForm(emptyListingForm);
-        setShowRescueHub(false);
-        setActiveTab('browse');
+        try {
+          if (editingListing) {
+            const updatedListing = await updateListing.updateListing(
+              editingListing.id,
+              updateListingInputFromForm(form, editingListing, currentProfile)
+            );
+            await listings.refetch();
+            setForm(emptyListingForm);
+            setEditingListing(null);
+            setSelectedListing(updatedListing);
+            return;
+          }
+
+          await createListing.createListing(createListingInputFromForm(form, currentProfile, visibleListings.length));
+          await listings.refetch();
+          setForm(emptyListingForm);
+          setShowRescueHub(false);
+          setActiveTab('browse');
+        } catch (error) {
+          Alert.alert('Listing not published', handleAppError(error).userMessage);
+        }
       },
       {
         title: 'List pet supplies',
@@ -140,14 +176,14 @@ function AppExperience() {
     );
   };
 
-  const openReportListing = () => {
+  const openReportListing = async () => {
     const listing = selectedListing;
 
     if (!listing) {
       return;
     }
 
-    const alreadyReported = listingReports.some((report) => report.listingId === listing.id);
+    const alreadyReported = reportedListingIds.has(listing.id);
 
     if (alreadyReported) {
       Alert.alert('Report already sent', 'Thanks for helping keep ReTail safe. Our moderation team will review it.');
@@ -163,39 +199,51 @@ function AppExperience() {
       return;
     }
 
+    try {
+      if (await reports.hasReportedListing(listing.id)) {
+        setReportedListingIds((current) => new Set(current).add(listing.id));
+        Alert.alert('Report already sent', 'Thanks for helping keep ReTail safe. Our moderation team will review it.');
+        return;
+      }
+    } catch (error) {
+      Alert.alert('Report not available', handleAppError(error).userMessage);
+      return;
+    }
+
     setReportingListing(listing);
   };
 
-  const submitListingReport = (reason: ListingReportReason, details: string) => {
+  const submitListingReport = async (reason: ListingReportReason, details: string) => {
     if (!reportingListing) {
       return;
     }
 
-    const report: ListingReportSubmission = {
-      listingId: reportingListing.id,
-      reason,
-      details: details || undefined,
-      reportedAt: new Date().toISOString(),
-    };
-
-    setListingReports((current) => [report, ...current]);
-    setReportingListing(null);
-    Alert.alert('Report submitted', 'Thanks for letting us know. Our moderation team will review this listing.');
+    try {
+      await reports.submit({ type: 'listing', id: reportingListing.id }, reason, details || undefined);
+      setReportedListingIds((current) => new Set(current).add(reportingListing.id));
+      setReportingListing(null);
+      Alert.alert('Report submitted', 'Thanks for letting us know. Our moderation team will review this listing.');
+    } catch (error) {
+      Alert.alert('Report not submitted', handleAppError(error).userMessage);
+    }
   };
 
-  const completeAuth = async (nextAccountType: AccountType) => {
+  const completeAuth = async (submission: AuthModalSubmission) => {
     try {
-      const timestamp = Date.now();
-      await auth.signUp({
-        email:
-          nextAccountType === 'rescue'
-            ? `greenpaws-${timestamp}@demo.retail.local`
-            : `rachel-${timestamp}@demo.retail.local`,
-        password: 'Demo1234!',
-        displayName: nextAccountType === 'rescue' ? 'Green Paws Rescue' : 'Rachel C.',
-        username: nextAccountType === 'rescue' ? `greenpaws${timestamp}` : `retailrachel${timestamp}`,
-        accountType: nextAccountType,
-      });
+      if (submission.mode === 'register') {
+        await auth.signUp({
+          email: submission.email,
+          password: submission.password,
+          displayName: submission.displayName ?? '',
+          username: submission.username,
+          accountType: submission.accountType,
+        });
+      } else {
+        await auth.signIn({
+          email: submission.email,
+          password: submission.password,
+        });
+      }
       setShowAuth(false);
       setAuthPrompt(undefined);
       if (pendingReportListing) {
@@ -219,7 +267,18 @@ function AppExperience() {
     setReportingListing(null);
     setPendingReportListing(null);
     setShowRescueHub(false);
+    setEditingListing(null);
     setActiveTab(nextTab);
+  };
+
+  const startEditingListing = (listing: Listing) => {
+    setForm(listingFormFromListing(listing));
+    setEditingListing(listing);
+    setSelectedListing(null);
+    setReportingListing(null);
+    setPendingReportListing(null);
+    setShowRescueHub(false);
+    setActiveTab('create');
   };
 
   const renderContent = () => {
@@ -228,10 +287,13 @@ function AppExperience() {
     }
 
     if (selectedListing) {
+      const canEditSelectedListing = Boolean(currentProfile?.id && selectedListing.sellerId === currentProfile.id);
+
       return (
         <ListingDetailScreen
           listing={selectedListing}
-          isFavorite={favorites.has(selectedListing.id)}
+          isFavorite={favoriteIds.has(selectedListing.id)}
+          canEdit={canEditSelectedListing}
           onBack={() => {
             setSelectedListing(null);
             setReportingListing(null);
@@ -240,6 +302,7 @@ function AppExperience() {
           onFavorite={() => toggleFavorite(selectedListing.id)}
           onMessage={openMessages}
           onReport={openReportListing}
+          onEdit={() => startEditingListing(selectedListing)}
         />
       );
     }
@@ -250,10 +313,13 @@ function AppExperience() {
           listings={visibleListings}
           query={query}
           category={category}
+          isLoading={listings.isLoading}
+          errorMessage={listings.isError ? handleAppError(listings.error).userMessage : undefined}
+          onRetry={listings.refetch}
           onQueryChange={setQuery}
           onCategoryChange={setCategory}
           onOpenListing={setSelectedListing}
-          favorites={favorites}
+          favorites={favoriteIds}
           onFavorite={toggleFavorite}
           onOpenRescueHub={() => setShowRescueHub(true)}
         />
@@ -265,6 +331,9 @@ function AppExperience() {
         <FavoritesScreen
           isSignedIn={isSignedIn}
           listings={favoriteListings}
+          isLoading={favorites.isLoading}
+          errorMessage={favorites.isError ? handleAppError(favorites.error).userMessage : undefined}
+          onRetry={favorites.refetch}
           onOpenListing={setSelectedListing}
           onFavorite={toggleFavorite}
           onSignIn={() =>
@@ -284,6 +353,7 @@ function AppExperience() {
           form={form}
           onChange={setForm}
           onPublish={publishListing}
+          mode={editingListing ? 'edit' : 'create'}
           onSignIn={() =>
             requestAuth({
               title: 'List pet supplies',
@@ -315,6 +385,10 @@ function AppExperience() {
       <ProfileScreen
         isSignedIn={isSignedIn}
         accountType={accountType}
+        profile={currentProfile}
+        isLoading={profile.isLoading || auth.loading}
+        errorMessage={profile.isError ? handleAppError(profile.error).userMessage : undefined}
+        onRetry={profile.refetch}
         onSignIn={() =>
           requestAuth({
             title: 'Your ReTail profile',
@@ -332,7 +406,7 @@ function AppExperience() {
       <View style={styles.appShell}>
         {renderContent()}
         {!selectedListing && !showRescueHub && (
-          <TabBar activeTab={activeTab} onChange={changeTab} favoritesCount={favorites.size} />
+          <TabBar activeTab={activeTab} onChange={changeTab} favoritesCount={favoriteListings.length} />
         )}
       </View>
       <AuthModal
@@ -352,6 +426,83 @@ function AppExperience() {
       />
     </SafeAreaView>
   );
+}
+
+function categoryToSlug(category: CategoryFilter): string | undefined {
+  if (category === 'All') {
+    return undefined;
+  }
+
+  return category === 'General' ? 'general' : category.toLowerCase().replaceAll(' ', '-');
+}
+
+function createListingInputFromForm(
+  form: ListingForm,
+  profile: Profile | null,
+  listingCount: number
+): CreateListingInput {
+  const isDonation = form.donation;
+
+  return {
+    title: form.title,
+    description: form.description,
+    category: form.category,
+    condition: form.condition,
+    listing_type: isDonation ? 'free' : 'sale',
+    price: isDonation ? null : form.price.trim() || '$0',
+    images: [listingImages[listingCount % listingImages.length]],
+    city: profile?.city?.trim() || 'Austin',
+    state: profile?.state?.trim() || 'TX',
+    zip_code: profile?.zip_code?.trim() || '78701',
+    latitude: profile?.latitude,
+    longitude: profile?.longitude,
+    pickup_available: form.pickup,
+    porch_pickup_available: false,
+    meetup_available: form.pickup,
+    shipping_available: false,
+    safety_confirmed: true,
+  };
+}
+
+function updateListingInputFromForm(
+  form: ListingForm,
+  listing: Listing,
+  profile: Profile | null
+): UpdateListingInput {
+  const isDonation = form.donation;
+
+  return {
+    title: form.title,
+    description: form.description,
+    category: form.category,
+    condition: form.condition,
+    listing_type: isDonation ? 'free' : 'sale',
+    price: isDonation ? null : form.price.trim() || '$0',
+    city: listing.city ?? profile?.city?.trim() ?? listing.location.split(',')[0]?.trim() ?? 'Austin',
+    state: listing.state ?? profile?.state?.trim() ?? 'TX',
+    zip_code: listing.zipCode ?? profile?.zip_code?.trim() ?? '78701',
+    latitude: listing.latitude,
+    longitude: listing.longitude,
+    pickup_available: form.pickup,
+    porch_pickup_available: listing.porchPickup,
+    meetup_available: listing.meetup || form.pickup,
+    shipping_available: listing.shipping,
+    safety_confirmed: true,
+  };
+}
+
+function listingFormFromListing(listing: Listing): ListingForm {
+  const isFreeListing = listing.price.toLowerCase() === 'free' || listing.price.toLowerCase() === 'donation';
+
+  return {
+    title: listing.title,
+    price: isFreeListing ? '' : listing.price,
+    description: listing.description,
+    category: listing.category,
+    condition: listing.condition,
+    donation: isFreeListing,
+    pickup: listing.pickup,
+  };
 }
 
 const styles = StyleSheet.create({

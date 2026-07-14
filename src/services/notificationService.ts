@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { trackEvent } from '../lib/analytics';
 import { emitMessagingUpdate } from './realtimeService';
 import type { DevicePlatform, Message, Notification, NotificationPreferences, NotificationType } from './types';
 import { ensureCurrentProfile, throwSupabaseError } from './supabaseData';
@@ -9,6 +10,10 @@ const defaultNotificationPreferences: NotificationPreferences = {
   reviews: true,
   listingUpdates: true,
   system: true,
+  pushMessages: false,
+  pushFavorites: false,
+  pushReviews: false,
+  pushMarketplaceUpdates: false,
 };
 
 const preferenceOverrides = new Map<string, NotificationPreferences>();
@@ -17,7 +22,9 @@ function typeEnabled(preferences: NotificationPreferences, type: NotificationTyp
   if (type === 'message') return preferences.messages;
   if (type === 'favorite') return preferences.favorites;
   if (type === 'review') return preferences.reviews;
+  if (type === 'transaction_completed') return preferences.listingUpdates;
   if (type === 'listing_sold') return preferences.listingUpdates;
+  if (type === 'listing_donated') return preferences.listingUpdates;
   if (type === 'saved_search') return preferences.listingUpdates;
   return preferences.system;
 }
@@ -48,19 +55,29 @@ export async function createNotification(input: {
     return null;
   }
 
+  const { data: notificationId, error: rpcError } = await supabase.rpc('create_user_notification', {
+    target_user_id: input.userId,
+    notification_type_value: input.type,
+    notification_title: input.title,
+    notification_body: input.body,
+    notification_data: input.data ?? {},
+  });
+
+  if (rpcError || !notificationId) {
+    return null;
+  }
+
   const { data, error } = await supabase
     .from('notifications')
-    .insert({
-      user_id: input.userId,
-      type: input.type,
-      title: input.title,
-      body: input.body,
-      data: input.data ?? {},
-    })
     .select('*')
-    .single();
+    .eq('id', notificationId as string)
+    .maybeSingle();
 
   if (error) {
+    return null;
+  }
+
+  if (!data) {
     return null;
   }
 
@@ -100,6 +117,8 @@ export async function markNotificationRead(notificationId: string): Promise<void
   if (error) {
     throwSupabaseError(error, 'We could not update that notification.');
   }
+
+  trackEvent('notification_marked_read', { notificationId });
 }
 
 export async function markAllNotificationsRead(): Promise<void> {
@@ -113,9 +132,66 @@ export async function markAllNotificationsRead(): Promise<void> {
   if (error) {
     throwSupabaseError(error, 'We could not update notifications.');
   }
+
+  trackEvent('notification_marked_read', { scope: 'all' });
 }
 
 export async function deleteNotification(notificationId: string): Promise<void> {
+  const { data, error: loadError } = await supabase
+    .from('notifications')
+    .select('data')
+    .eq('id', notificationId)
+    .single();
+
+  if (loadError) {
+    throwSupabaseError(loadError, 'This notification is no longer available.');
+  }
+
+  const existingData = typeof data?.data === 'object' && data.data !== null ? data.data as Record<string, unknown> : {};
+  const { error } = await supabase
+    .from('notifications')
+    .delete()
+    .eq('id', notificationId);
+
+  if (error) {
+    const { error: softDeleteError } = await supabase
+      .from('notifications')
+      .update({
+        is_read: true,
+        read_at: new Date().toISOString(),
+        data: { ...existingData, deleted: true },
+      })
+      .eq('id', notificationId);
+
+    if (softDeleteError) {
+      throwSupabaseError(softDeleteError, 'We could not delete that notification.');
+    }
+
+    return;
+  }
+}
+
+export async function createTransactionCompletedNotification(
+  userId: string,
+  transactionId: string,
+  listingId: string,
+  listingTitle: string,
+  outcome: 'sold' | 'donated'
+): Promise<Notification | null> {
+  return createNotification({
+    userId,
+    type: 'transaction_completed',
+    title: outcome === 'donated' ? 'Donation completed' : 'Purchase completed',
+    body: `"${listingTitle}" was marked ${outcome}. You can now leave a review.`,
+    data: {
+      listingId,
+      transactionId,
+      route: `/listing/${listingId}`,
+    },
+  });
+}
+
+export async function deleteNotificationLegacy(notificationId: string): Promise<void> {
   const { data, error: loadError } = await supabase
     .from('notifications')
     .select('data')
@@ -200,7 +276,7 @@ export async function createListingStatusNotification(
 ): Promise<Notification | null> {
   return createNotification({
     userId,
-    type: 'listing_sold',
+    type: status === 'Sold' ? 'listing_sold' : 'listing_donated',
     title: status === 'Sold' ? 'Listing marked sold' : 'Listing marked donated',
     body: `"${listingTitle}" was marked ${status.toLowerCase()}.`,
     data: { listingId, route: `/listing/${listingId}` },
@@ -229,7 +305,41 @@ export async function createSavedSearchNotification(
 
 export async function getNotificationPreferences(): Promise<NotificationPreferences> {
   const profile = await ensureCurrentProfile();
-  return preferenceOverrides.get(profile.id) ?? defaultNotificationPreferences;
+  const override = preferenceOverrides.get(profile.id);
+
+  if (override) {
+    return override;
+  }
+
+  const { data, error } = await supabase
+    .from('notification_preferences')
+    .select('*')
+    .eq('user_id', profile.id)
+    .maybeSingle();
+
+  if (error) {
+    if (error.code === 'PGRST205' || error.code === '42P01') {
+      return defaultNotificationPreferences;
+    }
+
+    throwSupabaseError(error, 'We could not load notification settings.');
+  }
+
+  if (!data) {
+    return defaultNotificationPreferences;
+  }
+
+  return {
+    messages: data.in_app_messages !== false,
+    favorites: data.in_app_favorites !== false,
+    reviews: data.in_app_reviews !== false,
+    listingUpdates: data.in_app_marketplace_updates !== false,
+    system: data.in_app_system !== false,
+    pushMessages: Boolean(data.push_messages),
+    pushFavorites: Boolean(data.push_favorites),
+    pushReviews: Boolean(data.push_reviews),
+    pushMarketplaceUpdates: Boolean(data.push_marketplace_updates),
+  };
 }
 
 export async function updateNotificationPreferences(input: Partial<NotificationPreferences>): Promise<NotificationPreferences> {
@@ -237,5 +347,25 @@ export async function updateNotificationPreferences(input: Partial<NotificationP
   const current = await getNotificationPreferences();
   const next = { ...current, ...input };
   preferenceOverrides.set(profile.id, next);
+  const { error } = await supabase
+    .from('notification_preferences')
+    .upsert({
+      user_id: profile.id,
+      in_app_messages: next.messages,
+      in_app_favorites: next.favorites,
+      in_app_reviews: next.reviews,
+      in_app_marketplace_updates: next.listingUpdates,
+      in_app_system: next.system,
+      push_messages: next.pushMessages ?? false,
+      push_favorites: next.pushFavorites ?? false,
+      push_reviews: next.pushReviews ?? false,
+      push_marketplace_updates: next.pushMarketplaceUpdates ?? false,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id' });
+
+  if (error && error.code !== 'PGRST205' && error.code !== '42P01') {
+    throwSupabaseError(error, 'We could not save notification settings.');
+  }
+
   return next;
 }

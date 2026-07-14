@@ -1,63 +1,105 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
 import { cachePolicy } from '../lib/cachePolicy';
-import { clearQueryData, getQueryData, setQueryData } from '../lib/queryClient';
 import { queryKeys } from '../lib/queryKeys';
 import { favoriteListing, getFavorites, isListingFavorited, unfavoriteListing } from '../services/favoriteService';
 import type { ListingSummary } from '../services/types';
 import { useAuth } from './useAuth';
-import { useAsyncResource } from './useAsyncResource';
+
+type SaveFavoriteInput = {
+  listingId: string;
+  listing?: ListingSummary;
+};
 
 export function useFavorites(autoLoad = true) {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const userId = user?.id ?? 'guest';
   const favoritesKey = useMemo(() => queryKeys.favorites(userId), [userId]);
-  const loadFavorites = useCallback(async (): Promise<ListingSummary[]> => {
-    const cached = getQueryData<ListingSummary[]>(favoritesKey);
+  const query = useQuery<ListingSummary[], Error>({
+    queryKey: favoritesKey,
+    queryFn: getFavorites,
+    enabled: autoLoad && Boolean(user),
+  });
 
-    if (cached) {
-      return cached;
-    }
+  const saveMutation = useMutation({
+    mutationFn: ({ listingId }: SaveFavoriteInput) => favoriteListing(listingId),
+    onMutate: async ({ listingId, listing }: SaveFavoriteInput) => {
+      await queryClient.cancelQueries({ queryKey: favoritesKey });
+      const previousFavorites = queryClient.getQueryData<ListingSummary[]>(favoritesKey) ?? query.data ?? [];
 
-    const favorites = await getFavorites();
-    setQueryData(favoritesKey, favorites);
-    return favorites;
-  }, [favoritesKey]);
-
-  const resource = useAsyncResource<ListingSummary[]>(loadFavorites, autoLoad && Boolean(user));
-
-  const saveFavorite = useCallback(
-    async (listingId: string) => {
-      if (cachePolicy.favorites.optimisticUpdates) {
-        const currentFavorites = getQueryData<ListingSummary[]>(favoritesKey) ?? resource.data ?? [];
-        setQueryData(favoritesKey, currentFavorites);
+      if (cachePolicy.favorites.optimisticUpdates && listing) {
+        queryClient.setQueryData(
+          favoritesKey,
+          previousFavorites.some((favorite) => favorite.id === listing.id)
+            ? previousFavorites
+            : [listing, ...previousFavorites]
+        );
       }
 
-      await favoriteListing(listingId);
-      clearQueryData(favoritesKey);
-      await resource.refresh();
+      queryClient.setQueryData(['favorite-status', userId, listingId], true);
+      return previousFavorites;
     },
-    [favoritesKey, resource]
+    onError: (_error, { listingId }, previousFavorites) => {
+      queryClient.setQueryData(favoritesKey, previousFavorites ?? []);
+      queryClient.setQueryData(
+        ['favorite-status', userId, listingId],
+        Boolean(previousFavorites?.some((listing) => listing.id === listingId))
+      );
+    },
+    onSettled: async (_data, _error, { listingId }) => {
+      await queryClient.invalidateQueries({ queryKey: favoritesKey });
+      await queryClient.invalidateQueries({ queryKey: ['favorite-status', userId, listingId] });
+    },
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: unfavoriteListing,
+    onMutate: async (listingId: string) => {
+      await queryClient.cancelQueries({ queryKey: favoritesKey });
+      const previousFavorites = queryClient.getQueryData<ListingSummary[]>(favoritesKey) ?? query.data ?? [];
+
+      if (cachePolicy.favorites.optimisticUpdates) {
+        queryClient.setQueryData(
+          favoritesKey,
+          previousFavorites.filter((listing) => listing.id !== listingId)
+        );
+      }
+
+      queryClient.setQueryData(['favorite-status', userId, listingId], false);
+      return previousFavorites;
+    },
+    onError: (_error, _listingId, previousFavorites) => {
+      queryClient.setQueryData(favoritesKey, previousFavorites ?? []);
+      queryClient.setQueryData(
+        ['favorite-status', userId, _listingId],
+        Boolean(previousFavorites?.some((listing) => listing.id === _listingId))
+      );
+    },
+    onSettled: async (_data, _error, listingId) => {
+      await queryClient.invalidateQueries({ queryKey: favoritesKey });
+      await queryClient.invalidateQueries({ queryKey: ['favorite-status', userId, listingId] });
+    },
+  });
+
+  const saveFavorite = useCallback(
+    async (listingId: string, listing?: ListingSummary) => {
+      await saveMutation.mutateAsync({ listingId, listing });
+      await query.refetch();
+    },
+    [query, saveMutation]
   );
 
   const removeFavorite = useCallback(
     async (listingId: string) => {
-      if (cachePolicy.favorites.optimisticUpdates) {
-        const currentFavorites = getQueryData<ListingSummary[]>(favoritesKey) ?? resource.data ?? [];
-        setQueryData(
-          favoritesKey,
-          currentFavorites.filter((listing) => listing.id !== listingId)
-        );
-      }
-
-      await unfavoriteListing(listingId);
-      clearQueryData(favoritesKey);
-      await resource.refresh();
+      await removeMutation.mutateAsync(listingId);
+      await query.refetch();
     },
-    [favoritesKey, resource]
+    [query, removeMutation]
   );
 
   const toggleFavorite = useCallback(
-    async (listingId: string) => {
+    async (listingId: string, listing?: ListingSummary) => {
       const selected = user ? await isListingFavorited(listingId) : false;
 
       if (selected) {
@@ -65,7 +107,7 @@ export function useFavorites(autoLoad = true) {
         return false;
       }
 
-      await saveFavorite(listingId);
+      await saveFavorite(listingId, listing);
       return true;
     },
     [removeFavorite, saveFavorite, user]
@@ -73,12 +115,23 @@ export function useFavorites(autoLoad = true) {
 
   const isFavorite = useCallback(
     (listingId: string) =>
-      Boolean((getQueryData<ListingSummary[]>(favoritesKey) ?? resource.data ?? []).some((listing) => listing.id === listingId)),
-    [favoritesKey, resource.data]
+      Boolean((queryClient.getQueryData<ListingSummary[]>(favoritesKey) ?? query.data ?? []).some((listing) => listing.id === listingId)),
+    [favoritesKey, query.data, queryClient]
   );
 
   return {
-    ...resource,
+    data: query.data ?? null,
+    loading: query.isLoading,
+    isLoading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    error: query.error ?? null,
+    refresh: async () => {
+      await query.refetch();
+    },
+    refetch: async () => {
+      await query.refetch();
+    },
     saveFavorite,
     removeFavorite,
     toggleFavorite,

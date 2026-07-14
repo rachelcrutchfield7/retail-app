@@ -21,9 +21,19 @@ export type ReportReason =
   | 'Prohibited Item'
   | 'Harassment'
   | 'Inappropriate Content'
+  | 'Hate Speech'
+  | 'Stolen Goods'
   | 'Duplicate Listing'
   | 'Other';
-export type NotificationType = 'message' | 'favorite' | 'review' | 'listing_sold' | 'saved_search' | 'system';
+export type NotificationType =
+  | 'message'
+  | 'favorite'
+  | 'review'
+  | 'transaction_completed'
+  | 'listing_sold'
+  | 'listing_donated'
+  | 'saved_search'
+  | 'system';
 export type DevicePlatform = 'ios' | 'android';
 
 export type AppError = {
@@ -243,6 +253,7 @@ export type ConversationSummary = Conversation & {
   listingThumbnail?: string;
   lastMessage?: Message;
   unreadCount: number;
+  messagingBlocked?: boolean;
 };
 
 export type ConversationDetail = ConversationSummary;
@@ -279,6 +290,12 @@ export type MessageQueryParams = {
   limit?: number;
 };
 
+export type PaginatedMessages = {
+  items: Message[];
+  nextCursor?: string;
+  hasMore: boolean;
+};
+
 export type UnreadMessages = {
   total: number;
   byConversation: Record<string, number>;
@@ -286,6 +303,7 @@ export type UnreadMessages = {
 
 export type Review = {
   id: string;
+  transaction_id?: string;
   reviewer_id: string;
   reviewee_id: string;
   listing_id?: string;
@@ -299,10 +317,55 @@ export type Review = {
 };
 
 export type CreateReviewInput = {
+  transactionId?: string;
   revieweeId: string;
   listingId?: string;
   rating: number;
   comment?: string;
+};
+
+export type TransactionStatus = 'pending' | 'completed' | 'cancelled';
+export type TransactionOutcome = 'sold' | 'donated';
+
+export type Transaction = {
+  id: string;
+  listing_id: string;
+  seller_id: string;
+  buyer_id: string;
+  status: TransactionStatus;
+  outcome?: TransactionOutcome;
+  completed_at?: string;
+  cancelled_at?: string;
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string;
+};
+
+export type TransactionParticipant = {
+  userId: string;
+  displayName: string;
+  username?: string;
+  avatarUrl?: string;
+  conversationId?: string;
+};
+
+export type CompleteTransactionInput = {
+  listingId: string;
+  buyerId?: string;
+  outcome: TransactionOutcome;
+};
+
+export type PendingReview = {
+  transaction: Transaction;
+  listingId: string;
+  listingTitle: string;
+  reviewee: PublicProfile;
+};
+
+export type ReviewSummary = {
+  averageRating: number;
+  reviewCount: number;
+  distribution: Record<1 | 2 | 3 | 4 | 5, number>;
 };
 
 export type Report = {
@@ -356,12 +419,20 @@ export type Block = {
   created_at: string;
 };
 
+export type BlockedUser = Block & {
+  blockedProfile?: PublicProfile;
+};
+
 export type NotificationPreferences = {
   messages: boolean;
   favorites: boolean;
   reviews: boolean;
   listingUpdates: boolean;
   system: boolean;
+  pushMessages?: boolean;
+  pushFavorites?: boolean;
+  pushReviews?: boolean;
+  pushMarketplaceUpdates?: boolean;
 };
 
 export type PrivacySettings = {
@@ -418,6 +489,7 @@ export type RescueSignupInput = {
   has501c3: boolean;
   ein?: string;
   websiteUrl?: string;
+  donationInstructions?: string;
   summary?: string;
 };
 
@@ -460,6 +532,10 @@ export type RescueWishlistItemInput = {
   priority: RescueNeedUrgency;
   notes?: string;
 };
+
+export type UpdateRescueNeedInput = RescueNeedInput;
+
+export type UpdateRescueWishlistItemInput = RescueWishlistItemInput;
 
 export type RescueDashboard = {
   profile: RescueProfile | null;

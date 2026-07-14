@@ -11,6 +11,8 @@ const reportReasonLabels: Record<string, ReportReason> = {
   prohibited_item: 'Prohibited Item',
   harassment: 'Harassment',
   inappropriate_content: 'Inappropriate Content',
+  hate_speech: 'Hate Speech',
+  stolen_goods: 'Stolen Goods',
   duplicate_listing: 'Duplicate Listing',
   other: 'Other',
 };

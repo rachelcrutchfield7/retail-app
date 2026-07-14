@@ -166,6 +166,7 @@ function RescueCard({ rescue }: { rescue: RescueOrganization }) {
       ) : null}
 
       <View style={styles.contactNote}>
+        <Text style={styles.contactLabel}>Donation instructions</Text>
         <Text style={styles.contactText}>{rescue.contactHint}</Text>
       </View>
     </Card>
@@ -348,6 +349,11 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     borderRadius: radius.medium,
     backgroundColor: colors.accentSoft,
+    gap: spacing.xs,
+  },
+  contactLabel: {
+    color: colors.textPrimary,
+    ...typography.button,
   },
   contactText: {
     color: colors.textPrimary,

@@ -291,11 +291,20 @@ export async function getListings(params: ListingQueryParams = {}): Promise<Pagi
 }
 
 export async function getListingById(listingId: string): Promise<ListingDetail> {
-  const { data, error } = await supabase
-    .from('listings')
-    .select(listingRelationsSelect)
-    .eq('id', listingId)
-    .maybeSingle();
+  const publicListingResult = await supabase.rpc('get_public_listing_detail', {
+    target_listing_id: listingId,
+  });
+  const publicListing = Array.isArray(publicListingResult.data)
+    ? publicListingResult.data[0] as Record<string, unknown> | undefined
+    : undefined;
+  const fallbackResult = publicListing
+    ? { data: publicListing, error: null }
+    : await supabase
+        .from('listings')
+        .select(listingRelationsSelect)
+        .eq('id', listingId)
+        .maybeSingle();
+  const { data, error } = fallbackResult;
 
   if (error) {
     throwSupabaseError(error, 'We could not load this listing.');
@@ -328,17 +337,22 @@ export async function getListingById(listingId: string): Promise<ListingDetail> 
     throwSupabaseError(favorite.error, 'We could not load favorite status.');
   }
 
-  const related = categoryRow?.id
-    ? await supabase
-        .from('listings')
-        .select(listingRelationsSelect)
-        .eq('category_id', String(categoryRow.id))
-        .eq('status', 'active')
-        .is('deleted_at', null)
-        .neq('id', listingId)
-        .order('created_at', { ascending: false })
-        .limit(4)
-    : { data: [], error: null };
+  const rpcRelatedListings = Array.isArray(row.related_listings)
+    ? row.related_listings as Array<Record<string, unknown>>
+    : undefined;
+  const related = rpcRelatedListings
+    ? { data: rpcRelatedListings, error: null }
+    : categoryRow?.id
+      ? await supabase
+          .from('listings')
+          .select(listingRelationsSelect)
+          .eq('category_id', String(categoryRow.id))
+          .eq('status', 'active')
+          .is('deleted_at', null)
+          .neq('id', listingId)
+          .order('created_at', { ascending: false })
+          .limit(4)
+      : { data: [], error: null };
 
   if (related.error) {
     throwSupabaseError(related.error, 'We could not load related listings.');

@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
+import type { LayoutChangeEvent } from 'react-native';
 import {
+  Alert,
   FlatList,
   Image,
   Platform,
@@ -57,8 +59,10 @@ import {
   PriceTag,
   ProfileActionButton,
   ProfileHeader,
+  PendingReviewCard,
   RescueHubBanner,
   ReviewCard,
+  ReviewSummary,
   SearchBar,
   StatsCard,
   TextArea,
@@ -72,6 +76,7 @@ import { colors, radius, sizes, spacing, typography } from '../constants/theme';
 import { rescueOrganizations } from '../data/mockData';
 import { useAuth } from '../hooks/useAuth';
 import { useCategories, useTopLevelCategories } from '../hooks/useCategories';
+import { useCompleteTransaction, useEligibleTransactionParticipants } from '../hooks/useCompleteTransaction';
 import { useCreateListing } from '../hooks/useCreateListing';
 import { useFavorites } from '../hooks/useFavorites';
 import { useFavoriteStatus } from '../hooks/useFavoriteStatus';
@@ -80,10 +85,11 @@ import { useListings } from '../hooks/useListings';
 import { useLocation } from '../hooks/useLocation';
 import { useMyListings, useUserListings } from '../hooks/useMyListings';
 import { useNotifications } from '../hooks/useNotifications';
+import { usePendingReviews } from '../hooks/usePendingReviews';
 import { useProfile } from '../hooks/useProfile';
 import { usePublicRescueProfile } from '../hooks/usePublicRescueProfile';
 import { useRescueActions, useRescueDashboard } from '../hooks/useRescueDashboard';
-import { useReviews } from '../hooks/useReviews';
+import { useReviews, useReviewSummary } from '../hooks/useReviews';
 import { useSavedSearches } from '../hooks/useSavedSearches';
 import { useUnreadMessages } from '../hooks/useUnreadMessages';
 import { useUpdateListing } from '../hooks/useUpdateListing';
@@ -100,10 +106,12 @@ import type {
   RescueProfile,
   RescueSignupInput,
   SavedSearch,
+  TransactionOutcome,
   UpdateListingInput,
 } from '../services/types';
 import type { Category, IconComponent, Listing, ListingCondition, ListingStatus, RescueNeedUrgency, RescueOrganizationType } from '../types';
 import { handleAppError } from '../utils/errorHandler';
+import { listingLocationLabel } from '../utils/format';
 import { validateCreateListingInput } from '../validation/createListing';
 
 type SprintTab = 'home' | 'search' | 'sell' | 'favorites' | 'profile';
@@ -127,6 +135,13 @@ const tabs: Array<{ key: SprintTab; label: string; icon: typeof Home }> = [
   { key: 'sell', label: 'Sell', icon: Plus },
   { key: 'favorites', label: 'Favorites', icon: Heart },
   { key: 'profile', label: 'Profile', icon: User },
+];
+
+const rescueDonationInstructionOptions = [
+  'Drop off at the public address during 11 AM-5 PM.',
+  'Send us a message through ReTail to coordinate drop-offs.',
+  'Visit our website for current donation drop-off instructions.',
+  'Please contact us before bringing supplies.',
 ];
 
 const emptyCreateListing: CreateListingInput = {
@@ -184,6 +199,7 @@ function Sprint3Experience() {
         listingId={route.listingId}
         onBack={() => openTab('home')}
         onOpenSeller={openPublicProfile}
+        onEditListing={openEditListing}
       />
     );
   }
@@ -335,9 +351,17 @@ export function HomeScreen({
     }),
     [location.latitude, location.longitude, location.radiusMiles]
   ));
+  const myListings = useMyListings();
 
-  const items = listings.data?.items ?? [];
-  const recentItems = recentListings.data?.items ?? [];
+  const ownActiveListings = (myListings.data ?? []).filter((listing) => listing.status === 'Active');
+  const ownFilteredListings = ownActiveListings.filter((listing) =>
+    listingMatchesFeedFilters(listing, {
+      search,
+      categorySlug: categoryId,
+    })
+  );
+  const items = mergeFeedListings(ownFilteredListings, listings.data?.items ?? []);
+  const recentItems = mergeFeedListings(ownActiveListings, recentListings.data?.items ?? []);
   const favoriteIds = (favorites.data ?? []).map((listing) => listing.id);
   const unreadTotal = unreadMessages.data?.total ?? 0;
   const unreadNotificationTotal = notifications.unreadCount ?? 0;
@@ -347,17 +371,18 @@ export function HomeScreen({
     0
   );
 
-  const handleFavorite = async (listingId: string) => {
+  const handleFavorite = async (listing: Listing) => {
     if (auth.isGuest) {
       setNotice({ title: 'Create an account to save listings.', body: 'Log in or create an account to keep favorite items.' });
       return;
     }
 
     try {
+      const listingId = listing.id;
       if (favorites.isFavorite(listingId)) {
         await favorites.removeFavorite(listingId);
       } else {
-        await favorites.saveFavorite(listingId);
+        await favorites.saveFavorite(listingId, listing);
       }
     } catch (error) {
       setNotice({ title: 'Favorite was not updated', body: handleAppError(error).userMessage });
@@ -453,7 +478,7 @@ export function HomeScreen({
                   variant="grid"
                   isFavorite={favoriteIds.includes(listing.id)}
                   onOpen={() => onOpenListing(listing.id)}
-                  onFavorite={() => void handleFavorite(listing.id)}
+                  onFavorite={() => void handleFavorite(listing)}
                 />
               </View>
             ))}
@@ -473,7 +498,7 @@ export function HomeScreen({
             variant="grid"
             isFavorite={favoriteIds.includes(item.id)}
             onOpen={() => onOpenListing(item.id)}
-            onFavorite={() => void handleFavorite(item.id)}
+            onFavorite={() => void handleFavorite(item)}
           />
         </View>
       )}
@@ -617,17 +642,18 @@ export function SearchScreen({
     }
   };
 
-  const handleFavorite = async (listingId: string) => {
+  const handleFavorite = async (listing: Listing) => {
     if (auth.isGuest) {
       setNotice({ title: 'Create an account to save listings.', body: 'Saved listings live in your Favorites tab.' });
       return;
     }
 
     try {
+      const listingId = listing.id;
       if (favorites.isFavorite(listingId)) {
         await favorites.removeFavorite(listingId);
       } else {
-        await favorites.saveFavorite(listingId);
+        await favorites.saveFavorite(listingId, listing);
       }
     } catch (error) {
       setNotice({ title: 'Favorite was not updated', body: handleAppError(error).userMessage });
@@ -730,7 +756,7 @@ export function SearchScreen({
             variant="grid"
             isFavorite={favoriteIds.includes(item.id)}
             onOpen={() => onOpenListing(item.id)}
-            onFavorite={() => void handleFavorite(item.id)}
+            onFavorite={() => void handleFavorite(item)}
           />
         </View>
       )}
@@ -1041,6 +1067,7 @@ export function ListingDetailScreen({
   onMessageSeller,
   onReportListing,
   onReviewListing,
+  onEditListing,
 }: {
   listingId: string;
   onBack: () => void;
@@ -1048,6 +1075,7 @@ export function ListingDetailScreen({
   onMessageSeller?: (listingId: string, sellerId: string) => void | Promise<void>;
   onReportListing?: (listingId: string) => void;
   onReviewListing?: (listingId: string, revieweeId: string) => void;
+  onEditListing?: (listingId: string) => void;
 }) {
   const auth = useAuth();
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -1073,14 +1101,16 @@ export function ListingDetailScreen({
     <ListingDetailContent
       detail={listing.data}
       isGuest={auth.isGuest}
-      currentUserId={auth.user?.id}
+      currentUserId={auth.profile?.id ?? auth.user?.id}
       notice={notice}
       setNotice={setNotice}
       onBack={onBack}
+      onListingChanged={listing.refetch}
       onOpenSeller={onOpenSeller}
       onMessageSeller={onMessageSeller}
       onReportListing={onReportListing}
       onReviewListing={onReviewListing}
+      onEditListing={onEditListing}
     />
   );
 }
@@ -1092,10 +1122,12 @@ function ListingDetailContent({
   notice,
   setNotice,
   onBack,
+  onListingChanged,
   onOpenSeller,
   onMessageSeller,
   onReportListing,
   onReviewListing,
+  onEditListing,
 }: {
   detail: ListingDetail;
   isGuest: boolean;
@@ -1103,14 +1135,32 @@ function ListingDetailContent({
   notice: Notice | null;
   setNotice: (notice: Notice | null) => void;
   onBack: () => void;
+  onListingChanged: () => Promise<void>;
   onOpenSeller: (userId: string) => void;
   onMessageSeller?: (listingId: string, sellerId: string) => void | Promise<void>;
   onReportListing?: (listingId: string) => void;
   onReviewListing?: (listingId: string, revieweeId: string) => void;
+  onEditListing?: (listingId: string) => void;
 }) {
   const item = detail.listing;
   const favorite = useFavoriteStatus(item.id, item.favoritedBy);
-  const owner = detail.seller.id === currentUserId;
+  const ownerActions = useMyListings();
+  const [ownerConfirm, setOwnerConfirm] = useState<{
+    title: string;
+    body: string;
+    confirmTitle: string;
+    variant?: 'primary' | 'danger';
+    action: () => Promise<void>;
+    after?: 'refresh' | 'back';
+  } | null>(null);
+  const ownerFromDetail = Boolean(currentUserId && (detail.seller.id === currentUserId || item.sellerId === currentUserId));
+  const ownerFromMyListings = Boolean(ownerActions.data?.some((listing) => listing.id === item.id));
+  const owner = ownerFromDetail || ownerFromMyListings;
+  const ownerCheckPending = Boolean(!isGuest && !ownerFromDetail && ownerActions.isLoading);
+  const editDisabled = ['Sold', 'Donated', 'Removed'].includes(item.status);
+  const completionDisabled = ['Sold', 'Donated', 'Archived', 'Removed'].includes(item.status);
+  const archiveDisabled = ['Sold', 'Donated', 'Archived', 'Removed'].includes(item.status);
+  const deleteDisabled = item.status === 'Removed';
 
   const toggleFavorite = async () => {
     if (isGuest) {
@@ -1127,6 +1177,46 @@ function ListingDetailContent({
       await favorite.toggleFavorite();
     } catch (error) {
       setNotice({ title: 'Favorite was not updated', body: handleAppError(error).userMessage });
+    }
+  };
+
+  const askOwnerAction = (
+    title: string,
+    body: string,
+    confirmTitle: string,
+    action: () => Promise<void>,
+    options: { variant?: 'primary' | 'danger'; after?: 'refresh' | 'back' } = {}
+  ) => {
+    setOwnerConfirm({
+      title,
+      body,
+      confirmTitle,
+      action,
+      variant: options.variant,
+      after: options.after ?? 'refresh',
+    });
+  };
+
+  const runOwnerAction = async () => {
+    if (!ownerConfirm) {
+      return;
+    }
+
+    try {
+      await ownerConfirm.action();
+
+      if (ownerConfirm.after === 'back') {
+        setOwnerConfirm(null);
+        onBack();
+        return;
+      }
+
+      await onListingChanged();
+      setOwnerConfirm(null);
+      setNotice({ title: 'Listing updated', body: 'Your listing management change has been saved.' });
+    } catch (error) {
+      setNotice({ title: 'Listing was not updated', body: handleAppError(error).userMessage });
+      setOwnerConfirm(null);
     }
   };
 
@@ -1154,7 +1244,7 @@ function ListingDetailContent({
           <Text style={styles.detailTitle}>{item.title}</Text>
           <View style={styles.locationRow}>
             <MapPin size={16} color={colors.textSecondary} />
-            <Text style={styles.metaText}>{item.distance} - {item.location}</Text>
+            <Text style={styles.metaText}>{listingLocationLabel(item)}</Text>
           </View>
           <View style={styles.wrapRow}>
             <ConditionBadge condition={item.condition} />
@@ -1163,6 +1253,24 @@ function ListingDetailContent({
         </View>
 
         {notice ? <NoticeCard notice={notice} /> : null}
+        {ownerConfirm ? (
+          <Card>
+            <View style={styles.stack}>
+              <Text style={styles.cardTitle}>{ownerConfirm.title}</Text>
+              <Text style={styles.body}>{ownerConfirm.body}</Text>
+              <View style={styles.actionGrid}>
+                <Button title="Cancel" variant="outline" onPress={() => setOwnerConfirm(null)} fullWidth />
+                <Button
+                  title={ownerConfirm.confirmTitle}
+                  variant={ownerConfirm.variant ?? 'primary'}
+                  onPress={() => void runOwnerAction()}
+                  loading={ownerActions.isFetching}
+                  fullWidth
+                />
+              </View>
+            </View>
+          </Card>
+        ) : null}
 
         <Card>
           <View style={styles.stack}>
@@ -1223,35 +1331,127 @@ function ListingDetailContent({
         </Pressable>
 
         <View style={styles.actionGrid}>
-          <Button
-            title="Message Seller"
-            icon={MessageCircle}
-            onPress={() => {
-              if (onMessageSeller) {
-                void Promise.resolve(onMessageSeller(item.id, detail.seller.id)).catch((error) => {
-                  setNotice({ title: 'Messaging is unavailable', body: handleAppError(error).userMessage });
-                });
-                return;
-              }
+          {ownerCheckPending ? (
+            <Card>
+              <View style={styles.stack}>
+                <LoadingSpinner />
+                <Text style={styles.cardTitle}>Checking listing ownership</Text>
+                <Text style={styles.body}>We are checking whether this listing belongs to your account.</Text>
+              </View>
+            </Card>
+          ) : owner ? (
+            <>
+              <Card>
+                <View style={styles.stack}>
+                  <Text style={styles.cardTitle}>Listing tools</Text>
+                  <Text style={styles.body}>Manage this listing from here without going back to your profile.</Text>
+                  <View style={styles.actionGrid}>
+                    <Button
+                      title="Edit Listing"
+                      icon={Edit3}
+                      variant="primary"
+                      disabled={editDisabled || !onEditListing}
+                      onPress={() => onEditListing?.(item.id)}
+                      fullWidth
+                    />
+                    <Button
+                      title="Archive"
+                      icon={Archive}
+                      variant="outline"
+                      disabled={archiveDisabled}
+                      onPress={() =>
+                        askOwnerAction(
+                          'Archive listing?',
+                          'Archived listings leave the marketplace feed but remain available in My Listings.',
+                          'Archive',
+                          () => ownerActions.archiveListing(item.id)
+                        )
+                      }
+                      fullWidth
+                    />
+                    <Button
+                      title="Mark Sold"
+                      icon={PackageOpen}
+                      variant="outline"
+                      disabled={completionDisabled}
+                      onPress={() =>
+                        askOwnerAction(
+                          'Mark listing sold?',
+                          'This updates the item status so buyers know it is no longer available.',
+                          'Mark Sold',
+                          () => ownerActions.markListingSold(item.id)
+                        )
+                      }
+                      fullWidth
+                    />
+                    <Button
+                      title="Mark Donated"
+                      icon={HeartHandshake}
+                      variant="outline"
+                      disabled={completionDisabled}
+                      onPress={() =>
+                        askOwnerAction(
+                          'Mark listing donated?',
+                          'This updates the item status so people know the donation is complete.',
+                          'Mark Donated',
+                          () => ownerActions.markListingDonated(item.id)
+                        )
+                      }
+                      fullWidth
+                    />
+                    <Button
+                      title="Delete"
+                      icon={Trash2}
+                      variant="danger"
+                      disabled={deleteDisabled}
+                      onPress={() =>
+                        askOwnerAction(
+                          'Delete listing?',
+                          'This removes the listing from public marketplace results.',
+                          'Delete',
+                          () => ownerActions.deleteListing(item.id),
+                          { variant: 'danger', after: 'back' }
+                        )
+                      }
+                      fullWidth
+                    />
+                  </View>
+                </View>
+              </Card>
+            </>
+          ) : (
+            <>
+              <Button
+                title="Message Seller"
+                icon={MessageCircle}
+                onPress={() => {
+                  if (onMessageSeller) {
+                    void Promise.resolve(onMessageSeller(item.id, detail.seller.id)).catch((error) => {
+                      setNotice({ title: 'Messaging is unavailable', body: handleAppError(error).userMessage });
+                    });
+                    return;
+                  }
 
-              setNotice({ title: 'Messaging unavailable', body: 'Log in and open a marketplace listing to contact the seller.' });
-            }}
-            fullWidth
-          />
-          <Button
-            title="Report"
-            icon={Flag}
-            variant="ghost"
-            onPress={() => {
-              if (onReportListing) {
-                onReportListing(item.id);
-                return;
-              }
-              setNotice({ title: 'Report listing', body: 'Log in to report spam, fraud, harassment, or inappropriate content.' });
-            }}
-            fullWidth
-          />
-          {['Sold', 'Donated'].includes(item.status) && onReviewListing ? (
+                  setNotice({ title: 'Messaging unavailable', body: 'Log in and open a marketplace listing to contact the seller.' });
+                }}
+                fullWidth
+              />
+              <Button
+                title="Report"
+                icon={Flag}
+                variant="ghost"
+                onPress={() => {
+                  if (onReportListing) {
+                    onReportListing(item.id);
+                    return;
+                  }
+                  setNotice({ title: 'Report listing', body: 'Log in to report spam, fraud, harassment, or inappropriate content.' });
+                }}
+                fullWidth
+              />
+            </>
+          )}
+          {!owner && ['Sold', 'Donated'].includes(item.status) && onReviewListing ? (
             <Button
               title="Leave Review"
               icon={Heart}
@@ -1274,6 +1474,7 @@ export function ProfileScreen({
   onNotifications,
   onSettings,
   onAdmin,
+  onReviewTransaction,
 }: {
   onEditProfile: () => void;
   onMyListings: () => void;
@@ -1282,6 +1483,7 @@ export function ProfileScreen({
   onNotifications?: () => void;
   onSettings?: () => void;
   onAdmin?: () => void;
+  onReviewTransaction?: (listingId: string, revieweeId: string, transactionId: string) => void;
 }) {
   const auth = useAuth();
   const [busy, setBusy] = useState(false);
@@ -1302,11 +1504,14 @@ export function ProfileScreen({
   const [rescueContactPerson, setRescueContactPerson] = useState('');
   const [rescueContactPhone, setRescueContactPhone] = useState('');
   const [rescueWebsite, setRescueWebsite] = useState('');
+  const [rescueDonationInstructions, setRescueDonationInstructions] = useState(rescueDonationInstructionOptions[1]);
   const [rescueOrganizationType, setRescueOrganizationType] = useState<RescueOrganizationType>('Foster-based');
   const [rescueHas501c3, setRescueHas501c3] = useState(false);
   const [rescueEin, setRescueEin] = useState('');
   const myListings = useMyListings();
   const reviews = useReviews(auth.profile?.id ?? '');
+  const reviewSummary = useReviewSummary(auth.profile?.id ?? '', Boolean(auth.profile));
+  const pendingReviews = usePendingReviews(Boolean(auth.profile));
 
   const submitAuth = async () => {
     setBusy(true);
@@ -1329,6 +1534,7 @@ export function ProfileScreen({
             has501c3: rescueHas501c3,
             ein: rescueEin,
             websiteUrl: rescueWebsite,
+            donationInstructions: rescueDonationInstructions,
           })
           : undefined;
 
@@ -1388,6 +1594,7 @@ export function ProfileScreen({
                     contactPerson={rescueContactPerson}
                     contactPhone={rescueContactPhone}
                     websiteUrl={rescueWebsite}
+                    donationInstructions={rescueDonationInstructions}
                     organizationType={rescueOrganizationType}
                     has501c3={rescueHas501c3}
                     ein={rescueEin}
@@ -1401,6 +1608,7 @@ export function ProfileScreen({
                     onContactPerson={setRescueContactPerson}
                     onContactPhone={setRescueContactPhone}
                     onWebsiteUrl={setRescueWebsite}
+                    onDonationInstructions={setRescueDonationInstructions}
                     onOrganizationType={setRescueOrganizationType}
                     onHas501c3={setRescueHas501c3}
                     onEin={setRescueEin}
@@ -1478,6 +1686,25 @@ export function ProfileScreen({
         <Button title="Log Out" icon={LogOut} variant="outline" onPress={signOut} fullWidth />
       </View>
       {notice ? <NoticeCard notice={notice} /> : null}
+      <ReviewSummary summary={reviewSummary.data} />
+      {(pendingReviews.data ?? []).length > 0 && onReviewTransaction ? (
+        <>
+          <SectionTitle title="Reviews to leave" hint={`${pendingReviews.data?.length ?? 0} pending`} />
+          {(pendingReviews.data ?? []).slice(0, 3).map((pendingReview) => (
+            <PendingReviewCard
+              key={pendingReview.transaction.id}
+              pendingReview={pendingReview}
+              onReview={() =>
+                onReviewTransaction(
+                  pendingReview.listingId,
+                  pendingReview.reviewee.id,
+                  pendingReview.transaction.id
+                )
+              }
+            />
+          ))}
+        </>
+      ) : null}
       <SectionTitle title="Reviews" hint={`${reviews.data?.length ?? 0} total`} />
       {reviews.isLoading ? <LoadingCards /> : null}
       {(reviews.data ?? []).slice(0, 3).map((review) => (
@@ -1512,6 +1739,7 @@ function RescueSignupFields({
   contactPerson,
   contactPhone,
   websiteUrl,
+  donationInstructions,
   organizationType,
   has501c3,
   ein,
@@ -1525,6 +1753,7 @@ function RescueSignupFields({
   onContactPerson,
   onContactPhone,
   onWebsiteUrl,
+  onDonationInstructions,
   onOrganizationType,
   onHas501c3,
   onEin,
@@ -1539,6 +1768,7 @@ function RescueSignupFields({
   contactPerson: string;
   contactPhone: string;
   websiteUrl: string;
+  donationInstructions: string;
   organizationType: RescueOrganizationType;
   has501c3: boolean;
   ein: string;
@@ -1552,6 +1782,7 @@ function RescueSignupFields({
   onContactPerson: (value: string) => void;
   onContactPhone: (value: string) => void;
   onWebsiteUrl: (value: string) => void;
+  onDonationInstructions: (value: string) => void;
   onOrganizationType: (value: RescueOrganizationType) => void;
   onHas501c3: (value: boolean) => void;
   onEin: (value: string) => void;
@@ -1571,6 +1802,18 @@ function RescueSignupFields({
       <TextInput label="Contact Person" value={contactPerson} onChangeText={onContactPerson} placeholder="Avery M." />
       <TextInput label="Contact Phone" value={contactPhone} onChangeText={onContactPhone} placeholder="Optional" keyboardType="phone-pad" />
       <TextInput label="Website or Social Link" value={websiteUrl} onChangeText={onWebsiteUrl} placeholder="Optional" autoCapitalize="none" />
+      <Text style={styles.filterLabel}>Donation drop-off options</Text>
+      <View style={styles.wrapRow}>
+        {rescueDonationInstructionOptions.map((option) => (
+          <FilterChip key={option} label={donationInstructionLabel(option)} selected={donationInstructions === option} onPress={() => onDonationInstructions(option)} />
+        ))}
+      </View>
+      <TextArea
+        label="Donation Instructions"
+        value={donationInstructions}
+        onChangeText={onDonationInstructions}
+        placeholder="Example: Drop off supplies at our front desk Monday-Saturday from 11 AM-5 PM."
+      />
       <Text style={styles.filterLabel}>Rescue setup</Text>
       <View style={styles.wrapRow}>
         {(['Foster-based', 'Physical location', 'Hybrid'] as RescueOrganizationType[]).map((option) => (
@@ -1608,40 +1851,149 @@ function RescueDashboardScreen({
 }) {
   const dashboard = useRescueDashboard(true);
   const actions = useRescueActions();
+  const rescueDashboardScrollRef = useRef<ScrollView | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [needItem, setNeedItem] = useState('');
   const [needQuantity, setNeedQuantity] = useState('');
   const [needUrgency, setNeedUrgency] = useState<RescueNeedUrgency>('High');
+  const [editingNeedId, setEditingNeedId] = useState<string | null>(null);
+  const [needFormY, setNeedFormY] = useState(0);
   const [wishlistItem, setWishlistItem] = useState('');
   const [wishlistQuantity, setWishlistQuantity] = useState('');
   const [wishlistPriority, setWishlistPriority] = useState<RescueNeedUrgency>('Medium');
+  const [editingWishlistItemId, setEditingWishlistItemId] = useState<string | null>(null);
+  const [wishlistFormY, setWishlistFormY] = useState(0);
 
   const rescueProfile = dashboard.data?.profile ?? null;
   const urgentNeeds = dashboard.data?.urgentNeeds ?? [];
   const wishlistItems = dashboard.data?.wishlistItems ?? [];
 
+  const resetNeedForm = () => {
+    setEditingNeedId(null);
+    setNeedItem('');
+    setNeedQuantity('');
+    setNeedUrgency('High');
+  };
+
+  const resetWishlistForm = () => {
+    setEditingWishlistItemId(null);
+    setWishlistItem('');
+    setWishlistQuantity('');
+    setWishlistPriority('Medium');
+  };
+
+  const scrollToDashboardForm = (y: number) => {
+    requestAnimationFrame(() => {
+      rescueDashboardScrollRef.current?.scrollTo({ y: Math.max(y - spacing.md, 0), animated: true });
+    });
+  };
+
+  const updateNeedFormY = (event: LayoutChangeEvent) => {
+    setNeedFormY(event.nativeEvent.layout.y);
+  };
+
+  const updateWishlistFormY = (event: LayoutChangeEvent) => {
+    setWishlistFormY(event.nativeEvent.layout.y);
+  };
+
+  const confirmDelete = (title: string, message: string, onDelete: () => Promise<void>) => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      if (window.confirm(message)) {
+        void onDelete();
+      }
+      return;
+    }
+
+    Alert.alert(title, message, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => void onDelete() },
+    ]);
+  };
+
   const addNeed = async () => {
     try {
-      await actions.addUrgentNeed({ item: needItem, quantity: needQuantity, urgency: needUrgency });
-      setNeedItem('');
-      setNeedQuantity('');
-      setNotice({ title: 'Urgent need added', body: 'It will appear on your rescue profile once your organization is verified.' });
+      if (editingNeedId) {
+        await actions.updateUrgentNeed(editingNeedId, { item: needItem, quantity: needQuantity, urgency: needUrgency });
+        setNotice({ title: 'Urgent need updated', body: 'Your Rescue Hub urgent need has been updated.' });
+      } else {
+        await actions.addUrgentNeed({ item: needItem, quantity: needQuantity, urgency: needUrgency });
+        setNotice({ title: 'Urgent need added', body: 'It will appear on your rescue profile once your organization is verified.' });
+      }
+      resetNeedForm();
       await dashboard.refetch();
     } catch (error) {
-      setNotice({ title: 'Need was not added', body: handleAppError(error).userMessage });
+      setNotice({ title: editingNeedId ? 'Need was not updated' : 'Need was not added', body: handleAppError(error).userMessage });
     }
   };
 
   const addWishlistItem = async () => {
     try {
-      await actions.addWishlistItem({ item: wishlistItem, quantity: wishlistQuantity, priority: wishlistPriority });
-      setWishlistItem('');
-      setWishlistQuantity('');
-      setNotice({ title: 'Wishlist item added', body: 'People browsing Rescue Hub will be able to see it after verification.' });
+      if (editingWishlistItemId) {
+        await actions.updateWishlistItem(editingWishlistItemId, { item: wishlistItem, quantity: wishlistQuantity, priority: wishlistPriority });
+        setNotice({ title: 'Wishlist item updated', body: 'Your Rescue Hub wishlist has been updated.' });
+      } else {
+        await actions.addWishlistItem({ item: wishlistItem, quantity: wishlistQuantity, priority: wishlistPriority });
+        setNotice({ title: 'Wishlist item added', body: 'People browsing Rescue Hub will be able to see it after verification.' });
+      }
+      resetWishlistForm();
       await dashboard.refetch();
     } catch (error) {
-      setNotice({ title: 'Wishlist item was not added', body: handleAppError(error).userMessage });
+      setNotice({ title: editingWishlistItemId ? 'Wishlist item was not updated' : 'Wishlist item was not added', body: handleAppError(error).userMessage });
     }
+  };
+
+  const deleteNeed = () => {
+    if (!editingNeedId) {
+      return;
+    }
+
+    const itemName = needItem.trim() || 'this urgent need';
+    confirmDelete('Delete urgent need?', `Remove "${itemName}" from Rescue Hub?`, async () => {
+      try {
+        await actions.deleteUrgentNeed(editingNeedId);
+        resetNeedForm();
+        setNotice({ title: 'Urgent need deleted', body: 'That item has been removed from your public rescue needs.' });
+        await dashboard.refetch();
+      } catch (error) {
+        setNotice({ title: 'Need was not deleted', body: handleAppError(error).userMessage });
+      }
+    });
+  };
+
+  const deleteWishlistItem = () => {
+    if (!editingWishlistItemId) {
+      return;
+    }
+
+    const itemName = wishlistItem.trim() || 'this wishlist item';
+    confirmDelete('Delete wishlist item?', `Remove "${itemName}" from Rescue Hub?`, async () => {
+      try {
+        await actions.deleteWishlistItem(editingWishlistItemId);
+        resetWishlistForm();
+        setNotice({ title: 'Wishlist item deleted', body: 'That item has been removed from your public rescue wishlist.' });
+        await dashboard.refetch();
+      } catch (error) {
+        setNotice({ title: 'Wishlist item was not deleted', body: handleAppError(error).userMessage });
+      }
+    });
+  };
+
+  const editNeed = (need: { id: string; item: string; quantity?: string; urgency: RescueNeedUrgency }) => {
+    setEditingNeedId(need.id);
+    setNeedItem(need.item);
+    setNeedQuantity(need.quantity ?? '');
+    setNeedUrgency(need.urgency);
+    setNotice({ title: 'Editing urgent need', body: `Update "${need.item}" in the form, then tap Save Urgent Need.` });
+    scrollToDashboardForm(needFormY);
+  };
+
+  const editWishlistItem = (item: { id: string; item: string; quantity?: string; priority: RescueNeedUrgency }) => {
+    setEditingWishlistItemId(item.id);
+    setWishlistItem(item.item);
+    setWishlistQuantity(item.quantity ?? '');
+    setWishlistPriority(item.priority);
+    setNotice({ title: 'Editing wishlist item', body: `Update "${item.item}" in the form, then tap Save Wishlist Item.` });
+    scrollToDashboardForm(wishlistFormY);
   };
 
   if (dashboard.isLoading) {
@@ -1665,7 +2017,7 @@ function RescueDashboardScreen({
   }
 
   return (
-    <ScrollView style={styles.listScreen} contentContainerStyle={styles.listContent}>
+    <ScrollView ref={rescueDashboardScrollRef} style={styles.listScreen} contentContainerStyle={styles.listContent} keyboardShouldPersistTaps="handled">
       <ProfileHeader
         name={rescueProfile.name}
         handle={`@${profile.username}`}
@@ -1693,6 +2045,7 @@ function RescueDashboardScreen({
           </Text>
           {rescueProfile.website_url ? <Text style={styles.body}>Website: {rescueProfile.website_url}</Text> : null}
           {rescuePublicAddress(rescueProfile) ? <Text style={styles.body}>Public address: {rescuePublicAddress(rescueProfile)}</Text> : null}
+          {rescueProfile.contact_hint ? <Text style={styles.body}>Donation instructions: {rescueProfile.contact_hint}</Text> : null}
         </View>
       </Card>
 
@@ -1715,11 +2068,12 @@ function RescueDashboardScreen({
       {notice ? <NoticeCard notice={notice} /> : null}
       {actions.error ? <Text style={styles.errorText}>{actions.error}</Text> : null}
 
+      <View onLayout={updateNeedFormY}>
       <Card>
         <View style={styles.stack}>
           <View style={styles.locationRow}>
             <AlertCircle size={20} color={colors.warning} />
-            <Text style={styles.cardTitle}>Add urgent need</Text>
+            <Text style={styles.cardTitle}>{editingNeedId ? 'Edit urgent need' : 'Add urgent need'}</Text>
           </View>
           <TextInput label="Needed Item" value={needItem} onChangeText={setNeedItem} placeholder="Small crates" />
           <TextInput label="Quantity" value={needQuantity} onChangeText={setNeedQuantity} placeholder="4 needed" />
@@ -1728,15 +2082,19 @@ function RescueDashboardScreen({
               <FilterChip key={option} label={option} selected={needUrgency === option} onPress={() => setNeedUrgency(option)} />
             ))}
           </View>
-          <Button title="Add Urgent Need" onPress={() => void addNeed()} loading={actions.loading} fullWidth />
+          <Button title={editingNeedId ? 'Save Urgent Need' : 'Add Urgent Need'} onPress={() => void addNeed()} loading={actions.loading} fullWidth />
+          {editingNeedId ? <Button title="Cancel Edit" variant="outline" onPress={resetNeedForm} fullWidth /> : null}
+          {editingNeedId ? <Button title="Delete Urgent Need" icon={Trash2} variant="danger" onPress={deleteNeed} loading={actions.loading} fullWidth /> : null}
         </View>
       </Card>
+      </View>
 
+      <View onLayout={updateWishlistFormY}>
       <Card>
         <View style={styles.stack}>
           <View style={styles.locationRow}>
             <HeartHandshake size={20} color={colors.primary} />
-            <Text style={styles.cardTitle}>Add wishlist item</Text>
+            <Text style={styles.cardTitle}>{editingWishlistItemId ? 'Edit wishlist item' : 'Add wishlist item'}</Text>
           </View>
           <TextInput label="Wishlist Item" value={wishlistItem} onChangeText={setWishlistItem} placeholder="Washable blankets" />
           <TextInput label="Quantity" value={wishlistQuantity} onChangeText={setWishlistQuantity} placeholder="12 requested" />
@@ -1745,9 +2103,12 @@ function RescueDashboardScreen({
               <FilterChip key={option} label={option} selected={wishlistPriority === option} onPress={() => setWishlistPriority(option)} />
             ))}
           </View>
-          <Button title="Add Wishlist Item" variant="secondary" onPress={() => void addWishlistItem()} loading={actions.loading} fullWidth />
+          <Button title={editingWishlistItemId ? 'Save Wishlist Item' : 'Add Wishlist Item'} variant="secondary" onPress={() => void addWishlistItem()} loading={actions.loading} fullWidth />
+          {editingWishlistItemId ? <Button title="Cancel Edit" variant="outline" onPress={resetWishlistForm} fullWidth /> : null}
+          {editingWishlistItemId ? <Button title="Delete Wishlist Item" icon={Trash2} variant="danger" onPress={deleteWishlistItem} loading={actions.loading} fullWidth /> : null}
         </View>
       </Card>
+      </View>
 
       <SectionTitle title="Current urgent needs" hint={`${urgentNeeds.length} active`} />
       <RescueDashboardItemList
@@ -1758,6 +2119,8 @@ function RescueDashboardScreen({
           urgency: need.urgency,
         }))}
         emptyTitle="No urgent needs yet"
+        editingItemId={editingNeedId}
+        onEdit={editNeed}
       />
 
       <SectionTitle title="Wishlist" hint={`${wishlistItems.length} active`} />
@@ -1769,6 +2132,15 @@ function RescueDashboardScreen({
           urgency: item.priority,
         }))}
         emptyTitle="No wishlist items yet"
+        editingItemId={editingWishlistItemId}
+        onEdit={(item) => {
+          editWishlistItem({
+            id: item.id,
+            item: item.item,
+            quantity: item.quantity,
+            priority: item.urgency,
+          });
+        }}
       />
     </ScrollView>
   );
@@ -1786,6 +2158,7 @@ function RescueProfileSetupScreen({ onSaved, onSignOut }: { onSaved: () => Promi
   const [contactPerson, setContactPerson] = useState('');
   const [contactPhone, setContactPhone] = useState('');
   const [websiteUrl, setWebsiteUrl] = useState('');
+  const [donationInstructions, setDonationInstructions] = useState(rescueDonationInstructionOptions[1]);
   const [organizationType, setOrganizationType] = useState<RescueOrganizationType>('Foster-based');
   const [has501c3, setHas501c3] = useState(false);
   const [ein, setEin] = useState('');
@@ -1802,10 +2175,12 @@ function RescueProfileSetupScreen({ onSaved, onSignOut }: { onSaved: () => Promi
         addressLine1,
         addressLine2,
         contactPerson,
+        contactPhone,
         organizationType,
         has501c3,
         ein,
         websiteUrl,
+        donationInstructions,
       }));
       setNotice({ title: 'Rescue profile saved', body: 'Your profile is pending verification.' });
       await onSaved();
@@ -1831,6 +2206,7 @@ function RescueProfileSetupScreen({ onSaved, onSignOut }: { onSaved: () => Promi
             contactPerson={contactPerson}
             contactPhone={contactPhone}
             websiteUrl={websiteUrl}
+            donationInstructions={donationInstructions}
             organizationType={organizationType}
             has501c3={has501c3}
             ein={ein}
@@ -1844,6 +2220,7 @@ function RescueProfileSetupScreen({ onSaved, onSignOut }: { onSaved: () => Promi
             onContactPerson={setContactPerson}
             onContactPhone={setContactPhone}
             onWebsiteUrl={setWebsiteUrl}
+            onDonationInstructions={setDonationInstructions}
             onOrganizationType={setOrganizationType}
             onHas501c3={setHas501c3}
             onEin={setEin}
@@ -1861,9 +2238,13 @@ function RescueProfileSetupScreen({ onSaved, onSignOut }: { onSaved: () => Promi
 function RescueDashboardItemList({
   items,
   emptyTitle,
+  editingItemId,
+  onEdit,
 }: {
   items: Array<{ id: string; item: string; quantity?: string; urgency: RescueNeedUrgency }>;
   emptyTitle: string;
+  editingItemId?: string | null;
+  onEdit: (item: { id: string; item: string; quantity?: string; urgency: RescueNeedUrgency }) => void;
 }) {
   if (items.length === 0) {
     return <EmptyState title={emptyTitle} body="Add items from your rescue dashboard." icon={HeartHandshake} />;
@@ -1879,6 +2260,15 @@ function RescueDashboardItemList({
               <Text style={styles.metaText}>{item.quantity || 'Quantity flexible'}</Text>
             </View>
             <ConditionBadge condition={item.urgency} />
+          </View>
+          <View style={styles.actionGrid}>
+            <Button
+              title={editingItemId === item.id ? 'Editing' : 'Edit'}
+              icon={Edit3}
+              variant={editingItemId === item.id ? 'secondary' : 'outline'}
+              onPress={() => onEdit(item)}
+              fullWidth
+            />
           </View>
         </Card>
       ))}
@@ -1901,6 +2291,7 @@ function buildRescueSignupInput(input: RescueSignupInput): RescueSignupInput {
     contactPhone: input.contactPhone?.trim() || undefined,
     ein: input.ein?.trim() || undefined,
     websiteUrl: input.websiteUrl?.trim() || undefined,
+    donationInstructions: input.donationInstructions?.trim() || rescueDonationInstructionOptions[1],
   };
 }
 
@@ -1917,7 +2308,27 @@ function rescuePublicAddress(rescueProfile: RescueProfile): string {
 }
 
 function rescuePublicProfileHasContact(rescueProfile: RescueProfile): boolean {
-  return Boolean(rescueProfile.website_url || rescuePublicAddress(rescueProfile));
+  return Boolean(rescueProfile.website_url || rescuePublicAddress(rescueProfile) || rescueProfile.contact_hint);
+}
+
+function donationInstructionLabel(instruction: string): string {
+  if (instruction.startsWith('Drop off')) {
+    return 'Drop-off hours';
+  }
+
+  if (instruction.startsWith('Send us a message')) {
+    return 'Message first';
+  }
+
+  if (instruction.startsWith('Visit our website')) {
+    return 'Website instructions';
+  }
+
+  if (instruction.startsWith('Please contact')) {
+    return 'Contact before drop-off';
+  }
+
+  return 'Use this option';
 }
 
 function verificationLabel(status: string) {
@@ -1974,6 +2385,7 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
     has501c3: false,
     ein: '',
     websiteUrl: '',
+    donationInstructions: rescueDonationInstructionOptions[1],
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const rescueProfile = rescueDashboard.data?.profile ?? null;
@@ -1998,6 +2410,7 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
       has501c3: rescueProfile.has_501c3,
       ein: rescueProfile.ein ?? '',
       websiteUrl: rescueProfile.website_url ?? '',
+      donationInstructions: rescueProfile.contact_hint ?? rescueDonationInstructionOptions[1],
       summary: rescueProfile.summary,
     });
   }, [rescueProfile]);
@@ -2122,6 +2535,7 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
                   contactPerson={rescueForm.contactPerson}
                   contactPhone={rescueForm.contactPhone ?? ''}
                   websiteUrl={rescueForm.websiteUrl ?? ''}
+                  donationInstructions={rescueForm.donationInstructions ?? rescueDonationInstructionOptions[1]}
                   organizationType={rescueForm.organizationType}
                   has501c3={rescueForm.has501c3}
                   ein={rescueForm.ein ?? ''}
@@ -2135,6 +2549,7 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
                   onContactPerson={(value) => updateRescue('contactPerson', value)}
                   onContactPhone={(value) => updateRescue('contactPhone', value)}
                   onWebsiteUrl={(value) => updateRescue('websiteUrl', value)}
+                  onDonationInstructions={(value) => updateRescue('donationInstructions', value)}
                   onOrganizationType={(value) => updateRescue('organizationType', value)}
                   onHas501c3={(value) => updateRescue('has501c3', value)}
                   onEin={(value) => updateRescue('ein', value)}
@@ -2168,6 +2583,7 @@ export function PublicProfileScreen({
   const publicRescueProfile = usePublicRescueProfile(userId, profile.data?.account_type === 'rescue');
   const listings = useUserListings(userId);
   const reviews = useReviews(userId);
+  const reviewSummary = useReviewSummary(userId);
   const favorites = useFavorites(Boolean(auth.user));
   const [notice, setNotice] = useState<Notice | null>(null);
 
@@ -2191,17 +2607,18 @@ export function PublicProfileScreen({
   const activeListings = (listings.data ?? []).filter((listing) => listing.status === 'Active');
   const favoriteIds = (favorites.data ?? []).map((listing) => listing.id);
 
-  const handleFavorite = async (listingId: string) => {
+  const handleFavorite = async (listing: Listing) => {
     if (auth.isGuest) {
       setNotice({ title: 'Create an account to save listings.', body: 'Saved listings live in your Favorites tab.' });
       return;
     }
 
     try {
+      const listingId = listing.id;
       if (favorites.isFavorite(listingId)) {
         await favorites.removeFavorite(listingId);
       } else {
-        await favorites.saveFavorite(listingId);
+        await favorites.saveFavorite(listingId, listing);
       }
     } catch (error) {
       setNotice({ title: 'Favorite was not updated', body: handleAppError(error).userMessage });
@@ -2238,6 +2655,9 @@ export function PublicProfileScreen({
               {rescuePublicAddress(publicRescueProfile.data) ? (
                 <Text style={styles.body}>Public address: {rescuePublicAddress(publicRescueProfile.data)}</Text>
               ) : null}
+              {publicRescueProfile.data.contact_hint ? (
+                <Text style={styles.body}>Donation instructions: {publicRescueProfile.data.contact_hint}</Text>
+              ) : null}
             </View>
           </Card>
         ) : null}
@@ -2252,6 +2672,7 @@ export function PublicProfileScreen({
           {onReportUser ? <Button title="Report User" icon={Flag} variant="ghost" onPress={() => onReportUser(userId)} fullWidth /> : null}
         </View>
         {notice ? <NoticeCard notice={notice} /> : null}
+        <ReviewSummary summary={reviewSummary.data} />
         <SectionTitle title="Reviews" hint={`${reviews.data?.length ?? 0} total`} />
         {reviews.isLoading ? <LoadingCards /> : null}
         {(reviews.data ?? []).slice(0, 4).map((review) => (
@@ -2269,7 +2690,12 @@ export function PublicProfileScreen({
           listings={activeListings}
           favoriteIds={favoriteIds}
           onOpenListing={onOpenListing}
-          onFavorite={(listingId) => void handleFavorite(listingId)}
+          onFavorite={(listingId) => {
+            const listing = activeListings.find((item) => item.id === listingId);
+            if (listing) {
+              void handleFavorite(listing);
+            }
+          }}
           emptyTitle="No active listings"
           emptyBody="This seller does not have active listings right now."
         />
@@ -2288,12 +2714,18 @@ export function MyListingsScreen({
   onEditListing: (listingId: string) => void;
 }) {
   const listings = useMyListings();
+  const transaction = useCompleteTransaction();
   const [confirm, setConfirm] = useState<{
     title: string;
     body: string;
     action: () => Promise<void>;
   } | null>(null);
+  const [completion, setCompletion] = useState<{
+    listing: Listing;
+    outcome: TransactionOutcome;
+  } | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
+  const completionParticipants = useEligibleTransactionParticipants(completion?.listing.id ?? '', Boolean(completion));
 
   const runConfirmed = async () => {
     if (!confirm) {
@@ -2312,6 +2744,30 @@ export function MyListingsScreen({
 
   const ask = (title: string, body: string, action: () => Promise<void>) => {
     setConfirm({ title, body, action });
+  };
+
+  const completeListing = async (buyerId?: string) => {
+    if (!completion) {
+      return;
+    }
+
+    try {
+      await transaction.complete({
+        listingId: completion.listing.id,
+        buyerId,
+        outcome: completion.outcome,
+      });
+      await listings.refetch();
+      setNotice({
+        title: completion.outcome === 'sold' ? 'Listing marked sold' : 'Listing marked donated',
+        body: buyerId
+          ? 'The transaction was recorded and both people can leave reviews.'
+          : 'The listing status was updated. Reviews are only enabled when a ReTail user is selected.',
+      });
+      setCompletion(null);
+    } catch (error) {
+      setNotice({ title: 'Listing was not completed', body: handleAppError(error).userMessage });
+    }
   };
 
   const groups: Array<{ status: ListingStatus; title: string }> = [
@@ -2343,6 +2799,48 @@ export function MyListingsScreen({
                 <Button title="Cancel" variant="outline" onPress={() => setConfirm(null)} fullWidth />
                 <Button title="Confirm" variant="danger" onPress={() => void runConfirmed()} fullWidth />
               </View>
+            </View>
+          </Card>
+        ) : null}
+        {completion ? (
+          <Card>
+            <View style={styles.stack}>
+              <Text style={styles.cardTitle}>
+                {completion.outcome === 'sold' ? 'Who bought this item?' : 'Who received this donation?'}
+              </Text>
+              <Text style={styles.body}>
+                Choose someone from the listing conversation to enable reviews. If the exchange happened outside ReTail,
+                you can still update the listing status without creating a reviewable transaction.
+              </Text>
+              {completionParticipants.isLoading ? <LoadingSpinner /> : null}
+              {completionParticipants.isError ? (
+                <ErrorState
+                  message={handleAppError(completionParticipants.error).userMessage}
+                  onRetry={completionParticipants.refetch}
+                />
+              ) : null}
+              {(completionParticipants.data ?? []).map((participant) => (
+                <Button
+                  key={participant.userId}
+                  title={`${participant.displayName}${participant.username ? ` (@${participant.username})` : ''}`}
+                  variant="outline"
+                  onPress={() => void completeListing(participant.userId)}
+                  loading={transaction.loading}
+                  fullWidth
+                />
+              ))}
+              {!completionParticipants.isLoading && (completionParticipants.data ?? []).length === 0 ? (
+                <Text style={styles.body}>No ReTail conversations are attached to this listing yet.</Text>
+              ) : null}
+              <Button
+                title="Completed outside ReTail / recipient not listed"
+                variant="secondary"
+                onPress={() => void completeListing()}
+                loading={transaction.loading}
+                fullWidth
+              />
+              <Button title="Cancel" variant="ghost" onPress={() => setCompletion(null)} fullWidth />
+              {transaction.error ? <Text style={styles.errorText}>{transaction.error}</Text> : null}
             </View>
           </Card>
         ) : null}
@@ -2380,18 +2878,12 @@ export function MyListingsScreen({
                 },
                 {
                   label: 'Mark Sold',
-                  onPress: (listing) =>
-                    ask('Mark listing sold?', 'This will remove the item from active marketplace results.', () =>
-                      listings.markListingSold(listing.id)
-                    ),
+                  onPress: (listing) => setCompletion({ listing, outcome: 'sold' }),
                   disabled: (listing) => ['Sold', 'Donated', 'Archived', 'Removed'].includes(listing.status),
                 },
                 {
                   label: 'Mark Donated',
-                  onPress: (listing) =>
-                    ask('Mark listing donated?', 'This records the item as donated and removes it from active results.', () =>
-                      listings.markListingDonated(listing.id)
-                    ),
+                  onPress: (listing) => setCompletion({ listing, outcome: 'donated' }),
                   disabled: (listing) => ['Sold', 'Donated', 'Archived', 'Removed'].includes(listing.status),
                 },
                 {
@@ -2820,6 +3312,46 @@ function LoadingCards() {
       ))}
     </View>
   );
+}
+
+function mergeFeedListings(primaryListings: Listing[], secondaryListings: Listing[]): Listing[] {
+  const listingIds = new Set<string>();
+  const mergedListings: Listing[] = [];
+
+  for (const listing of [...primaryListings, ...secondaryListings]) {
+    if (listingIds.has(listing.id)) {
+      continue;
+    }
+
+    listingIds.add(listing.id);
+    mergedListings.push(listing);
+  }
+
+  return mergedListings;
+}
+
+function listingMatchesFeedFilters(
+  listing: Listing,
+  filters: {
+    search: string;
+    categorySlug?: string;
+  }
+) {
+  const normalizedSearch = filters.search.trim().toLowerCase();
+  const matchesSearch =
+    !normalizedSearch ||
+    [listing.title, listing.description, listing.category, listing.condition, listing.brand]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase()
+      .includes(normalizedSearch);
+  const matchesCategory = !filters.categorySlug || listingCategorySlug(listing) === filters.categorySlug;
+
+  return matchesSearch && matchesCategory;
+}
+
+function listingCategorySlug(listing: Listing) {
+  return listing.category === 'General' ? 'general' : listing.category.toLowerCase().replaceAll(' ', '-');
 }
 
 function initialsFor(name: string) {

@@ -19,6 +19,7 @@ type CreateListingScreenProps = {
   onChange: (form: ListingForm) => void;
   onPublish: () => void;
   onSignIn: () => void;
+  mode?: 'create' | 'edit';
 };
 
 export function CreateListingScreen({
@@ -27,6 +28,7 @@ export function CreateListingScreen({
   onChange,
   onPublish,
   onSignIn,
+  mode = 'create',
 }: CreateListingScreenProps) {
   if (!isSignedIn) {
     return (
@@ -47,8 +49,10 @@ export function CreateListingScreen({
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
       <ScrollView style={styles.screen} contentContainerStyle={styles.screenContent}>
-        <Text style={styles.title}>Create listing</Text>
-        <Text style={styles.subhead}>Sell or donate supplies to nearby pet owners.</Text>
+        <Text style={styles.title}>{mode === 'edit' ? 'Edit listing' : 'Create listing'}</Text>
+        <Text style={styles.subhead}>
+          {mode === 'edit' ? 'Update your listing details for nearby pet owners.' : 'Sell or donate supplies to nearby pet owners.'}
+        </Text>
 
         <Pressable style={styles.photoPicker}>
           <Camera size={24} color={colors.primary} />
@@ -116,7 +120,7 @@ export function CreateListingScreen({
 
         <Pressable style={styles.primaryButtonWide} onPress={onPublish}>
           <CheckCircle2 size={20} color={colors.white} />
-          <Text style={styles.primaryButtonText}>Publish listing</Text>
+          <Text style={styles.primaryButtonText}>{mode === 'edit' ? 'Save changes' : 'Publish listing'}</Text>
         </Pressable>
       </ScrollView>
     </KeyboardAvoidingView>

@@ -1,8 +1,16 @@
 import { useCallback } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { clearQueryData, getQueryData, setQueryData } from '../lib/queryClient';
 import { queryKeys } from '../lib/queryKeys';
-import { createReview, getUserReviews } from '../services/reviewService';
+import {
+  createReview,
+  getPendingReviews,
+  getReviewSummary,
+  getUserReviews,
+} from '../services/reviewService';
 import type { CreateReviewInput, Review } from '../services/types';
+import { handleAppError } from '../utils/errorHandler';
+import { useAuth } from './useAuth';
 import { useAsyncResource } from './useAsyncResource';
 
 export function useReviews(userId: string) {
@@ -23,16 +31,50 @@ export function useReviews(userId: string) {
 }
 
 export function useCreateReview(userIdToRefresh?: string) {
-  const submitReview = useCallback(
-    async (input: CreateReviewInput) => {
-      const review = await createReview(input);
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const mutation = useMutation({
+    mutationFn: (input: CreateReviewInput) => createReview(input),
+    onSuccess: async (review) => {
       if (userIdToRefresh) {
         clearQueryData(queryKeys.reviews(userIdToRefresh));
+        await queryClient.invalidateQueries({ queryKey: queryKeys.reviews(userIdToRefresh) });
+        await queryClient.invalidateQueries({ queryKey: queryKeys.reviewSummary(userIdToRefresh) });
       }
+
+      if (user) {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.pendingReviews(user.id) });
+      }
+
       return review;
     },
-    [userIdToRefresh]
+  });
+
+  const submitReview = useCallback(
+    (input: CreateReviewInput) => mutation.mutateAsync(input),
+    [mutation]
   );
 
-  return { submitReview };
+  return {
+    submitReview,
+    loading: mutation.isPending,
+    error: mutation.error ? handleAppError(mutation.error).userMessage : null,
+  };
+}
+
+export function useReviewSummary(userId: string, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.reviewSummary(userId),
+    queryFn: () => getReviewSummary(userId),
+    enabled: enabled && Boolean(userId),
+  });
+}
+
+export function usePendingReviews(autoLoad = true) {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: queryKeys.pendingReviews(user?.id ?? 'guest'),
+    queryFn: () => getPendingReviews(user?.id),
+    enabled: autoLoad && Boolean(user),
+  });
 }

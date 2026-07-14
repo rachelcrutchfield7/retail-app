@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-import { config, hasSupabaseConfig } from '../constants/config';
+import { config, hasSupabaseConfig, isClientSafeSupabaseKey } from '../constants/config';
 import { createServiceError } from '../services/errors';
 
 export type SupabaseRuntimeConfig = {
@@ -16,16 +16,41 @@ type SupabaseStorageAdapter = {
 };
 
 const memoryStorage = new Map<string, string>();
+type SecureStoreModule = typeof import('expo-secure-store');
+let secureStoreImport: Promise<SecureStoreModule> | null = null;
+
+function usesNativeSecureStorage(): boolean {
+  const maybeNavigator = globalThis.navigator as { product?: string } | undefined;
+  return maybeNavigator?.product === 'ReactNative';
+}
+
+function getSecureStore(): Promise<SecureStoreModule> {
+  secureStoreImport ??= import('expo-secure-store');
+  return secureStoreImport;
+}
 
 const supabaseSessionStorage: SupabaseStorageAdapter = {
-  getItem(key) {
+  async getItem(key) {
+    if (usesNativeSecureStorage()) {
+      const secureStore = await getSecureStore();
+      return secureStore.getItemAsync(key);
+    }
+
     if (typeof globalThis !== 'undefined' && 'localStorage' in globalThis && globalThis.localStorage) {
       return globalThis.localStorage.getItem(key);
     }
 
     return memoryStorage.get(key) ?? null;
   },
-  setItem(key, value) {
+  async setItem(key, value) {
+    if (usesNativeSecureStorage()) {
+      const secureStore = await getSecureStore();
+      await secureStore.setItemAsync(key, value, {
+        keychainAccessible: secureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY,
+      });
+      return;
+    }
+
     if (typeof globalThis !== 'undefined' && 'localStorage' in globalThis && globalThis.localStorage) {
       globalThis.localStorage.setItem(key, value);
       return;
@@ -33,7 +58,13 @@ const supabaseSessionStorage: SupabaseStorageAdapter = {
 
     memoryStorage.set(key, value);
   },
-  removeItem(key) {
+  async removeItem(key) {
+    if (usesNativeSecureStorage()) {
+      const secureStore = await getSecureStore();
+      await secureStore.deleteItemAsync(key);
+      return;
+    }
+
     if (typeof globalThis !== 'undefined' && 'localStorage' in globalThis && globalThis.localStorage) {
       globalThis.localStorage.removeItem(key);
       return;
@@ -59,6 +90,14 @@ function assertSupabaseConfigured(): SupabaseRuntimeConfig {
       'SUPABASE_NOT_CONFIGURED',
       'Supabase environment variables are missing.',
       'Supabase is not configured yet. Add the project URL and publishable key, then restart the app.'
+    );
+  }
+
+  if (!isClientSafeSupabaseKey(runtimeConfig.anonKey)) {
+    throw createServiceError(
+      'UNSAFE_SUPABASE_KEY',
+      'A secret Supabase credential was supplied through a public environment variable.',
+      'The app is using an unsafe Supabase key. Replace it with the public anon or publishable key before continuing.'
     );
   }
 

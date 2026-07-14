@@ -32,8 +32,8 @@ export function PaymentChoiceCard({
             <ShieldCheck size={24} color={colors.primary} />
           </View>
           <View style={styles.headingText}>
-            <Text style={styles.title}>Choose how to pay</Text>
-            <Text style={styles.body}>This listing is priced at {price} from {sellerName}.</Text>
+            <Text style={styles.title}>Checkout options</Text>
+            <Text style={styles.body}>Agreed amount: {price} with {sellerName}.</Text>
           </View>
         </View>
 
@@ -42,7 +42,7 @@ export function PaymentChoiceCard({
         <View style={styles.optionBox}>
           <View style={styles.optionHeader}>
             <CreditCard size={20} color={colors.primary} />
-            <Text style={styles.optionTitle}>Pay through ReTail</Text>
+            <Text style={styles.optionTitle}>ReTail Protected Checkout</Text>
           </View>
           <Text style={styles.body}>
             Use Stripe checkout for a ReTail payment record, receipt, and dispute review support for eligible in-app transactions.
@@ -50,18 +50,18 @@ export function PaymentChoiceCard({
           {!protectedCheckoutReady ? (
             <Text style={styles.helper}>Stripe checkout is prepared in the app flow, but needs Stripe Connect and backend setup before charging cards.</Text>
           ) : null}
-          <Button title="Pay through ReTail" icon={CreditCard} onPress={onPayWithStripe} disabled={disabled} fullWidth />
+          <Button title="ReTail Protected Checkout" icon={CreditCard} onPress={onPayWithStripe} disabled={disabled} fullWidth />
         </View>
 
         <View style={[styles.optionBox, styles.warningBox]}>
           <View style={styles.optionHeader}>
             <Wallet size={20} color={colors.warning} />
-            <Text style={styles.optionTitle}>Pay outside of app</Text>
+            <Text style={styles.optionTitle}>Arrange payment outside ReTail</Text>
           </View>
           <Text style={styles.body}>
-            Cash or another payment platform is allowed, but ReTail cannot cover scams, chargebacks, refunds, or payment disputes outside the app.
+            Cash or another payment platform is allowed, but ReTail cannot help with scams, chargebacks, refunds, or payment disputes outside the app.
           </Text>
-          <Button title="Pay outside of app" variant="outline" icon={Wallet} onPress={onPayOutsideApp} disabled={disabled} fullWidth />
+          <Button title="Arrange Outside ReTail" variant="outline" icon={Wallet} onPress={onPayOutsideApp} disabled={disabled} fullWidth />
         </View>
       </View>
     </Card>
