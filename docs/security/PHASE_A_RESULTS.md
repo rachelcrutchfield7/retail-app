@@ -92,8 +92,8 @@ Established scanner:
 - Local full working-tree scan: found ignored local `.env.local` and `.expo/dev/logs/*.log` copies of public Supabase Expo keys. Values were redacted. These files are not staged or tracked.
 - Local clean staged-source current-tree scan: passed.
 - Local Git-history scan: passed.
-- CI current-tree scan: pending the verification patch workflow run.
-- CI Git-history scan: pending the verification patch workflow run.
+- CI current-tree scan: passed in GitHub Actions run `29332836924`.
+- CI Git-history scan: passed in GitHub Actions run `29332836924`.
 
 Project-specific supplemental scanner:
 
@@ -190,7 +190,10 @@ No live Supabase credentials are required by the workflow.
 
 Verification patch workflow result:
 
-- Pending until the verification patch is pushed to `origin/security-phase-a` and GitHub Actions completes.
+- Passed in GitHub Actions run `29332836924`.
+- Workflow: `ReTail Security Baseline`.
+- Commit: `2888f91cc0943130b0d58de2734806ca6cecbfe0`.
+- URL: `https://github.com/rachelcrutchfield7/retail-app/actions/runs/29332836924`.
 
 ## Verification Results
 
@@ -231,7 +234,8 @@ Decision:
 
 Verification patch commit:
 
-- Pending until commit creation.
+- `db90e982b439e3f416e0ed4ebc0fbfbc1943cfb9` - `Verify security remediation Phase A`.
+- `2888f91cc0943130b0d58de2734806ca6cecbfe0` - `Fix Phase A CI blueprint path`.
 
 ## Expo Compatibility
 
@@ -252,6 +256,6 @@ Approved to proceed to Phase B with these known residual risks:
 
 ## Phase A Status
 
-Phase A remediation is complete.
+Phase A remediation is complete and verified by the passing `ReTail Security Baseline` GitHub Actions workflow.
 
 Proceed to Phase B: yes, after reviewing and accepting the documented residual risks.
