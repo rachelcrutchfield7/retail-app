@@ -22,6 +22,8 @@ export type Listing = {
   category: Category;
   condition: ListingCondition;
   image: string;
+  city?: string;
+  state?: string;
   location: string;
   zipCode?: string;
   distance: string;
@@ -29,6 +31,7 @@ export type Listing = {
   longitude?: number;
   distanceMiles?: number;
   status: ListingStatus;
+  sellerId?: string;
   seller: string;
   sellerRating: number;
   sellerReviews: number;
@@ -85,8 +88,9 @@ export type RescueOrganization = {
   name: string;
   location: string;
   distance: string;
-  latitude: number;
-  longitude: number;
+  distanceMiles?: number;
+  latitude?: number;
+  longitude?: number;
   verified: boolean;
   verificationStatus?: 'Pending' | 'Verified' | 'Rejected';
   summary: string;

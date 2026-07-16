@@ -16,12 +16,21 @@ export async function getCurrentProfile(): Promise<Profile> {
 }
 
 export async function getPublicProfile(userId: string): Promise<PublicProfile> {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', userId)
-    .is('deleted_at', null)
-    .single();
+  const publicProfileResult = await supabase.rpc('get_public_profile', {
+    target_user_id: userId,
+  });
+  const publicProfile = Array.isArray(publicProfileResult.data)
+    ? publicProfileResult.data[0] as Record<string, unknown> | undefined
+    : undefined;
+  const fallbackResult = publicProfile
+    ? { data: publicProfile, error: null }
+    : await supabase
+        .from('profiles')
+        .select('id,account_type,display_name,username,bio,avatar_url,city,state,buyer_rating,seller_rating,review_count,listings_count,completed_sales_count,is_verified,created_at')
+        .eq('id', userId)
+        .is('deleted_at', null)
+        .single();
+  const { data, error } = fallbackResult;
 
   if (error) {
     throwSupabaseError(error, 'This profile is not available.');

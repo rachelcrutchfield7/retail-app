@@ -46,10 +46,11 @@ test('payment choice UI includes protected Stripe and outside-app options', () =
   const listingScreen = readFileSync(join(root, 'src/sprint3/Sprint3App.tsx'), 'utf8');
   const sprint4App = readFileSync(join(root, 'src/sprint4/Sprint4App.tsx'), 'utf8');
 
-  assert.match(paymentCard, /Pay through ReTail/);
-  assert.match(paymentCard, /Pay outside of app/);
-  assert.match(paymentCard, /cannot cover scams/i);
+  assert.match(paymentCard, /ReTail Protected Checkout/);
+  assert.match(paymentCard, /Arrange payment outside ReTail/);
+  assert.match(paymentCard, /cannot help with scams/i);
   assert.doesNotMatch(listingScreen, /PaymentChoiceCard/);
-  assert.match(sprint4App, /Messaging options/);
+  assert.match(sprint4App, /Deal options/);
+  assert.match(sprint4App, /Offer accepted/);
   assert.match(sprint4App, /PaymentOptionsScreen/);
 });

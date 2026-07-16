@@ -5,8 +5,10 @@ import { colors, sizes, spacing, typography } from '../constants/theme';
 import {
   CategoryChip,
   EmptyState,
+  ErrorState,
   IconButton,
   ListingCard,
+  LoadingSpinner,
   RescueHubBanner,
   SearchBar,
 } from '../components';
@@ -18,6 +20,9 @@ type BrowseScreenProps = {
   query: string;
   category: CategoryFilter;
   favorites: Set<string>;
+  isLoading?: boolean;
+  errorMessage?: string;
+  onRetry?: () => void;
   onQueryChange: (value: string) => void;
   onCategoryChange: (value: CategoryFilter) => void;
   onOpenListing: (listing: Listing) => void;
@@ -33,6 +38,9 @@ export function BrowseScreen({
   onCategoryChange,
   onOpenListing,
   favorites,
+  isLoading = false,
+  errorMessage,
+  onRetry,
   onFavorite,
   onOpenRescueHub,
 }: BrowseScreenProps) {
@@ -78,7 +86,11 @@ export function BrowseScreen({
         <Text style={styles.sectionHint}>{listings.length} results</Text>
       </View>
 
-      {listings.length === 0 ? (
+      {isLoading ? (
+        <LoadingSpinner />
+      ) : errorMessage ? (
+        <ErrorState message={errorMessage} onRetry={onRetry} />
+      ) : listings.length === 0 ? (
         <EmptyState
           title="No listings found"
           body="Try a different keyword or category to find more pet supplies nearby."

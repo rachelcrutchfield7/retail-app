@@ -12,6 +12,7 @@ type MessageInputProps = {
   imageUri?: string | null;
   onRemoveImage: () => void;
   disabled?: boolean;
+  disabledMessage?: string;
   sending?: boolean;
   error?: string | null;
 };
@@ -24,6 +25,7 @@ export function MessageInput({
   imageUri,
   onRemoveImage,
   disabled = false,
+  disabledMessage = 'Messages are unavailable while offline.',
   sending = false,
   error,
 }: MessageInputProps) {
@@ -33,7 +35,7 @@ export function MessageInput({
     <View style={styles.wrap}>
       <ImagePreview imageUri={imageUri} onRemove={onRemoveImage} />
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      {disabled ? <Text style={styles.offline}>Messages are unavailable while offline.</Text> : null}
+      {disabled ? <Text style={styles.offline}>{disabledMessage}</Text> : null}
       <View style={styles.row}>
         <AttachmentButton onPress={onAttach} disabled={disabled || sending} />
         <TextInput
@@ -44,6 +46,7 @@ export function MessageInput({
           style={styles.input}
           editable={!disabled && !sending}
           multiline
+          maxLength={2000}
           accessibilityLabel="Message"
         />
         <Pressable

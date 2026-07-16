@@ -1,23 +1,35 @@
-import { useCallback } from 'react';
-import { getQueryData, setQueryData } from '../lib/queryClient';
+import { useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '../lib/queryKeys';
 import { getNearbyRescues } from '../services/rescueService';
 import type { RescueHubQueryParams, RescueHubResult } from '../services/types';
-import { useAsyncResource } from './useAsyncResource';
 
 export function useRescueHub(params: RescueHubQueryParams = {}) {
-  const loadRescues = useCallback(async (): Promise<RescueHubResult> => {
-    const key = queryKeys.rescueHub(JSON.stringify(params));
-    const cached = getQueryData<RescueHubResult>(key);
+  const queryHash = useMemo(
+    () => JSON.stringify({
+      search: params.search?.trim() ?? '',
+      latitude: params.latitude ?? null,
+      longitude: params.longitude ?? null,
+      radiusMiles: params.radiusMiles ?? 25,
+    }),
+    [params.latitude, params.longitude, params.radiusMiles, params.search]
+  );
 
-    if (cached) {
-      return cached;
-    }
+  const query = useQuery<RescueHubResult, Error>({
+    queryKey: queryKeys.rescueHub(queryHash),
+    queryFn: () => getNearbyRescues(params),
+    staleTime: 15 * 1000,
+    gcTime: 60 * 1000,
+  });
 
-    const rescues = await getNearbyRescues(params);
-    setQueryData(key, rescues);
-    return rescues;
-  }, [params]);
-
-  return useAsyncResource(loadRescues);
+  return {
+    data: query.data ?? null,
+    loading: query.isLoading,
+    isLoading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    error: query.error ?? null,
+    refresh: query.refetch,
+    refetch: query.refetch,
+  };
 }

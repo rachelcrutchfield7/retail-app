@@ -1,35 +1,48 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo, useState } from 'react';
-import { clearQueryData, getQueryData, setQueryData } from '../lib/queryClient';
 import { queryKeys } from '../lib/queryKeys';
 import { favoriteListing, isListingFavorited, unfavoriteListing } from '../services/favoriteService';
 import { createServiceError } from '../services/errors';
-import type { ListingSummary } from '../services/types';
 import { useAuth } from './useAuth';
-import { useAsyncResource } from './useAsyncResource';
 
 export function useFavoriteStatus(listingId: string, initialCount = 0) {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [favoriteCount, setFavoriteCount] = useState(initialCount);
   const userId = user?.id ?? 'guest';
   const favoriteKey = useMemo(() => ['favorite-status', userId, listingId] as const, [listingId, userId]);
+  const favoritesKey = useMemo(() => queryKeys.favorites(userId), [userId]);
+  const query = useQuery<boolean, Error>({
+    queryKey: favoriteKey,
+    queryFn: () => isListingFavorited(listingId),
+    enabled: Boolean(user && listingId),
+  });
+  const mutation = useMutation({
+    mutationFn: async (nextSelected: boolean) => {
+      if (nextSelected) {
+        await favoriteListing(listingId);
+      } else {
+        await unfavoriteListing(listingId);
+      }
+    },
+    onMutate: async (nextSelected: boolean) => {
+      await queryClient.cancelQueries({ queryKey: favoriteKey });
+      const previousSelected = queryClient.getQueryData<boolean>(favoriteKey) ?? Boolean(query.data);
 
-  const loadStatus = useCallback(async () => {
-    if (!user) {
-      return false;
-    }
+      queryClient.setQueryData(favoriteKey, nextSelected);
+      setFavoriteCount((count) => Math.max(count + (nextSelected ? 1 : -1), 0));
 
-    const cached = getQueryData<boolean>(favoriteKey);
-
-    if (cached !== undefined) {
-      return cached;
-    }
-
-    const selected = await isListingFavorited(listingId);
-    setQueryData(favoriteKey, selected);
-    return selected;
-  }, [favoriteKey, listingId, user]);
-
-  const resource = useAsyncResource<boolean>(loadStatus, Boolean(user && listingId));
+      return previousSelected;
+    },
+    onError: (_error, _nextSelected, previousSelected) => {
+      queryClient.setQueryData(favoriteKey, previousSelected ?? false);
+      setFavoriteCount((count) => Math.max(count + (previousSelected ? 1 : -1), 0));
+    },
+    onSettled: async () => {
+      await queryClient.invalidateQueries({ queryKey: favoriteKey });
+      await queryClient.invalidateQueries({ queryKey: favoritesKey });
+    },
+  });
 
   const toggleFavorite = useCallback(async () => {
     if (!user) {
@@ -40,37 +53,23 @@ export function useFavoriteStatus(listingId: string, initialCount = 0) {
       );
     }
 
-    const selected = Boolean(resource.data);
-    const favoritesKey = queryKeys.favorites(user.id);
-    const currentFavorites = getQueryData<ListingSummary[]>(favoritesKey);
-
-    setQueryData(favoriteKey, !selected);
-    setFavoriteCount((count) => Math.max(count + (selected ? -1 : 1), 0));
-
-    try {
-      if (selected) {
-        await unfavoriteListing(listingId);
-      } else {
-        await favoriteListing(listingId);
-      }
-
-      clearQueryData(favoritesKey);
-      await resource.refresh();
-    } catch (error) {
-      setQueryData(favoriteKey, selected);
-      setFavoriteCount((count) => Math.max(count + (selected ? 1 : -1), 0));
-
-      if (currentFavorites) {
-        setQueryData(favoritesKey, currentFavorites);
-      }
-
-      throw error;
-    }
-  }, [favoriteKey, listingId, resource, user]);
+    await mutation.mutateAsync(!Boolean(query.data));
+  }, [mutation, query.data, user]);
 
   return {
-    ...resource,
-    isFavorited: Boolean(resource.data),
+    data: query.data ?? false,
+    loading: query.isLoading,
+    isLoading: query.isLoading,
+    isFetching: query.isFetching || mutation.isPending,
+    isError: query.isError || mutation.isError,
+    error: query.error ?? mutation.error ?? null,
+    refresh: async () => {
+      await query.refetch();
+    },
+    refetch: async () => {
+      await query.refetch();
+    },
+    isFavorited: Boolean(query.data),
     favoriteCount,
     toggleFavorite,
   };

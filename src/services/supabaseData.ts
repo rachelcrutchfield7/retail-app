@@ -332,6 +332,8 @@ export function toListing(row: SupabaseRow): Listing {
     category: categoryFromRow(categoryRow),
     condition: conditionFromDb(row.condition),
     image: images[0]?.thumbnail_url ?? images[0]?.image_url ?? '',
+    city,
+    state,
     location: [city, [state, zipCode].filter(Boolean).join(' ')].filter(Boolean).join(', '),
     zipCode,
     distance: distanceFromRow(row),
@@ -339,6 +341,7 @@ export function toListing(row: SupabaseRow): Listing {
     longitude: optionalNumber(row.longitude),
     distanceMiles: optionalNumber(row.distance_miles),
     status: statusFromDb(row.status),
+    sellerId: optionalString(row.seller_id) ?? optionalString(sellerRow?.id),
     seller: sellerRow ? String(sellerRow.display_name ?? 'ReTail User') : 'ReTail User',
     sellerRating: sellerRow ? numberValue(sellerRow.seller_rating) : 0,
     sellerReviews: sellerRow ? integerValue(sellerRow.review_count) : 0,
@@ -375,10 +378,6 @@ function distanceFromRow(row: SupabaseRow): string {
 
   if (distanceMiles !== undefined) {
     return formatDistanceMiles(distanceMiles);
-  }
-
-  if (optionalNumber(row.latitude) !== undefined && optionalNumber(row.longitude) !== undefined) {
-    return 'Distance pending';
   }
 
   return 'Distance unavailable';

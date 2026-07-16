@@ -7,11 +7,25 @@ export type AnalyticsEvent = {
 
 const analyticsEvents: AnalyticsEvent[] = [];
 let identifiedUserId: string | undefined;
+const sensitiveAnalyticsKeyPattern = /(address|body|comment|credential|detail|email|latitude|longitude|message|password|phone|secret|token)/i;
+
+function sanitizeProperties(properties?: AnalyticsEvent['properties']): AnalyticsEvent['properties'] {
+  if (!properties) {
+    return undefined;
+  }
+
+  return Object.fromEntries(
+    Object.entries(properties).map(([key, value]) => [
+      key,
+      sensitiveAnalyticsKeyPattern.test(key) ? '[redacted]' : value,
+    ])
+  ) as AnalyticsEvent['properties'];
+}
 
 export function trackEvent(name: string, properties?: AnalyticsEvent['properties']): void {
   analyticsEvents.push({
     name,
-    properties,
+    properties: sanitizeProperties(properties),
     userId: identifiedUserId,
     createdAt: new Date().toISOString(),
   });

@@ -8,15 +8,20 @@ import { useAsyncResource } from './useAsyncResource';
 export function useListing(listingId: string) {
   const loadListing = useCallback(async (): Promise<ListingDetail> => {
     const key = queryKeys.listing(listingId);
-    const cached = getQueryData<ListingDetail>(key);
 
-    if (cached) {
-      return cached;
+    try {
+      const listing = await getListingById(listingId);
+      setQueryData(key, listing);
+      return listing;
+    } catch (error) {
+      const cached = getQueryData<ListingDetail>(key);
+
+      if (cached) {
+        return cached;
+      }
+
+      throw error;
     }
-
-    const listing = await getListingById(listingId);
-    setQueryData(key, listing);
-    return listing;
   }, [listingId]);
 
   return useAsyncResource(loadListing, Boolean(listingId));

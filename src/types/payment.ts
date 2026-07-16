@@ -12,4 +12,5 @@ export type PaymentOptionContext = {
   listing: Listing;
   sellerName: string;
   buyerId?: string;
+  agreedAmount?: string;
 };

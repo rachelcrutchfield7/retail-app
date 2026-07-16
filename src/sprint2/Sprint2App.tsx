@@ -37,6 +37,7 @@ import { QueryClientProvider } from '../lib/queryClient';
 import type { CreateListingInput, ListingQueryParams, ListingType } from '../services/types';
 import type { Category, Listing, ListingCondition } from '../types';
 import { handleAppError } from '../utils/errorHandler';
+import { listingLocationLabel } from '../utils/format';
 import { validateCreateListingInput } from '../validation/createListing';
 
 type SprintTab = 'home' | 'search' | 'sell' | 'favorites' | 'profile';
@@ -538,7 +539,7 @@ export function ListingDetailScreen({
           <Text style={styles.detailTitle}>{item.title}</Text>
           <View style={styles.locationRow}>
             <MapPin size={16} color={colors.textSecondary} />
-            <Text style={styles.metaText}>{item.distance} - {item.location}</Text>
+            <Text style={styles.metaText}>{listingLocationLabel(item)}</Text>
           </View>
           <View style={styles.wrapRow}>
             <ConditionBadge condition={item.condition} />

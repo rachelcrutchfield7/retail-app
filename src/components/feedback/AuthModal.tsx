@@ -1,19 +1,29 @@
 import { useState } from 'react';
-import { Apple, Building2, Globe, Mail, UserRound, X } from 'lucide-react-native';
+import { Building2, Mail, UserRound, X } from 'lucide-react-native';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, radius, sizes, spacing, typography } from '../../constants/theme';
 import type { AccountType, IconComponent } from '../../types.ts';
+import { TextInput } from '../forms/TextInput';
 
 type AuthModalProps = {
   visible: boolean;
   prompt?: AuthPrompt;
   onClose: () => void;
-  onComplete: (accountType: AccountType) => void | Promise<void>;
+  onComplete: (submission: AuthModalSubmission) => void | Promise<void>;
 };
 
 export type AuthPrompt = {
   title: string;
   body: string;
+};
+
+export type AuthModalSubmission = {
+  mode: 'login' | 'register';
+  accountType: AccountType;
+  email: string;
+  password: string;
+  displayName?: string;
+  username?: string;
 };
 
 const accountTypeOptions: Array<{
@@ -37,7 +47,23 @@ const accountTypeOptions: Array<{
 ];
 
 export function AuthModal({ visible, prompt, onClose, onComplete }: AuthModalProps) {
+  const [mode, setMode] = useState<'login' | 'register'>('login');
   const [selectedAccountType, setSelectedAccountType] = useState<AccountType>('regular');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [username, setUsername] = useState('');
+
+  const submit = () => {
+    void onComplete({
+      mode,
+      accountType: selectedAccountType,
+      email,
+      password,
+      displayName: displayName.trim() || undefined,
+      username: username.trim() || undefined,
+    });
+  };
 
   return (
     <Modal visible={visible} animationType="slide" transparent>
@@ -54,46 +80,102 @@ export function AuthModal({ visible, prompt, onClose, onComplete }: AuthModalPro
           </View>
           <Text style={styles.bodyText}>
             {prompt?.body ??
-              'Choose the account type that best matches how you will use ReTail. This prototype signs you into a local demo profile.'}
+              'Log in or create an account to save listings, message sellers, and list pet supplies.'}
           </Text>
 
-          <View style={styles.accountTypeGrid}>
-            {accountTypeOptions.map((option) => {
-              const selected = selectedAccountType === option.type;
-              const Icon = option.icon;
-              return (
-                <Pressable
-                  key={option.type}
-                  accessibilityRole="button"
-                  style={[styles.accountTypeCard, selected && styles.accountTypeCardSelected]}
-                  onPress={() => setSelectedAccountType(option.type)}
-                  accessibilityLabel={`Choose ${option.title}`}
-                >
-                  <View style={[styles.accountTypeIcon, selected && styles.accountTypeIconSelected]}>
-                    <Icon size={20} color={selected ? colors.white : colors.primary} />
-                  </View>
-                  <View style={styles.accountTypeText}>
-                    <Text style={styles.accountTypeTitle}>{option.title}</Text>
-                    <Text style={styles.accountTypeDescription}>{option.description}</Text>
-                  </View>
-                </Pressable>
-              );
-            })}
+          <View style={styles.modeRow}>
+            <ModeButton label="Log In" selected={mode === 'login'} onPress={() => setMode('login')} />
+            <ModeButton label="Create Account" selected={mode === 'register'} onPress={() => setMode('register')} />
           </View>
 
-          <Text style={styles.selectedPathText}>
-            Signing up as {selectedAccountType === 'regular' ? 'a regular user' : 'an animal rescue'}.
-          </Text>
+          {mode === 'register' ? (
+            <View style={styles.accountTypeGrid}>
+              {accountTypeOptions.map((option) => {
+                const selected = selectedAccountType === option.type;
+                const Icon = option.icon;
+                return (
+                  <Pressable
+                    key={option.type}
+                    accessibilityRole="button"
+                    style={[styles.accountTypeCard, selected && styles.accountTypeCardSelected]}
+                    onPress={() => setSelectedAccountType(option.type)}
+                    accessibilityLabel={`Choose ${option.title}`}
+                  >
+                    <View style={[styles.accountTypeIcon, selected && styles.accountTypeIconSelected]}>
+                      <Icon size={20} color={selected ? colors.white : colors.primary} />
+                    </View>
+                    <View style={styles.accountTypeText}>
+                      <Text style={styles.accountTypeTitle}>{option.title}</Text>
+                      <Text style={styles.accountTypeDescription}>{option.description}</Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
+          ) : null}
 
-          <AuthButton icon={Mail} label="Continue with email" onPress={() => onComplete(selectedAccountType)} />
-          <AuthButton icon={Apple} label="Continue with Apple" onPress={() => onComplete(selectedAccountType)} />
-          <AuthButton icon={Globe} label="Continue with Google" onPress={() => onComplete(selectedAccountType)} />
+          {mode === 'register' ? (
+            <>
+              <Text style={styles.selectedPathText}>
+                Signing up as {selectedAccountType === 'regular' ? 'a regular user' : 'an animal rescue'}.
+              </Text>
+              <TextInput
+                label="Display Name"
+                value={displayName}
+                onChangeText={setDisplayName}
+                placeholder={selectedAccountType === 'rescue' ? 'Green Paws Rescue' : 'Rachel C.'}
+              />
+              <TextInput
+                label="Username"
+                value={username}
+                onChangeText={setUsername}
+                placeholder="retail_user"
+                autoCapitalize="none"
+              />
+            </>
+          ) : null}
+
+          <TextInput
+            label="Email"
+            value={email}
+            onChangeText={setEmail}
+            placeholder="you@example.com"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            textContentType="emailAddress"
+          />
+          <TextInput
+            label="Password"
+            value={password}
+            onChangeText={setPassword}
+            placeholder="Password"
+            secureTextEntry
+            textContentType={mode === 'register' ? 'newPassword' : 'password'}
+          />
+          <AuthButton
+            icon={Mail}
+            label={mode === 'register' ? 'Create Account' : 'Log In'}
+            onPress={submit}
+          />
           <Text style={styles.termsText}>
             By continuing, you agree to keep ReTail safe, local, and free of prohibited items, including live animals.
           </Text>
         </View>
       </View>
     </Modal>
+  );
+}
+
+function ModeButton({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={[styles.modeButton, selected && styles.modeButtonSelected]}
+      onPress={onPress}
+    >
+      <Text style={[styles.modeButtonText, selected && styles.modeButtonTextSelected]}>{label}</Text>
+    </Pressable>
   );
 }
 
@@ -149,6 +231,31 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     ...typography.body,
     lineHeight: 23,
+  },
+  modeRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  modeButton: {
+    minHeight: sizes.touchTarget,
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.medium,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  modeButtonSelected: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  modeButtonText: {
+    color: colors.textPrimary,
+    ...typography.button,
+  },
+  modeButtonTextSelected: {
+    color: colors.white,
   },
   accountTypeGrid: {
     gap: spacing.md,

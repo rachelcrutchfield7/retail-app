@@ -11,16 +11,23 @@ const seed = readFileSync(join(root, 'supabase/seed.sql'), 'utf8');
 const storage = readFileSync(join(root, 'supabase/storage.sql'), 'utf8');
 const distance = readFileSync(join(root, 'supabase/distance.sql'), 'utf8');
 const rescueAccounts = readFileSync(join(root, 'supabase/rescue_accounts.sql'), 'utf8');
-const backendSpecPath = join(
-  root,
-  '..',
-  'ReTail Blueprint',
-  '21 - Codex Build Instructions',
-  '16-Backend-Implementation-Specification.md',
-);
+const backendSpecPaths = [
+  join(root, 'docs/blueprint/16-Backend-Implementation-Specification.md'),
+  join(
+    root,
+    '..',
+    'ReTail Blueprint',
+    '21 - Codex Build Instructions',
+    '16-Backend-Implementation-Specification.md',
+  ),
+];
 
 test('backend implementation spec is saved in the blueprint', () => {
-  assert.equal(existsSync(backendSpecPath), true, 'Backend implementation spec should exist');
+  assert.equal(
+    backendSpecPaths.some((backendSpecPath) => existsSync(backendSpecPath)),
+    true,
+    'Backend implementation spec should exist'
+  );
 });
 
 test('schema includes MVP trust, moderation, and review foundations', () => {

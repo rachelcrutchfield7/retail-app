@@ -1,272 +1,399 @@
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { InfiniteData } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { cachePolicy } from '../lib/cachePolicy';
-import { clearQueryData, getQueryData, setQueryData } from '../lib/queryClient';
 import { queryKeys } from '../lib/queryKeys';
 import {
   getConversationById,
   getConversations,
-  getMessages,
   getOrCreateConversation,
+} from '../services/conversationService';
+import {
+  getPaginatedMessages,
   getUnreadMessageCount,
   markMessagesRead,
   sendImageMessage,
   sendMessage,
-  subscribeToMessagingUpdates,
 } from '../services/messageService';
+import {
+  subscribeToConversationMessages,
+  subscribeToKnownConversationMessages,
+  subscribeToUserConversations,
+} from '../services/realtimeService';
 import type {
   ConversationDetail,
   ConversationSearchParams,
   ConversationSummary,
   Message,
+  PaginatedMessages,
   SendMessageInput,
   UnreadMessages,
 } from '../services/types';
 import { handleAppError } from '../utils/errorHandler';
 import { useAuth } from './useAuth';
-import { useAsyncResource } from './useAsyncResource';
+
+function messageSort(first: Message, second: Message): number {
+  return Date.parse(first.created_at) - Date.parse(second.created_at);
+}
+
+function dedupeMessages(messages: Message[]): Message[] {
+  const seen = new Set<string>();
+
+  return messages
+    .filter((message) => {
+      if (seen.has(message.id)) {
+        return false;
+      }
+
+      seen.add(message.id);
+      return true;
+    })
+    .sort(messageSort);
+}
+
+function appendMessageToCache(
+  cache: InfiniteData<PaginatedMessages> | undefined,
+  message: Message
+): InfiniteData<PaginatedMessages> | undefined {
+  if (!cache) {
+    return cache;
+  }
+
+  const alreadyExists = cache.pages.some((page) => page.items.some((item) => item.id === message.id));
+
+  if (alreadyExists) {
+    return cache;
+  }
+
+  const [firstPage, ...restPages] = cache.pages;
+
+  if (!firstPage) {
+    return cache;
+  }
+
+  return {
+    ...cache,
+    pages: [
+      {
+        ...firstPage,
+        items: dedupeMessages([...firstPage.items, message]),
+      },
+      ...restPages,
+    ],
+  };
+}
+
+export function clearUserMessagingCache(queryClient: ReturnType<typeof useQueryClient>, userId: string): void {
+  queryClient.removeQueries({ queryKey: queryKeys.conversations(userId) });
+  queryClient.removeQueries({ queryKey: queryKeys.unreadMessages(userId) });
+}
 
 export function useConversations(params: ConversationSearchParams = {}, autoLoad = true) {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const userId = user?.id ?? 'guest';
-  const key = useMemo(() => [...queryKeys.conversations(userId), JSON.stringify(params)] as const, [params, userId]);
-
-  const loadConversations = useCallback(async (): Promise<ConversationSummary[]> => {
-    const cached = getQueryData<ConversationSummary[]>(key);
-
-    if (cached) {
-      return cached;
-    }
-
-    const conversations = await getConversations(params);
-    setQueryData(key, conversations);
-    return conversations;
-  }, [key, params]);
-
-  const resource = useAsyncResource<ConversationSummary[]>(loadConversations, autoLoad && Boolean(user));
+  const queryHash = useMemo(() => JSON.stringify(params), [params]);
+  const queryKey = useMemo(() => [...queryKeys.conversations(userId), queryHash] as const, [queryHash, userId]);
+  const query = useQuery<ConversationSummary[], Error>({
+    queryKey,
+    queryFn: () => getConversations(params),
+    enabled: autoLoad && Boolean(user),
+  });
+  const conversationIds = useMemo(() => (query.data ?? []).map((conversation) => conversation.id), [query.data]);
 
   useEffect(() => {
     if (!user) {
+      queryClient.removeQueries({ queryKey: queryKeys.conversations('guest') });
       return undefined;
     }
 
-    return subscribeToMessagingUpdates(() => {
-      clearQueryData();
-      void resource.refresh();
+    return subscribeToUserConversations(user.id, () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.conversations(user.id) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.unreadMessages(user.id) });
     });
-  }, [resource, user]);
+  }, [queryClient, user]);
 
-  return resource;
+  useEffect(() => {
+    if (!user || conversationIds.length === 0) {
+      return undefined;
+    }
+
+    return subscribeToKnownConversationMessages(conversationIds, (event) => {
+      if ('conversationId' in event) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.messages(event.conversationId) });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.conversation(event.conversationId) });
+      }
+
+      void queryClient.invalidateQueries({ queryKey: queryKeys.conversations(user.id) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.unreadMessages(user.id) });
+    });
+  }, [conversationIds, queryClient, user]);
+
+  return {
+    data: query.data ?? null,
+    conversations: query.data ?? [],
+    loading: query.isLoading,
+    isLoading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    error: query.error ?? null,
+    refetch: query.refetch,
+    refresh: query.refetch,
+  };
 }
 
 export function useConversation(conversationId: string, markReadOnOpen = true) {
-  const key = useMemo(() => ['conversation', conversationId] as const, [conversationId]);
-
-  const loadConversation = useCallback(async (): Promise<ConversationDetail> => {
-    const cached = getQueryData<ConversationDetail>(key);
-
-    if (cached) {
-      return cached;
-    }
-
-    const conversation = await getConversationById(conversationId);
-    setQueryData(key, conversation);
-    return conversation;
-  }, [conversationId, key]);
-
-  const resource = useAsyncResource(loadConversation, Boolean(conversationId));
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const query = useQuery<ConversationDetail, Error>({
+    queryKey: queryKeys.conversation(conversationId),
+    queryFn: () => getConversationById(conversationId),
+    enabled: Boolean(conversationId),
+  });
 
   useEffect(() => {
-    if (!conversationId || !markReadOnOpen) {
+    if (!conversationId || !markReadOnOpen || !user) {
       return;
     }
 
-    void markMessagesRead(conversationId);
-  }, [conversationId, markReadOnOpen]);
+    void markMessagesRead(conversationId).then(() => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.unreadMessages(user.id) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.conversations(user.id) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.messages(conversationId) });
+    });
+  }, [conversationId, markReadOnOpen, queryClient, user]);
 
   useEffect(() => {
-    if (!conversationId) {
+    if (!conversationId || !user) {
       return undefined;
     }
 
-    return subscribeToMessagingUpdates((event) => {
-      if ('conversationId' in event && event.conversationId === conversationId) {
-        clearQueryData(key);
-        void resource.refresh();
-      }
+    return subscribeToConversationMessages(conversationId, () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.conversation(conversationId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.messages(conversationId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.conversations(user.id) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.unreadMessages(user.id) });
     });
-  }, [conversationId, key, resource]);
+  }, [conversationId, queryClient, user]);
 
-  return resource;
+  return {
+    data: query.data ?? null,
+    loading: query.isLoading,
+    isLoading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    error: query.error ?? null,
+    refetch: query.refetch,
+    refresh: query.refetch,
+  };
 }
 
 export function useMessages(conversationId: string) {
-  const key = useMemo(() => queryKeys.messages(conversationId), [conversationId]);
-
-  const loadMessages = useCallback(async (): Promise<Message[]> => {
-    const cached = getQueryData<Message[]>(key);
-
-    if (cached) {
-      return cached.slice(-cachePolicy.messages.pageSize);
-    }
-
-    const messages = await getMessages(conversationId, { limit: cachePolicy.messages.pageSize });
-    setQueryData(key, messages);
-    return messages;
-  }, [conversationId, key]);
-
-  const resource = useAsyncResource(loadMessages, Boolean(conversationId));
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const query = useInfiniteQuery<PaginatedMessages, Error>({
+    queryKey: queryKeys.messages(conversationId),
+    queryFn: ({ pageParam }) =>
+      getPaginatedMessages(conversationId, {
+        before: typeof pageParam === 'string' ? pageParam : undefined,
+        limit: cachePolicy.messages.pageSize,
+      }),
+    initialPageParam: undefined,
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
+    enabled: Boolean(conversationId),
+  });
+  const messages = useMemo(
+    () => dedupeMessages((query.data?.pages ?? []).flatMap((page) => page.items)),
+    [query.data]
+  );
 
   useEffect(() => {
-    if (!conversationId) {
+    if (!conversationId || !user) {
       return undefined;
     }
 
-    return subscribeToMessagingUpdates((event) => {
-      if ('conversationId' in event && event.conversationId === conversationId) {
-        clearQueryData(key);
-        void resource.refresh();
-      }
+    return subscribeToConversationMessages(conversationId, () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.messages(conversationId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.conversation(conversationId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.conversations(user.id) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.unreadMessages(user.id) });
     });
-  }, [conversationId, key, resource]);
+  }, [conversationId, queryClient, user]);
 
   return {
-    ...resource,
+    data: messages,
+    messages,
+    loading: query.isLoading,
+    isLoading: query.isLoading,
+    isFetching: query.isFetching,
+    isFetchingNextPage: query.isFetchingNextPage,
+    hasNextPage: Boolean(query.hasNextPage),
+    fetchNextPage: query.fetchNextPage,
+    isError: query.isError,
+    error: query.error ?? null,
+    refetch: query.refetch,
+    refresh: query.refetch,
     markRead: () => markMessagesRead(conversationId),
   };
 }
 
 export function useSendMessage(conversationId: string) {
-  const [loading, setLoading] = useState(false);
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
+  const mutation = useMutation({
+    mutationFn: (input: Omit<SendMessageInput, 'conversationId'>) => sendMessage({ ...input, conversationId }),
+    onSuccess: (message) => {
+      queryClient.setQueryData<InfiniteData<PaginatedMessages>>(
+        queryKeys.messages(conversationId),
+        (cache) => appendMessageToCache(cache, message)
+      );
 
-  const sendText = useCallback(
-    async (body: string) => {
-      setLoading(true);
-      setError(null);
-
-      try {
-        const message = await sendMessage({ conversationId, body, messageType: 'text' });
-        clearQueryData();
-        return message;
-      } catch (caughtError) {
-        const appError = handleAppError(caughtError);
-        setError(appError.userMessage);
-        throw caughtError;
-      } finally {
-        setLoading(false);
+      if (user) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.conversations(user.id) });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.unreadMessages(user.id) });
       }
     },
-    [conversationId]
+    onError: (caughtError) => {
+      setError(handleAppError(caughtError).userMessage);
+    },
+  });
+
+  const send = useCallback(
+    async (input: Omit<SendMessageInput, 'conversationId'>) => {
+      setError(null);
+      return mutation.mutateAsync(input);
+    },
+    [mutation]
+  );
+
+  const sendText = useCallback(
+    async (body: string) => send({ body, messageType: 'text' }),
+    [send]
   );
 
   const sendImage = useCallback(
     async (imageUri: string, body?: string) => {
-      setLoading(true);
       setError(null);
-
       try {
         const message = await sendImageMessage(conversationId, imageUri, body);
-        clearQueryData();
+        queryClient.setQueryData<InfiniteData<PaginatedMessages>>(
+          queryKeys.messages(conversationId),
+          (cache) => appendMessageToCache(cache, message)
+        );
         return message;
       } catch (caughtError) {
-        const appError = handleAppError(caughtError);
-        setError(appError.userMessage);
+        setError(handleAppError(caughtError).userMessage);
         throw caughtError;
-      } finally {
-        setLoading(false);
       }
     },
-    [conversationId]
-  );
-
-  const send = useCallback(
-    async (input: Omit<SendMessageInput, 'conversationId'>) => {
-      setLoading(true);
-      setError(null);
-
-      try {
-        const message = await sendMessage({ ...input, conversationId });
-        clearQueryData();
-        return message;
-      } catch (caughtError) {
-        const appError = handleAppError(caughtError);
-        setError(appError.userMessage);
-        throw caughtError;
-      } finally {
-        setLoading(false);
-      }
-    },
-    [conversationId]
+    [conversationId, queryClient]
   );
 
   return {
     send,
     sendText,
     sendImage,
-    loading,
-    isLoading: loading,
+    loading: mutation.isPending,
+    isLoading: mutation.isPending,
+    isPending: mutation.isPending,
     error,
   };
 }
 
 export function useUnreadMessages(autoLoad = true) {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const userId = user?.id ?? 'guest';
-  const key = useMemo(() => ['unread-messages', userId] as const, [userId]);
-
-  const loadUnread = useCallback(async (): Promise<UnreadMessages> => {
-    const cached = getQueryData<UnreadMessages>(key);
-
-    if (cached) {
-      return cached;
-    }
-
-    const unread = await getUnreadMessageCount();
-    setQueryData(key, unread);
-    return unread;
-  }, [key]);
-
-  const resource = useAsyncResource(loadUnread, autoLoad && Boolean(user));
+  const query = useQuery<UnreadMessages, Error>({
+    queryKey: queryKeys.unreadMessages(userId),
+    queryFn: getUnreadMessageCount,
+    enabled: autoLoad && Boolean(user),
+  });
+  const conversationIds = useMemo(() => Object.keys(query.data?.byConversation ?? {}), [query.data]);
 
   useEffect(() => {
     if (!user) {
+      queryClient.removeQueries({ queryKey: queryKeys.unreadMessages('guest') });
       return undefined;
     }
 
-    return subscribeToMessagingUpdates(() => {
-      clearQueryData(key);
-      void resource.refresh();
+    return subscribeToUserConversations(user.id, () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.unreadMessages(user.id) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.conversations(user.id) });
     });
-  }, [key, resource, user]);
+  }, [queryClient, user]);
 
-  return resource;
+  useEffect(() => {
+    if (!user || conversationIds.length === 0) {
+      return undefined;
+    }
+
+    return subscribeToKnownConversationMessages(conversationIds, () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.unreadMessages(user.id) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.conversations(user.id) });
+    });
+  }, [conversationIds, queryClient, user]);
+
+  return {
+    data: query.data ?? null,
+    loading: query.isLoading,
+    isLoading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    error: query.error ?? null,
+    refetch: query.refetch,
+    refresh: query.refetch,
+  };
 }
 
 export function useStartConversation() {
-  const [loading, setLoading] = useState(false);
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
+  const mutation = useMutation({
+    mutationFn: ({ listingId, sellerId }: { listingId: string; sellerId?: string }) =>
+      getOrCreateConversation(listingId, sellerId),
+    onSuccess: (conversation) => {
+      queryClient.setQueryData(queryKeys.conversation(conversation.id), conversation);
 
-  const startConversation = useCallback(async (listingId: string, sellerId: string) => {
-    setLoading(true);
-    setError(null);
+      if (user) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.conversations(user.id) });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.unreadMessages(user.id) });
+      }
+    },
+    onError: (caughtError) => {
+      setError(handleAppError(caughtError).userMessage);
+    },
+  });
 
-    try {
-      const conversation = await getOrCreateConversation(listingId, sellerId);
-      clearQueryData();
-      return conversation;
-    } catch (caughtError) {
-      const appError = handleAppError(caughtError);
-      setError(appError.userMessage);
-      throw caughtError;
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const startConversation = useCallback(
+    async (listingId: string, sellerId?: string) => {
+      setError(null);
+      return mutation.mutateAsync({ listingId, sellerId });
+    },
+    [mutation]
+  );
 
   return {
     startConversation,
-    loading,
-    isLoading: loading,
+    loading: mutation.isPending,
+    isLoading: mutation.isPending,
     error,
   };
+}
+
+export function useRealtimeMessages(conversationId: string, enabled = true) {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (!enabled || !conversationId) {
+      return undefined;
+    }
+
+    return subscribeToConversationMessages(conversationId, () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.messages(conversationId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.conversation(conversationId) });
+    });
+  }, [conversationId, enabled, queryClient]);
 }

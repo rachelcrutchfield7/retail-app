@@ -7,6 +7,7 @@ import test from 'node:test';
 const root = fileURLToPath(new URL('..', import.meta.url));
 const reportModal = readFileSync(join(root, 'src/components/feedback/ReportListingModal.tsx'), 'utf8');
 const listingDetail = readFileSync(join(root, 'src/screens/ListingDetailScreen.tsx'), 'utf8');
+const sprint3 = readFileSync(join(root, 'src/sprint3/Sprint3App.tsx'), 'utf8');
 const sprint4 = readFileSync(join(root, 'src/sprint4/Sprint4App.tsx'), 'utf8');
 const adminService = readFileSync(join(root, 'src/services/adminService.ts'), 'utf8');
 
@@ -27,6 +28,21 @@ test('listing reports include the required reasons', () => {
 test('listing details expose a report listing action', () => {
   assert.match(listingDetail, /Report listing/);
   assert.match(listingDetail, /Spam, fraud, prohibited, or inappropriate content/);
+});
+
+test('listing details expose an owner edit action', () => {
+  assert.match(listingDetail, /canEdit/);
+  assert.match(listingDetail, /Edit listing/);
+  assert.match(sprint3, /owner \?/);
+  assert.match(sprint3, /ownerFromMyListings/);
+  assert.match(sprint3, /Checking listing ownership/);
+  assert.match(sprint3, /Edit Listing/);
+  assert.match(sprint3, /Listing tools/);
+  assert.match(sprint3, /Mark Sold/);
+  assert.match(sprint3, /Mark Donated/);
+  assert.match(sprint3, /Archive/);
+  assert.match(sprint3, /Delete/);
+  assert.match(sprint4, /onEditListing=\{openEditListing\}/);
 });
 
 test('admin review panel surfaces listing reports', () => {

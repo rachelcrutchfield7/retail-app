@@ -1,34 +1,24 @@
-import { useCallback, useState } from 'react';
-import { clearQueryData } from '../lib/queryClient';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '../lib/queryKeys';
 import { createListing } from '../services/listingService';
 import type { CreateListingInput } from '../services/types';
 import { handleAppError } from '../utils/errorHandler';
 
 export function useCreateListing() {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const mutation = useMutation({
+    mutationFn: createListing,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.listings });
+    },
+  });
 
-  const submit = useCallback(async (input: CreateListingInput) => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const listing = await createListing(input);
-      clearQueryData();
-      return listing;
-    } catch (caughtError) {
-      const appError = handleAppError(caughtError);
-      setError(appError.userMessage);
-      throw caughtError;
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const error = mutation.error ? handleAppError(mutation.error).userMessage : null;
 
   return {
-    createListing: submit,
-    loading,
-    isLoading: loading,
+    createListing: mutation.mutateAsync,
+    loading: mutation.isPending,
+    isLoading: mutation.isPending,
     error,
   };
 }

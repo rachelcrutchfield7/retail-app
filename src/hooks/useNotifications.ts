@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { cachePolicy } from '../lib/cachePolicy';
 import { clearQueryData, getQueryData, setQueryData } from '../lib/queryClient';
 import { queryKeys } from '../lib/queryKeys';
@@ -9,6 +9,7 @@ import {
   markAllNotificationsRead,
   markNotificationRead,
 } from '../services/notificationService';
+import { subscribeToUserNotifications } from '../services/realtimeService';
 import type { Notification } from '../services/types';
 import { useAuth } from './useAuth';
 import { useAsyncResource } from './useAsyncResource';
@@ -30,6 +31,18 @@ export function useNotifications(autoLoad = true) {
   }, [key]);
 
   const resource = useAsyncResource<Notification[]>(loadNotifications, autoLoad && Boolean(user));
+  const refreshNotifications = resource.refresh;
+
+  useEffect(() => {
+    if (!user || !autoLoad) {
+      return undefined;
+    }
+
+    return subscribeToUserNotifications(user.id, () => {
+      clearQueryData(key);
+      void refreshNotifications();
+    });
+  }, [autoLoad, key, refreshNotifications, user]);
 
   const markRead = useCallback(
     async (notificationId: string) => {

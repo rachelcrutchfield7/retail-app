@@ -20,6 +20,8 @@ import type {
   RescueSignupInput,
   RescueWishlistItem,
   RescueWishlistItemInput,
+  UpdateRescueNeedInput,
+  UpdateRescueWishlistItemInput,
 } from './types';
 
 type Row = Record<string, unknown>;
@@ -76,7 +78,7 @@ export async function getCurrentRescueProfile(): Promise<RescueProfile | null> {
 export async function getPublicRescueProfileByOwner(ownerId: string): Promise<RescueProfile | null> {
   const { data, error } = await supabase
     .from('rescue_profiles')
-    .select('*')
+    .select('id,owner_id,name,slug,summary,animals_rescued,city,state,website_url,contact_hint,contact_person,organization_type,has_501c3,verification_status,is_verified,is_active,created_at,updated_at,deleted_at')
     .eq('owner_id', ownerId)
     .eq('is_active', true)
     .eq('is_verified', true)
@@ -124,6 +126,9 @@ export async function createOrUpdateRescueProfile(input: RescueSignupInput): Pro
     );
   }
 
+  const donationInstructions = input.donationInstructions?.trim()
+    || 'Send this rescue a message through ReTail to coordinate supply drop-offs.';
+
   const payload = {
     owner_id: profile.id,
     name: input.organizationName.trim(),
@@ -142,12 +147,7 @@ export async function createOrUpdateRescueProfile(input: RescueSignupInput): Pro
     has_501c3: input.has501c3,
     ein: input.ein?.trim() || null,
     website_url: input.websiteUrl?.trim() || null,
-    contact_hint: input.contactEmail?.trim()
-      ? `Contact ${input.contactPerson.trim()} for donation coordination.`
-      : 'Message this rescue through ReTail to coordinate donations.',
-    verification_status: 'pending',
-    is_verified: false,
-    is_active: true,
+    contact_hint: donationInstructions,
   };
 
   const { data, error } = await supabase
@@ -187,6 +187,52 @@ export async function createRescueNeed(input: RescueNeedInput): Promise<RescueNe
   return toRescueNeed(data as Row);
 }
 
+export async function updateRescueNeed(needId: string, input: UpdateRescueNeedInput): Promise<RescueNeed> {
+  assertValidItemInput(input.item, 'urgent need');
+  const rescueProfile = await requireCurrentRescueProfile();
+
+  const { data, error } = await supabase
+    .from('rescue_needs')
+    .update({
+      item: input.item.trim(),
+      quantity: input.quantity?.trim() || null,
+      urgency: input.urgency,
+      notes: input.notes?.trim() || null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', needId)
+    .eq('rescue_id', rescueProfile.id)
+    .select('*')
+    .single();
+
+  if (error) {
+    throwSupabaseError(error, 'We could not update that urgent need.');
+  }
+
+  return toRescueNeed(data as Row);
+}
+
+export async function deleteRescueNeed(needId: string): Promise<void> {
+  const rescueProfile = await requireCurrentRescueProfile();
+  const deletedAt = new Date().toISOString();
+
+  const { error } = await supabase
+    .from('rescue_needs')
+    .update({
+      is_active: false,
+      deleted_at: deletedAt,
+      updated_at: deletedAt,
+    })
+    .eq('id', needId)
+    .eq('rescue_id', rescueProfile.id)
+    .select('id')
+    .single();
+
+  if (error) {
+    throwSupabaseError(error, 'We could not delete that urgent need.');
+  }
+}
+
 export async function createRescueWishlistItem(input: RescueWishlistItemInput): Promise<RescueWishlistItem> {
   assertValidItemInput(input.item, 'wishlist item');
   const rescueProfile = await requireCurrentRescueProfile();
@@ -211,11 +257,61 @@ export async function createRescueWishlistItem(input: RescueWishlistItemInput): 
   return toRescueWishlistItem(data as Row);
 }
 
+export async function updateRescueWishlistItem(
+  wishlistItemId: string,
+  input: UpdateRescueWishlistItemInput
+): Promise<RescueWishlistItem> {
+  assertValidItemInput(input.item, 'wishlist item');
+  const rescueProfile = await requireCurrentRescueProfile();
+
+  const { data, error } = await supabase
+    .from('rescue_wishlist_items')
+    .update({
+      item: input.item.trim(),
+      quantity: input.quantity?.trim() || null,
+      priority: input.priority,
+      notes: input.notes?.trim() || null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', wishlistItemId)
+    .eq('rescue_id', rescueProfile.id)
+    .select('*')
+    .single();
+
+  if (error) {
+    throwSupabaseError(error, 'We could not update that wishlist item.');
+  }
+
+  return toRescueWishlistItem(data as Row);
+}
+
+export async function deleteRescueWishlistItem(wishlistItemId: string): Promise<void> {
+  const rescueProfile = await requireCurrentRescueProfile();
+  const deletedAt = new Date().toISOString();
+
+  const { error } = await supabase
+    .from('rescue_wishlist_items')
+    .update({
+      is_active: false,
+      deleted_at: deletedAt,
+      updated_at: deletedAt,
+    })
+    .eq('id', wishlistItemId)
+    .eq('rescue_id', rescueProfile.id)
+    .select('id')
+    .single();
+
+  if (error) {
+    throwSupabaseError(error, 'We could not delete that wishlist item.');
+  }
+}
+
 export async function getNearbyRescues(params: RescueHubQueryParams = {}): Promise<RescueOrganization[]> {
   const origin = rescueHubOrigin(params);
+  const tableRescues = await getVerifiedRescuesFromTables(params).catch(() => null);
 
   if (!origin) {
-    return filterMockRescues(params);
+    return tableRescues ?? filterMockRescues(params);
   }
 
   const { data, error } = await supabase.rpc('get_nearby_rescues', {
@@ -226,13 +322,140 @@ export async function getNearbyRescues(params: RescueHubQueryParams = {}): Promi
   });
 
   if (error) {
-    return filterMockRescues(params);
+    return tableRescues ?? filterMockRescues(params);
   }
 
   const rows = (data ?? []) as Row[];
-  const rescues = rows.map((row) => hubRescueFromRow(row));
+  const rescues = mergeRescueResults(tableRescues ?? [], rows.map((row) => hubRescueFromRow(row)));
 
-  return rescues.length > 0 ? rescues : filterMockRescues(params);
+  return rescues.length > 0 ? rescues : tableRescues ?? filterMockRescues(params);
+}
+
+async function getVerifiedRescuesFromTables(params: RescueHubQueryParams): Promise<RescueOrganization[]> {
+  const { data, error } = await supabase
+    .from('rescue_profiles')
+    .select('id,name,summary,animals_rescued,city,state,website_url,contact_hint,organization_type,has_501c3,is_verified')
+    .eq('is_active', true)
+    .eq('is_verified', true)
+    .is('deleted_at', null)
+    .order('name', { ascending: true });
+
+  if (error) {
+    throwSupabaseError(error, 'We could not load rescue profiles.');
+  }
+
+  const profileRows = (data ?? []) as Row[];
+  const rescueIds = profileRows.map((profile) => stringValue(profile.id)).filter(Boolean);
+
+  if (rescueIds.length === 0) {
+    return [];
+  }
+
+  const needsByRescue = await getRescueNeedsByRescueIds(rescueIds);
+  const wishlistByRescue = await getRescueWishlistItemsByRescueIds(rescueIds).catch(() => new Map<string, Row[]>());
+  const origin = rescueHubOrigin(params);
+  const normalizedSearch = params.search?.trim().toLowerCase();
+  const radiusMiles = params.radiusMiles ?? 25;
+
+  return profileRows
+    .map((profile) => {
+      const rescueId = stringValue(profile.id);
+      const latitude = optionalNumber(profile.latitude);
+      const longitude = optionalNumber(profile.longitude);
+      const distanceMiles = origin && latitude !== undefined && longitude !== undefined
+        ? distanceMilesBetween(origin, { latitude, longitude })
+        : undefined;
+
+      return hubRescueFromRow({
+        ...profile,
+        needs: needsByRescue.get(rescueId) ?? [],
+        wishlist_items: wishlistByRescue.get(rescueId) ?? [],
+        distance_miles: distanceMiles,
+      });
+    })
+    .filter((rescue) => {
+      if (origin && rescue.distanceMiles !== undefined && rescue.distanceMiles > radiusMiles) {
+        return false;
+      }
+
+      if (!normalizedSearch) {
+        return true;
+      }
+
+      return rescueMatchesSearch(rescue, normalizedSearch);
+    })
+    .sort((first, second) => {
+      if (first.distanceMiles !== undefined && second.distanceMiles !== undefined) {
+        return first.distanceMiles - second.distanceMiles;
+      }
+
+      if (first.distanceMiles !== undefined) {
+        return -1;
+      }
+
+      if (second.distanceMiles !== undefined) {
+        return 1;
+      }
+
+      return first.name.localeCompare(second.name);
+    });
+}
+
+async function getRescueNeedsByRescueIds(rescueIds: string[]): Promise<Map<string, Row[]>> {
+  const { data, error } = await supabase
+    .from('rescue_needs')
+    .select('*')
+    .in('rescue_id', rescueIds)
+    .eq('is_active', true)
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    throwSupabaseError(error, 'We could not load urgent needs.');
+  }
+
+  return groupRowsByRescueId((data ?? []) as Row[]);
+}
+
+async function getRescueWishlistItemsByRescueIds(rescueIds: string[]): Promise<Map<string, Row[]>> {
+  const { data, error } = await supabase
+    .from('rescue_wishlist_items')
+    .select('*')
+    .in('rescue_id', rescueIds)
+    .eq('is_active', true)
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    throwSupabaseError(error, 'We could not load wishlist items.');
+  }
+
+  return groupRowsByRescueId((data ?? []) as Row[]);
+}
+
+function groupRowsByRescueId(rows: Row[]): Map<string, Row[]> {
+  return rows.reduce((grouped, row) => {
+    const rescueId = stringValue(row.rescue_id);
+    const currentRows = grouped.get(rescueId) ?? [];
+    grouped.set(rescueId, [...currentRows, row]);
+    return grouped;
+  }, new Map<string, Row[]>());
+}
+
+function mergeRescueResults(primary: RescueOrganization[], secondary: RescueOrganization[]): RescueOrganization[] {
+  const seen = new Set<string>();
+  const merged: RescueOrganization[] = [];
+
+  for (const rescue of [...primary, ...secondary]) {
+    if (seen.has(rescue.id)) {
+      continue;
+    }
+
+    seen.add(rescue.id);
+    merged.push(rescue);
+  }
+
+  return merged;
 }
 
 async function requireCurrentRescueProfile(): Promise<RescueProfile> {
@@ -313,7 +536,9 @@ function filterMockRescues(params: RescueHubQueryParams): RescueOrganization[] {
 
   return sorted
     .map((rescue) => {
-      const distanceMiles = origin ? distanceMilesBetween(origin, rescue) : Number.POSITIVE_INFINITY;
+      const distanceMiles = origin && hasCoordinates(rescue)
+        ? distanceMilesBetween(origin, rescue)
+        : Number.POSITIVE_INFINITY;
 
       return {
         ...rescue,
@@ -321,7 +546,7 @@ function filterMockRescues(params: RescueHubQueryParams): RescueOrganization[] {
       };
     })
     .filter((rescue) => {
-      if (origin && distanceMilesBetween(origin, rescue) > radiusMiles) {
+      if (origin && hasCoordinates(rescue) && distanceMilesBetween(origin, rescue) > radiusMiles) {
         return false;
       }
 
@@ -363,8 +588,9 @@ function hubRescueFromRow(row: Row): RescueOrganization {
     name: stringValue(row.name),
     location: [city, state].filter(Boolean).join(', '),
     distance: distanceMiles === undefined ? 'Distance unavailable' : formatDistanceMiles(distanceMiles),
-    latitude: numberValue(row.latitude),
-    longitude: numberValue(row.longitude),
+    distanceMiles,
+    latitude: optionalNumber(row.latitude),
+    longitude: optionalNumber(row.longitude),
     verified: Boolean(row.is_verified),
     verificationStatus: Boolean(row.is_verified) ? 'Verified' : 'Pending',
     summary: stringValue(row.summary),
@@ -398,6 +624,23 @@ function hubRescueFromRow(row: Row): RescueOrganization {
     addressLine2: optionalString(row.address_line2),
     zipCode: optionalString(row.zip_code),
   };
+}
+
+function rescueMatchesSearch(rescue: RescueOrganization, normalizedSearch: string): boolean {
+  return [
+    rescue.name,
+    rescue.location,
+    rescue.summary,
+    rescue.contactHint,
+    rescue.contactPerson ?? '',
+    rescue.websiteUrl ?? '',
+    rescue.addressLine1 ?? '',
+    rescue.addressLine2 ?? '',
+    rescue.zipCode ?? '',
+    ...rescue.animalsRescued,
+    ...rescue.urgentNeeds.map((need) => need.item),
+    ...rescue.wishlistItems.map((item) => item.item),
+  ].join(' ').toLowerCase().includes(normalizedSearch);
 }
 
 function toRescueProfile(row: Row): RescueProfile {

@@ -57,7 +57,7 @@ function trackPaymentChoice(method: PaymentMethodChoice, context: PaymentOptionC
   trackEvent('Payment Option Selected', {
     method,
     listingId: context.listing.id,
-    price: context.listing.price,
+    price: context.agreedAmount ?? context.listing.price,
     sellerName: context.sellerName,
   });
 }

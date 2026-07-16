@@ -3,6 +3,7 @@ import { MapPin } from 'lucide-react-native';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, radius, sizes, spacing, typography } from '../../constants/theme';
 import type { Listing } from '../../types.ts';
+import { listingLocationLabel } from '../../utils/format';
 import { ConditionBadge } from './ConditionBadge';
 import { FavoriteButton } from './FavoriteButton';
 import { PriceTag } from './PriceTag';
@@ -40,7 +41,7 @@ export function ListingCard({ listing, isFavorite, onOpen, onFavorite, variant =
         <View style={styles.metaRow}>
           <MapPin size={grid ? 12 : 14} color={colors.textSecondary} />
           <Text numberOfLines={1} style={[styles.metaText, grid && styles.gridMetaText]}>
-            {listing.distance} - {listing.location}
+            {listingLocationLabel(listing)}
           </Text>
         </View>
         <View style={[styles.cardFooter, grid && styles.gridFooter]}>

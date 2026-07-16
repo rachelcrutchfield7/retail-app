@@ -5,13 +5,19 @@ import {
   createOrUpdateRescueProfile,
   createRescueNeed,
   createRescueWishlistItem,
+  deleteRescueNeed,
+  deleteRescueWishlistItem,
   getCurrentRescueDashboard,
+  updateRescueNeed,
+  updateRescueWishlistItem,
 } from '../services/rescueService';
 import type {
   RescueDashboard,
   RescueNeedInput,
   RescueSignupInput,
   RescueWishlistItemInput,
+  UpdateRescueNeedInput,
+  UpdateRescueWishlistItemInput,
 } from '../services/types';
 import { handleAppError } from '../utils/errorHandler';
 import { useAsyncResource } from './useAsyncResource';
@@ -60,6 +66,10 @@ export function useRescueActions() {
     error,
     saveProfile: (input: RescueSignupInput) => run(() => createOrUpdateRescueProfile(input)),
     addUrgentNeed: (input: RescueNeedInput) => run(() => createRescueNeed(input)),
+    updateUrgentNeed: (needId: string, input: UpdateRescueNeedInput) => run(() => updateRescueNeed(needId, input)),
+    deleteUrgentNeed: (needId: string) => run(() => deleteRescueNeed(needId)),
     addWishlistItem: (input: RescueWishlistItemInput) => run(() => createRescueWishlistItem(input)),
+    updateWishlistItem: (itemId: string, input: UpdateRescueWishlistItemInput) => run(() => updateRescueWishlistItem(itemId, input)),
+    deleteWishlistItem: (itemId: string) => run(() => deleteRescueWishlistItem(itemId)),
   };
 }

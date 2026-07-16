@@ -1,6 +1,8 @@
 import { createServiceError } from './errors';
 import { supabase } from '../lib/supabase';
 import type { Conversation, ConversationDetail, ConversationSearchParams, ConversationSummary, Message, Profile } from './types';
+import { isEitherUserBlocked } from './blockService';
+import { trackEvent } from '../lib/analytics';
 import {
   ensureCurrentProfile,
   imagesFromListingRow,
@@ -11,6 +13,7 @@ import {
   toProfile,
   toPublicProfile,
 } from './supabaseData';
+import type { Listing } from '../types';
 
 type ConversationRow = {
   id: string;
@@ -99,30 +102,72 @@ async function loadProfile(userId: string): Promise<Profile> {
   return toProfile(data as Record<string, unknown>);
 }
 
-export async function isBlockedBetween(firstUserId: string, secondUserId: string): Promise<boolean> {
+async function loadProfileSafe(userId: string): Promise<Profile | null> {
   const { data, error } = await supabase
-    .from('blocks')
-    .select('id')
-    .or(
-      `and(blocker_id.eq.${firstUserId},blocked_id.eq.${secondUserId}),and(blocker_id.eq.${secondUserId},blocked_id.eq.${firstUserId})`
-    )
-    .limit(1);
+    .from('profiles')
+    .select('*')
+    .eq('id', userId)
+    .maybeSingle();
 
   if (error) {
-    throwSupabaseError(error, 'We could not check messaging permissions.');
+    return null;
   }
 
-  return Boolean(data?.length);
+  return data ? toProfile(data as Record<string, unknown>) : null;
 }
 
 async function requireNotBlocked(firstUserId: string, secondUserId: string): Promise<void> {
-  if (await isBlockedBetween(firstUserId, secondUserId)) {
+  if (await isEitherUserBlocked(firstUserId, secondUserId)) {
     throw createServiceError(
       'USER_BLOCKED',
       `Messaging blocked between ${firstUserId} and ${secondUserId}`,
       'Messaging is unavailable between these accounts.'
     );
   }
+}
+
+function deletedPublicProfile(userId: string) {
+  return {
+    id: userId,
+    account_type: 'regular' as const,
+    display_name: 'Deleted User',
+    username: 'deleted_user',
+    bio: undefined,
+    avatar_url: undefined,
+    city: undefined,
+    state: undefined,
+    buyer_rating: 0,
+    seller_rating: 0,
+    review_count: 0,
+    listings_count: 0,
+    completed_sales_count: 0,
+    is_verified: false,
+    created_at: new Date().toISOString(),
+  };
+}
+
+function unavailableListing(listingId: string): Listing {
+  return {
+    id: listingId,
+    title: 'Listing unavailable',
+    description: 'This listing is no longer available.',
+    price: '',
+    category: 'General',
+    condition: 'Good',
+    image: '',
+    location: 'Location unavailable',
+    distance: 'Distance unavailable',
+    status: 'Archived',
+    seller: 'Deleted User',
+    sellerRating: 0,
+    sellerReviews: 0,
+    posted: 'Previously listed',
+    pickup: false,
+    porchPickup: false,
+    meetup: false,
+    shipping: false,
+    favoritedBy: 0,
+  };
 }
 
 async function lastMessageFor(conversationId: string): Promise<Message | undefined> {
@@ -173,48 +218,73 @@ export async function buildConversationSummary(conversation: Conversation | Conv
       };
   const currentProfile = await requireParticipant(row);
   const otherUserId = row.buyer_id === currentProfile.id ? row.seller_id : row.buyer_id;
-  const otherProfile = requireActiveMessageRecipient(await loadProfile(otherUserId));
+  const otherProfile = await loadProfileSafe(otherUserId);
   const { data: listingData, error: listingError } = await supabase
     .from('listings')
     .select(listingRelationsSelect)
     .eq('id', row.listing_id)
-    .single();
+    .maybeSingle();
 
   if (listingError) {
     throwSupabaseError(listingError, 'Listing details are unavailable.');
   }
 
-  const listingSummary = toListing(listingData as Record<string, unknown>);
-  const images = imagesFromListingRow(listingData as Record<string, unknown>);
+  const listingSummary = listingData
+    ? toListing(listingData as Record<string, unknown>)
+    : unavailableListing(row.listing_id ?? '');
+  const images = listingData ? imagesFromListingRow(listingData as Record<string, unknown>) : [];
   const lastMessage = await lastMessageFor(row.id);
   const unreadCount = await unreadCountFor(row.id, currentProfile.id);
   const normalized = toConversation(row, listingSummary.title);
+  const messagingBlocked = await isEitherUserBlocked(row.buyer_id, row.seller_id);
 
   return {
     ...normalized,
-    name: otherProfile.display_name,
+    name: otherProfile?.display_name ?? 'Deleted User',
     listing: listingSummary.title,
     preview: lastMessage?.body || (lastMessage?.message_type === 'image' ? 'Photo message' : normalized.preview),
     unread: unreadCount > 0,
     time: formatConversationTime(lastMessage?.created_at ?? normalized.lastMessageAt),
-    otherUser: toPublicProfile(otherProfile),
+    otherUser: otherProfile ? toPublicProfile(otherProfile) : deletedPublicProfile(otherUserId),
     listingSummary,
     listingThumbnail: images[0]?.thumbnail_url ?? images[0]?.image_url ?? listingSummary.image,
     lastMessage,
     unreadCount,
+    messagingBlocked,
   };
 }
 
-export async function getOrCreateConversation(listingId: string, sellerId: string): Promise<ConversationDetail> {
+export async function getOrCreateConversation(listingId: string, expectedSellerId?: string): Promise<ConversationDetail> {
   const profile = await ensureCurrentProfile();
+  requireActiveMessageRecipient(profile);
+  const { data: listingData, error: listingError } = await supabase
+    .from('listings')
+    .select('id, seller_id, status, deleted_at')
+    .eq('id', listingId)
+    .maybeSingle();
+
+  if (listingError) {
+    throwSupabaseError(listingError, 'We could not load this listing.');
+  }
+
+  if (!listingData) {
+    throw createServiceError('LISTING_NOT_FOUND', `Listing ${listingId} was not found`, 'This listing is no longer available.');
+  }
+
+  const listing = listingData as { id: string; seller_id: string; status?: string; deleted_at?: string | null };
+  const sellerId = listing.seller_id;
 
   if (profile.id === sellerId) {
     throw createServiceError('SELF_MESSAGE_NOT_ALLOWED', 'User tried to message themselves', 'You cannot message yourself.');
   }
 
-  requireActiveMessageRecipient(await loadProfile(profile.id));
-  requireActiveMessageRecipient(await loadProfile(sellerId));
-  await requireNotBlocked(profile.id, sellerId);
+  if (expectedSellerId && expectedSellerId !== sellerId && expectedSellerId !== profile.id) {
+    throw createServiceError(
+      'SELLER_MISMATCH',
+      `Expected seller ${expectedSellerId} did not match listing seller ${sellerId}`,
+      'We could not confirm the seller for this listing.'
+    );
+  }
 
   const existing = await supabase
     .from('conversations')
@@ -229,8 +299,20 @@ export async function getOrCreateConversation(listingId: string, sellerId: strin
   }
 
   if (existing.data) {
+    trackEvent('Conversation Opened', { conversationId: String((existing.data as ConversationRow).id) });
     return buildConversationSummary(existing.data as ConversationRow);
   }
+
+  if (listing.status !== 'active' || listing.deleted_at) {
+    throw createServiceError(
+      'LISTING_UNAVAILABLE',
+      `Listing ${listingId} is not active`,
+      'This listing is no longer available for new conversations.'
+    );
+  }
+
+  requireActiveMessageRecipient(await loadProfile(sellerId));
+  await requireNotBlocked(profile.id, sellerId);
 
   const { data, error } = await supabase
     .from('conversations')
@@ -244,20 +326,54 @@ export async function getOrCreateConversation(listingId: string, sellerId: strin
     .single();
 
   if (error) {
+    if (error.code === '23505') {
+      const duplicate = await supabase
+        .from('conversations')
+        .select('*')
+        .eq('listing_id', listingId)
+        .eq('buyer_id', profile.id)
+        .eq('seller_id', sellerId)
+        .maybeSingle();
+
+      if (!duplicate.error && duplicate.data) {
+        return buildConversationSummary(duplicate.data as ConversationRow);
+      }
+    }
+
     throwSupabaseError(error, 'We could not start this conversation.');
   }
 
+  trackEvent('Conversation Started', { conversationId: String((data as ConversationRow).id), listingId });
   return buildConversationSummary(data as ConversationRow);
 }
 
-export async function getConversationById(conversationId: string): Promise<ConversationDetail> {
+export async function getConversationById(conversationId: string, userId?: string): Promise<ConversationDetail> {
   const conversation = await getConversation(conversationId);
-  await requireParticipant(conversation);
+  const profile = await requireParticipant(conversation);
+
+  if (userId && userId !== profile.id) {
+    throw createServiceError(
+      'CONVERSATION_PERMISSION_DENIED',
+      `User ${profile.id} cannot access conversation as ${userId}`,
+      'You can only view conversations from your own account.'
+    );
+  }
+
+  trackEvent('Conversation Opened', { conversationId });
   return buildConversationSummary(conversation);
 }
 
-export async function getConversations(params: ConversationSearchParams = {}): Promise<ConversationSummary[]> {
+export async function getUserConversations(userId: string, params: ConversationSearchParams = {}): Promise<ConversationSummary[]> {
   const profile = await ensureCurrentProfile();
+
+  if (userId !== profile.id) {
+    throw createServiceError(
+      'CONVERSATION_PERMISSION_DENIED',
+      `User ${profile.id} tried to load conversations for ${userId}`,
+      'You can only view your own conversations.'
+    );
+  }
+
   const search = params.search?.trim().toLowerCase();
   const limit = Math.min(Math.max(params.limit ?? 50, 1), 100);
   const { data, error } = await supabase
@@ -282,6 +398,11 @@ export async function getConversations(params: ConversationSearchParams = {}): P
     const searchable = `${conversation.otherUser.display_name} ${conversation.otherUser.username} ${conversation.listingSummary.title}`.toLowerCase();
     return searchable.includes(search);
   });
+}
+
+export async function getConversations(params: ConversationSearchParams = {}): Promise<ConversationSummary[]> {
+  const profile = await ensureCurrentProfile();
+  return getUserConversations(profile.id, params);
 }
 
 export async function getConversationParticipantIds(conversationId: string): Promise<{ buyerId: string; sellerId: string }> {

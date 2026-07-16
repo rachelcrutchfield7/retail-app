@@ -9,16 +9,6 @@
     "assetBundlePatterns": [
       "**/*"
     ],
-    "splash": {
-      "image": "./assets/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#F8F3EA",
-      "dark": {
-        "image": "./assets/dark-splash.png",
-        "resizeMode": "contain",
-        "backgroundColor": "#1F2933"
-      }
-    },
     "ios": {
       "supportsTablet": true,
       "icon": "./assets/app-icon.png",
@@ -57,11 +47,29 @@
     },
     "web": {
       "bundler": "metro",
-      "output": "single"
+      "output": "single",
+      "splash": {
+        "image": "./assets/splash.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#F8F3EA"
+      }
     },
     "plugins": [
       "expo-status-bar",
-      "expo-notifications"
+      "expo-notifications",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#F8F3EA",
+          "dark": {
+            "image": "./assets/dark-splash.png",
+            "backgroundColor": "#1F2933"
+          }
+        }
+      ],
+      "expo-secure-store"
     ],
     "extra": {
       "eas": {

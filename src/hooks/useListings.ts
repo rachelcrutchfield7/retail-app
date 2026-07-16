@@ -1,24 +1,31 @@
-import { useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useMemo } from 'react';
 import { cachePolicy } from '../lib/cachePolicy';
-import { getQueryData, setQueryData } from '../lib/queryClient';
 import { queryKeys } from '../lib/queryKeys';
 import { getListings } from '../services/listingService';
 import type { ListingQueryParams, PaginatedListings } from '../services/types';
-import { useAsyncResource } from './useAsyncResource';
 
 export function useListings(params: ListingQueryParams = {}) {
-  const loadListings = useCallback(async (): Promise<PaginatedListings> => {
-    const key = [...queryKeys.listings, JSON.stringify(params)] as const;
-    const cached = getQueryData<PaginatedListings>(key);
+  const queryHash = useMemo(() => JSON.stringify(params), [params]);
+  const query = useQuery<PaginatedListings, Error>({
+    queryKey: [...queryKeys.listings, queryHash],
+    queryFn: () => getListings({ limit: cachePolicy.listings.pageSize, ...params }),
+    staleTime: cachePolicy.listings.staleTime,
+    gcTime: cachePolicy.listings.cacheTime,
+  });
 
-    if (cached) {
-      return cached;
-    }
-
-    const listings = await getListings({ limit: cachePolicy.listings.pageSize, ...params });
-    setQueryData(key, listings);
-    return listings;
-  }, [params]);
-
-  return useAsyncResource(loadListings);
+  return {
+    data: query.data ?? null,
+    loading: query.isLoading,
+    isLoading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    error: query.error ?? null,
+    refresh: async () => {
+      await query.refetch();
+    },
+    refetch: async () => {
+      await query.refetch();
+    },
+  };
 }

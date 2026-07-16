@@ -1,56 +1,32 @@
 import { CheckCircle2, Star, UserRound } from 'lucide-react-native';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { colors, radius, sizes, spacing, typography } from '../constants/theme';
-import { LockedScreen, Metric } from '../components';
+import { ErrorState, LoadingSpinner, LockedScreen, Metric } from '../components';
 import type { AccountType } from '../types.ts';
+import type { Profile } from '../types/profile';
+import { initials } from '../utils/format';
 
 type ProfileScreenProps = {
   isSignedIn: boolean;
   accountType: AccountType | null;
+  profile?: Profile | null;
+  isLoading?: boolean;
+  errorMessage?: string;
+  onRetry?: () => void;
   onSignIn: () => void;
   onSignOut: () => void;
 };
 
-const profileContent: Record<AccountType, {
-  initials: string;
-  name: string;
-  handle: string;
-  rating: string;
-  metrics: Array<{ label: string; value: string; tone?: 'green' | 'coral' | 'gold' }>;
-  about: string;
-  trustItems: string[];
-}> = {
-  regular: {
-    initials: 'RC',
-    name: 'Rachel C.',
-    handle: '@retail_rachel - Austin, TX',
-    rating: '4.9 buyer rating - 4.8 seller rating',
-    metrics: [
-      { label: 'Listings', value: '12' },
-      { label: 'Completed', value: '34', tone: 'coral' },
-      { label: 'Reviews', value: '18', tone: 'gold' },
-    ],
-    about:
-      'Pet parent to one senior dog and two cats. Happy to donate supplies whenever another pet family can use them.',
-    trustItems: ['Email verified', 'Profile photo added', 'Member since 2026'],
-  },
-  rescue: {
-    initials: 'GP',
-    name: 'Green Paws Rescue',
-    handle: '@greenpaws_rescue - Austin, TX',
-    rating: 'Verified rescue profile - 4.9 community rating',
-    metrics: [
-      { label: 'Listings', value: '28' },
-      { label: 'Donations', value: '76', tone: 'coral' },
-      { label: 'Reviews', value: '41', tone: 'gold' },
-    ],
-    about:
-      'Local rescue helping foster families find crates, carriers, food storage, bedding, and other donated supplies.',
-    trustItems: ['Rescue profile selected', 'Email verified', 'Donation-ready account'],
-  },
-};
-
-export function ProfileScreen({ isSignedIn, accountType, onSignIn, onSignOut }: ProfileScreenProps) {
+export function ProfileScreen({
+  isSignedIn,
+  accountType,
+  profile,
+  isLoading = false,
+  errorMessage,
+  onRetry,
+  onSignIn,
+  onSignOut,
+}: ProfileScreenProps) {
   if (!isSignedIn) {
     return (
       <LockedScreen
@@ -63,38 +39,63 @@ export function ProfileScreen({ isSignedIn, accountType, onSignIn, onSignOut }: 
     );
   }
 
-  const profile = profileContent[accountType ?? 'regular'];
+  if (isLoading && !profile) {
+    return <LoadingSpinner />;
+  }
+
+  if (errorMessage && !profile) {
+    return <ErrorState message={errorMessage} onRetry={onRetry} />;
+  }
+
+  const displayName = profile?.display_name ?? 'ReTail User';
+  const location = [profile?.city, profile?.state].filter(Boolean).join(', ') || 'Location not set';
+  const handle = `@${profile?.username ?? 'retail_user'} - ${location}`;
+  const about = profile?.bio?.trim() || defaultProfileBio(accountType ?? 'regular');
+  const trustItems = [
+    profile?.is_verified ? 'Profile verified' : 'Email verified',
+    profile?.avatar_url ? 'Profile photo added' : 'Profile photo can be added',
+    profile?.created_at ? `Member since ${new Date(profile.created_at).getFullYear()}` : 'Member profile active',
+  ];
+  const metrics = [
+    { label: 'Listings', value: String(profile?.listings_count ?? 0) },
+    { label: 'Completed', value: String(profile?.completed_sales_count ?? 0), tone: 'coral' as const },
+    { label: 'Reviews', value: String(profile?.review_count ?? 0), tone: 'gold' as const },
+  ];
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.screenContent}>
       <View style={styles.profileHeader}>
         <View style={[styles.avatar, styles.profileAvatar]}>
-          <Text style={styles.profileAvatarText}>{profile.initials}</Text>
+          {profile?.avatar_url ? (
+            <Image source={{ uri: profile.avatar_url }} style={styles.profileImage} />
+          ) : (
+            <Text style={styles.profileAvatarText}>{initials(displayName)}</Text>
+          )}
         </View>
         <View style={styles.profileText}>
-          <Text style={styles.title}>{profile.name}</Text>
-          <Text style={styles.subhead}>{profile.handle}</Text>
+          <Text style={styles.title}>{displayName}</Text>
+          <Text style={styles.subhead}>{handle}</Text>
           <View style={styles.metaRow}>
             <Star size={16} color={colors.warning} fill={colors.warning} />
-            <Text style={styles.metaText}>{profile.rating}</Text>
+            <Text style={styles.metaText}>{ratingLabel(profile)}</Text>
           </View>
         </View>
       </View>
 
       <View style={styles.metricRow}>
-        {profile.metrics.map((metric) => (
+        {metrics.map((metric) => (
           <Metric key={metric.label} label={metric.label} value={metric.value} tone={metric.tone} />
         ))}
       </View>
 
       <View style={styles.profileSection}>
         <Text style={styles.sectionTitle}>About</Text>
-        <Text style={styles.bodyText}>{profile.about}</Text>
+        <Text style={styles.bodyText}>{about}</Text>
       </View>
 
       <View style={styles.profileSection}>
         <Text style={styles.sectionTitle}>Trust and safety</Text>
-        {profile.trustItems.map((item) => (
+        {trustItems.map((item) => (
           <ChecklistItem key={item} label={item} />
         ))}
       </View>
@@ -104,6 +105,20 @@ export function ProfileScreen({ isSignedIn, accountType, onSignIn, onSignOut }: 
       </Pressable>
     </ScrollView>
   );
+}
+
+function defaultProfileBio(accountType: AccountType) {
+  return accountType === 'rescue'
+    ? 'Rescue account ready to share supplies, wishlists, and urgent needs with the local pet community.'
+    : 'Pet parent using ReTail to buy, sell, and donate secondhand pet supplies locally.';
+}
+
+function ratingLabel(profile?: Profile | null) {
+  if (!profile?.review_count) {
+    return 'No reviews yet';
+  }
+
+  return `${profile.seller_rating.toFixed(1)} seller rating - ${profile.buyer_rating.toFixed(1)} buyer rating`;
 }
 
 function ChecklistItem({ label }: { label: string }) {
@@ -141,6 +156,11 @@ const styles = StyleSheet.create({
     width: sizes.avatarLarge,
     height: sizes.avatarLarge,
     backgroundColor: colors.primary,
+    overflow: 'hidden',
+  },
+  profileImage: {
+    width: '100%',
+    height: '100%',
   },
   profileAvatarText: {
     color: colors.white,

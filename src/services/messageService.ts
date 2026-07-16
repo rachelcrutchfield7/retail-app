@@ -9,12 +9,30 @@ import {
   requireCanSendInConversation,
 } from './conversationService';
 import { createMessageNotification } from './notificationService';
-import { emitMessagingUpdate, subscribeToMessagingUpdates } from './realtimeService';
 import { ensureCurrentProfile, throwSupabaseError, toMessage } from './supabaseData';
-import type { Message, MessageQueryParams, SendMessageInput, UnreadMessages } from './types';
+import type { Message, MessageQueryParams, PaginatedMessages, SendMessageInput, UnreadMessages } from './types';
 
 const messageWindowMs = 60 * 60 * 1000;
 const maxMessagesPerWindow = 100;
+const maxMessageLength = 2000;
+
+function normalizeTextBody(body: string | undefined): string {
+  const trimmed = body?.trim() ?? '';
+
+  if (!trimmed) {
+    throw createServiceError('MESSAGE_REQUIRED', 'Text message body was blank', 'Type a message before sending.');
+  }
+
+  if (trimmed.length > maxMessageLength) {
+    throw createServiceError(
+      'MESSAGE_TOO_LONG',
+      `Message was ${trimmed.length} characters`,
+      `Keep messages under ${maxMessageLength.toLocaleString()} characters.`
+    );
+  }
+
+  return trimmed;
+}
 
 async function enforceRateLimit(userId: string): Promise<void> {
   const cutoff = new Date(Date.now() - messageWindowMs).toISOString();
@@ -38,6 +56,10 @@ async function enforceRateLimit(userId: string): Promise<void> {
 }
 
 export async function getMessages(conversationId: string, params: MessageQueryParams = {}): Promise<Message[]> {
+  return (await getPaginatedMessages(conversationId, params)).items;
+}
+
+export async function getPaginatedMessages(conversationId: string, params: MessageQueryParams = {}): Promise<PaginatedMessages> {
   const profile = await ensureCurrentProfile();
   await getConversationById(conversationId);
   const limit = Math.min(Math.max(params.limit ?? cachePolicy.messages.pageSize, 1), 100);
@@ -59,21 +81,25 @@ export async function getMessages(conversationId: string, params: MessageQueryPa
     throwSupabaseError(error, 'We could not load messages.');
   }
 
-  return (data ?? [])
+  const messages = (data ?? [])
     .map((message) => toMessage(message as Record<string, unknown>, profile.id))
     .sort((first, second) => Date.parse(first.created_at) - Date.parse(second.created_at));
+
+  return {
+    items: messages,
+    nextCursor: messages.length === limit ? messages[0]?.created_at : undefined,
+    hasMore: messages.length === limit,
+  };
 }
 
 export async function sendMessage(input: SendMessageInput): Promise<Message> {
   const profile = await ensureCurrentProfile();
   const conversation = await requireCanSendInConversation(input.conversationId);
   await enforceRateLimit(profile.id);
+  const messageType = input.messageType ?? 'text';
+  const textBody = messageType === 'text' || messageType === 'system' ? normalizeTextBody(input.body) : input.body?.trim() || null;
 
-  if (input.messageType !== 'image' && !input.body?.trim()) {
-    throw createServiceError('MESSAGE_REQUIRED', 'Text message body was blank', 'Type a message before sending.');
-  }
-
-  if (input.messageType === 'image' && !input.imageUrl?.trim()) {
+  if (messageType === 'image' && !input.imageUrl?.trim()) {
     throw createServiceError('IMAGE_REQUIRED', 'Image message was missing image URL', 'Choose an image to send.');
   }
 
@@ -82,8 +108,8 @@ export async function sendMessage(input: SendMessageInput): Promise<Message> {
     .insert({
       conversation_id: input.conversationId,
       sender_id: profile.id,
-      message_type: input.messageType ?? 'text',
-      body: input.body?.trim() || null,
+      message_type: messageType,
+      body: textBody,
       image_url: input.imageUrl?.trim() || null,
       is_read: false,
     })
@@ -97,9 +123,22 @@ export async function sendMessage(input: SendMessageInput): Promise<Message> {
   const message = toMessage(data as Record<string, unknown>, profile.id);
   const recipientId = conversation.buyerId === profile.id ? conversation.sellerId : conversation.buyerId;
   await createMessageNotification(recipientId, input.conversationId, conversation.listingId, message).catch(() => null);
-  emitMessagingUpdate({ type: 'message_created', conversationId: input.conversationId, messageId: message.id });
-  trackEvent('Message Sent', { conversationId: input.conversationId });
+  trackEvent('Message Sent', { conversationId: input.conversationId, messageType });
   return message;
+}
+
+export async function sendTextMessage(conversationId: string, senderId: string, body: string): Promise<Message> {
+  const profile = await ensureCurrentProfile();
+
+  if (senderId !== profile.id) {
+    throw createServiceError(
+      'SENDER_IMPERSONATION_DENIED',
+      `User ${profile.id} tried to send as ${senderId}`,
+      'We could not send that message. Please sign in again.'
+    );
+  }
+
+  return sendMessage({ conversationId, messageType: 'text', body });
 }
 
 export async function sendImageMessage(conversationId: string, imageUri: string, body?: string): Promise<Message> {
@@ -149,20 +188,29 @@ export async function uploadMessageImage(fileUri: string, conversationId: string
 }
 
 export async function markMessagesRead(conversationId: string): Promise<void> {
-  const profile = await ensureCurrentProfile();
+  await ensureCurrentProfile();
   await getConversationById(conversationId);
-  const { error } = await supabase
-    .from('messages')
-    .update({ is_read: true, read_at: new Date().toISOString() })
-    .eq('conversation_id', conversationId)
-    .neq('sender_id', profile.id)
-    .eq('is_read', false);
+  const { error } = await supabase.rpc('mark_conversation_read', {
+    target_conversation_id: conversationId,
+  });
 
   if (error) {
     throwSupabaseError(error, 'We could not mark messages read.');
   }
+}
 
-  emitMessagingUpdate({ type: 'messages_read', conversationId });
+export async function markConversationRead(conversationId: string, currentUserId: string): Promise<void> {
+  const profile = await ensureCurrentProfile();
+
+  if (currentUserId !== profile.id) {
+    throw createServiceError(
+      'READ_RECEIPT_PERMISSION_DENIED',
+      `User ${profile.id} tried to mark read as ${currentUserId}`,
+      'We could not update read receipts. Please sign in again.'
+    );
+  }
+
+  await markMessagesRead(conversationId);
 }
 
 export async function deleteMessage(messageId: string): Promise<void> {
@@ -187,16 +235,27 @@ export async function deleteMessage(messageId: string): Promise<void> {
     );
   }
 
-  const { error } = await supabase
-    .from('messages')
-    .update({ deleted_at: new Date().toISOString() })
-    .eq('id', messageId);
+  const { error } = await supabase.rpc('soft_delete_own_message', {
+    target_message_id: messageId,
+  });
 
   if (error) {
     throwSupabaseError(error, 'We could not delete that message.');
   }
+}
 
-  emitMessagingUpdate({ type: 'message_created', conversationId: message.conversation_id, messageId: message.id });
+export async function softDeleteOwnMessage(messageId: string, currentUserId: string): Promise<void> {
+  const profile = await ensureCurrentProfile();
+
+  if (currentUserId !== profile.id) {
+    throw createServiceError(
+      'MESSAGE_PERMISSION_DENIED',
+      `User ${profile.id} tried to delete as ${currentUserId}`,
+      'You can only delete messages you sent.'
+    );
+  }
+
+  await deleteMessage(messageId);
 }
 
 export async function getUnreadMessageCount(): Promise<UnreadMessages> {
@@ -215,4 +274,4 @@ export async function getUnreadMessageCount(): Promise<UnreadMessages> {
   };
 }
 
-export { getConversationById, getConversations, getOrCreateConversation, subscribeToMessagingUpdates };
+export { getConversationById, getConversations, getOrCreateConversation };
