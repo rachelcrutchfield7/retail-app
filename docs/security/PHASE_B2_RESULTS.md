@@ -9,6 +9,7 @@ No Phase C work was performed.
 ## Completed Source Changes
 
 - Added Supabase migration `20260717161849_phase_b2_coarse_search_areas.sql`.
+- Added advisor follow-up migration `20260717171018_phase_b2_advisor_indexes.sql`.
 - Added `marketplace_search_areas`.
 - Added `marketplace_search_preferences`.
 - Added server-managed `marketplace_search_area_change_events`.
@@ -77,6 +78,7 @@ Target project:
 Applied migration:
 
 - `20260717161849_phase_b2_coarse_search_areas`
+- `20260717171018_phase_b2_advisor_indexes`
 
 Verified outcomes:
 
@@ -92,6 +94,7 @@ Verified outcomes:
 - The fourth successful search-area change in a rollback-only test was rejected with `RETAIL_SEARCH_AREA_RATE_LIMITED`.
 - Nearby listings returned coarse distance band `Same area`, not exact distance.
 - Nearby rescues returned coarse distance band `Same area`, not exact distance.
+- The Phase B.2 performance advisor finding for the search-area change-event foreign key was resolved with a covering index.
 
 ## Distance Bands
 
