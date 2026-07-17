@@ -22,6 +22,8 @@ Phase B.1 uses the existing owner-private `profiles.latitude` and `profiles.long
 
 This avoids creating a duplicate sensitive location table. Direct client access remains protected by RLS and existing profile ownership rules. Public nearby responses continue to expose only city/state and approximate `distance_band`.
 
+Phase B.2 supersedes this model. Nearby discovery now uses `marketplace_search_preferences.search_area_id` and server-controlled `marketplace_search_areas.centroid`, not profile latitude/longitude.
+
 ## Fallback Behavior
 
 If a signed-in user does not have a valid saved profile location, the nearby RPC raises the safe marker `RETAIL_LOCATION_REQUIRED`.
@@ -71,6 +73,8 @@ Disallowed nearby inputs:
 ## Remaining Required Work
 
 - Address remaining advisor findings in the appropriate future security/performance phase.
-- Keep Phase B and Phase B.1 tests in the release gate.
+- Keep Phase B, Phase B.1, and Phase B.2 tests in the release gate.
+
+Phase B.2 results are documented in `PHASE_B2_RESULTS.md`.
 
 No Phase C remediation was performed in this phase.

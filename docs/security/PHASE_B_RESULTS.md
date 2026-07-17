@@ -26,7 +26,8 @@ Database verification:
 
 - Supabase migration history shows `20260717125609_phase_b_public_location_privacy` applied to the target project.
 - Phase B.1 supersedes the Phase B nearby RPC signatures so caller coordinates are no longer accepted as public discovery inputs.
-- Supabase advisor and live verification results for Phase B.1 are documented separately in `PHASE_B1_RESULTS.md`.
+- Phase B.2 supersedes the Phase B.1 profile-coordinate origin model with coarse server-controlled marketplace search areas.
+- Supabase advisor and live verification results for Phase B.1 and Phase B.2 are documented separately in `PHASE_B1_RESULTS.md` and `PHASE_B2_RESULTS.md`.
 
 ## Public Data Contract
 
@@ -46,13 +47,14 @@ Public responses must not include:
 
 The model is documented in `docs/security/LOCATION_PRIVACY_MODEL.md`.
 
-Precise location may be stored for server-side filtering, but public output must use city/state and distance bands only.
+Exact coordinates may remain in legacy private fields, but public marketplace discovery must use approved search areas and public output must use city/state and distance bands only.
 
 ## Remaining Required Work
 
 Before treating Phase B and Phase B.1 as complete in production:
 
 - Keep the Phase B and Phase B.1 regression tests passing.
+- Keep the Phase B.2 regression tests passing.
 - Review Supabase advisors after every schema change.
 - Continue periodic direct API checks against profiles, listings, rescues, and nearby RPCs.
 

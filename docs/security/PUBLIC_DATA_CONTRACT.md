@@ -33,7 +33,7 @@ Never expose publicly:
 Public listing discovery must use:
 
 - `get_public_listing_feed`
-- `get_nearby_listings` for signed-in users with a saved private profile location
+- `get_nearby_listings` for signed-in users with a saved marketplace search-area preference
 - `get_public_listing_detail`
 - `get_public_user_listings`
 
@@ -49,6 +49,7 @@ Never expose publicly:
 - listing ZIP code
 - ship-from ZIP code
 - exact latitude or longitude
+- search-area centroid or geography point
 - exact numeric distance
 - deleted/moderation fields
 - raw seller profile rows
@@ -58,7 +59,7 @@ Never expose publicly:
 Public rescue discovery must use:
 
 - `get_public_rescue_feed`
-- `get_nearby_rescues` for signed-in users with a saved private profile location
+- `get_nearby_rescues` for signed-in users with a saved marketplace search-area preference
 - `get_public_rescue`
 - `get_public_rescue_by_owner`
 
@@ -72,6 +73,7 @@ Never expose publicly:
 - street address
 - ZIP code
 - exact coordinates
+- search-area centroid or geography point
 - contact person
 - contact email
 - contact phone
@@ -83,6 +85,10 @@ Never expose publicly:
 
 - Public screens must not call Supabase base tables directly for profiles, listings, or rescue discovery.
 - Public nearby discovery service functions must not send live caller latitude or longitude to Supabase RPCs.
+- Public nearby discovery must use `marketplace_search_preferences` and approved `marketplace_search_areas`.
+- Clients may read safe area labels through `get_marketplace_search_areas`, but must never read area centroids directly.
+- Clients may update search preferences only through `set_marketplace_search_area`.
+- Direct client writes to `profiles.latitude` and `profiles.longitude` are forbidden.
 - Public service functions must fail closed. If a public RPC is unavailable, show a friendly error instead of falling back to raw table reads.
 - Owner management screens may use owner-authenticated table reads and mutations where RLS enforces ownership.
 - New public fields require this document, the SQL RPC return contract, and security tests to be updated together.

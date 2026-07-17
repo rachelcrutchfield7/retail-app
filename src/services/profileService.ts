@@ -57,8 +57,6 @@ export async function updateProfile(data: UpdateProfileInput): Promise<Profile> 
       ...(data.city !== undefined ? { city: data.city.trim() || null } : {}),
       ...(data.state !== undefined ? { state: data.state.trim() || null } : {}),
       ...(data.zip_code !== undefined ? { zip_code: data.zip_code.trim() || null } : {}),
-      latitude: data.latitude,
-      longitude: data.longitude,
     })
     .eq('id', currentProfile.id)
     .select('*')

@@ -1,11 +1,15 @@
 import { useMemo, useState } from 'react';
 import { AlertCircle, HeartHandshake, MapPin, ShieldCheck } from 'lucide-react-native';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Badge, Card, DistanceFilter, EmptyState, ErrorState, HeaderBar, LoadingSpinner, Metric, SearchBar } from '../components';
 import { colors, radius, sizes, spacing, typography } from '../constants/theme';
-import { useLocation } from '../hooks/useLocation';
+import {
+  useMarketplaceSearchAreas,
+  useMarketplaceSearchPreference,
+  useSetMarketplaceSearchArea,
+} from '../hooks/useMarketplaceSearchArea';
 import { useRescueHub } from '../hooks/useRescueHub';
-import type { RescueNeedUrgency, RescueOrganization } from '../types.ts';
+import type { MarketplaceSearchArea, RescueNeedUrgency, RescueOrganization } from '../types.ts';
 import { handleAppError } from '../utils/errorHandler';
 
 type RescueHubScreenProps = {
@@ -14,13 +18,23 @@ type RescueHubScreenProps = {
 
 export function RescueHubScreen({ onBack }: RescueHubScreenProps) {
   const [search, setSearch] = useState('');
-  const { location, loading, error, requestCurrentLocation, setRadiusMiles, setManualLocation } = useLocation();
+  const searchAreas = useMarketplaceSearchAreas();
+  const searchPreference = useMarketplaceSearchPreference();
+  const setSearchArea = useSetMarketplaceSearchArea();
+  const radiusMiles = searchPreference.data?.radius_miles ?? 25;
+  const selectedArea = useMemo(
+    () => searchAreas.data.find((area) => area.id === searchPreference.data?.search_area_id),
+    [searchAreas.data, searchPreference.data?.search_area_id]
+  );
+  const displayCity = searchPreference.data?.city ?? selectedArea?.city ?? 'Marketplace Area';
+  const displayState = searchPreference.data?.state ?? selectedArea?.state ?? '';
+  const areaError = searchAreas.error ?? searchPreference.error ?? setSearchArea.error;
   const rescueParams = useMemo(
     () => ({
       search,
-      radiusMiles: location.radiusMiles,
+      radiusMiles,
     }),
-    [location.radiusMiles, search]
+    [radiusMiles, search]
   );
   const rescues = useRescueHub(rescueParams);
   const filteredRescues = rescues.data ?? [];
@@ -58,19 +72,24 @@ export function RescueHubScreen({ onBack }: RescueHubScreenProps) {
       />
 
       <DistanceFilter
-        city={location.city}
-        state={location.state}
-        radiusMiles={location.radiusMiles}
-        loading={loading}
-        error={error}
-        onRadiusChange={setRadiusMiles}
-        onUseCurrentLocation={requestCurrentLocation}
-        onManualLocationSelect={setManualLocation}
+        city={displayCity}
+        state={displayState}
+        radiusMiles={radiusMiles}
+        loading={searchAreas.isLoading || searchPreference.isLoading || setSearchArea.isLoading}
+        error={areaError ? handleAppError(areaError).userMessage : null}
+        searchAreas={searchAreas.data}
+        selectedSearchAreaId={searchPreference.data?.search_area_id}
+        onRadiusChange={(nextRadius) => {
+          void updateMarketplaceRadius(nextRadius, searchPreference.data?.search_area_id, setSearchArea.setSearchArea);
+        }}
+        onSearchAreaSelect={(area) => {
+          void updateMarketplaceSearchArea(area, radiusMiles, setSearchArea.setSearchArea);
+        }}
       />
 
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Rescues nearby</Text>
-        <Text style={styles.sectionHint}>{filteredRescues.length} within {location.radiusMiles} mi</Text>
+        <Text style={styles.sectionHint}>{filteredRescues.length} within {radiusMiles} mi</Text>
       </View>
 
       {rescues.isLoading ? <LoadingSpinner /> : null}
@@ -95,6 +114,46 @@ export function RescueHubScreen({ onBack }: RescueHubScreenProps) {
       )}
     </ScrollView>
   );
+}
+
+async function updateMarketplaceRadius(
+  radiusMiles: number,
+  searchAreaId: string | undefined,
+  setSearchArea: (input: { searchAreaId: string; radiusMiles: 10 | 25 | 50 | 100 }) => Promise<unknown>
+) {
+  if (!searchAreaId) {
+    Alert.alert('Choose an area first', 'Pick a marketplace area before changing the distance filter.');
+    return;
+  }
+
+  if (!isAllowedRadius(radiusMiles)) {
+    Alert.alert('Distance not available', 'Choose 10, 25, 50, or 100 miles.');
+    return;
+  }
+
+  try {
+    await setSearchArea({ searchAreaId, radiusMiles });
+  } catch (error) {
+    Alert.alert('Area not updated', handleAppError(error).userMessage);
+  }
+}
+
+async function updateMarketplaceSearchArea(
+  area: MarketplaceSearchArea,
+  radiusMiles: number,
+  setSearchArea: (input: { searchAreaId: string; radiusMiles: 10 | 25 | 50 | 100 }) => Promise<unknown>
+) {
+  const safeRadius = isAllowedRadius(radiusMiles) ? radiusMiles : 25;
+
+  try {
+    await setSearchArea({ searchAreaId: area.id, radiusMiles: safeRadius });
+  } catch (error) {
+    Alert.alert('Area not updated', handleAppError(error).userMessage);
+  }
+}
+
+function isAllowedRadius(radiusMiles: number): radiusMiles is 10 | 25 | 50 | 100 {
+  return radiusMiles === 10 || radiusMiles === 25 || radiusMiles === 50 || radiusMiles === 100;
 }
 
 function RescueCard({ rescue }: { rescue: RescueOrganization }) {

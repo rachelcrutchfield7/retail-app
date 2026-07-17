@@ -5,6 +5,9 @@ import type {
   Listing,
   ListingCondition,
   ShippingPayer,
+  MarketplaceSearchArea as PrototypeMarketplaceSearchArea,
+  MarketplaceSearchPreference as PrototypeMarketplaceSearchPreference,
+  MarketplaceSearchRadius,
   RescueNeedUrgency,
   RescueOrganization,
   RescueOrganizationType,
@@ -67,8 +70,6 @@ export type Profile = {
   city?: string;
   state?: string;
   zip_code?: string;
-  latitude?: number;
-  longitude?: number;
   buyer_rating: number;
   seller_rating: number;
   review_count: number;
@@ -111,8 +112,6 @@ export type UpdateProfileInput = Partial<
     | 'city'
     | 'state'
     | 'zip_code'
-    | 'latitude'
-    | 'longitude'
   >
 >;
 
@@ -144,8 +143,6 @@ export type SavedSearch = {
   city?: string;
   state?: string;
   zip_code?: string;
-  latitude?: number;
-  longitude?: number;
   notifications_enabled: boolean;
   last_notified_at?: string;
   created_at: string;
@@ -167,9 +164,15 @@ export type CreateSavedSearchInput = {
   city?: string;
   state?: string;
   zip_code?: string;
-  latitude?: number;
-  longitude?: number;
   notifications_enabled?: boolean;
+};
+
+export type MarketplaceSearchArea = PrototypeMarketplaceSearchArea;
+export type MarketplaceSearchPreference = PrototypeMarketplaceSearchPreference;
+
+export type SetMarketplaceSearchAreaInput = {
+  searchAreaId: string;
+  radiusMiles?: MarketplaceSearchRadius;
 };
 
 export type PaginatedListings = {
@@ -210,8 +213,6 @@ export type CreateListingInput = {
   city: string;
   state: string;
   zip_code?: string;
-  latitude?: number;
-  longitude?: number;
   pickup_available?: boolean;
   porch_pickup_available?: boolean;
   meetup_available?: boolean;

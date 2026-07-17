@@ -1,6 +1,4 @@
 export type LocationStoreState = {
-  latitude?: number;
-  longitude?: number;
   city: string;
   state: string;
   zipCode?: string;
@@ -9,10 +7,8 @@ export type LocationStoreState = {
 };
 
 export const defaultLocationState: LocationStoreState = {
-  latitude: 30.2672,
-  longitude: -97.7431,
-  city: 'Austin',
-  state: 'TX',
+  city: 'Marketplace Area',
+  state: '',
   radiusMiles: 25,
   permissionStatus: 'manual',
 };

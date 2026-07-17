@@ -303,7 +303,6 @@ export async function getNearbyRescues(params: RescueHubQueryParams = {}): Promi
 
   if (sessionResult.data.session) {
     const nearbyResult = await supabase.rpc('get_nearby_rescues', {
-      radius_miles: params.radiusMiles ?? 25,
       search_query: params.search?.trim() || null,
     });
 
@@ -449,7 +448,10 @@ function isMissingSavedLocationError(error: unknown): boolean {
     return false;
   }
 
-  return error.appError.message.includes('RETAIL_LOCATION_REQUIRED');
+  return (
+    error.appError.message.includes('RETAIL_LOCATION_REQUIRED') ||
+    error.appError.message.includes('RETAIL_SEARCH_AREA_REQUIRED')
+  );
 }
 
 function toRescueProfile(row: Row): RescueProfile {

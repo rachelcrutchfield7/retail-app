@@ -105,7 +105,6 @@ export async function getNearbyListings(params: ListingQueryParams = {}): Promis
   const limit = Math.min(Math.max(params.limit ?? 20, 1), 50);
   const categoryId = params.categoryId ? await resolveCategoryId(params.categoryId) : undefined;
   const condition = conditionToDb(params.condition);
-  const radiusMiles = params.radiusMiles ?? 25;
   const sessionResult = await supabase.auth.getSession();
 
   if (sessionResult.error) {
@@ -118,7 +117,6 @@ export async function getNearbyListings(params: ListingQueryParams = {}): Promis
         params,
         categoryId,
         condition,
-        radiusMiles,
         page,
         limit,
       });
@@ -136,19 +134,16 @@ async function getNearbyListingsFromRpc({
   params,
   categoryId,
   condition,
-  radiusMiles,
   page,
   limit,
 }: {
   params: ListingQueryParams;
   categoryId?: string;
   condition?: string;
-  radiusMiles: number;
   page: number;
   limit: number;
 }): Promise<PaginatedListings> {
   const { data, error } = await supabase.rpc('get_nearby_listings', {
-    radius_miles: radiusMiles,
     page_number: page,
     page_size: limit,
     category_filter: categoryId ?? null,
@@ -180,7 +175,10 @@ function isMissingSavedLocationError(error: unknown): boolean {
     return false;
   }
 
-  return error.appError.message.includes('RETAIL_LOCATION_REQUIRED');
+  return (
+    error.appError.message.includes('RETAIL_LOCATION_REQUIRED') ||
+    error.appError.message.includes('RETAIL_SEARCH_AREA_REQUIRED')
+  );
 }
 
 async function getPublicListingFeedFromRpc({
@@ -305,8 +303,6 @@ export async function createListing(input: CreateListingInput): Promise<Listing>
       city: input.city.trim(),
       state: input.state.trim(),
       zip_code: input.zip_code?.trim() || null,
-      latitude: input.latitude,
-      longitude: input.longitude,
       pickup_available: Boolean(input.porch_pickup_available || input.meetup_available || input.pickup_available),
       porch_pickup_available: input.porch_pickup_available ?? false,
       meetup_available: input.meetup_available ?? input.pickup_available ?? true,
@@ -360,8 +356,6 @@ export async function updateListing(listingId: string, input: UpdateListingInput
   if (input.city !== undefined) updates.city = input.city.trim();
   if (input.state !== undefined) updates.state = input.state.trim();
   if (input.zip_code !== undefined) updates.zip_code = input.zip_code?.trim() || null;
-  if (input.latitude !== undefined) updates.latitude = input.latitude;
-  if (input.longitude !== undefined) updates.longitude = input.longitude;
   if (
     input.pickup_available !== undefined ||
     input.porch_pickup_available !== undefined ||

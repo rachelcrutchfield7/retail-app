@@ -58,8 +58,6 @@ export async function deleteAccount(): Promise<void> {
         city: null,
         state: null,
         zip_code: null,
-        latitude: null,
-        longitude: null,
         deleted_at: timestamp,
       })
       .eq('id', profile.id);

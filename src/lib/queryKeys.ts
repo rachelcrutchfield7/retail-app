@@ -16,6 +16,8 @@ export const queryKeys = {
   transactionParticipants: (listingId: string) => ['transaction-participants', listingId] as const,
   notifications: (userId: string) => ['notifications', userId] as const,
   savedSearches: (userId: string) => ['saved-searches', userId] as const,
+  marketplaceSearchAreas: ['marketplace-search-areas'] as const,
+  marketplaceSearchPreference: (userId: string) => ['marketplace-search-preference', userId] as const,
   rescueDashboard: () => ['rescue-dashboard'] as const,
   rescueHub: (params: string) => ['rescue-hub', params] as const,
   publicRescueProfile: (ownerId: string) => ['public-rescue-profile', ownerId] as const,

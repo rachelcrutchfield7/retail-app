@@ -13,6 +13,25 @@ export type ListingStatus = (typeof LISTING_STATUSES)[number];
 export type TabKey = 'browse' | 'favorites' | 'create' | 'messages' | 'profile';
 export type AccountType = 'regular' | 'rescue';
 export type ShippingPayer = 'buyer' | 'seller' | 'discuss';
+export type MarketplaceSearchRadius = 10 | 25 | 50 | 100;
+
+export type MarketplaceSearchArea = {
+  id: string;
+  slug: string;
+  label: string;
+  city?: string;
+  state?: string;
+  region_name?: string;
+};
+
+export type MarketplaceSearchPreference = {
+  search_area_id: string;
+  radius_miles: MarketplaceSearchRadius;
+  label: string;
+  city?: string;
+  state?: string;
+  region_name?: string;
+};
 
 export type Listing = {
   id: string;

@@ -155,8 +155,6 @@ const emptyCreateListing: CreateListingInput = {
   city: 'Austin',
   state: 'TX',
   zip_code: '78701',
-  latitude: 30.2672,
-  longitude: -97.7431,
   pickup_available: true,
   porch_pickup_available: false,
   meetup_available: true,
@@ -323,8 +321,6 @@ export function HomeScreen({
     loading: locationLoading,
     error: locationError,
     setRadiusMiles,
-    requestCurrentLocation,
-    setManualLocation,
   } = useLocation();
   const categories = useTopLevelCategories();
   const favorites = useFavorites(Boolean(auth.user));
@@ -448,8 +444,6 @@ export function HomeScreen({
             loading={locationLoading}
             error={locationError}
             onRadiusChange={setRadiusMiles}
-            onUseCurrentLocation={requestCurrentLocation}
-            onManualLocationSelect={setManualLocation}
           />
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipScroller}>
@@ -577,8 +571,6 @@ export function SearchScreen({
     city: location.city,
     state: location.state,
     zip_code: location.zipCode,
-    latitude: location.latitude,
-    longitude: location.longitude,
     notifications_enabled: true,
   });
 
@@ -605,13 +597,11 @@ export function SearchScreen({
     setMaxPrice(savedSearch.max_price === undefined ? '' : String(savedSearch.max_price));
     setRadiusMiles(savedSearch.radius_miles);
 
-    if (savedSearch.city || savedSearch.state || savedSearch.latitude || savedSearch.longitude) {
+    if (savedSearch.city || savedSearch.state) {
       setManualLocation({
         city: savedSearch.city ?? location.city,
         state: savedSearch.state ?? location.state,
         zipCode: savedSearch.zip_code,
-        latitude: savedSearch.latitude,
-        longitude: savedSearch.longitude,
         radiusMiles: savedSearch.radius_miles,
       });
     }
@@ -675,8 +665,6 @@ export function SearchScreen({
             loading={locationLoading}
             error={locationError}
             onRadiusChange={setRadiusMiles}
-            onUseCurrentLocation={requestCurrentLocation}
-            onManualLocationSelect={setManualLocation}
           />
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipScroller}>
             <CategoryChip label="All" selected={!categoryId} onPress={() => setCategoryId(undefined)} />
@@ -2960,8 +2948,6 @@ function EditListingForm({
     city: cityFor(item.location),
     state: stateFor(item.location),
     zip_code: item.zipCode ?? zipCodeFor(item.location),
-    latitude: item.latitude,
-    longitude: item.longitude,
     pickup_available: item.pickup,
     porch_pickup_available: item.porchPickup,
     meetup_available: item.meetup,
@@ -3052,8 +3038,6 @@ function ListingForm({
 
     onChange('city', matchedLocation.city);
     onChange('state', matchedLocation.state);
-    onChange('latitude', matchedLocation.latitude);
-    onChange('longitude', matchedLocation.longitude);
   };
 
   return (

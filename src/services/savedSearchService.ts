@@ -29,8 +29,6 @@ function toSavedSearch(row: SavedSearchRow): SavedSearch {
     city: optionalString(row.city),
     state: optionalString(row.state),
     zip_code: optionalString(row.zip_code),
-    latitude: optionalNumber(row.latitude),
-    longitude: optionalNumber(row.longitude),
     notifications_enabled: row.notifications_enabled !== false,
     last_notified_at: optionalString(row.last_notified_at),
     created_at: String(row.created_at ?? new Date().toISOString()),
@@ -86,8 +84,6 @@ function buildSavedSearchPayload(profileId: string, input: CreateSavedSearchInpu
     city: input.city?.trim() || null,
     state: input.state?.trim() || null,
     zip_code: input.zip_code?.trim() || null,
-    latitude: input.latitude ?? null,
-    longitude: input.longitude ?? null,
     notifications_enabled: input.notifications_enabled ?? true,
     deleted_at: null,
   };
@@ -111,8 +107,6 @@ function buildSavedSearchUpdatePayload(input: Partial<CreateSavedSearchInput>, c
   if (input.city !== undefined) updates.city = input.city?.trim() || null;
   if (input.state !== undefined) updates.state = input.state?.trim() || null;
   if (input.zip_code !== undefined) updates.zip_code = input.zip_code?.trim() || null;
-  if (input.latitude !== undefined) updates.latitude = input.latitude ?? null;
-  if (input.longitude !== undefined) updates.longitude = input.longitude ?? null;
   if (input.notifications_enabled !== undefined) updates.notifications_enabled = input.notifications_enabled;
 
   return updates;

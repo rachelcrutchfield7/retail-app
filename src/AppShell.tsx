@@ -10,7 +10,7 @@ import { QueryClientProvider } from './lib/queryClient';
 import { useCreateListing } from './hooks/useCreateListing';
 import { useFavorites } from './hooks/useFavorites';
 import { useListings } from './hooks/useListings';
-import { useLocation } from './hooks/useLocation';
+import { useMarketplaceSearchPreference } from './hooks/useMarketplaceSearchArea';
 import { useProfile } from './hooks/useProfile';
 import { useReports } from './hooks/useReports';
 import { useUpdateListing } from './hooks/useUpdateListing';
@@ -61,15 +61,15 @@ function AppExperience() {
   const [form, setForm] = useState<ListingForm>(emptyListingForm);
   const [messageText, setMessageText] = useState('');
   const isSignedIn = !auth.isGuest;
-  const { location } = useLocation();
+  const searchPreference = useMarketplaceSearchPreference();
   const listingParams = useMemo(
     () => ({
       search: query.trim() || undefined,
       categoryId: categoryToSlug(category),
-      radiusMiles: location.radiusMiles,
+      radiusMiles: searchPreference.data?.radius_miles,
       limit: 20,
     }),
-    [category, location.radiusMiles, query]
+    [category, query, searchPreference.data?.radius_miles]
   );
   const listings = useListings(listingParams);
   const favorites = useFavorites(Boolean(auth.user));
@@ -452,8 +452,6 @@ function createListingInputFromForm(
     city: profile?.city?.trim() || 'Austin',
     state: profile?.state?.trim() || 'TX',
     zip_code: profile?.zip_code?.trim() || '78701',
-    latitude: profile?.latitude,
-    longitude: profile?.longitude,
     pickup_available: form.pickup,
     porch_pickup_available: false,
     meetup_available: form.pickup,
@@ -479,8 +477,6 @@ function updateListingInputFromForm(
     city: listing.city ?? profile?.city?.trim() ?? listing.location.split(',')[0]?.trim() ?? 'Austin',
     state: listing.state ?? profile?.state?.trim() ?? 'TX',
     zip_code: listing.zipCode ?? profile?.zip_code?.trim() ?? '78701',
-    latitude: listing.latitude,
-    longitude: listing.longitude,
     pickup_available: form.pickup,
     porch_pickup_available: listing.porchPickup,
     meetup_available: listing.meetup || form.pickup,

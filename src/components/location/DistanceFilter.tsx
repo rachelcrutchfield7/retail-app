@@ -1,10 +1,9 @@
 import { useMemo, useState } from 'react';
-import { MapPin, Navigation, Search } from 'lucide-react-native';
+import { MapPin, Search } from 'lucide-react-native';
 import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { colors, radius, spacing, typography } from '../../constants/theme';
-import { manualLocationOptions, searchRadiusOptions } from '../../constants/location';
-import type { ManualLocationOption } from '../../constants/location';
-import { Button } from '../ui/Button';
+import { searchRadiusOptions } from '../../constants/location';
+import type { MarketplaceSearchArea } from '../../types.ts';
 import { Card } from '../ui/Card';
 import { FilterChip } from '../marketplace/FilterChip';
 
@@ -15,8 +14,9 @@ type DistanceFilterProps = {
   loading?: boolean;
   error?: string | null;
   onRadiusChange: (radiusMiles: number) => void;
-  onUseCurrentLocation?: () => void;
-  onManualLocationSelect?: (location: ManualLocationOption) => void;
+  searchAreas?: MarketplaceSearchArea[];
+  selectedSearchAreaId?: string;
+  onSearchAreaSelect?: (area: MarketplaceSearchArea) => void;
 };
 
 export function DistanceFilter({
@@ -26,35 +26,35 @@ export function DistanceFilter({
   loading = false,
   error,
   onRadiusChange,
-  onUseCurrentLocation,
-  onManualLocationSelect,
+  searchAreas = [],
+  selectedSearchAreaId,
+  onSearchAreaSelect,
 }: DistanceFilterProps) {
   const [areaSearch, setAreaSearch] = useState('');
   const locationLabel = [city, state].filter(Boolean).join(', ') || 'your area';
   const normalizedAreaSearch = normalizeLocationSearch(areaSearch);
   const areaMatches = useMemo(() => {
     if (!normalizedAreaSearch) {
-      return manualLocationOptions.slice(0, 5);
+      return searchAreas.slice(0, 6);
     }
 
-    return manualLocationOptions
-      .filter((option) => {
+    return searchAreas
+      .filter((area) => {
         const searchableText = normalizeLocationSearch([
-          option.label,
-          option.city,
-          option.state,
-          option.zipCode,
-          ...(option.aliases ?? []),
+          area.label,
+          area.city,
+          area.state,
+          area.region_name,
         ].filter(Boolean).join(' '));
 
         return searchableText.includes(normalizedAreaSearch);
       })
       .slice(0, 6);
-  }, [normalizedAreaSearch]);
+  }, [normalizedAreaSearch, searchAreas]);
 
-  const selectManualArea = (location: ManualLocationOption) => {
-    onManualLocationSelect?.(location);
-    setAreaSearch(location.zipCode ? `${location.city}, ${location.state} ${location.zipCode}` : `${location.city}, ${location.state}`);
+  const selectSearchArea = (area: MarketplaceSearchArea) => {
+    onSearchAreaSelect?.(area);
+    setAreaSearch([area.label, area.state].filter(Boolean).join(', '));
   };
 
   return (
@@ -81,45 +81,34 @@ export function DistanceFilter({
           ))}
         </ScrollView>
 
-        {onUseCurrentLocation ? (
-          <Button
-            title="Use Current Location"
-            variant="outline"
-            icon={Navigation}
-            loading={loading}
-            onPress={onUseCurrentLocation}
-            fullWidth
-          />
-        ) : null}
-
-        {onManualLocationSelect ? (
+        {onSearchAreaSelect ? (
           <View style={styles.manualBlock}>
-            <Text style={styles.label}>Search nearby area</Text>
+            <Text style={styles.label}>Search marketplace area</Text>
             <View style={styles.searchRow}>
               <Search size={18} color={colors.textSecondary} />
               <TextInput
                 value={areaSearch}
                 onChangeText={setAreaSearch}
-                placeholder="City or zip code"
+                placeholder="City or area"
                 placeholderTextColor={colors.textSecondary}
                 style={styles.searchInput}
                 returnKeyType="search"
                 autoCapitalize="words"
-                accessibilityLabel="Search nearby area by city or zip code"
+                accessibilityLabel="Search marketplace area"
               />
             </View>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.radiusRow}>
-              {areaMatches.map((option) => (
+              {areaMatches.map((area) => (
                 <FilterChip
-                  key={option.label}
-                  label={option.zipCode ? `${option.label} ${option.zipCode}` : option.label}
-                  selected={city === option.city && state === option.state}
-                  onPress={() => selectManualArea(option)}
+                  key={area.id}
+                  label={area.state ? `${area.label}, ${area.state}` : area.label}
+                  selected={selectedSearchAreaId === area.id}
+                  onPress={() => selectSearchArea(area)}
                 />
               ))}
             </ScrollView>
             {areaMatches.length === 0 ? (
-              <Text style={styles.helpText}>No matching areas yet. Try a nearby city name or zip code.</Text>
+              <Text style={styles.helpText}>No matching marketplace areas yet. Try a nearby city or region name.</Text>
             ) : null}
           </View>
         ) : null}
@@ -127,11 +116,11 @@ export function DistanceFilter({
         {error ? (
           <View style={styles.errorBox}>
             <Text style={styles.error}>{error}</Text>
-            <Text style={styles.helpText}>
-              In a real mobile build, this will use the phone's location permission prompt. Some desktop previews block location by default.
-            </Text>
+            <Text style={styles.helpText}>Choose a marketplace area to keep nearby sorting private and consistent.</Text>
           </View>
         ) : null}
+
+        {loading ? <Text style={styles.helpText}>Updating marketplace area...</Text> : null}
       </View>
     </Card>
   );

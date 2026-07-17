@@ -90,8 +90,6 @@ export function toProfile(row: SupabaseRow): Profile {
     city: optionalString(row.city),
     state: optionalString(row.state),
     zip_code: optionalString(row.zip_code),
-    latitude: optionalNumber(row.latitude),
-    longitude: optionalNumber(row.longitude),
     buyer_rating: numberValue(row.buyer_rating),
     seller_rating: numberValue(row.seller_rating),
     review_count: integerValue(row.review_count),
