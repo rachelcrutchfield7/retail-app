@@ -4,7 +4,6 @@ import type { Listing } from '../types';
 import type { Profile, PublicProfile, UpdateProfileInput } from './types';
 import {
   ensureCurrentProfile,
-  listingRelationsSelect,
   throwSupabaseError,
   toListing,
   toProfile,
@@ -19,24 +18,20 @@ export async function getPublicProfile(userId: string): Promise<PublicProfile> {
   const publicProfileResult = await supabase.rpc('get_public_profile', {
     target_user_id: userId,
   });
+
+  if (publicProfileResult.error) {
+    throwSupabaseError(publicProfileResult.error, 'This profile is not available.');
+  }
+
   const publicProfile = Array.isArray(publicProfileResult.data)
     ? publicProfileResult.data[0] as Record<string, unknown> | undefined
     : undefined;
-  const fallbackResult = publicProfile
-    ? { data: publicProfile, error: null }
-    : await supabase
-        .from('profiles')
-        .select('id,account_type,display_name,username,bio,avatar_url,city,state,buyer_rating,seller_rating,review_count,listings_count,completed_sales_count,is_verified,created_at')
-        .eq('id', userId)
-        .is('deleted_at', null)
-        .single();
-  const { data, error } = fallbackResult;
 
-  if (error) {
-    throwSupabaseError(error, 'This profile is not available.');
+  if (!publicProfile) {
+    throw createServiceError('PROFILE_NOT_FOUND', `Public profile ${userId} was not returned`, 'This profile is not available.');
   }
 
-  return toPublicProfile(data as Record<string, unknown>);
+  return toPublicProfile(publicProfile);
 }
 
 export async function updateProfile(data: UpdateProfileInput): Promise<Profile> {
@@ -77,19 +72,17 @@ export async function updateProfile(data: UpdateProfileInput): Promise<Profile> 
 }
 
 export async function getUserListings(userId: string): Promise<Listing[]> {
-  const { data, error } = await supabase
-    .from('listings')
-    .select(listingRelationsSelect)
-    .eq('seller_id', userId)
-    .eq('status', 'active')
-    .is('deleted_at', null)
-    .order('created_at', { ascending: false });
+  const { data, error } = await supabase.rpc('get_public_user_listings', {
+    target_user_id: userId,
+    page_number: 1,
+    page_size: 50,
+  });
 
   if (error) {
     throwSupabaseError(error, 'We could not load this seller’s listings.');
   }
 
-  return (data ?? []).map((listing) => toListing(listing as Record<string, unknown>));
+  return ((data ?? []) as Array<Record<string, unknown>>).map((listing) => toListing(listing));
 }
 
 export async function uploadAvatar(fileUri: string): Promise<string> {

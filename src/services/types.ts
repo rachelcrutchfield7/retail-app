@@ -439,7 +439,26 @@ export type PrivacySettings = {
   showCityState: boolean;
   allowMessagesFromBuyers: boolean;
   allowProfileInSearch: boolean;
+  allowApproximateDistance: boolean;
+  rescuePublicContactEnabled: boolean;
 };
+
+export type DistanceBand = 'Under 5 miles' | '5-10 miles' | '10-25 miles' | '25-50 miles' | '50+ miles';
+
+export type PublicListing = Omit<Listing, 'zipCode' | 'latitude' | 'longitude' | 'distanceMiles' | 'shipFromZipCode'> & {
+  distanceBand?: DistanceBand;
+};
+
+export type OwnerListing = Listing;
+
+export type PublicRescue = Omit<
+  RescueOrganization,
+  'distanceMiles' | 'latitude' | 'longitude' | 'contactPerson' | 'addressLine1' | 'addressLine2' | 'zipCode'
+> & {
+  distanceBand?: DistanceBand;
+};
+
+export type OwnerRescue = RescueProfile;
 
 export type RescueVerificationStatus = 'draft' | 'pending' | 'verified' | 'rejected';
 export type RescueOrgTypeDb = 'foster_based' | 'physical_location' | 'hybrid';

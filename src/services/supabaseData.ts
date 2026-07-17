@@ -6,7 +6,6 @@ import type {
 import { CATEGORIES } from '../constants/categories';
 import { supabase } from '../lib/supabase';
 import type { Category, Listing, ListingCondition, ListingStatus } from '../types';
-import { formatDistanceMiles } from '../utils/distance';
 import { createServiceError } from './errors';
 import type {
   AccountType,
@@ -311,7 +310,6 @@ export function toListing(row: SupabaseRow): Listing {
   const title = String(row.title ?? 'Pet supply listing');
   const city = optionalString(row.city);
   const state = optionalString(row.state);
-  const zipCode = optionalString(row.zip_code);
   const listingType = String(row.listing_type ?? 'sale');
   const price =
     listingType === 'donation'
@@ -334,12 +332,8 @@ export function toListing(row: SupabaseRow): Listing {
     image: images[0]?.thumbnail_url ?? images[0]?.image_url ?? '',
     city,
     state,
-    location: [city, [state, zipCode].filter(Boolean).join(' ')].filter(Boolean).join(', '),
-    zipCode,
+    location: [city, state].filter(Boolean).join(', '),
     distance: distanceFromRow(row),
-    latitude: optionalNumber(row.latitude),
-    longitude: optionalNumber(row.longitude),
-    distanceMiles: optionalNumber(row.distance_miles),
     status: statusFromDb(row.status),
     sellerId: optionalString(row.seller_id) ?? optionalString(sellerRow?.id),
     seller: sellerRow ? String(sellerRow.display_name ?? 'ReTail User') : 'ReTail User',
@@ -360,7 +354,6 @@ export function toListing(row: SupabaseRow): Listing {
     shippingPayer: shippingPayerFromDb(row.shipping_payer),
     shippingCostEstimate: shippingCostEstimate === undefined ? undefined : formatDisplayPrice(shippingCostEstimate),
     handlingTime: optionalString(row.handling_time),
-    shipFromZipCode: optionalString(row.ship_from_zip_code),
     favoritedBy: integerValue(row.favorite_count),
   };
 }
@@ -374,13 +367,39 @@ function shippingPayerFromDb(value: unknown): Listing['shippingPayer'] {
 }
 
 function distanceFromRow(row: SupabaseRow): string {
+  const distanceBand = optionalString(row.distance_band);
+
+  if (distanceBand) {
+    return distanceBand;
+  }
+
   const distanceMiles = optionalNumber(row.distance_miles);
 
   if (distanceMiles !== undefined) {
-    return formatDistanceMiles(distanceMiles);
+    return distanceBandFromMiles(distanceMiles);
   }
 
   return 'Distance unavailable';
+}
+
+function distanceBandFromMiles(distanceMiles: number): string {
+  if (distanceMiles < 5) {
+    return 'Under 5 miles';
+  }
+
+  if (distanceMiles < 10) {
+    return '5-10 miles';
+  }
+
+  if (distanceMiles < 25) {
+    return '10-25 miles';
+  }
+
+  if (distanceMiles < 50) {
+    return '25-50 miles';
+  }
+
+  return '50+ miles';
 }
 
 export function imagesFromListingRow(row: SupabaseRow): ListingImage[] {

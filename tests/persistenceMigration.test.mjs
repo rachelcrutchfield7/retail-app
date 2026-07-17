@@ -42,8 +42,8 @@ test('database listing rows map into UI listings', () => {
   assert.equal(listing.price, '$45');
   assert.equal(listing.category, 'Dogs');
   assert.equal(listing.condition, 'Like New');
-  assert.equal(listing.location, 'Austin, TX 78701');
-  assert.equal(listing.distance, '3.2 mi');
+  assert.equal(listing.location, 'Austin, TX');
+  assert.equal(listing.distance, 'Under 5 miles');
   assert.equal(listing.sellerId, 'seller-1');
   assert.equal(listing.image, 'https://example.com/crate.jpg');
   assert.equal(listing.favoritedBy, 4);

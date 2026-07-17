@@ -1,13 +1,6 @@
-import { rescueOrganizations } from '../data/mockData';
 import { supabase } from '../lib/supabase';
 import type { RescueNeedUrgency, RescueOrganization, RescueOrganizationType } from '../types';
-import {
-  distanceMilesBetween,
-  formatDistanceMiles,
-  hasCoordinates,
-  sortByDistance,
-  type Coordinates,
-} from '../utils/distance';
+import { hasCoordinates, type Coordinates } from '../utils/distance';
 import { createServiceError } from './errors';
 import { ensureCurrentProfile, throwSupabaseError } from './supabaseData';
 import type {
@@ -76,20 +69,16 @@ export async function getCurrentRescueProfile(): Promise<RescueProfile | null> {
 }
 
 export async function getPublicRescueProfileByOwner(ownerId: string): Promise<RescueProfile | null> {
-  const { data, error } = await supabase
-    .from('rescue_profiles')
-    .select('id,owner_id,name,slug,summary,animals_rescued,city,state,website_url,contact_hint,contact_person,organization_type,has_501c3,verification_status,is_verified,is_active,created_at,updated_at,deleted_at')
-    .eq('owner_id', ownerId)
-    .eq('is_active', true)
-    .eq('is_verified', true)
-    .is('deleted_at', null)
-    .maybeSingle();
+  const { data, error } = await supabase.rpc('get_public_rescue_by_owner', {
+    target_owner_id: ownerId,
+  });
 
   if (error) {
     throwSupabaseError(error, 'We could not load that rescue profile.');
   }
 
-  return data ? toRescueProfile(data as Row) : null;
+  const row = Array.isArray(data) ? data[0] as Row | undefined : undefined;
+  return row ? toRescueProfile(row) : null;
 }
 
 export async function ensureCurrentRescueProfileFromMetadata(): Promise<RescueProfile | null> {
@@ -308,154 +297,30 @@ export async function deleteRescueWishlistItem(wishlistItemId: string): Promise<
 
 export async function getNearbyRescues(params: RescueHubQueryParams = {}): Promise<RescueOrganization[]> {
   const origin = rescueHubOrigin(params);
-  const tableRescues = await getVerifiedRescuesFromTables(params).catch(() => null);
+  const sessionResult = await supabase.auth.getSession();
 
-  if (!origin) {
-    return tableRescues ?? filterMockRescues(params);
+  if (sessionResult.error) {
+    throwSupabaseError(sessionResult.error, 'Please sign in again.');
   }
 
-  const { data, error } = await supabase.rpc('get_nearby_rescues', {
-    user_latitude: origin.latitude,
-    user_longitude: origin.longitude,
-    radius_miles: params.radiusMiles ?? 25,
-    search_query: params.search?.trim() || null,
-  });
-
-  if (error) {
-    return tableRescues ?? filterMockRescues(params);
-  }
-
-  const rows = (data ?? []) as Row[];
-  const rescues = mergeRescueResults(tableRescues ?? [], rows.map((row) => hubRescueFromRow(row)));
-
-  return rescues.length > 0 ? rescues : tableRescues ?? filterMockRescues(params);
-}
-
-async function getVerifiedRescuesFromTables(params: RescueHubQueryParams): Promise<RescueOrganization[]> {
-  const { data, error } = await supabase
-    .from('rescue_profiles')
-    .select('id,name,summary,animals_rescued,city,state,website_url,contact_hint,organization_type,has_501c3,is_verified')
-    .eq('is_active', true)
-    .eq('is_verified', true)
-    .is('deleted_at', null)
-    .order('name', { ascending: true });
-
-  if (error) {
-    throwSupabaseError(error, 'We could not load rescue profiles.');
-  }
-
-  const profileRows = (data ?? []) as Row[];
-  const rescueIds = profileRows.map((profile) => stringValue(profile.id)).filter(Boolean);
-
-  if (rescueIds.length === 0) {
-    return [];
-  }
-
-  const needsByRescue = await getRescueNeedsByRescueIds(rescueIds);
-  const wishlistByRescue = await getRescueWishlistItemsByRescueIds(rescueIds).catch(() => new Map<string, Row[]>());
-  const origin = rescueHubOrigin(params);
-  const normalizedSearch = params.search?.trim().toLowerCase();
-  const radiusMiles = params.radiusMiles ?? 25;
-
-  return profileRows
-    .map((profile) => {
-      const rescueId = stringValue(profile.id);
-      const latitude = optionalNumber(profile.latitude);
-      const longitude = optionalNumber(profile.longitude);
-      const distanceMiles = origin && latitude !== undefined && longitude !== undefined
-        ? distanceMilesBetween(origin, { latitude, longitude })
-        : undefined;
-
-      return hubRescueFromRow({
-        ...profile,
-        needs: needsByRescue.get(rescueId) ?? [],
-        wishlist_items: wishlistByRescue.get(rescueId) ?? [],
-        distance_miles: distanceMiles,
+  const result = origin && sessionResult.data.session
+    ? await supabase.rpc('get_nearby_rescues', {
+        user_latitude: origin.latitude,
+        user_longitude: origin.longitude,
+        radius_miles: params.radiusMiles ?? 25,
+        search_query: params.search?.trim() || null,
+      })
+    : await supabase.rpc('get_public_rescue_feed', {
+        page_number: 1,
+        page_size: 50,
+        search_query: params.search?.trim() || null,
       });
-    })
-    .filter((rescue) => {
-      if (origin && rescue.distanceMiles !== undefined && rescue.distanceMiles > radiusMiles) {
-        return false;
-      }
 
-      if (!normalizedSearch) {
-        return true;
-      }
-
-      return rescueMatchesSearch(rescue, normalizedSearch);
-    })
-    .sort((first, second) => {
-      if (first.distanceMiles !== undefined && second.distanceMiles !== undefined) {
-        return first.distanceMiles - second.distanceMiles;
-      }
-
-      if (first.distanceMiles !== undefined) {
-        return -1;
-      }
-
-      if (second.distanceMiles !== undefined) {
-        return 1;
-      }
-
-      return first.name.localeCompare(second.name);
-    });
-}
-
-async function getRescueNeedsByRescueIds(rescueIds: string[]): Promise<Map<string, Row[]>> {
-  const { data, error } = await supabase
-    .from('rescue_needs')
-    .select('*')
-    .in('rescue_id', rescueIds)
-    .eq('is_active', true)
-    .is('deleted_at', null)
-    .order('created_at', { ascending: false });
-
-  if (error) {
-    throwSupabaseError(error, 'We could not load urgent needs.');
+  if (result.error) {
+    throwSupabaseError(result.error, 'We could not load local rescues.');
   }
 
-  return groupRowsByRescueId((data ?? []) as Row[]);
-}
-
-async function getRescueWishlistItemsByRescueIds(rescueIds: string[]): Promise<Map<string, Row[]>> {
-  const { data, error } = await supabase
-    .from('rescue_wishlist_items')
-    .select('*')
-    .in('rescue_id', rescueIds)
-    .eq('is_active', true)
-    .is('deleted_at', null)
-    .order('created_at', { ascending: false });
-
-  if (error) {
-    throwSupabaseError(error, 'We could not load wishlist items.');
-  }
-
-  return groupRowsByRescueId((data ?? []) as Row[]);
-}
-
-function groupRowsByRescueId(rows: Row[]): Map<string, Row[]> {
-  return rows.reduce((grouped, row) => {
-    const rescueId = stringValue(row.rescue_id);
-    const currentRows = grouped.get(rescueId) ?? [];
-    grouped.set(rescueId, [...currentRows, row]);
-    return grouped;
-  }, new Map<string, Row[]>());
-}
-
-function mergeRescueResults(primary: RescueOrganization[], secondary: RescueOrganization[]): RescueOrganization[] {
-  const seen = new Set<string>();
-  const merged: RescueOrganization[] = [];
-
-  for (const rescue of [...primary, ...secondary]) {
-    if (seen.has(rescue.id)) {
-      continue;
-    }
-
-    seen.add(rescue.id);
-    merged.push(rescue);
-  }
-
-  return merged;
+  return ((result.data ?? []) as Row[]).map((row) => hubRescueFromRow(row));
 }
 
 async function requireCurrentRescueProfile(): Promise<RescueProfile> {
@@ -528,47 +393,6 @@ function assertValidItemInput(item: string, label: string): void {
   }
 }
 
-function filterMockRescues(params: RescueHubQueryParams): RescueOrganization[] {
-  const origin = rescueHubOrigin(params);
-  const normalizedSearch = params.search?.trim().toLowerCase();
-  const radiusMiles = params.radiusMiles ?? 25;
-  const sorted = origin ? sortByDistance(rescueOrganizations, origin, (rescue) => rescue) : rescueOrganizations;
-
-  return sorted
-    .map((rescue) => {
-      const distanceMiles = origin && hasCoordinates(rescue)
-        ? distanceMilesBetween(origin, rescue)
-        : Number.POSITIVE_INFINITY;
-
-      return {
-        ...rescue,
-        distance: Number.isFinite(distanceMiles) ? formatDistanceMiles(distanceMiles) : rescue.distance,
-      };
-    })
-    .filter((rescue) => {
-      if (origin && hasCoordinates(rescue) && distanceMilesBetween(origin, rescue) > radiusMiles) {
-        return false;
-      }
-
-      if (!normalizedSearch) {
-        return true;
-      }
-
-      return [
-        rescue.name,
-        rescue.location,
-        rescue.summary,
-        rescue.contactHint,
-        rescue.websiteUrl ?? '',
-        rescue.addressLine1 ?? '',
-        rescue.addressLine2 ?? '',
-        rescue.zipCode ?? '',
-        ...rescue.urgentNeeds.map((need) => need.item),
-        ...rescue.wishlistItems.map((item) => item.item),
-      ].join(' ').toLowerCase().includes(normalizedSearch);
-    });
-}
-
 function rescueHubOrigin(params: RescueHubQueryParams): Coordinates | undefined {
   const candidate = {
     latitude: params.latitude,
@@ -579,7 +403,7 @@ function rescueHubOrigin(params: RescueHubQueryParams): Coordinates | undefined 
 }
 
 function hubRescueFromRow(row: Row): RescueOrganization {
-  const distanceMiles = optionalNumber(row.distance_miles);
+  const distanceBand = optionalString(row.distance_band);
   const city = stringValue(row.city);
   const state = stringValue(row.state);
 
@@ -587,16 +411,13 @@ function hubRescueFromRow(row: Row): RescueOrganization {
     id: stringValue(row.id),
     name: stringValue(row.name),
     location: [city, state].filter(Boolean).join(', '),
-    distance: distanceMiles === undefined ? 'Distance unavailable' : formatDistanceMiles(distanceMiles),
-    distanceMiles,
-    latitude: optionalNumber(row.latitude),
-    longitude: optionalNumber(row.longitude),
+    distance: distanceBand ?? 'Distance unavailable',
     verified: Boolean(row.is_verified),
     verificationStatus: Boolean(row.is_verified) ? 'Verified' : 'Pending',
     summary: stringValue(row.summary),
     animalsRescued: arrayValue(row.animals_rescued).map(String),
     organizationType: organizationTypeFromDb(row.organization_type),
-    has501c3: Boolean(row.has_501c3),
+    has501c3: false,
     urgentNeeds: arrayValue(row.needs).map((need) => {
       const needRow = need as Row;
       return {
@@ -618,29 +439,8 @@ function hubRescueFromRow(row: Row): RescueOrganization {
       };
     }),
     contactHint: optionalString(row.contact_hint) ?? 'Message this rescue through ReTail to coordinate donations.',
-    contactPerson: optionalString(row.contact_person),
     websiteUrl: optionalString(row.website_url),
-    addressLine1: optionalString(row.address_line1),
-    addressLine2: optionalString(row.address_line2),
-    zipCode: optionalString(row.zip_code),
   };
-}
-
-function rescueMatchesSearch(rescue: RescueOrganization, normalizedSearch: string): boolean {
-  return [
-    rescue.name,
-    rescue.location,
-    rescue.summary,
-    rescue.contactHint,
-    rescue.contactPerson ?? '',
-    rescue.websiteUrl ?? '',
-    rescue.addressLine1 ?? '',
-    rescue.addressLine2 ?? '',
-    rescue.zipCode ?? '',
-    ...rescue.animalsRescued,
-    ...rescue.urgentNeeds.map((need) => need.item),
-    ...rescue.wishlistItems.map((item) => item.item),
-  ].join(' ').toLowerCase().includes(normalizedSearch);
 }
 
 function toRescueProfile(row: Row): RescueProfile {

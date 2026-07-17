@@ -1,7 +1,7 @@
 import type { Listing } from '../types';
 import { trackEvent } from '../lib/analytics';
 import { supabase } from '../lib/supabase';
-import { distanceMilesBetween, hasCoordinates } from '../utils/distance';
+import { hasCoordinates } from '../utils/distance';
 import { createServiceError } from './errors';
 import { createListingStatusNotification } from './notificationService';
 import { uploadListingImage } from './storageService';
@@ -24,8 +24,6 @@ import type {
   ListingQueryParams,
   UpdateListingInput,
 } from './types';
-
-let distanceRpcUnavailable = false;
 
 function assertCreateListingInput(input: CreateListingInput): void {
   if (!input.title.trim() || input.title.trim().length < 3) {
@@ -106,17 +104,19 @@ function assertListingExists(row: unknown, listingId: string): asserts row is Re
 export async function getNearbyListings(params: ListingQueryParams = {}): Promise<PaginatedListings> {
   const page = Math.max(params.page ?? 1, 1);
   const limit = Math.min(Math.max(params.limit ?? 20, 1), 50);
-  const start = (page - 1) * limit;
-  const end = start + limit - 1;
   const categoryId = params.categoryId ? await resolveCategoryId(params.categoryId) : undefined;
   const condition = conditionToDb(params.condition);
   const locationCandidate = { latitude: params.latitude, longitude: params.longitude };
   const origin = hasCoordinates(locationCandidate) ? locationCandidate : undefined;
   const radiusMiles = params.radiusMiles ?? 25;
-  const shouldApplyDistance = Boolean(origin);
+  const sessionResult = await supabase.auth.getSession();
 
-  if (origin) {
-    const rpcResult = await getNearbyListingsFromRpc({
+  if (sessionResult.error) {
+    throwSupabaseError(sessionResult.error, 'Please sign in again.');
+  }
+
+  if (origin && sessionResult.data.session) {
+    return getNearbyListingsFromRpc({
       params,
       categoryId,
       condition,
@@ -125,70 +125,9 @@ export async function getNearbyListings(params: ListingQueryParams = {}): Promis
       page,
       limit,
     });
-
-    if (rpcResult) {
-      return rpcResult;
-    }
   }
 
-  let query = supabase
-    .from('listings')
-    .select(listingRelationsSelect, { count: 'exact' })
-    .eq('status', 'active')
-    .is('deleted_at', null)
-    .order('created_at', { ascending: false });
-
-  if (shouldApplyDistance) {
-    query = query.limit(Math.min(start + limit * 4, 100));
-  } else {
-    query = query.range(start, end);
-  }
-
-  if (categoryId) {
-    query = query.eq('category_id', categoryId);
-  }
-
-  if (params.search?.trim()) {
-    const term = params.search.trim().replaceAll('%', '').replaceAll(',', ' ');
-    query = query.or(`title.ilike.%${term}%,description.ilike.%${term}%,brand.ilike.%${term}%`);
-  }
-
-  if (params.minPrice !== undefined) {
-    query = query.gte('price', params.minPrice);
-  }
-
-  if (params.maxPrice !== undefined) {
-    query = query.lte('price', params.maxPrice);
-  }
-
-  if (condition) {
-    query = query.eq('condition', condition);
-  }
-
-  if (params.listingType) {
-    query = query.eq('listing_type', params.listingType);
-  }
-
-  const { data, error, count } = await query;
-
-  if (error) {
-    throwSupabaseError(error, 'We could not load listings.');
-  }
-
-  const distanceRows = shouldApplyDistance && origin ? prepareRowsForDistance(data ?? [], origin, radiusMiles) : undefined;
-  const preparedRows = distanceRows
-    ? distanceRows.slice(start, start + limit)
-    : (data ?? []).map((row) => row as Record<string, unknown>);
-  const items = preparedRows.map((row) => toListing(row));
-  const total = distanceRows ? distanceRows.length : count ?? items.length;
-
-  return {
-    items,
-    page,
-    limit,
-    total,
-    hasMore: start + items.length < total,
-  };
+  return getPublicListingFeedFromRpc({ params, categoryId, condition, page, limit });
 }
 
 async function getNearbyListingsFromRpc({
@@ -207,11 +146,7 @@ async function getNearbyListingsFromRpc({
   radiusMiles: number;
   page: number;
   limit: number;
-}): Promise<PaginatedListings | null> {
-  if (distanceRpcUnavailable) {
-    return null;
-  }
-
+}): Promise<PaginatedListings> {
   const { data, error } = await supabase.rpc('get_nearby_listings', {
     user_latitude: origin.latitude,
     user_longitude: origin.longitude,
@@ -227,8 +162,7 @@ async function getNearbyListingsFromRpc({
   });
 
   if (error) {
-    distanceRpcUnavailable = true;
-    return null;
+    throwSupabaseError(error, 'We could not load nearby listings.');
   }
 
   const rows = (data ?? []) as Array<Record<string, unknown>>;
@@ -243,47 +177,46 @@ async function getNearbyListingsFromRpc({
   };
 }
 
-function prepareRowsForDistance(
-  rows: unknown[],
-  origin: { latitude: number; longitude: number },
-  radiusMiles: number
-): Array<Record<string, unknown>> {
-  return rows
-    .map((row) => {
-      const listingRow = row as Record<string, unknown>;
-      const latitude = Number(listingRow.latitude);
-      const longitude = Number(listingRow.longitude);
+async function getPublicListingFeedFromRpc({
+  params,
+  categoryId,
+  condition,
+  page,
+  limit,
+}: {
+  params: ListingQueryParams;
+  categoryId?: string;
+  condition?: string;
+  page: number;
+  limit: number;
+}): Promise<PaginatedListings> {
+  const { data, error } = await supabase.rpc('get_public_listing_feed', {
+    page_number: page,
+    page_size: limit,
+    category_filter: categoryId ?? null,
+    search_query: params.search?.trim() ?? null,
+    min_price_filter: params.minPrice ?? null,
+    max_price_filter: params.maxPrice ?? null,
+    condition_filter: condition ?? null,
+    listing_type_filter: params.listingType ?? null,
+    city_filter: null,
+    state_filter: null,
+  });
 
-      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-        return listingRow;
-      }
+  if (error) {
+    throwSupabaseError(error, 'We could not load listings.');
+  }
 
-      const distanceMiles = distanceMilesBetween(origin, { latitude, longitude });
+  const rows = (data ?? []) as Array<Record<string, unknown>>;
+  const items = rows.map((row) => toListing(row));
 
-      return {
-        ...listingRow,
-        distance_miles: distanceMiles,
-      };
-    })
-    .filter((row) => {
-      const distanceMiles = Number(row.distance_miles);
-
-      return !Number.isFinite(distanceMiles) || distanceMiles <= radiusMiles;
-    })
-    .sort((first, second) => {
-      const firstDistance = Number(first.distance_miles);
-      const secondDistance = Number(second.distance_miles);
-
-      if (!Number.isFinite(firstDistance)) {
-        return 1;
-      }
-
-      if (!Number.isFinite(secondDistance)) {
-        return -1;
-      }
-
-      return firstDistance - secondDistance;
-    });
+  return {
+    items,
+    page,
+    limit,
+    total: items.length,
+    hasMore: items.length === limit,
+  };
 }
 
 export async function getListings(params: ListingQueryParams = {}): Promise<PaginatedListings> {
@@ -294,28 +227,20 @@ export async function getListingById(listingId: string): Promise<ListingDetail> 
   const publicListingResult = await supabase.rpc('get_public_listing_detail', {
     target_listing_id: listingId,
   });
+
+  if (publicListingResult.error) {
+    throwSupabaseError(publicListingResult.error, 'We could not load this listing.');
+  }
+
   const publicListing = Array.isArray(publicListingResult.data)
     ? publicListingResult.data[0] as Record<string, unknown> | undefined
     : undefined;
-  const fallbackResult = publicListing
-    ? { data: publicListing, error: null }
-    : await supabase
-        .from('listings')
-        .select(listingRelationsSelect)
-        .eq('id', listingId)
-        .maybeSingle();
-  const { data, error } = fallbackResult;
 
-  if (error) {
-    throwSupabaseError(error, 'We could not load this listing.');
-  }
+  assertListingExists(publicListing, listingId);
 
-  assertListingExists(data, listingId);
-
-  const row = data as Record<string, unknown>;
+  const row = publicListing;
   const listing = toListing(row);
   const sellerRow = row.seller as Record<string, unknown> | undefined;
-  const categoryRow = row.category as Record<string, unknown> | undefined;
 
   if (!sellerRow) {
     throw createServiceError('SELLER_NOT_FOUND', `Seller was missing for ${listingId}`, 'Seller details are unavailable.');
@@ -339,24 +264,7 @@ export async function getListingById(listingId: string): Promise<ListingDetail> 
 
   const rpcRelatedListings = Array.isArray(row.related_listings)
     ? row.related_listings as Array<Record<string, unknown>>
-    : undefined;
-  const related = rpcRelatedListings
-    ? { data: rpcRelatedListings, error: null }
-    : categoryRow?.id
-      ? await supabase
-          .from('listings')
-          .select(listingRelationsSelect)
-          .eq('category_id', String(categoryRow.id))
-          .eq('status', 'active')
-          .is('deleted_at', null)
-          .neq('id', listingId)
-          .order('created_at', { ascending: false })
-          .limit(4)
-      : { data: [], error: null };
-
-  if (related.error) {
-    throwSupabaseError(related.error, 'We could not load related listings.');
-  }
+    : [];
 
   trackEvent('Listing Viewed', { listingId });
 
@@ -365,7 +273,7 @@ export async function getListingById(listingId: string): Promise<ListingDetail> 
     images,
     seller: toPublicProfile(sellerRow),
     isFavorited: Boolean(favorite.data),
-    relatedListings: (related.data ?? []).map((item) => toListing(item as Record<string, unknown>)),
+    relatedListings: rpcRelatedListings.map((item) => toListing(item)),
   };
 }
 
