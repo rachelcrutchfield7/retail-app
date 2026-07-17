@@ -11,7 +11,6 @@ import {
   listingRelationsSelect,
   priceNumber,
   resolveCategoryId,
-  statusToDb,
   throwSupabaseError,
   toListing,
   toPublicProfile,
@@ -283,43 +282,36 @@ export async function getListingById(listingId: string): Promise<ListingDetail> 
 
 export async function createListing(input: CreateListingInput): Promise<Listing> {
   assertCreateListingInput(input);
-  const profile = await ensureCurrentProfile();
   const categoryId = await resolveCategoryId(input.category_id, input.category);
   const listingType = input.listing_type;
   const price = listingType === 'sale' ? priceNumber(input.price) : 0;
 
-  const { data, error } = await supabase
-    .from('listings')
-    .insert({
-      seller_id: profile.id,
-      category_id: categoryId,
-      title: input.title.trim(),
-      description: input.description.trim(),
-      price,
-      listing_type: listingType,
-      condition: conditionToDb(input.condition),
-      status: 'active',
-      brand: input.brand?.trim() || null,
-      city: input.city.trim(),
-      state: input.state.trim(),
-      zip_code: input.zip_code?.trim() || null,
-      pickup_available: Boolean(input.porch_pickup_available || input.meetup_available || input.pickup_available),
-      porch_pickup_available: input.porch_pickup_available ?? false,
-      meetup_available: input.meetup_available ?? input.pickup_available ?? true,
-      shipping_available: input.shipping_available ?? false,
-      shipping_payer: input.shipping_available ? input.shipping_payer ?? 'buyer' : 'buyer',
-      shipping_cost_estimate: input.shipping_available ? priceNumber(input.shipping_cost_estimate) : null,
-      handling_time: input.shipping_available ? input.handling_time?.trim() || null : null,
-      ship_from_zip_code: input.shipping_available ? input.ship_from_zip_code?.trim() || input.zip_code?.trim() || null : null,
-      item_dimensions: input.item_dimensions?.trim() || null,
-      pet_size: input.pet_size?.trim() || null,
-      condition_notes: input.condition_notes?.trim() || null,
-      availability_notes: input.availability_notes?.trim() || null,
-      reason_for_listing: input.reason_for_listing?.trim() || null,
-      safety_confirmed: Boolean(input.safety_confirmed),
-    })
-    .select(listingRelationsSelect)
-    .single();
+  const { data, error } = await supabase.rpc('create_listing', {
+    requested_category_id: categoryId,
+    requested_title: input.title.trim(),
+    requested_description: input.description.trim(),
+    requested_condition: conditionToDb(input.condition),
+    requested_listing_type: listingType,
+    requested_price: price,
+    requested_brand: input.brand?.trim() || null,
+    requested_city: input.city.trim(),
+    requested_state: input.state.trim(),
+    requested_zip_code: input.zip_code?.trim() || null,
+    requested_pickup_available: Boolean(input.porch_pickup_available || input.meetup_available || input.pickup_available),
+    requested_porch_pickup_available: input.porch_pickup_available ?? false,
+    requested_meetup_available: input.meetup_available ?? input.pickup_available ?? true,
+    requested_shipping_available: input.shipping_available ?? false,
+    requested_shipping_payer: input.shipping_available ? input.shipping_payer ?? 'buyer' : 'buyer',
+    requested_shipping_cost_estimate: input.shipping_available ? priceNumber(input.shipping_cost_estimate) : null,
+    requested_handling_time: input.shipping_available ? input.handling_time?.trim() || null : null,
+    requested_ship_from_zip_code: input.shipping_available ? input.ship_from_zip_code?.trim() || input.zip_code?.trim() || null : null,
+    requested_item_dimensions: input.item_dimensions?.trim() || null,
+    requested_pet_size: input.pet_size?.trim() || null,
+    requested_condition_notes: input.condition_notes?.trim() || null,
+    requested_availability_notes: input.availability_notes?.trim() || null,
+    requested_reason_for_listing: input.reason_for_listing?.trim() || null,
+    requested_safety_confirmed: Boolean(input.safety_confirmed),
+  });
 
   if (error) {
     throwSupabaseError(error, 'We could not publish your listing.');
@@ -338,73 +330,65 @@ export async function createListing(input: CreateListingInput): Promise<Listing>
 
 export async function updateListing(listingId: string, input: UpdateListingInput): Promise<Listing> {
   await ensureCurrentProfile();
+  const submittedStatus = (input as { status?: Listing['status'] }).status;
 
-  const updates: Record<string, unknown> = {};
-
-  if (input.title !== undefined) updates.title = input.title.trim();
-  if (input.description !== undefined) updates.description = input.description.trim();
-  if (input.category_id !== undefined || input.category !== undefined) {
-    updates.category_id = await resolveCategoryId(input.category_id, input.category);
-  }
-  if (input.condition !== undefined) updates.condition = conditionToDb(input.condition);
-  if (input.listing_type !== undefined) {
-    updates.listing_type = input.listing_type;
-    updates.price = input.listing_type === 'sale' ? priceNumber(input.price) : 0;
-  } else if (input.price !== undefined) {
-    updates.price = priceNumber(input.price);
-  }
-  if (input.city !== undefined) updates.city = input.city.trim();
-  if (input.state !== undefined) updates.state = input.state.trim();
-  if (input.zip_code !== undefined) updates.zip_code = input.zip_code?.trim() || null;
-  if (
-    input.pickup_available !== undefined ||
-    input.porch_pickup_available !== undefined ||
-    input.meetup_available !== undefined
-  ) {
-    updates.pickup_available = Boolean(
-      (input.porch_pickup_available ?? false) ||
-      (input.meetup_available ?? false) ||
-      (input.pickup_available ?? false)
+  if (submittedStatus !== undefined) {
+    throw createServiceError(
+      'LISTING_STATUS_CONTROLLED',
+      'Listing status was submitted through the general edit path',
+      'Use the listing actions to archive, sell, donate, or delete this listing.'
     );
   }
-  if (input.porch_pickup_available !== undefined) updates.porch_pickup_available = input.porch_pickup_available;
-  if (input.meetup_available !== undefined) updates.meetup_available = input.meetup_available;
-  if (input.shipping_available !== undefined) updates.shipping_available = input.shipping_available;
-  if (input.shipping_available === false) {
-    updates.shipping_payer = 'buyer';
-    updates.shipping_cost_estimate = null;
-    updates.handling_time = null;
-    updates.ship_from_zip_code = null;
-  } else {
-    if (input.shipping_payer !== undefined) updates.shipping_payer = input.shipping_payer;
-    if (input.shipping_cost_estimate !== undefined) updates.shipping_cost_estimate = priceNumber(input.shipping_cost_estimate);
-    if (input.handling_time !== undefined) updates.handling_time = input.handling_time?.trim() || null;
-    if (input.ship_from_zip_code !== undefined) updates.ship_from_zip_code = input.ship_from_zip_code?.trim() || null;
-  }
-  if (input.brand !== undefined) updates.brand = input.brand?.trim() || null;
-  if (input.item_dimensions !== undefined) updates.item_dimensions = input.item_dimensions?.trim() || null;
-  if (input.pet_size !== undefined) updates.pet_size = input.pet_size?.trim() || null;
-  if (input.condition_notes !== undefined) updates.condition_notes = input.condition_notes?.trim() || null;
-  if (input.availability_notes !== undefined) updates.availability_notes = input.availability_notes?.trim() || null;
-  if (input.reason_for_listing !== undefined) updates.reason_for_listing = input.reason_for_listing?.trim() || null;
-  if (input.safety_confirmed !== undefined) updates.safety_confirmed = input.safety_confirmed;
-  if (input.status !== undefined) updates.status = statusToDb(input.status);
 
-  const { data, error } = await supabase
-    .from('listings')
-    .update(updates)
-    .eq('id', listingId)
-    .select(listingRelationsSelect)
-    .single();
+  let categoryId: string | null = null;
+  if (input.category_id !== undefined || input.category !== undefined) {
+    categoryId = await resolveCategoryId(input.category_id, input.category);
+  }
+
+  const { error } = await supabase.rpc('update_my_listing', {
+    target_listing_id: listingId,
+    requested_category_id: categoryId,
+    requested_title: input.title !== undefined ? input.title.trim() : null,
+    requested_description: input.description !== undefined ? input.description.trim() : null,
+    requested_condition: input.condition !== undefined ? conditionToDb(input.condition) : null,
+    requested_listing_type: input.listing_type ?? null,
+    requested_price: input.price !== undefined ? priceNumber(input.price) : null,
+    requested_brand: input.brand !== undefined ? input.brand.trim() : null,
+    requested_city: input.city !== undefined ? input.city.trim() : null,
+    requested_state: input.state !== undefined ? input.state.trim() : null,
+    requested_zip_code: input.zip_code !== undefined ? input.zip_code?.trim() || '' : null,
+    requested_pickup_available: input.pickup_available ?? null,
+    requested_porch_pickup_available: input.porch_pickup_available ?? null,
+    requested_meetup_available: input.meetup_available ?? null,
+    requested_shipping_available: input.shipping_available ?? null,
+    requested_shipping_payer: input.shipping_payer ?? null,
+    requested_shipping_cost_estimate: input.shipping_cost_estimate !== undefined ? priceNumber(input.shipping_cost_estimate) : null,
+    requested_handling_time: input.handling_time !== undefined ? input.handling_time?.trim() || '' : null,
+    requested_ship_from_zip_code: input.ship_from_zip_code !== undefined ? input.ship_from_zip_code?.trim() || '' : null,
+    requested_item_dimensions: input.item_dimensions !== undefined ? input.item_dimensions?.trim() || '' : null,
+    requested_pet_size: input.pet_size !== undefined ? input.pet_size?.trim() || '' : null,
+    requested_condition_notes: input.condition_notes !== undefined ? input.condition_notes?.trim() || '' : null,
+    requested_availability_notes: input.availability_notes !== undefined ? input.availability_notes?.trim() || '' : null,
+    requested_reason_for_listing: input.reason_for_listing !== undefined ? input.reason_for_listing?.trim() || '' : null,
+    requested_safety_confirmed: input.safety_confirmed ?? null,
+  });
 
   if (error) {
     throwSupabaseError(error, 'We could not update this listing.');
   }
 
   if (input.images) {
-    const currentImages = imagesFromListingRow(data as Record<string, unknown>);
-    for (const image of currentImages) {
-      await supabase.from('listing_images').delete().eq('id', image.id);
+    const { data: currentImageRows, error: currentImagesError } = await supabase
+      .from('listing_images')
+      .select('*')
+      .eq('listing_id', listingId);
+
+    if (currentImagesError) {
+      throwSupabaseError(currentImagesError, 'We could not update listing photos.');
+    }
+
+    for (const image of currentImageRows ?? []) {
+      await supabase.from('listing_images').delete().eq('id', String((image as Record<string, unknown>).id));
     }
 
     for (const imageUri of input.images) {
@@ -416,10 +400,9 @@ export async function updateListing(listingId: string, input: UpdateListingInput
 }
 
 export async function deleteListing(listingId: string): Promise<void> {
-  const { error } = await supabase
-    .from('listings')
-    .update({ status: 'removed', deleted_at: new Date().toISOString() })
-    .eq('id', listingId);
+  const { error } = await supabase.rpc('delete_my_listing', {
+    target_listing_id: listingId,
+  });
 
   if (error) {
     throwSupabaseError(error, 'We could not delete this listing.');
@@ -427,7 +410,9 @@ export async function deleteListing(listingId: string): Promise<void> {
 }
 
 export async function archiveListing(listingId: string): Promise<void> {
-  const { error } = await supabase.from('listings').update({ status: 'archived' }).eq('id', listingId);
+  const { error } = await supabase.rpc('archive_my_listing', {
+    target_listing_id: listingId,
+  });
 
   if (error) {
     throwSupabaseError(error, 'We could not archive this listing.');
@@ -436,12 +421,9 @@ export async function archiveListing(listingId: string): Promise<void> {
 
 export async function markListingSold(listingId: string): Promise<Listing> {
   const profile = await ensureCurrentProfile();
-  const { data, error } = await supabase
-    .from('listings')
-    .update({ status: 'sold' })
-    .eq('id', listingId)
-    .select(listingRelationsSelect)
-    .single();
+  const { data, error } = await supabase.rpc('mark_my_listing_sold', {
+    target_listing_id: listingId,
+  });
 
   if (error) {
     throwSupabaseError(error, 'We could not mark this listing sold.');
@@ -455,12 +437,9 @@ export async function markListingSold(listingId: string): Promise<Listing> {
 
 export async function markListingDonated(listingId: string): Promise<Listing> {
   const profile = await ensureCurrentProfile();
-  const { data, error } = await supabase
-    .from('listings')
-    .update({ status: 'donated' })
-    .eq('id', listingId)
-    .select(listingRelationsSelect)
-    .single();
+  const { data, error } = await supabase.rpc('mark_my_listing_donated', {
+    target_listing_id: listingId,
+  });
 
   if (error) {
     throwSupabaseError(error, 'We could not mark this listing donated.');

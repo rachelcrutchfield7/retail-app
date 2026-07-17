@@ -117,32 +117,24 @@ export async function createOrUpdateRescueProfile(input: RescueSignupInput): Pro
   const donationInstructions = input.donationInstructions?.trim()
     || 'Send this rescue a message through ReTail to coordinate supply drop-offs.';
 
-  const payload = {
-    owner_id: profile.id,
-    name: input.organizationName.trim(),
-    slug: `${slugify(input.organizationName)}-${profile.id.slice(0, 8)}`,
-    summary: input.summary?.trim() || `${input.organizationName.trim()} helps local animals and shares current supply needs on ReTail.`,
-    animals_rescued: splitAnimals(input.animalsRescued),
-    city: input.city.trim(),
-    state: input.state.trim(),
-    zip_code: input.zipCode?.trim() || null,
-    address_line1: input.addressLine1?.trim() || null,
-    address_line2: input.addressLine2?.trim() || null,
-    contact_person: input.contactPerson.trim(),
-    contact_email: input.contactEmail?.trim() || null,
-    contact_phone: input.contactPhone?.trim() || null,
-    organization_type: organizationTypeToDb(input.organizationType),
-    has_501c3: input.has501c3,
-    ein: input.ein?.trim() || null,
-    website_url: input.websiteUrl?.trim() || null,
-    contact_hint: donationInstructions,
-  };
-
-  const { data, error } = await supabase
-    .from('rescue_profiles')
-    .upsert(payload, { onConflict: 'owner_id' })
-    .select('*')
-    .single();
+  const { data, error } = await supabase.rpc('update_my_rescue_profile', {
+    requested_name: input.organizationName.trim(),
+    requested_summary: input.summary?.trim() || `${input.organizationName.trim()} helps local animals and shares current supply needs on ReTail.`,
+    requested_animals_rescued: splitAnimals(input.animalsRescued),
+    requested_city: input.city.trim(),
+    requested_state: input.state.trim(),
+    requested_zip_code: input.zipCode?.trim() || null,
+    requested_address_line1: input.addressLine1?.trim() || null,
+    requested_address_line2: input.addressLine2?.trim() || null,
+    requested_contact_person: input.contactPerson.trim(),
+    requested_contact_email: input.contactEmail?.trim() || null,
+    requested_contact_phone: input.contactPhone?.trim() || null,
+    requested_organization_type: organizationTypeToDb(input.organizationType),
+    requested_has_501c3: input.has501c3,
+    requested_ein: input.ein?.trim() || null,
+    requested_website_url: input.websiteUrl?.trim() || null,
+    requested_contact_hint: donationInstructions,
+  });
 
   if (error) {
     throwSupabaseError(error, 'We could not save your rescue profile.');
@@ -521,15 +513,6 @@ function splitAnimals(value: string): string[] {
     .split(',')
     .map((animal) => animal.trim())
     .filter(Boolean);
-}
-
-function slugify(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 48) || 'rescue';
 }
 
 function organizationTypeToDb(value: RescueOrganizationType): RescueOrgTypeDb {

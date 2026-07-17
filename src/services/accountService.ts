@@ -37,44 +37,13 @@ export async function updatePassword(input: { password: string }): Promise<void>
 }
 
 export async function deleteAccount(): Promise<void> {
-  const profile = await ensureCurrentProfile();
+  await ensureCurrentProfile();
   trackEvent('account_deletion_started', {});
 
   const rpcResult = await supabase.rpc('delete_current_account');
 
-  if (rpcResult.error && rpcResult.error.code !== 'PGRST202' && rpcResult.error.code !== '42883') {
-    throwSupabaseError(rpcResult.error, 'We could not delete your account.');
-  }
-
   if (rpcResult.error) {
-    const timestamp = new Date().toISOString();
-    const { error: profileError } = await supabase
-      .from('profiles')
-      .update({
-        display_name: 'Deleted User',
-        username: `deleted_${profile.id.slice(0, 8)}`,
-        bio: null,
-        avatar_url: null,
-        city: null,
-        state: null,
-        zip_code: null,
-        deleted_at: timestamp,
-      })
-      .eq('id', profile.id);
-
-    if (profileError) {
-      throwSupabaseError(profileError, 'We could not delete your account.');
-    }
-
-    const { error: listingError } = await supabase
-      .from('listings')
-      .update({ status: 'archived' })
-      .eq('seller_id', profile.id)
-      .in('status', ['active', 'pending']);
-
-    if (listingError) {
-      throwSupabaseError(listingError, 'We could not archive your active listings.');
-    }
+    throwSupabaseError(rpcResult.error, 'We could not delete your account.');
   }
 
   trackEvent('account_deleted', {});

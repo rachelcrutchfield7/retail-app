@@ -230,9 +230,7 @@ export type CreateListingInput = {
   safety_confirmed?: boolean;
 };
 
-export type UpdateListingInput = Partial<CreateListingInput> & {
-  status?: Listing['status'];
-};
+export type UpdateListingInput = Partial<CreateListingInput>;
 
 export type ListingSummary = Listing;
 

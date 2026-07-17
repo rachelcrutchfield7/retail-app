@@ -35,7 +35,6 @@ export async function getPublicProfile(userId: string): Promise<PublicProfile> {
 }
 
 export async function updateProfile(data: UpdateProfileInput): Promise<Profile> {
-  const currentProfile = await ensureCurrentProfile();
   const displayName = data.display_name?.trim();
   const username = data.username?.trim();
 
@@ -47,20 +46,15 @@ export async function updateProfile(data: UpdateProfileInput): Promise<Profile> 
     throw createServiceError('USERNAME_REQUIRED', 'Username was blank', 'Username cannot be blank.');
   }
 
-  const { data: updatedProfile, error } = await supabase
-    .from('profiles')
-    .update({
-      display_name: displayName ?? currentProfile.display_name,
-      username: username ?? currentProfile.username,
-      ...(data.bio !== undefined ? { bio: data.bio.trim() || null } : {}),
-      ...(data.avatar_url !== undefined ? { avatar_url: data.avatar_url.trim() || null } : {}),
-      ...(data.city !== undefined ? { city: data.city.trim() || null } : {}),
-      ...(data.state !== undefined ? { state: data.state.trim() || null } : {}),
-      ...(data.zip_code !== undefined ? { zip_code: data.zip_code.trim() || null } : {}),
-    })
-    .eq('id', currentProfile.id)
-    .select('*')
-    .single();
+  const { data: updatedProfile, error } = await supabase.rpc('update_my_profile', {
+    requested_display_name: displayName ?? null,
+    requested_username: username ?? null,
+    requested_bio: data.bio !== undefined ? data.bio : null,
+    requested_avatar_url: data.avatar_url !== undefined ? data.avatar_url : null,
+    requested_city: data.city !== undefined ? data.city : null,
+    requested_state: data.state !== undefined ? data.state : null,
+    requested_zip_code: data.zip_code !== undefined ? data.zip_code : null,
+  });
 
   if (error) {
     throwSupabaseError(error, 'We could not update your profile.');

@@ -224,41 +224,14 @@ export async function ensureCurrentProfile(): Promise<Profile> {
     const candidateUsername = attempt === 0
       ? username
       : normalizeUsername(`${username}_${Math.floor(1000 + Math.random() * 9000)}`);
-    const profilePayload = {
-      id: user.id,
-      display_name: displayName.length >= 2 ? displayName : 'ReTail User',
-      username: candidateUsername,
-      account_type: accountType,
-    };
-    const { data, error } = await supabase
-      .from('profiles')
-      .insert(profilePayload)
-      .select('*')
-      .single();
+    const { data, error } = await supabase.rpc('create_my_profile', {
+      requested_display_name: displayName.length >= 2 ? displayName : 'ReTail User',
+      requested_username: candidateUsername,
+      requested_account_type: accountType,
+    });
 
     if (!error) {
       return toProfile(data as SupabaseRow);
-    }
-
-    if (error.code === '42703' && String(error.message ?? '').includes('account_type')) {
-      const legacyProfilePayload = {
-        id: profilePayload.id,
-        display_name: profilePayload.display_name,
-        username: profilePayload.username,
-      };
-      const { data: legacyData, error: legacyError } = await supabase
-        .from('profiles')
-        .insert(legacyProfilePayload)
-        .select('*')
-        .single();
-
-      if (!legacyError) {
-        return toProfile(legacyData as SupabaseRow);
-      }
-
-      if (legacyError.code !== '23505' || attempt === 3) {
-        throwSupabaseError(legacyError, 'We could not finish setting up your profile.');
-      }
     }
 
     if (error.code !== '23505' || attempt === 3) {

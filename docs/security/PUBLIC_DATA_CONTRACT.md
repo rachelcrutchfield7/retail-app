@@ -90,5 +90,6 @@ Never expose publicly:
 - Clients may update search preferences only through `set_marketplace_search_area`.
 - Direct client writes to `profiles.latitude` and `profiles.longitude` are forbidden.
 - Public service functions must fail closed. If a public RPC is unavailable, show a friendly error instead of falling back to raw table reads.
-- Owner management screens may use owner-authenticated table reads and mutations where RLS enforces ownership.
+- Owner management screens may use owner-authenticated table reads where RLS enforces ownership.
+- Owner mutations for `profiles`, `listings`, and `rescue_profiles` must use Phase C controlled RPCs, not direct table writes.
 - New public fields require this document, the SQL RPC return contract, and security tests to be updated together.

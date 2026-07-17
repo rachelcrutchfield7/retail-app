@@ -37,17 +37,11 @@ export async function getRescueApprovalQueue(): Promise<RescueProfile[]> {
 export async function approveRescueProfile(rescueId: string): Promise<RescueProfile> {
   await requireAdminProfile();
 
-  const { data, error } = await supabase
-    .from('rescue_profiles')
-    .update({
-      verification_status: 'verified',
-      is_verified: true,
-      is_active: true,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', rescueId)
-    .select('*')
-    .single();
+  const { data, error } = await supabase.rpc('admin_set_rescue_verification', {
+    target_rescue_id: rescueId,
+    requested_verification_status: 'verified',
+    requested_admin_note: null,
+  });
 
   if (error) {
     throwSupabaseError(error, 'We could not approve that rescue.');
@@ -59,16 +53,11 @@ export async function approveRescueProfile(rescueId: string): Promise<RescueProf
 export async function rejectRescueProfile(rescueId: string): Promise<RescueProfile> {
   await requireAdminProfile();
 
-  const { data, error } = await supabase
-    .from('rescue_profiles')
-    .update({
-      verification_status: 'rejected',
-      is_verified: false,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', rescueId)
-    .select('*')
-    .single();
+  const { data, error } = await supabase.rpc('admin_set_rescue_verification', {
+    target_rescue_id: rescueId,
+    requested_verification_status: 'rejected',
+    requested_admin_note: null,
+  });
 
   if (error) {
     throwSupabaseError(error, 'We could not reject that rescue.');

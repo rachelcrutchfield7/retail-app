@@ -103,6 +103,8 @@ Dependencies on earlier phases:
 
 ## Phase C: RLS, Grants, and Protected Profile Fields
 
+Status: Completed on 2026-07-17 in `20260717174159_phase_c_protected_fields_least_privilege.sql` and `20260717180029_phase_c_function_search_path_hardening.sql`.
+
 Exact goal:
 
 Ensure direct Supabase API calls cannot update system fields, role fields, trust counters, rescue verification state, moderation state, or admin-only data.

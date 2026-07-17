@@ -1,10 +1,10 @@
 import { trackEvent } from '../lib/analytics';
 import { supabase } from '../lib/supabase';
+import { markListingDonated, markListingSold } from './listingService';
 import { createServiceError } from './errors';
 import { createTransactionCompletedNotification } from './notificationService';
 import {
   ensureCurrentProfile,
-  listingRelationsSelect,
   throwSupabaseError,
   toPublicProfile,
 } from './supabaseData';
@@ -127,7 +127,6 @@ export async function getEligibleTransactionParticipants(listingId: string): Pro
 export async function completeTransaction(input: CompleteTransactionInput): Promise<Transaction | null> {
   const profile = await ensureCurrentProfile();
   const outcome = input.outcome;
-  const status = outcome === 'donated' ? 'donated' : 'sold';
   const { data: listing, error: listingError } = await supabase
     .from('listings')
     .select('id,seller_id,title')
@@ -151,14 +150,7 @@ export async function completeTransaction(input: CompleteTransactionInput): Prom
   }
 
   if (!input.buyerId) {
-    const { error: listingUpdateError } = await supabase
-      .from('listings')
-      .update({ status })
-      .eq('id', input.listingId);
-
-    if (listingUpdateError) {
-      throwSupabaseError(listingUpdateError, 'We could not update the listing status.');
-    }
+    await (outcome === 'donated' ? markListingDonated(input.listingId) : markListingSold(input.listingId));
 
     trackEvent('transaction_completed', { listingId: input.listingId, outcome, linkedUser: false });
     return null;
