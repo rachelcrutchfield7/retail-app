@@ -66,12 +66,10 @@ function AppExperience() {
     () => ({
       search: query.trim() || undefined,
       categoryId: categoryToSlug(category),
-      latitude: location.latitude,
-      longitude: location.longitude,
       radiusMiles: location.radiusMiles,
       limit: 20,
     }),
-    [category, location.latitude, location.longitude, location.radiusMiles, query]
+    [category, location.radiusMiles, query]
   );
   const listings = useListings(listingParams);
   const favorites = useFavorites(Boolean(auth.user));

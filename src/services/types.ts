@@ -117,8 +117,6 @@ export type UpdateProfileInput = Partial<
 >;
 
 export type ListingQueryParams = {
-  latitude?: number;
-  longitude?: number;
   radiusMiles?: number;
   categoryId?: string;
   search?: string;
@@ -563,8 +561,6 @@ export type RescueDashboard = {
 };
 
 export type RescueHubQueryParams = {
-  latitude?: number;
-  longitude?: number;
   radiusMiles?: number;
   search?: string;
 };

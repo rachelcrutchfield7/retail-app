@@ -6,7 +6,7 @@ Phase B focused only on public data exposure and exact-location privacy.
 
 Completed source changes:
 
-- Added Supabase migration `20260716173451_phase_b_public_location_privacy.sql`.
+- Added Supabase migration `20260717125609_phase_b_public_location_privacy.sql`.
 - Removed broad public read policies for `profiles`, `listings`, and `rescue_profiles`.
 - Added persisted `privacy_settings`.
 - Added safe public RPCs for profiles, listings, and rescue discovery.
@@ -24,9 +24,9 @@ Source-level verification:
 
 Database verification:
 
-- The migration has not been claimed as applied to production from this document.
-- Supabase advisor results have not been claimed from this document.
-- Live direct-API verification must be performed after applying the migration to the target Supabase project.
+- Supabase migration history shows `20260717125609_phase_b_public_location_privacy` applied to the target project.
+- Phase B.1 supersedes the Phase B nearby RPC signatures so caller coordinates are no longer accepted as public discovery inputs.
+- Supabase advisor and live verification results for Phase B.1 are documented separately in `PHASE_B1_RESULTS.md`.
 
 ## Public Data Contract
 
@@ -50,13 +50,10 @@ Precise location may be stored for server-side filtering, but public output must
 
 ## Remaining Required Work
 
-Before treating Phase B as complete in production:
+Before treating Phase B and Phase B.1 as complete in production:
 
-- Apply the migration to a test Supabase project.
-- Run Supabase database advisors.
-- Verify anonymous REST requests cannot read private base-table rows.
-- Verify authenticated users can only read their own private base-table rows.
-- Verify public RPCs return only allowlisted fields.
-- Verify nearby RPCs return distance bands and are not callable by anonymous users.
+- Keep the Phase B and Phase B.1 regression tests passing.
+- Review Supabase advisors after every schema change.
+- Continue periodic direct API checks against profiles, listings, rescues, and nearby RPCs.
 
 No Phase C remediation was performed in this phase.

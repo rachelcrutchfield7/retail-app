@@ -1,7 +1,6 @@
 import { supabase } from '../lib/supabase';
 import type { RescueNeedUrgency, RescueOrganization, RescueOrganizationType } from '../types';
-import { hasCoordinates, type Coordinates } from '../utils/distance';
-import { createServiceError } from './errors';
+import { createServiceError, isAppServiceError } from './errors';
 import { ensureCurrentProfile, throwSupabaseError } from './supabaseData';
 import type {
   RescueDashboard,
@@ -296,31 +295,42 @@ export async function deleteRescueWishlistItem(wishlistItemId: string): Promise<
 }
 
 export async function getNearbyRescues(params: RescueHubQueryParams = {}): Promise<RescueOrganization[]> {
-  const origin = rescueHubOrigin(params);
   const sessionResult = await supabase.auth.getSession();
 
   if (sessionResult.error) {
     throwSupabaseError(sessionResult.error, 'Please sign in again.');
   }
 
-  const result = origin && sessionResult.data.session
-    ? await supabase.rpc('get_nearby_rescues', {
-        user_latitude: origin.latitude,
-        user_longitude: origin.longitude,
-        radius_miles: params.radiusMiles ?? 25,
-        search_query: params.search?.trim() || null,
-      })
-    : await supabase.rpc('get_public_rescue_feed', {
-        page_number: 1,
-        page_size: 50,
-        search_query: params.search?.trim() || null,
-      });
+  if (sessionResult.data.session) {
+    const nearbyResult = await supabase.rpc('get_nearby_rescues', {
+      radius_miles: params.radiusMiles ?? 25,
+      search_query: params.search?.trim() || null,
+    });
 
-  if (result.error) {
-    throwSupabaseError(result.error, 'We could not load local rescues.');
+    if (!nearbyResult.error) {
+      return ((nearbyResult.data ?? []) as Row[]).map((row) => hubRescueFromRow(row));
+    }
+
+    try {
+      throwSupabaseError(nearbyResult.error, 'We could not load local rescues.');
+    } catch (error) {
+      if (!isMissingSavedLocationError(error)) {
+        throw error;
+      }
+    }
   }
 
-  return ((result.data ?? []) as Row[]).map((row) => hubRescueFromRow(row));
+  const publicResult = await supabase.rpc('get_public_rescue_feed', {
+    page_number: 1,
+    page_size: 50,
+    search_query: params.search?.trim() || null,
+  });
+
+  if (publicResult.error) {
+    throwSupabaseError(publicResult.error, 'We could not load local rescues.');
+  }
+
+  return ((publicResult.data ?? []) as Row[]).map((row) => hubRescueFromRow(row));
 }
 
 async function requireCurrentRescueProfile(): Promise<RescueProfile> {
@@ -393,15 +403,6 @@ function assertValidItemInput(item: string, label: string): void {
   }
 }
 
-function rescueHubOrigin(params: RescueHubQueryParams): Coordinates | undefined {
-  const candidate = {
-    latitude: params.latitude,
-    longitude: params.longitude,
-  };
-
-  return hasCoordinates(candidate) ? candidate : undefined;
-}
-
 function hubRescueFromRow(row: Row): RescueOrganization {
   const distanceBand = optionalString(row.distance_band);
   const city = stringValue(row.city);
@@ -441,6 +442,14 @@ function hubRescueFromRow(row: Row): RescueOrganization {
     contactHint: optionalString(row.contact_hint) ?? 'Message this rescue through ReTail to coordinate donations.',
     websiteUrl: optionalString(row.website_url),
   };
+}
+
+function isMissingSavedLocationError(error: unknown): boolean {
+  if (!isAppServiceError(error)) {
+    return false;
+  }
+
+  return error.appError.message.includes('RETAIL_LOCATION_REQUIRED');
 }
 
 function toRescueProfile(row: Row): RescueProfile {

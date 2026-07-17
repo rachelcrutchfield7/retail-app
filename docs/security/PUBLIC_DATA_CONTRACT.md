@@ -33,7 +33,7 @@ Never expose publicly:
 Public listing discovery must use:
 
 - `get_public_listing_feed`
-- `get_nearby_listings` for signed-in users with a current location
+- `get_nearby_listings` for signed-in users with a saved private profile location
 - `get_public_listing_detail`
 - `get_public_user_listings`
 
@@ -58,7 +58,7 @@ Never expose publicly:
 Public rescue discovery must use:
 
 - `get_public_rescue_feed`
-- `get_nearby_rescues` for signed-in users with a current location
+- `get_nearby_rescues` for signed-in users with a saved private profile location
 - `get_public_rescue`
 - `get_public_rescue_by_owner`
 
@@ -82,6 +82,7 @@ Never expose publicly:
 ## Service Rules
 
 - Public screens must not call Supabase base tables directly for profiles, listings, or rescue discovery.
+- Public nearby discovery service functions must not send live caller latitude or longitude to Supabase RPCs.
 - Public service functions must fail closed. If a public RPC is unavailable, show a friendly error instead of falling back to raw table reads.
 - Owner management screens may use owner-authenticated table reads and mutations where RLS enforces ownership.
 - New public fields require this document, the SQL RPC return contract, and security tests to be updated together.

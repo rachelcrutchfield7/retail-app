@@ -8,11 +8,9 @@ export function useRescueHub(params: RescueHubQueryParams = {}) {
   const queryHash = useMemo(
     () => JSON.stringify({
       search: params.search?.trim() ?? '',
-      latitude: params.latitude ?? null,
-      longitude: params.longitude ?? null,
       radiusMiles: params.radiusMiles ?? 25,
     }),
-    [params.latitude, params.longitude, params.radiusMiles, params.search]
+    [params.radiusMiles, params.search]
   );
 
   const query = useQuery<RescueHubResult, Error>({

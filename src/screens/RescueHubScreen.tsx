@@ -18,11 +18,9 @@ export function RescueHubScreen({ onBack }: RescueHubScreenProps) {
   const rescueParams = useMemo(
     () => ({
       search,
-      latitude: location.latitude,
-      longitude: location.longitude,
       radiusMiles: location.radiusMiles,
     }),
-    [location.latitude, location.longitude, location.radiusMiles, search]
+    [location.radiusMiles, search]
   );
   const rescues = useRescueHub(rescueParams);
   const filteredRescues = rescues.data ?? [];

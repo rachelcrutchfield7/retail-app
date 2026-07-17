@@ -334,22 +334,18 @@ export function HomeScreen({
     () => ({
       search,
       categoryId,
-      latitude: location.latitude,
-      longitude: location.longitude,
       radiusMiles: location.radiusMiles,
       limit: 20,
     }),
-    [categoryId, location.latitude, location.longitude, location.radiusMiles, search]
+    [categoryId, location.radiusMiles, search]
   );
   const listings = useListings(params);
   const recentListings = useListings(useMemo(
     () => ({
-      latitude: location.latitude,
-      longitude: location.longitude,
       radiusMiles: location.radiusMiles,
       limit: 5,
     }),
-    [location.latitude, location.longitude, location.radiusMiles]
+    [location.radiusMiles]
   ));
   const myListings = useMyListings();
 
@@ -550,14 +546,12 @@ export function SearchScreen({
       categoryId,
       condition,
       listingType,
-      latitude: location.latitude,
-      longitude: location.longitude,
       radiusMiles: location.radiusMiles,
       minPrice: parsedMinPrice,
       maxPrice: parsedMaxPrice,
       limit: 20,
     }),
-    [categoryId, condition, listingType, location.latitude, location.longitude, location.radiusMiles, parsedMaxPrice, parsedMinPrice, search]
+    [categoryId, condition, listingType, location.radiusMiles, parsedMaxPrice, parsedMinPrice, search]
   );
   const listings = useListings(params);
   const favoriteIds = (favorites.data ?? []).map((listing) => listing.id);

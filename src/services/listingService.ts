@@ -1,8 +1,7 @@
 import type { Listing } from '../types';
 import { trackEvent } from '../lib/analytics';
 import { supabase } from '../lib/supabase';
-import { hasCoordinates } from '../utils/distance';
-import { createServiceError } from './errors';
+import { createServiceError, isAppServiceError } from './errors';
 import { createListingStatusNotification } from './notificationService';
 import { uploadListingImage } from './storageService';
 import {
@@ -106,8 +105,6 @@ export async function getNearbyListings(params: ListingQueryParams = {}): Promis
   const limit = Math.min(Math.max(params.limit ?? 20, 1), 50);
   const categoryId = params.categoryId ? await resolveCategoryId(params.categoryId) : undefined;
   const condition = conditionToDb(params.condition);
-  const locationCandidate = { latitude: params.latitude, longitude: params.longitude };
-  const origin = hasCoordinates(locationCandidate) ? locationCandidate : undefined;
   const radiusMiles = params.radiusMiles ?? 25;
   const sessionResult = await supabase.auth.getSession();
 
@@ -115,16 +112,21 @@ export async function getNearbyListings(params: ListingQueryParams = {}): Promis
     throwSupabaseError(sessionResult.error, 'Please sign in again.');
   }
 
-  if (origin && sessionResult.data.session) {
-    return getNearbyListingsFromRpc({
-      params,
-      categoryId,
-      condition,
-      origin,
-      radiusMiles,
-      page,
-      limit,
-    });
+  if (sessionResult.data.session) {
+    try {
+      return await getNearbyListingsFromRpc({
+        params,
+        categoryId,
+        condition,
+        radiusMiles,
+        page,
+        limit,
+      });
+    } catch (error) {
+      if (!isMissingSavedLocationError(error)) {
+        throw error;
+      }
+    }
   }
 
   return getPublicListingFeedFromRpc({ params, categoryId, condition, page, limit });
@@ -134,7 +136,6 @@ async function getNearbyListingsFromRpc({
   params,
   categoryId,
   condition,
-  origin,
   radiusMiles,
   page,
   limit,
@@ -142,14 +143,11 @@ async function getNearbyListingsFromRpc({
   params: ListingQueryParams;
   categoryId?: string;
   condition?: string;
-  origin: { latitude: number; longitude: number };
   radiusMiles: number;
   page: number;
   limit: number;
 }): Promise<PaginatedListings> {
   const { data, error } = await supabase.rpc('get_nearby_listings', {
-    user_latitude: origin.latitude,
-    user_longitude: origin.longitude,
     radius_miles: radiusMiles,
     page_number: page,
     page_size: limit,
@@ -175,6 +173,14 @@ async function getNearbyListingsFromRpc({
     total: items.length,
     hasMore: items.length === limit,
   };
+}
+
+function isMissingSavedLocationError(error: unknown): boolean {
+  if (!isAppServiceError(error)) {
+    return false;
+  }
+
+  return error.appError.message.includes('RETAIL_LOCATION_REQUIRED');
 }
 
 async function getPublicListingFeedFromRpc({

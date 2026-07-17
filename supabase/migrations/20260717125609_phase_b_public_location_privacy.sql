@@ -391,7 +391,7 @@ set search_path = ''
 as $$
   with checked_origin as (
     select
-      st_setsrid(st_makepoint(user_longitude::double precision, user_latitude::double precision), 4326)::geography as point,
+      public.st_setsrid(public.st_makepoint(user_longitude::double precision, user_latitude::double precision), 4326)::public.geography as point,
       public.allowed_distance_radius(radius_miles) as safe_radius
     where (select auth.uid()) is not null
       and user_latitude between -90 and 90
@@ -400,12 +400,12 @@ as $$
   ranked as (
     select
       l.*,
-      st_distance(l.location_point, checked_origin.point) / 1609.344 as private_distance_miles,
+      public.st_distance(l.location_point, checked_origin.point) / 1609.344 as private_distance_miles,
       checked_origin.safe_radius
     from public.listings l
     cross join checked_origin
     where l.location_point is not null
-      and st_dwithin(l.location_point, checked_origin.point, checked_origin.safe_radius * 1609.344)
+      and public.st_dwithin(l.location_point, checked_origin.point, checked_origin.safe_radius * 1609.344)
   )
   select
     l.id,
@@ -961,7 +961,7 @@ set search_path = ''
 as $$
   with checked_origin as (
     select
-      st_setsrid(st_makepoint(user_longitude::double precision, user_latitude::double precision), 4326)::geography as point,
+      public.st_setsrid(public.st_makepoint(user_longitude::double precision, user_latitude::double precision), 4326)::public.geography as point,
       public.allowed_distance_radius(radius_miles) as safe_radius
     where (select auth.uid()) is not null
       and user_latitude between -90 and 90
@@ -970,11 +970,11 @@ as $$
   ranked as (
     select
       rp.*,
-      st_distance(rp.location_point, checked_origin.point) / 1609.344 as private_distance_miles
+      public.st_distance(rp.location_point, checked_origin.point) / 1609.344 as private_distance_miles
     from public.rescue_profiles rp
     cross join checked_origin
     where rp.location_point is not null
-      and st_dwithin(rp.location_point, checked_origin.point, checked_origin.safe_radius * 1609.344)
+      and public.st_dwithin(rp.location_point, checked_origin.point, checked_origin.safe_radius * 1609.344)
   )
   select
     rp.id,

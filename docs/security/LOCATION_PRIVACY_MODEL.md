@@ -35,12 +35,20 @@ The app must not show exact numeric distance from public RPCs.
 
 ## Distance Search
 
-Signed-in users can submit their current location to server-side RPCs:
+Signed-in users can request nearby results through:
 
 - `get_nearby_listings`
 - `get_nearby_rescues`
 
-The database uses the submitted point internally to sort and filter results, then returns only the distance band. Anonymous users use non-location public feeds.
+The client must not send caller latitude or longitude to these RPCs. The
+database derives the caller origin from the authenticated user's private saved
+profile location (`profiles.latitude` and `profiles.longitude`) using
+`auth.uid()`. If that saved location is missing or invalid, the nearby RPC fails
+safely and the app may fall back to a non-location public feed or show a
+friendly location setup state.
+
+The database uses the private point internally to sort and filter results, then
+returns only the distance band. Anonymous users use non-location public feeds.
 
 ## Privacy Settings
 
@@ -59,3 +67,7 @@ The RPC layer uses these settings when shaping public results.
 ## Implementation Rule
 
 Client-side code must not calculate public distance from downloaded coordinates. Coordinates should not be present in public listing or rescue responses.
+
+Client-side code must also not pass live device coordinates into public nearby
+discovery RPCs. Updating the owner's saved private profile location is separate
+from public discovery and remains owner-authenticated.
