@@ -82,12 +82,14 @@ The test rolled back disposable data and did not leave Phase F fixtures behind.
 
 ## GitHub Actions
 
-Pending final push:
+Initial Phase F implementation commit: `a6b7253394f9f6946f76059b360bf609eb5f8d06`
 
-- `ReTail CI`
-- `ReTail Security Baseline`
+| Workflow | Run ID | Commit SHA | Conclusion | URL |
+| --- | --- | --- | --- | --- |
+| `ReTail CI` | `29707574040` | `a6b7253394f9f6946f76059b360bf609eb5f8d06` | `success` | `https://github.com/rachelcrutchfield7/retail-app/actions/runs/29707574040` |
+| `ReTail Security Baseline` | `29707574058` | `a6b7253394f9f6946f76059b360bf609eb5f8d06` | `success` | `https://github.com/rachelcrutchfield7/retail-app/actions/runs/29707574058` |
 
-Workflow run IDs, commit SHAs, conclusions, and URLs must be recorded after the final branch push.
+This documentation update requires a final GitHub Actions pass on its own commit before Phase F is marked fully approved.
 
 ## Manual Follow-Up
 
