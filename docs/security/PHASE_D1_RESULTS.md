@@ -1,7 +1,7 @@
 # ReTail Security Remediation Phase D.1 Results
 
 Date: 2026-07-19
-Status: Applied to Supabase project `ycwgsdigvpmprqreoqiz`; final real Storage upload/send proof is pending explicit approval for temporary live test accounts.
+Status: Applied to Supabase project `ycwgsdigvpmprqreoqiz`; final real Storage upload/send proof passed during Phase D.2 verification.
 
 ## Scope
 
@@ -131,10 +131,16 @@ Static test suite result:
 
 Dependency auditing found one moderate transitive `uuid` advisory through Expo tooling and no high or critical production advisories. The custom gate passed because it blocks high and critical findings.
 
-Pending:
+Phase D.2 final live verification result:
 
-- The real Storage API upload/send/signed-read test in `tests/securityPhaseD1Live.test.mjs` is ready, but it requires either supplied live test credentials or explicit approval to create temporary disposable live test accounts and a temporary listing, then delete them immediately after the test.
-- GitHub Actions verification is pending until the final D.1 commit is pushed.
+- Temporary Account A, Account B, and Account C fixtures were created only for the verification run.
+- Real `.jpg`, `.jpeg`, `.png`, and `.webp` Storage upload, message creation, signed URL generation, signed URL download, and unrelated-user denial all passed.
+- Invalid attachment cases were rejected without creating message rows.
+- Orphan upload cleanup was verified through the app service.
+- Blocking prevented new messages and uploads while preserving historical attachment reads for participants.
+- All temporary D.2 auth accounts, profiles, listing, conversation, messages, notifications, blocks, and Storage objects were removed after the test.
+
+GitHub Actions verification for the Phase D.2 branch is recorded in `docs/security/PHASE_D2_FINAL_VERIFICATION.md`.
 
 ## Advisor Results
 

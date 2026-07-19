@@ -390,14 +390,46 @@ create table if not exists messages (
   message_type message_type not null default 'text',
   body text,
   image_url text,
+  attachment_bucket text,
+  attachment_path text,
+  attachment_mime_type text,
+  attachment_size_bytes integer,
+  attachment_width integer,
+  attachment_height integer,
   is_read boolean not null default false,
   read_at timestamptz,
   created_at timestamptz not null default now(),
   deleted_at timestamptz,
   constraint message_has_content check (
-    (message_type = 'text' and body is not null and char_length(body) between 1 and 2000)
-    or (message_type = 'image' and image_url is not null)
-    or message_type = 'system'
+    (
+      message_type = 'text'
+      and body is not null
+      and char_length(body) between 1 and 2000
+      and image_url is null
+      and attachment_bucket is null
+      and attachment_path is null
+      and attachment_mime_type is null
+      and attachment_size_bytes is null
+    )
+    or (
+      message_type = 'image'
+      and image_url is null
+      and attachment_bucket is not null
+      and attachment_path is not null
+      and attachment_mime_type is not null
+      and attachment_size_bytes is not null
+      and attachment_size_bytes > 0
+    )
+    or (
+      message_type = 'system'
+      and body is not null
+      and char_length(body) between 1 and 2000
+      and image_url is null
+      and attachment_bucket is null
+      and attachment_path is null
+      and attachment_mime_type is null
+      and attachment_size_bytes is null
+    )
   )
 );
 
