@@ -1,6 +1,6 @@
 # Phase D Storage Model
 
-Date: 2026-07-18
+Date: 2026-07-19
 
 ## Goals
 
@@ -62,9 +62,19 @@ Read access verifies:
 - caller is an active conversation participant
 - path matches the expected conversation/uploader pattern
 - object is referenced by a non-deleted message row
-- neither participant has blocked the other
+
+Read access does not reject historical attachments merely because participants later blocked each other. Blocking prevents new uploads, replacements, and messages, but existing image evidence remains readable to participants.
 
 Delete/update access is limited to the uploader path.
+
+Phase D.1 adds a canonical attachment path helper and validates the uploaded object against `storage.objects` before message creation:
+
+- object bucket is `message-images`
+- object path exactly matches the submitted path
+- object owner is the sender
+- object MIME type matches the submitted MIME type
+- object size matches the submitted size
+- object size is positive and within the bucket limit
 
 ## Application Behavior
 

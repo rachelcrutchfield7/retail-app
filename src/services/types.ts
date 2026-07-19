@@ -16,6 +16,7 @@ import type {
 export type AccountType = PrototypeAccountType | 'shelter' | 'business';
 export type ListingType = 'sale' | 'free' | 'donation';
 export type MessageType = 'text' | 'image' | 'system';
+export type SendableMessageType = 'text' | 'image';
 export type ReportType = 'listing' | 'user' | 'message';
 export type ReportStatus = 'open' | 'reviewing' | 'resolved' | 'dismissed';
 export type ReportReason =
@@ -283,7 +284,7 @@ export type Message = {
 
 export type SendMessageInput = {
   conversationId: string;
-  messageType?: MessageType;
+  messageType?: SendableMessageType;
   body?: string;
   imageUrl?: string;
   attachmentBucket?: string;

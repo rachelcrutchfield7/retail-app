@@ -26,6 +26,48 @@ type ConversationRow = {
   deleted_at?: string | null;
 };
 
+const offerPrefix = 'RETAIL_OFFER::';
+
+function offerPreview(body: string): string | null {
+  if (!body.startsWith(offerPrefix)) {
+    return null;
+  }
+
+  try {
+    const payload = JSON.parse(body.slice(offerPrefix.length)) as { kind?: string; amount?: string; status?: string };
+
+    if (!payload.amount) {
+      return 'ReTail offer';
+    }
+
+    if (payload.kind === 'counter_offer') {
+      return `Counter offer: ${payload.amount}`;
+    }
+
+    if (payload.kind === 'offer_response') {
+      return payload.status === 'accepted'
+        ? `Offer accepted: ${payload.amount}`
+        : `Offer declined: ${payload.amount}`;
+    }
+
+    return `Offer made: ${payload.amount}`;
+  } catch {
+    return 'ReTail offer';
+  }
+}
+
+function messagePreview(message: Message | undefined, fallback: string): string {
+  if (!message) {
+    return fallback;
+  }
+
+  if (message.body) {
+    return offerPreview(message.body) ?? message.body;
+  }
+
+  return message.message_type === 'image' ? 'Photo message' : fallback;
+}
+
 function toConversation(row: ConversationRow, listingTitle = 'Listing'): Conversation {
   const lastMessageAt = row.last_message_at ?? row.updated_at ?? row.created_at;
 
@@ -261,7 +303,7 @@ export async function buildConversationSummary(conversation: Conversation | Conv
     ...normalized,
     name: otherProfile?.display_name ?? 'Deleted User',
     listing: listingSummary.title,
-    preview: lastMessage?.body || (lastMessage?.message_type === 'image' ? 'Photo message' : normalized.preview),
+    preview: messagePreview(lastMessage, normalized.preview),
     unread: unreadCount > 0,
     time: formatConversationTime(lastMessage?.created_at ?? normalized.lastMessageAt),
     otherUser: otherProfile ? toPublicProfile(otherProfile) : deletedPublicProfile(otherUserId),

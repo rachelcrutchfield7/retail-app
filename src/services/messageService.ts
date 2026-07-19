@@ -15,6 +15,7 @@ import type {
   MessageAttachmentInput,
   MessageQueryParams,
   PaginatedMessages,
+  SendableMessageType,
   SendMessageInput,
   UnreadMessages,
 } from './types';
@@ -98,6 +99,45 @@ async function withSignedAttachmentUrl(message: Message): Promise<Message> {
   };
 }
 
+function mapMessageRpcError(error: unknown): never {
+  const details = typeof error === 'object' && error !== null ? error as { code?: string; message?: string } : {};
+  const message = details.message ?? '';
+
+  if (message.includes('RETAIL_SYSTEM_MESSAGE_FORBIDDEN')) {
+    throw createServiceError(
+      'RETAIL_SYSTEM_MESSAGE_FORBIDDEN',
+      message,
+      'That message type is reserved for ReTail system notices.'
+    );
+  }
+
+  if (message.includes('RETAIL_INVALID_MESSAGE_ATTACHMENT')) {
+    throw createServiceError(
+      'RETAIL_INVALID_MESSAGE_ATTACHMENT',
+      message,
+      'We could not send that photo. Please choose it again and retry.'
+    );
+  }
+
+  if (message.includes('RETAIL_MESSAGE_BLOCKED')) {
+    throw createServiceError(
+      'RETAIL_MESSAGE_BLOCKED',
+      message,
+      'Messaging is unavailable between these accounts.'
+    );
+  }
+
+  throwSupabaseError(error, 'We could not send that message.');
+}
+
+async function deleteUploadedMessageAttachment(attachment: MessageAttachmentInput): Promise<void> {
+  await supabase.storage
+    .from(attachment.bucket)
+    .remove([attachment.path])
+    .then(() => undefined)
+    .catch(() => undefined);
+}
+
 async function enforceRateLimit(userId: string): Promise<void> {
   const cutoff = new Date(Date.now() - messageWindowMs).toISOString();
   const { count, error } = await supabase
@@ -163,8 +203,8 @@ export async function sendMessage(input: SendMessageInput): Promise<Message> {
   const profile = await ensureCurrentProfile();
   await requireCanSendInConversation(input.conversationId);
   await enforceRateLimit(profile.id);
-  const messageType = input.messageType ?? 'text';
-  const textBody = messageType === 'text' || messageType === 'system' ? normalizeTextBody(input.body) : input.body?.trim() || null;
+  const messageType: SendableMessageType = input.messageType ?? 'text';
+  const textBody = messageType === 'text' ? normalizeTextBody(input.body) : input.body?.trim() || null;
 
   if (messageType === 'image' && !input.attachmentPath?.trim()) {
     throw createServiceError('IMAGE_REQUIRED', 'Image message was missing private attachment metadata', 'Choose an image to send.');
@@ -184,7 +224,7 @@ export async function sendMessage(input: SendMessageInput): Promise<Message> {
     });
 
   if (error) {
-    throwSupabaseError(error, 'We could not send that message.');
+    mapMessageRpcError(error);
   }
 
   const message = await withSignedAttachmentUrl(toMessage(data as Record<string, unknown>, profile.id));
@@ -208,17 +248,23 @@ export async function sendTextMessage(conversationId: string, senderId: string, 
 
 export async function sendImageMessage(conversationId: string, imageUri: string, body?: string): Promise<Message> {
   const attachment = await uploadMessageImage(imageUri, conversationId);
-  return sendMessage({
-    conversationId,
-    messageType: 'image',
-    body,
-    attachmentBucket: attachment.bucket,
-    attachmentPath: attachment.path,
-    attachmentMimeType: attachment.mimeType,
-    attachmentSizeBytes: attachment.sizeBytes,
-    attachmentWidth: attachment.width,
-    attachmentHeight: attachment.height,
-  });
+
+  try {
+    return await sendMessage({
+      conversationId,
+      messageType: 'image',
+      body,
+      attachmentBucket: attachment.bucket,
+      attachmentPath: attachment.path,
+      attachmentMimeType: attachment.mimeType,
+      attachmentSizeBytes: attachment.sizeBytes,
+      attachmentWidth: attachment.width,
+      attachmentHeight: attachment.height,
+    });
+  } catch (error) {
+    await deleteUploadedMessageAttachment(attachment);
+    throw error;
+  }
 }
 
 export async function uploadMessageImage(fileUri: string, conversationId: string): Promise<MessageAttachmentInput> {

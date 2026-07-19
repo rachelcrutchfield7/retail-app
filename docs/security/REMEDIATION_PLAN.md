@@ -155,7 +155,7 @@ Dependencies on earlier phases:
 
 ## Phase D: Conversations, Messages, Blocking, and Storage
 
-Status: Completed on 2026-07-18 in `20260719003237 phase_d_messaging_blocking_storage_security`.
+Status: Completed on 2026-07-18 in `20260719003237 phase_d_messaging_blocking_storage_security`; amended on 2026-07-19 by `20260719011141 phase_d1_attachment_and_system_message_fixes`.
 
 Exact goal:
 
@@ -212,6 +212,42 @@ Completion notes:
 - Avatar/listing public URL serving remains, but broad object enumeration policies were removed.
 - Removed listing image cleanup is queued in `storage_cleanup_jobs` for a future worker.
 - See `PHASE_D_RESULTS.md`, `PHASE_D_MESSAGING_AUTHORIZATION_MATRIX.md`, and `PHASE_D_STORAGE_MODEL.md`.
+
+## Phase D.1: Message Attachment Validation and System Message Lockdown
+
+Status: Applied to Supabase on 2026-07-19; real Storage API upload/send proof pending explicit approval for disposable live test data.
+
+Exact goal:
+
+Correct Phase D attachment path validation, validate Storage object metadata before image-message creation, forbid ordinary callers from creating `system` messages, and align blocking behavior so historical message images remain readable to existing conversation participants.
+
+Files changed:
+
+- `src/services/conversationService.ts`
+- `src/services/messageService.ts`
+- `src/services/notificationService.ts`
+- `src/services/offerService.ts`
+- `src/services/types.ts`
+- `tests/securityPhaseD1.test.mjs`
+- `tests/securityPhaseD1Live.test.mjs`
+- `tests/security_phase_d1_live_rollback.sql`
+- `docs/security/PHASE_D1_RESULTS.md`
+
+SQL objects changed:
+
+- `private.is_valid_message_attachment_path`
+- `private.message_attachment_path_is_valid`
+- `private.can_access_message_attachment`
+- `public.protect_message_phase_d_fields`
+- `public.send_message`
+- `storage.objects` message-image policies
+
+Verification:
+
+- Live migration recorded in Supabase.
+- Rollback-only live SQL checks passed.
+- Local lint, typecheck, tests, Expo Doctor, web export, secret scans, and dependency audit passed.
+- Full real Storage upload/send/signed-read test remains pending until temporary live test accounts are explicitly approved or live test credentials are supplied.
 
 ## Phase E: Transactions, Reviews, Reports, and Notifications
 

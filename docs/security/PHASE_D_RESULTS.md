@@ -1,7 +1,7 @@
 # ReTail Security Remediation Phase D Results
 
 Date: 2026-07-18
-Status: Applied to Supabase project `ycwgsdigvpmprqreoqiz`
+Status: Applied to Supabase project `ycwgsdigvpmprqreoqiz`; amended by Phase D.1 on 2026-07-19
 
 ## Scope
 
@@ -14,12 +14,15 @@ This phase did not redesign payments, reviews, reports, public discovery RPCs, r
 Recorded Supabase migration:
 
 - `20260719003237 phase_d_messaging_blocking_storage_security`
+- `20260719011141 phase_d1_attachment_and_system_message_fixes`
 
 Repository migration file:
 
 - `supabase/migrations/20260719003237_phase_d_messaging_blocking_storage_security.sql`
 
 The first live apply attempt failed before recording a migration because Supabase does not allow project SQL to alter owner-managed `storage.objects` table settings. The migration was adjusted to leave Supabase-managed Storage RLS ownership alone while still replacing ReTail bucket policies. The successful recorded migration applied afterward.
+
+Phase D.1 was added as a forward-only patch to correct message attachment path validation, verify Storage object metadata, prevent public callers from creating `system` messages, and keep historical image attachment reads available to conversation participants after a block.
 
 ## RPCs Added
 
@@ -89,6 +92,8 @@ Message-image paths must follow:
 <conversation_id>/<auth.uid()>/<random_uuid>.<jpg|jpeg|png|webp>
 ```
 
+Phase D.1 centralizes this validation in `private.is_valid_message_attachment_path(...)` and verifies uploaded Storage object metadata before an image message can be created.
+
 The app stores `attachment_bucket`, `attachment_path`, MIME type, size, and optional dimensions. It does not persist signed URLs. Signed URLs are generated on read and treated as short-lived display values.
 
 Legacy `messages.image_url` values are not used for new image messages. The app no longer renders arbitrary external legacy message image URLs.
@@ -102,6 +107,8 @@ Blocking is enforced in both directions:
 - A cannot upload new message images for a conversation with B if either user blocked the other.
 
 Historical conversation/message reads remain available to participants for continuity and moderation context, but new interaction is blocked.
+
+Phase D.1 clarifies that historical image attachments referenced by existing non-deleted messages also remain readable to participants after a block. New uploads and replacements remain blocked.
 
 ## Removed Listing Image Strategy
 
@@ -202,6 +209,7 @@ Phase D is complete for messaging/blocking/storage hardening.
 
 Deferred:
 
+- Real Storage API upload/send/signed-read D.1 proof is pending explicit approval for disposable live test accounts or supplied live test credentials.
 - Edge Function or worker to process `storage_cleanup_jobs`.
 - Broader advisor remediation.
 - Transaction/review/report/notification trust model work in Phase E.

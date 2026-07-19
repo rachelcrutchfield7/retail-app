@@ -17,6 +17,7 @@ const defaultNotificationPreferences: NotificationPreferences = {
 };
 
 const preferenceOverrides = new Map<string, NotificationPreferences>();
+const offerMessagePrefix = 'RETAIL_OFFER::';
 
 function typeEnabled(preferences: NotificationPreferences, type: NotificationType): boolean {
   if (type === 'message') return preferences.messages;
@@ -40,6 +41,18 @@ function toNotification(row: Record<string, unknown>): Notification {
     is_read: Boolean(row.is_read),
     created_at: typeof row.created_at === 'string' ? row.created_at : new Date().toISOString(),
   };
+}
+
+function messageNotificationBody(message: Message): string {
+  if (message.message_type === 'image') {
+    return 'You received a photo.';
+  }
+
+  if (message.body?.startsWith(offerMessagePrefix)) {
+    return 'You received a ReTail offer update.';
+  }
+
+  return message.body ?? 'You received a message.';
 }
 
 export async function createNotification(input: {
@@ -238,7 +251,7 @@ export async function createMessageNotification(
     userId,
     type: 'message',
     title: 'New message',
-    body: message.message_type === 'image' ? 'You received a photo.' : message.body ?? 'You received a message.',
+    body: messageNotificationBody(message),
     data: {
       conversationId,
       listingId,

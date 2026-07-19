@@ -31,7 +31,7 @@ export function normalizeOfferAmount(value: string): string {
 }
 
 export function parseOfferMessage(message: Message): OfferEvent | null {
-  if (message.message_type !== 'system' || !message.body?.startsWith(offerPrefix)) {
+  if (!['text', 'system'].includes(message.message_type) || !message.body?.startsWith(offerPrefix)) {
     return null;
   }
 
@@ -71,7 +71,7 @@ export function latestPendingOffer(messages: Message[]): OfferEvent | null {
 
 export async function makeOffer(conversationId: string, amount: string): Promise<Message> {
   const normalizedAmount = normalizeOfferAmount(amount);
-  const message = await sendOfferSystemMessage(conversationId, {
+  const message = await sendOfferMessage(conversationId, {
     kind: 'offer',
     amount: normalizedAmount,
     status: 'pending',
@@ -82,7 +82,7 @@ export async function makeOffer(conversationId: string, amount: string): Promise
 }
 
 export async function acceptOffer(conversationId: string, offer: OfferEvent): Promise<Message> {
-  const message = await sendOfferSystemMessage(conversationId, {
+  const message = await sendOfferMessage(conversationId, {
     kind: 'offer_response',
     amount: offer.amount,
     status: 'accepted',
@@ -94,7 +94,7 @@ export async function acceptOffer(conversationId: string, offer: OfferEvent): Pr
 }
 
 export async function declineOffer(conversationId: string, offer: OfferEvent): Promise<Message> {
-  const message = await sendOfferSystemMessage(conversationId, {
+  const message = await sendOfferMessage(conversationId, {
     kind: 'offer_response',
     amount: offer.amount,
     status: 'declined',
@@ -107,7 +107,7 @@ export async function declineOffer(conversationId: string, offer: OfferEvent): P
 
 export async function counterOffer(conversationId: string, offer: OfferEvent, amount: string): Promise<Message> {
   const normalizedAmount = normalizeOfferAmount(amount);
-  const message = await sendOfferSystemMessage(conversationId, {
+  const message = await sendOfferMessage(conversationId, {
     kind: 'counter_offer',
     amount: normalizedAmount,
     status: 'countered',
@@ -122,13 +122,13 @@ function encodeOffer(payload: Pick<OfferEvent, 'kind' | 'amount' | 'status' | 'r
   return `${offerPrefix}${JSON.stringify(payload)}`;
 }
 
-function sendOfferSystemMessage(
+function sendOfferMessage(
   conversationId: string,
   payload: Pick<OfferEvent, 'kind' | 'amount' | 'status' | 'respondsTo'>
 ): Promise<Message> {
   return sendMessage({
     conversationId,
-    messageType: 'system',
+    messageType: 'text',
     body: encodeOffer(payload),
   });
 }

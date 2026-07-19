@@ -1,6 +1,6 @@
 # Phase D Messaging Authorization Matrix
 
-Date: 2026-07-18
+Date: 2026-07-19
 
 ## Conversations
 
@@ -27,6 +27,7 @@ Rules:
 | Read message | Denied | Denied | Allowed | Allowed | Allowed |
 | Send text message | Denied | Denied | Allowed through `send_message` | Allowed through `send_message` | Not special-cased |
 | Send image message | Denied | Denied | Allowed with private attachment metadata | Allowed with private attachment metadata | Not special-cased |
+| Send system message | Denied | Denied | Denied | Denied | Trusted server-only future path |
 | Set `sender_id` | Denied | Denied | Denied | Denied | Trusted server-only |
 | Edit sent content | Denied | Denied | Denied | Denied | Not implemented |
 | Mark read | Denied | Denied | Cannot mark own sent messages | Allowed through `mark_conversation_read` | Not special-cased |
@@ -35,10 +36,13 @@ Rules:
 Rules:
 
 - `sender_id` is always derived from `auth.uid()`.
-- Text/system messages require a nonblank body of 2,000 characters or less.
-- Image messages require private Storage metadata.
+- Public `send_message` accepts only `text` and `image`.
+- Public `send_message` rejects `system` with `RETAIL_SYSTEM_MESSAGE_FORBIDDEN`.
+- Text messages require a nonblank body of 2,000 characters or less.
+- Image messages require private Storage metadata whose Storage object owner, MIME type, and size match the submitted metadata.
 - New image messages reject `messages.image_url`.
 - Direct `messages` insert/update/delete grants are removed from app roles.
+- Historical `system` rows may still render, but ordinary users cannot create new ones.
 
 ## Blocking
 
@@ -61,3 +65,5 @@ Historical reads remain available to participants after a block. New conversatio
 | `message-images` | Private only | Participant-scoped signed URL access | Participant path `<conversation>/<auth.uid()>/<uuid>.<ext>` | Uploader path only |
 
 Message images are read with short-lived signed URLs. Signed URLs are never stored in the database.
+
+Historical message images referenced by non-deleted messages remain readable to participants after a block. Blocks still prevent new uploads, replacements, and new messages.

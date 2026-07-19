@@ -14,12 +14,16 @@
 | Rescue verification | Rescue owner cannot self-verify | SQL trigger added; live API test required |
 | Conversations | Buyer/seller/listing cannot be reassigned | SQL trigger/policy added; live API test required |
 | Messages | Body/image/sender cannot be edited after send | SQL trigger/RPC added; live API test required |
+| Messages | Public users cannot create `system` messages | Live rollback SQL check passed |
+| Messages | Structured offer payloads do not show raw code in previews | Automated static test added |
 | Transactions | Buyer cannot complete or reassign transaction | SQL RPC/policy added; live API test required |
 | Reviews | Review target/rating cannot be rewritten by user | SQL trigger/policy added; live API test required |
 | Reports | Reporter cannot read admin notes | Report read policy removed; live API test required |
 | Notifications | Client cannot fabricate arbitrary notifications | Insert policies removed; live API test required |
 | Blocking | Blocked users cannot message or upload message images | SQL policy checks added; live API test required |
 | Storage | Private message images are participant-scoped | Existing policy strengthened; live storage test required |
+| Storage | Message attachment path regex accepts canonical paths and rejects malformed paths | Live rollback SQL check passed |
+| Storage | Message image send validates uploaded object metadata | SQL migration and static test added; real Storage API test pending |
 | Dependencies | Pinned production dependencies | Automated static test added |
 | Dependencies | Package-manager audit | Requires network audit run |
 | Static analysis | Semgrep or equivalent | Not run locally |
