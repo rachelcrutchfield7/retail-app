@@ -1,6 +1,5 @@
 import { createServiceError } from './errors';
 import { supabase } from '../lib/supabase';
-import { createReviewNotification } from './notificationService';
 import { trackEvent } from '../lib/analytics';
 import { getPendingReviews as getPendingTransactionReviews, toTransaction } from './transactionService';
 import type { CreateReviewInput, PendingReview, Review, ReviewSummary } from './types';
@@ -88,35 +87,28 @@ export async function createReview(input: CreateReviewInput): Promise<Review> {
     ? await getCompletedTransactionForReview(profile.id, input.revieweeId, input.transactionId)
     : await completedTransactionFor(profile.id, input.revieweeId, input.listingId);
 
-  if (await hasReviewedTransaction(profile.id, transaction.id)) {
-    throw createServiceError(
-      'REVIEW_ALREADY_SUBMITTED',
-      `User ${profile.id} already reviewed transaction ${transaction.id}`,
-      'You already reviewed this transaction.'
-    );
-  }
-
   const { data, error } = await supabase
-    .from('reviews')
-    .insert({
-      transaction_id: transaction.id,
-      reviewer_id: profile.id,
-      reviewee_id: input.revieweeId,
-      listing_id: input.listingId ?? transaction.listing_id,
-      rating: input.rating,
-      comment: input.comment?.trim() || null,
-    })
-    .select('*')
-    .single();
+    .rpc('create_transaction_review', {
+      target_transaction_id: transaction.id,
+      requested_rating: input.rating,
+      requested_comment: input.comment?.trim() || null,
+    });
 
   if (error) {
     throwSupabaseError(error, 'We could not submit that review.');
   }
 
-  const reviewerName = profile.display_name;
-  const revieweeName = await displayNameFor(input.revieweeId);
-  const review = toReview(data as Record<string, unknown>, reviewerName, revieweeName);
-  await createReviewNotification(input.revieweeId, review.id, reviewerName).catch(() => null);
+  const row = Array.isArray(data)
+    ? data[0] as Record<string, unknown> | undefined
+    : data as Record<string, unknown> | undefined;
+
+  if (!row) {
+    throw createServiceError('REVIEW_NOT_CREATED', 'Review RPC returned no row', 'We could not submit that review.');
+  }
+
+  const reviewerName = await displayNameFor(String(row.reviewer_id)) ?? profile.display_name;
+  const revieweeName = await displayNameFor(String(row.reviewee_id));
+  const review = toReview(row, reviewerName, revieweeName);
   trackEvent('review_submitted', { reviewId: review.id, rating: review.rating });
   return review;
 }
@@ -183,29 +175,28 @@ export async function getUserReviews(userId: string): Promise<Review[]> {
 }
 
 export async function getReviewSummary(userId: string): Promise<ReviewSummary> {
-  const reviews = await getReviewsForUser(userId);
-  const distribution: ReviewSummary['distribution'] = {
-    1: 0,
-    2: 0,
-    3: 0,
-    4: 0,
-    5: 0,
-  };
-
-  reviews.forEach((review) => {
-    const rating = Math.max(1, Math.min(5, Math.round(review.rating))) as 1 | 2 | 3 | 4 | 5;
-    distribution[rating] += 1;
+  const { data, error } = await supabase.rpc('get_user_review_summary', {
+    target_user_id: userId,
   });
 
-  const reviewCount = reviews.length;
-  const averageRating = reviewCount
-    ? reviews.reduce((total, review) => total + review.rating, 0) / reviewCount
-    : 0;
+  if (error) {
+    throwSupabaseError(error, 'We could not load review totals.');
+  }
+
+  const row = Array.isArray(data)
+    ? data[0] as Record<string, unknown> | undefined
+    : data as Record<string, unknown> | undefined;
 
   return {
-    averageRating,
-    reviewCount,
-    distribution,
+    averageRating: Number(row?.average_rating ?? 0),
+    reviewCount: Number(row?.review_count ?? 0),
+    distribution: {
+      1: Number(row?.rating_1_count ?? 0),
+      2: Number(row?.rating_2_count ?? 0),
+      3: Number(row?.rating_3_count ?? 0),
+      4: Number(row?.rating_4_count ?? 0),
+      5: Number(row?.rating_5_count ?? 0),
+    },
   };
 }
 

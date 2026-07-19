@@ -87,25 +87,11 @@ export async function getListingReportQueue(): Promise<AdminListingReport[]> {
 export async function updateListingReportStatus(reportId: string, status: ReportStatus, adminNotes?: string): Promise<AdminListingReport> {
   await requireAdminProfile();
 
-  const payload: Record<string, unknown> = {
-    status,
-    updated_at: new Date().toISOString(),
-  };
-
-  if (adminNotes !== undefined) {
-    payload.admin_notes = adminNotes.trim() || null;
-  }
-
-  if (status === 'resolved' || status === 'dismissed') {
-    payload.resolved_at = new Date().toISOString();
-  }
-
-  const { data, error } = await supabase
-    .from('reports')
-    .update(payload)
-    .eq('id', reportId)
-    .select('*')
-    .single();
+  const { data, error } = await supabase.rpc('admin_update_report', {
+    target_report_id: reportId,
+    requested_status: status,
+    requested_admin_notes: adminNotes?.trim() || null,
+  });
 
   if (error) {
     throwSupabaseError(error, 'We could not update that report.');

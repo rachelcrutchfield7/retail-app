@@ -9,6 +9,7 @@ const schema = readFileSync(join(root, 'supabase/schema.sql'), 'utf8');
 const policies = readFileSync(join(root, 'supabase/policies.sql'), 'utf8');
 const seed = readFileSync(join(root, 'supabase/seed.sql'), 'utf8');
 const storage = readFileSync(join(root, 'supabase/storage.sql'), 'utf8');
+const phaseESql = readFileSync(join(root, 'supabase/migrations/20260719120708_phase_e_transactions_reviews_reports_notifications_security.sql'), 'utf8');
 const distance = readFileSync(join(root, 'supabase/distance.sql'), 'utf8');
 const rescueAccounts = readFileSync(join(root, 'supabase/rescue_accounts.sql'), 'utf8');
 const backendSpecPaths = [
@@ -88,7 +89,9 @@ test('RLS is enabled for all protected backend tables', () => {
     'reports',
     'blocks',
     'notifications',
+    'notification_preferences',
     'device_tokens',
+    'report_moderation_events',
     'audit_logs',
     'rate_limit_events',
   ]) {
@@ -104,12 +107,7 @@ test('policies require active accounts for user-generated marketplace actions', 
     'Users manage their own saved searches',
     'Buyers create conversations for themselves',
     'Conversation participants can send messages',
-    'Sellers create transactions for own listings',
-    'Users create reviews they wrote',
-    'Users create reports',
-    'Users read their own reports',
     'Users manage their own blocks',
-    'Users manage their own device tokens',
   ]) {
     const policyStart = policies.indexOf(`create policy "${policyName}"`);
     assert.notEqual(policyStart, -1, `${policyName} should exist`);
@@ -117,12 +115,22 @@ test('policies require active accounts for user-generated marketplace actions', 
     const policyBody = policies.slice(policyStart, nextPolicy === -1 ? undefined : nextPolicy);
     assert.match(policyBody, /is_account_active\(\)/, `${policyName} should require an active account`);
   }
+
+  assert.match(phaseESql, /create or replace function public\.complete_listing_transaction/);
+  assert.match(phaseESql, /create or replace function public\.create_transaction_review/);
+  assert.match(phaseESql, /create or replace function public\.submit_report/);
+  assert.match(phaseESql, /create or replace function public\.register_my_device_token/);
+  assert.match(phaseESql, /RETAIL_TRANSACTION_PERMISSION_DENIED/);
+  assert.match(phaseESql, /RETAIL_REVIEW_NOT_ALLOWED/);
+  assert.match(phaseESql, /RETAIL_REPORT_PERMISSION_DENIED/);
+  assert.match(phaseESql, /RETAIL_DEVICE_TOKEN_INVALID/);
 });
 
 test('policies bind conversations, transactions, and reviews to the correct listing', () => {
   assert.match(policies, /listings\.seller_id = conversations\.seller_id/);
-  assert.match(policies, /listings\.id = transactions\.listing_id/);
-  assert.match(policies, /transactions\.listing_id = reviews\.listing_id/);
+  assert.match(phaseESql, /where l\.id = target_listing_id/);
+  assert.match(phaseESql, /transaction_row\.listing_id/);
+  assert.match(phaseESql, /target_transaction_id/);
 });
 
 test('policies support owner and admin visibility without weakening public reads', () => {
@@ -130,13 +138,13 @@ test('policies support owner and admin visibility without weakening public reads
     'Active listings are publicly readable',
     'Users read their own listings',
     'Admins read any listing',
-    'Users read their own reports',
-    'Admins read reports',
+    'Phase E admins can read reports',
     'Admins delete any listing',
   ]) {
     assert.match(policies, new RegExp(`create policy "${policyName}"`));
   }
 
+  assert.match(phaseESql, /create or replace function public\.get_my_reports/);
   assert.match(policies, /status = 'active' and deleted_at is null/);
 });
 

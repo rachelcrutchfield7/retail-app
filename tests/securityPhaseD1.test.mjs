@@ -103,11 +103,11 @@ test('Phase D.1 app cleans orphan uploads when image send fails', () => {
 });
 
 test('Phase D.1 offer payloads are not exposed in notification previews', () => {
-  const notificationService = read('src/services/notificationService.ts');
+  const phaseESql = read('supabase/migrations/20260719120708_phase_e_transactions_reviews_reports_notifications_security.sql');
 
-  assert.match(notificationService, /messageNotificationBody/);
-  assert.match(notificationService, /RETAIL_OFFER::/);
-  assert.match(notificationService, /You received a ReTail offer update\./);
+  assert.match(phaseESql, /requested_body like 'RETAIL_OFFER::%'/);
+  assert.match(phaseESql, /You received a ReTail offer update\./);
+  assert.doesNotMatch(phaseESql, /safe_body := requested_body/);
 });
 
 test('Phase D.1 docs are present', () => {

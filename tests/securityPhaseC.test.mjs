@@ -107,7 +107,7 @@ test('Phase C app services use controlled RPCs for protected table writes', () =
   assert.match(listingService, /rpc\('mark_my_listing_donated'/);
   assert.match(rescueService, /rpc\('update_my_rescue_profile'/);
   assert.match(adminService, /rpc\('admin_set_rescue_verification'/);
-  assert.match(transactionService, /markListingDonated|markListingSold/);
+  assert.match(transactionService, /rpc\('complete_listing_transaction'/);
   assert.match(accountService, /rpc\('delete_current_account'/);
   assert.doesNotMatch(serviceTypes, /status\?: Listing\['status'\]/);
 

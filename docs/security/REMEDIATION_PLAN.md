@@ -251,31 +251,50 @@ Verification:
 
 ## Phase E: Transactions, Reviews, Reports, and Notifications
 
+Status: Repository implementation prepared on 2026-07-19 in `20260719120708_phase_e_transactions_reviews_reports_notifications_security.sql`; live Supabase application and disposable multi-user verification pending.
+
 Exact goal:
 
 Ensure trust records are server-controlled, cannot be forged by direct API calls, and cannot target unrelated users.
 
-Files likely to change:
+Files changed:
 
 - `src/services/transactionService.ts`
 - `src/services/reviewService.ts`
 - `src/services/reportService.ts`
 - `src/services/notificationService.ts`
-- `src/services/offerService.ts`
-- Admin moderation service and screens
-- Tests for trust and notification flows
+- `src/services/adminService.ts`
+- `src/services/favoriteService.ts`
+- `src/services/listingService.ts`
+- `supabase/schema.sql`
+- `supabase/policies.sql`
+- `tests/securityPhaseE.test.mjs`
+- Related legacy static tests
 
-SQL objects likely to change:
+SQL objects changed:
 
 - `transactions`
 - `reviews`
 - `reports`
 - `notifications`
-- `audit_logs`
+- `notification_preferences`
+- `device_tokens`
+- `report_moderation_events`
 - `complete_listing_transaction`
+- `create_transaction_review`
+- `get_user_review_summary`
 - `submit_report`
 - `has_existing_report`
-- `create_user_notification`
+- `get_my_reports`
+- `admin_update_report`
+- `mark_notification_read`
+- `mark_all_notifications_read`
+- `delete_my_notification`
+- `get_my_notification_preferences`
+- `update_my_notification_preferences`
+- `register_my_device_token`
+- `remove_my_device_token`
+- `private.create_notification_for_event`
 - Transaction policies
 - Review policies
 - Report policies
@@ -283,14 +302,14 @@ SQL objects likely to change:
 
 Tests required:
 
-- Seller cannot complete transaction with a user who was not a valid conversation participant or accepted buyer.
-- Buyer confirmation or accepted offer is required before review eligibility, if that product rule is adopted.
+- Seller cannot complete transaction with a user who was not a valid conversation participant.
 - Nonparticipant cannot report a message by UUID.
 - User cannot create report with trusted fields such as status, assigned admin, resolved timestamp, or admin notes.
 - User cannot fabricate notifications for another user.
 - User cannot retarget review `reviewee_id`, `transaction_id`, `listing_id`, or `rating` after creation.
-- Admin can resolve reports and create system notifications.
-- Audit log records key moderation actions.
+- Admin can resolve reports through `admin_update_report`.
+- Report moderation event records status transitions.
+- Preferences and device tokens can be changed only through caller-derived RPCs.
 
 Rollback considerations:
 
@@ -301,6 +320,15 @@ Dependencies on earlier phases:
 
 - Phase C should be complete for protected system fields.
 - Phase D should be complete if transaction completion depends on conversations/offers.
+
+Completion notes:
+
+- Direct client notification creation was removed from application services.
+- Generic `create_user_notification` is dropped by the Phase E migration.
+- Completed transactions, reviews, reports, moderation, notification preferences, and device tokens now use controlled RPCs.
+- Notification creation is centralized in `private.create_notification_for_event` and server-side triggers/RPCs.
+- See `PHASE_E_RESULTS.md`, `PHASE_E_AUTHORIZATION_MATRIX.md`, `PHASE_E_TRANSACTION_REVIEW_MODEL.md`, `PHASE_E_REPORT_MODERATION_MODEL.md`, and `PHASE_E_NOTIFICATION_MODEL.md`.
+- Phase E is not complete until the migration is applied to Supabase with the exact recorded version and live multi-user tests pass.
 
 ## Phase F: Rate Limiting, Security Tests, and Automated Scanners
 

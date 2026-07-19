@@ -16,10 +16,18 @@
 | Messages | Body/image/sender cannot be edited after send | SQL trigger/RPC added; live API test required |
 | Messages | Public users cannot create `system` messages | Live rollback SQL check passed |
 | Messages | Structured offer payloads do not show raw code in previews | Automated static test added |
-| Transactions | Buyer cannot complete or reassign transaction | SQL RPC/policy added; live API test required |
-| Reviews | Review target/rating cannot be rewritten by user | SQL trigger/policy added; live API test required |
-| Reports | Reporter cannot read admin notes | Report read policy removed; live API test required |
-| Notifications | Client cannot fabricate arbitrary notifications | Insert policies removed; live API test required |
+| Transactions | Buyer cannot complete or reassign transaction | Phase E RPC and static tests added; live API test required |
+| Transactions | Linked buyer must be conversation participant | Phase E RPC and static tests added; live API test required |
+| Transactions | Unlinked completion creates no fake transaction | Phase E RPC added; live API test required |
+| Reviews | Reviewer, reviewee, and listing are derived from completed transaction | Phase E RPC and static tests added; live API test required |
+| Reviews | Review summary uses all valid reviews | Phase E RPC and service test added; live API test required |
+| Reports | Reporter cannot read admin notes or evidence | Phase E reporter-safe RPC added; live API test required |
+| Reports | Duplicate open/reviewing report denied per reporter and target | Phase E partial unique indexes added; live API test required |
+| Moderation | Admin report status changes create immutable audit events | Phase E RPC and table added; live API test required |
+| Notifications | Client cannot fabricate arbitrary notifications | Generic notification helper removed; static tests added; live API test required |
+| Notifications | Read/delete actions use controlled RPCs and soft delete | Phase E service/static tests added; live API test required |
+| Preferences | Notification preferences derive user ID server-side | Phase E RPC and static tests added; live API test required |
+| Device tokens | Device token registration/removal derives user ID server-side | Phase E RPC and static tests added; live API test required |
 | Blocking | Blocked users cannot message or upload message images | SQL policy checks added; live API test required |
 | Storage | Private message images are participant-scoped | Existing policy strengthened; live storage test required |
 | Storage | Message attachment path regex accepts canonical paths and rejects malformed paths | Live rollback SQL check passed |

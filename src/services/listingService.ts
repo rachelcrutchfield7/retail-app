@@ -2,7 +2,6 @@ import type { Listing } from '../types';
 import { trackEvent } from '../lib/analytics';
 import { supabase } from '../lib/supabase';
 import { createServiceError, isAppServiceError } from './errors';
-import { createListingStatusNotification } from './notificationService';
 import { uploadListingImage } from './storageService';
 import {
   conditionToDb,
@@ -420,7 +419,6 @@ export async function archiveListing(listingId: string): Promise<void> {
 }
 
 export async function markListingSold(listingId: string): Promise<Listing> {
-  const profile = await ensureCurrentProfile();
   const { data, error } = await supabase.rpc('mark_my_listing_sold', {
     target_listing_id: listingId,
   });
@@ -430,13 +428,11 @@ export async function markListingSold(listingId: string): Promise<Listing> {
   }
 
   const listing = toListing(data as Record<string, unknown>);
-  await createListingStatusNotification(profile.id, listingId, listing.title, 'Sold').catch(() => null);
   trackEvent('Listing Sold', { listingId });
   return listing;
 }
 
 export async function markListingDonated(listingId: string): Promise<Listing> {
-  const profile = await ensureCurrentProfile();
   const { data, error } = await supabase.rpc('mark_my_listing_donated', {
     target_listing_id: listingId,
   });
@@ -446,7 +442,6 @@ export async function markListingDonated(listingId: string): Promise<Listing> {
   }
 
   const listing = toListing(data as Record<string, unknown>);
-  await createListingStatusNotification(profile.id, listingId, listing.title, 'Donated').catch(() => null);
   return listing;
 }
 

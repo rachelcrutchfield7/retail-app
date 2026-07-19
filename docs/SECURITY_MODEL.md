@@ -2,7 +2,7 @@
 
 ## Scope
 
-This document describes the security boundaries for the ReTail mobile app, Supabase database, storage buckets, and client services as of Sprint 5.5.
+This document describes the security boundaries for the ReTail mobile app, Supabase database, storage buckets, and client services as of Security Phase E.
 
 ## Core Boundaries
 
@@ -48,9 +48,15 @@ High-risk actions use database-controlled functions:
 - `mark_conversation_read`
 - `soft_delete_own_message`
 - `complete_listing_transaction`
-- `create_user_notification`
+- `create_transaction_review`
+- `get_user_review_summary`
+- `admin_update_report`
+- `mark_notification_read`
+- `delete_my_notification`
+- `update_my_notification_preferences`
+- `register_my_device_token`
 
-The database sets server-controlled fields such as reporter ID, notification recipient validation, transaction status, timestamps, and audit records.
+The database sets server-controlled fields such as reporter ID, review participants, notification recipient/content, transaction status, timestamps, and audit records. Generic client-created notifications are not part of the active model.
 
 ## Storage
 

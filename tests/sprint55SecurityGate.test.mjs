@@ -79,7 +79,10 @@ test('services use security RPCs instead of direct risky updates', () => {
   const messageService = read('src/services/messageService.ts');
   const transactionService = read('src/services/transactionService.ts');
 
-  assert.match(notificationService, /rpc\('create_user_notification'/);
+  assert.doesNotMatch(notificationService, /create_user_notification/);
+  assert.match(notificationService, /rpc\('mark_notification_read'/);
+  assert.match(notificationService, /rpc\('update_my_notification_preferences'/);
+  assert.match(notificationService, /rpc\('register_my_device_token'/);
   assert.doesNotMatch(notificationService, /\.from\('notifications'\)[\s\S]*?\.insert\(/);
   assert.match(reportService, /rpc\('submit_report'/);
   assert.match(reportService, /rpc\('has_existing_report'/);

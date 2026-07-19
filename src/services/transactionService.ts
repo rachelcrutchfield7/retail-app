@@ -1,8 +1,6 @@
 import { trackEvent } from '../lib/analytics';
 import { supabase } from '../lib/supabase';
-import { markListingDonated, markListingSold } from './listingService';
 import { createServiceError } from './errors';
-import { createTransactionCompletedNotification } from './notificationService';
 import {
   ensureCurrentProfile,
   throwSupabaseError,
@@ -19,6 +17,18 @@ import type {
 } from './types';
 
 type Row = Record<string, unknown>;
+
+type CompleteTransactionRpcResult = {
+  transaction_id: string | null;
+  listing_id: string;
+  buyer_id: string | null;
+  seller_id: string;
+  outcome: TransactionOutcome;
+  listing_status: string;
+  completed_at: string;
+  linked_transaction: boolean;
+  notification_id: string | null;
+};
 
 function stringValue(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value : fallback;
@@ -125,51 +135,31 @@ export async function getEligibleTransactionParticipants(listingId: string): Pro
 }
 
 export async function completeTransaction(input: CompleteTransactionInput): Promise<Transaction | null> {
-  const profile = await ensureCurrentProfile();
   const outcome = input.outcome;
-  const { data: listing, error: listingError } = await supabase
-    .from('listings')
-    .select('id,seller_id,title')
-    .eq('id', input.listingId)
-    .maybeSingle();
 
-  if (listingError) {
-    throwSupabaseError(listingError, 'We could not complete this listing.');
-  }
-
-  if (!listing || String((listing as Row).seller_id) !== profile.id) {
-    throw createServiceError(
-      'TRANSACTION_PERMISSION_DENIED',
-      `User ${profile.id} tried to complete listing ${input.listingId}`,
-      'Only the listing owner can complete this listing.'
-    );
-  }
-
-  if (input.buyerId === profile.id) {
-    throw createServiceError('TRANSACTION_SELF_BUYER', 'Seller selected self as buyer', 'Choose a different buyer or recipient.');
-  }
-
-  if (!input.buyerId) {
-    await (outcome === 'donated' ? markListingDonated(input.listingId) : markListingSold(input.listingId));
-
-    trackEvent('transaction_completed', { listingId: input.listingId, outcome, linkedUser: false });
-    return null;
-  }
-
-  const { data: transactionId, error: completionError } = await supabase.rpc('complete_listing_transaction', {
+  const { data: completionRows, error: completionError } = await supabase.rpc('complete_listing_transaction', {
     target_listing_id: input.listingId,
-    target_buyer_id: input.buyerId,
     target_outcome: outcome,
+    target_buyer_id: input.buyerId ?? null,
   });
 
   if (completionError) {
     throwSupabaseError(completionError, 'We could not record the completed transaction.');
   }
 
+  const completion = Array.isArray(completionRows)
+    ? completionRows[0] as CompleteTransactionRpcResult | undefined
+    : completionRows as CompleteTransactionRpcResult | undefined;
+
+  if (!completion?.linked_transaction || !completion.transaction_id) {
+    trackEvent('transaction_completed', { listingId: input.listingId, outcome, linkedUser: false });
+    return null;
+  }
+
   const { data, error } = await supabase
     .from('transactions')
     .select('*')
-    .eq('id', transactionId as string)
+    .eq('id', completion.transaction_id)
     .single();
 
   if (error) {
@@ -177,13 +167,6 @@ export async function completeTransaction(input: CompleteTransactionInput): Prom
   }
 
   const transaction = toTransaction(data as Row);
-  await createTransactionCompletedNotification(
-    input.buyerId,
-    transaction.id,
-    input.listingId,
-    String((listing as Row).title ?? 'your item'),
-    outcome
-  ).catch(() => null);
   trackEvent('transaction_completed', { listingId: input.listingId, transactionId: transaction.id, outcome, linkedUser: true });
   return transaction;
 }

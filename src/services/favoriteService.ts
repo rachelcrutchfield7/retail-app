@@ -1,6 +1,5 @@
 import { createServiceError } from './errors';
 import { supabase } from '../lib/supabase';
-import { createFavoriteNotification } from './notificationService';
 import { trackEvent } from '../lib/analytics';
 import type { ListingSummary } from './types';
 import {
@@ -40,7 +39,6 @@ export async function favoriteListing(listingId: string): Promise<void> {
     throwSupabaseError(error, 'We could not save this listing.');
   }
 
-  await createFavoriteNotification(listingRow.seller_id, listingId, listingRow.title).catch(() => null);
   trackEvent('Favorite Added', { listingId });
 }
 

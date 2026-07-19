@@ -65,12 +65,27 @@ exception when duplicate_object then null;
 end $$;
 
 do $$ begin
-  create type notification_type as enum ('message', 'favorite', 'review', 'listing_sold', 'saved_search', 'system');
+  create type notification_type as enum (
+    'message',
+    'favorite',
+    'review',
+    'listing_sold',
+    'saved_search',
+    'system',
+    'transaction_completed',
+    'listing_donated'
+  );
 exception when duplicate_object then null;
 end $$;
 
 do $$ begin
   alter type notification_type add value if not exists 'saved_search' before 'system';
+exception when undefined_object then null;
+end $$;
+
+do $$ begin
+  alter type notification_type add value if not exists 'transaction_completed';
+  alter type notification_type add value if not exists 'listing_donated';
 exception when undefined_object then null;
 end $$;
 
@@ -441,6 +456,7 @@ create table if not exists transactions (
   status transaction_status not null default 'pending',
   outcome transaction_outcome,
   completed_at timestamptz,
+  cancelled_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   deleted_at timestamptz,
@@ -463,7 +479,6 @@ create table if not exists reviews (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   deleted_at timestamptz,
-  unique(reviewer_id, reviewee_id, transaction_id),
   constraint review_has_two_people check (reviewer_id <> reviewee_id)
 );
 
@@ -506,9 +521,11 @@ create table if not exists notifications (
   title text not null check (char_length(title) between 1 and 120),
   body text not null check (char_length(body) between 1 and 500),
   data jsonb not null default '{}'::jsonb,
+  dedupe_key text check (dedupe_key is null or char_length(dedupe_key) between 1 and 240),
   is_read boolean not null default false,
   read_at timestamptz,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  deleted_at timestamptz
 );
 
 create or replace function create_saved_search_notifications_for_listing()
@@ -605,11 +622,21 @@ $$;
 create table if not exists device_tokens (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references profiles(id) on delete cascade,
-  token text not null,
+  token text not null check (char_length(btrim(token)) between 1 and 4096),
   platform text not null check (platform in ('ios', 'android')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique(user_id, token)
+);
+
+create table if not exists report_moderation_events (
+  id uuid primary key default gen_random_uuid(),
+  report_id uuid not null references reports(id) on delete cascade,
+  admin_id uuid references profiles(id) on delete set null,
+  previous_status report_status not null,
+  new_status report_status not null,
+  note_present boolean not null default false,
+  created_at timestamptz not null default now()
 );
 
 create table if not exists audit_logs (
@@ -941,16 +968,52 @@ create index if not exists idx_messages_sender on messages(sender_id);
 create index if not exists idx_transactions_listing on transactions(listing_id);
 create index if not exists idx_transactions_buyer on transactions(buyer_id);
 create index if not exists idx_transactions_seller on transactions(seller_id);
+create unique index if not exists transactions_one_completed_per_listing
+  on transactions(listing_id)
+  where status = 'completed' and deleted_at is null;
 create index if not exists idx_reviews_reviewee on reviews(reviewee_id, created_at desc);
 create index if not exists idx_reviews_reviewer on reviews(reviewer_id);
 create index if not exists idx_reviews_listing on reviews(listing_id);
+create unique index if not exists reviews_one_per_reviewer_transaction
+  on reviews(reviewer_id, transaction_id)
+  where deleted_at is null;
 create index if not exists idx_reports_status on reports(status, created_at);
 create index if not exists idx_reports_type on reports(report_type);
 create index if not exists idx_reports_reporter on reports(reporter_id);
+create unique index if not exists reports_one_active_listing_report
+  on reports(reporter_id, listing_id)
+  where report_type = 'listing'
+    and status in ('open', 'reviewing')
+    and reporter_id is not null
+    and listing_id is not null;
+create unique index if not exists reports_one_active_user_report
+  on reports(reporter_id, reported_user_id)
+  where report_type = 'user'
+    and status in ('open', 'reviewing')
+    and reporter_id is not null
+    and reported_user_id is not null
+    and message_id is null;
+create unique index if not exists reports_one_active_message_report
+  on reports(reporter_id, message_id)
+  where report_type = 'message'
+    and status in ('open', 'reviewing')
+    and reporter_id is not null
+    and message_id is not null;
 create index if not exists idx_blocks_blocker on blocks(blocker_id);
 create index if not exists idx_blocks_blocked on blocks(blocked_id);
 create index if not exists idx_notifications_user on notifications(user_id, is_read, created_at desc);
+create unique index if not exists notifications_unique_user_dedupe_key
+  on notifications(user_id, dedupe_key)
+  where dedupe_key is not null;
+create index if not exists idx_notifications_user_live
+  on notifications(user_id, is_read, created_at desc)
+  where deleted_at is null;
 create index if not exists idx_device_tokens_user on device_tokens(user_id);
+create unique index if not exists device_tokens_unique_token on device_tokens(token);
+create index if not exists idx_report_moderation_events_report
+  on report_moderation_events(report_id, created_at desc);
+create index if not exists idx_report_moderation_events_admin
+  on report_moderation_events(admin_id, created_at desc);
 create index if not exists idx_audit_logs_actor on audit_logs(actor_id, created_at desc);
 create index if not exists idx_rate_limit_events_lookup on rate_limit_events(action, user_id, ip_address, created_at desc);
 

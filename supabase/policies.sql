@@ -11,7 +11,9 @@ alter table reviews enable row level security;
 alter table reports enable row level security;
 alter table blocks enable row level security;
 alter table notifications enable row level security;
+alter table notification_preferences enable row level security;
 alter table device_tokens enable row level security;
+alter table report_moderation_events enable row level security;
 alter table audit_logs enable row level security;
 alter table rate_limit_events enable row level security;
 
@@ -58,6 +60,11 @@ drop policy if exists "Service inserts notifications" on notifications;
 drop policy if exists "Participants create message notifications" on notifications;
 drop policy if exists "Users create favorite notifications" on notifications;
 drop policy if exists "Users manage their own device tokens" on device_tokens;
+drop policy if exists "Phase E transaction participants can read" on transactions;
+drop policy if exists "Phase E public can read reviews" on reviews;
+drop policy if exists "Phase E admins can read reports" on reports;
+drop policy if exists "Phase E users can read own notifications" on notifications;
+drop policy if exists "Phase E admins can read report moderation events" on report_moderation_events;
 drop policy if exists "Admins read audit logs" on audit_logs;
 drop policy if exists "Admins insert audit logs" on audit_logs;
 drop policy if exists "Users insert rate limit events" on rate_limit_events;
@@ -248,119 +255,38 @@ create policy "Conversation participants can mark messages read"
     )
   );
 
-create policy "Transaction participants can read transactions"
+create policy "Phase E transaction participants can read"
   on transactions for select
-  using (auth.uid() = buyer_id or auth.uid() = seller_id or is_admin());
-
-create policy "Sellers create transactions for own listings"
-  on transactions for insert
-  with check (
-    auth.uid() = seller_id
-    and buyer_id <> seller_id
-    and is_account_active()
-    and exists (
-      select 1 from listings
-      where listings.id = transactions.listing_id
-        and listings.seller_id = auth.uid()
-    )
+  to authenticated
+  using (
+    is_account_active()
+    and (auth.uid() = buyer_id or auth.uid() = seller_id or is_admin())
   );
 
-create policy "Transaction participants can update transactions"
-  on transactions for update
-  using ((auth.uid() = buyer_id or auth.uid() = seller_id) and is_account_active())
-  with check ((auth.uid() = buyer_id or auth.uid() = seller_id) and is_account_active());
-
-create policy "Reviews are publicly readable"
+create policy "Phase E public can read reviews"
   on reviews for select
+  to anon, authenticated
   using (deleted_at is null);
 
-create policy "Users create reviews they wrote"
-  on reviews for insert
-  with check (
-    auth.uid() = reviewer_id
-    and is_account_active()
-    and reviewer_id <> reviewee_id
-    and exists (
-      select 1 from transactions
-      where transactions.id = reviews.transaction_id
-        and transactions.status = 'completed'
-        and transactions.listing_id = reviews.listing_id
-        and (transactions.buyer_id = auth.uid() or transactions.seller_id = auth.uid())
-        and (transactions.buyer_id = reviews.reviewee_id or transactions.seller_id = reviews.reviewee_id)
-    )
-  );
-
-create policy "Users update reviews they wrote"
-  on reviews for update
-  using (auth.uid() = reviewer_id and is_account_active())
-  with check (auth.uid() = reviewer_id and is_account_active());
-
-create policy "Users create reports"
-  on reports for insert
-  with check (auth.uid() = reporter_id and is_account_active());
-
-create policy "Users read their own reports"
+create policy "Phase E admins can read reports"
   on reports for select
-  using (auth.uid() = reporter_id and is_account_active());
-
-create policy "Admins read reports"
-  on reports for select
+  to authenticated
   using (is_admin());
-
-create policy "Admins update reports"
-  on reports for update
-  using (is_admin())
-  with check (is_admin());
 
 create policy "Users manage their own blocks"
   on blocks for all
   using (auth.uid() = blocker_id and is_account_active())
   with check (auth.uid() = blocker_id and blocker_id <> blocked_id and is_account_active());
 
-create policy "Users read their own notifications"
+create policy "Phase E users can read own notifications"
   on notifications for select
-  using (auth.uid() = user_id);
+  to authenticated
+  using (auth.uid() = user_id and is_account_active() and deleted_at is null);
 
-create policy "Users update their own notifications"
-  on notifications for update
-  using (auth.uid() = user_id and is_account_active())
-  with check (auth.uid() = user_id and is_account_active());
-
-create policy "Service inserts notifications"
-  on notifications for insert
-  with check (is_admin());
-
-create policy "Participants create message notifications"
-  on notifications for insert
-  with check (
-    type = 'message'
-    and is_account_active()
-    and exists (
-      select 1 from conversations
-      where conversations.id = uuid_or_null(notifications.data ->> 'conversationId')
-        and (conversations.buyer_id = auth.uid() or conversations.seller_id = auth.uid())
-        and notifications.user_id in (conversations.buyer_id, conversations.seller_id)
-        and notifications.user_id <> auth.uid()
-    )
-  );
-
-create policy "Users create favorite notifications"
-  on notifications for insert
-  with check (
-    type = 'favorite'
-    and is_account_active()
-    and exists (
-      select 1 from listings
-      where listings.id = uuid_or_null(notifications.data ->> 'listingId')
-        and listings.seller_id = notifications.user_id
-        and listings.seller_id <> auth.uid()
-    )
-  );
-
-create policy "Users manage their own device tokens"
-  on device_tokens for all
-  using (auth.uid() = user_id and is_account_active())
-  with check (auth.uid() = user_id and is_account_active());
+create policy "Phase E admins can read report moderation events"
+  on report_moderation_events for select
+  to authenticated
+  using (is_admin());
 
 create policy "Admins read audit logs"
   on audit_logs for select

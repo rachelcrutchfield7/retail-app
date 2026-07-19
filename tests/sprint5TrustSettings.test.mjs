@@ -36,14 +36,16 @@ test('transactions drive review eligibility instead of listing status alone', ()
 test('reviews enforce completed transactions and duplicate prevention', () => {
   assert.match(reviewService, /transaction_id/);
   assert.match(reviewService, /hasReviewedTransaction/);
-  assert.match(reviewService, /REVIEW_ALREADY_SUBMITTED/);
+  assert.match(reviewService, /rpc\('create_transaction_review'/);
   assert.match(reviewService, /REVIEW_NOT_ALLOWED/);
   assert.match(settingsScreen, /StarRatingInput/);
 });
 
 test('notifications and reports use persistent standardized safety paths', () => {
-  assert.match(notificationService, /notification_preferences/);
-  assert.match(notificationService, /createTransactionCompletedNotification/);
+  assert.match(notificationService, /rpc\('get_my_notification_preferences'/);
+  assert.match(notificationService, /rpc\('delete_my_notification'/);
+  assert.match(notificationService, /rpc\('register_my_device_token'/);
+  assert.doesNotMatch(notificationService, /createTransactionCompletedNotification/);
   assert.match(notificationService, /notification_marked_read/);
   assert.match(reportService, /createListingReport/);
   assert.match(reportService, /createUserReport/);
