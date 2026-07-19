@@ -2,7 +2,7 @@
 
 ## Scope
 
-This document describes the security boundaries for the ReTail mobile app, Supabase database, storage buckets, and client services as of Security Phase E.
+This document describes the security boundaries for the ReTail mobile app, Supabase database, storage buckets, and client services as of Security Phase F.
 
 ## Core Boundaries
 
@@ -58,6 +58,30 @@ High-risk actions use database-controlled functions:
 
 The database sets server-controlled fields such as reporter ID, review participants, notification recipient/content, transaction status, timestamps, and audit records. Generic client-created notifications are not part of the active model.
 
+## Rate Limiting And Abuse Prevention
+
+High-risk actions are rate-limited in Supabase, not only in the app client.
+
+Database-enforced controls cover:
+
+- conversation creation attempts
+- message sends
+- image messages
+- repeated identical message bodies
+- report submissions
+- review submissions
+- transaction completion attempts
+- listing creation and edits
+- favorite state changes
+- saved-search changes and active saved-search count
+- block state changes
+- device-token changes
+- admin report moderation updates
+
+`rate_limit_events` is internal-only. The table has RLS enabled, app-role access is revoked, and client users cannot insert fake rate-limit records. Events do not store raw message bodies, tokens, private text, exact locations, signed URLs, or secret values.
+
+Public search RPCs validate page size and search input length before returning data.
+
 ## Storage
 
 - Avatars are public-read and owner-managed.
@@ -69,6 +93,8 @@ The database sets server-controlled fields such as reporter ID, review participa
 
 Admin status and verification status are database-protected fields. Users cannot promote themselves, verify themselves, update ratings, update counts, ban accounts, or directly change deletion state.
 
+Admin report moderation uses `admin_update_report`, verifies an active admin identity from `auth.uid()`, writes moderation/audit events, and is rate-limited.
+
 ## Known Limits
 
-This security model does not replace an independent penetration test. Native preview builds still need mobile binary scanning, and the live Supabase project still needs Supabase advisor review after the SQL is applied.
+This security model does not replace an independent penetration test. Native preview builds still need mobile binary scanning, and the live Supabase project still needs Supabase advisor, Auth dashboard, backup, Realtime, and Storage review after the SQL is applied.

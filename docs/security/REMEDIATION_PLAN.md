@@ -1,7 +1,7 @@
 # ReTail Security Remediation Plan
 
-Date: 2026-07-14
-Status: Planning only; no remediation applied
+Date: 2026-07-19
+Status: Phases A through E complete; Phase F repository implementation in progress
 
 ## Overview
 
@@ -251,7 +251,7 @@ Verification:
 
 ## Phase E: Transactions, Reviews, Reports, and Notifications
 
-Status: Repository implementation prepared on 2026-07-19 in `20260719120708_phase_e_transactions_reviews_reports_notifications_security.sql`; live Supabase application and disposable multi-user verification pending.
+Status: Completed on 2026-07-19 in `20260719120708_phase_e_transactions_reviews_reports_notifications_security.sql`.
 
 Exact goal:
 
@@ -328,46 +328,44 @@ Completion notes:
 - Completed transactions, reviews, reports, moderation, notification preferences, and device tokens now use controlled RPCs.
 - Notification creation is centralized in `private.create_notification_for_event` and server-side triggers/RPCs.
 - See `PHASE_E_RESULTS.md`, `PHASE_E_AUTHORIZATION_MATRIX.md`, `PHASE_E_TRANSACTION_REVIEW_MODEL.md`, `PHASE_E_REPORT_MODERATION_MODEL.md`, and `PHASE_E_NOTIFICATION_MODEL.md`.
-- Phase E is not complete until the migration is applied to Supabase with the exact recorded version and live multi-user tests pass.
+- Phase E was applied to Supabase with the exact recorded version and live multi-user tests passed.
 
 ## Phase F: Rate Limiting, Security Tests, and Automated Scanners
 
+Status: Repository implementation in progress on 2026-07-19 in `20260719175607_phase_f_rate_limiting_abuse_prevention_and_beta_readiness.sql`.
+
 Exact goal:
 
-Add enforceable abuse limits, direct API regression tests, and automated security checks so future changes do not reopen the same classes of issues.
+Add enforceable abuse limits, direct API regression tests, final authorization documentation, and beta-readiness operations checklists so future changes do not reopen the same classes of issues.
 
-Files likely to change:
+Files changed:
 
 - `src/services/messageService.ts`
-- `src/services/reportService.ts`
-- `src/services/listingService.ts`
-- `src/services/authService.ts`
-- `tests/`
-- `scripts/`
-- CI workflow files, if present or added later
-- Supabase local test configuration, if added later
+- `src/services/supabaseData.ts`
+- `supabase/schema.sql`
+- `supabase/policies.sql`
+- `tests/securityPhaseF.test.mjs`
+- `tests/securityPhaseFLive.test.mjs`
+- `tests/security_phase_f_live.sql`
+- Phase F security documentation
 
-SQL objects likely to change:
+SQL objects changed:
 
 - `rate_limit_events`
-- New rate-limit helper functions
-- Message send RPC
-- Report submit RPC
-- Listing create RPC or triggers
-- Notification create RPC
-- Audit log functions
+- `private.require_active_account`
+- `private.check_rate_limit`
+- `private.normalized_message_fingerprint`
+- `private.ensure_public_search_bounds`
+- `private.cleanup_rate_limit_events`
+- High-risk write triggers for conversations, messages, reports, reviews, listings, favorites, saved searches, blocks, and device tokens
+- Wrappers for `create_or_get_conversation`, `complete_listing_transaction`, `admin_update_report`, and public discovery RPCs
 
 Tests required:
 
-- Direct API tests for each RLS policy and RPC.
-- Anonymous public API snapshot tests proving only safe fields are returned.
-- Authenticated malicious-user tests with arbitrary UUIDs.
-- Rate-limit tests for messages, reports, listings, and notifications.
-- Storage policy tests for public and private buckets.
-- Dependency audit in CI.
-- Secret scan in CI.
-- App permission/privacy manifest review checklist.
-- Basic accessibility and session cache tests.
+- Static Phase F regression tests for private helpers, grants, rate-limit coverage, abuse controls, search bounds, and app error handling.
+- Rollback-based live Supabase tests for message spam, limits, saved-search cap, report/admin/review/transaction/device/block limits, direct rate-event write denial, and cleanup.
+- Final local lint, typecheck, tests, Expo Doctor, web export, dependency audit, and secret scans.
+- Supabase migration alignment, advisors, Auth dashboard, Realtime, Storage, and backup checklist review.
 
 Rollback considerations:
 
@@ -379,6 +377,11 @@ Dependencies on earlier phases:
 
 - Phases B through E should define the desired security rules.
 - Phase F turns those rules into repeatable guardrails and should run continuously after completion.
+
+Completion notes:
+
+- See `PHASE_F_RESULTS.md`, `PHASE_F_RATE_LIMIT_MODEL.md`, `PHASE_F_ABUSE_PREVENTION_MODEL.md`, `PHASE_F_FINAL_AUTHORIZATION_REVIEW.md`, `BETA_SECURITY_READINESS_CHECKLIST.md`, `SUPABASE_AUTH_PRODUCTION_CHECKLIST.md`, `INCIDENT_RESPONSE_PLAN.md`, and `BACKUP_AND_RECOVERY_PLAN.md`.
+- Phase F is not complete until the migration is applied to Supabase, live tests pass, the branch is pushed, and both required GitHub Actions workflows complete successfully.
 
 ## Suggested Execution Order
 

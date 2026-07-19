@@ -654,10 +654,19 @@ create table if not exists audit_logs (
 create table if not exists rate_limit_events (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references profiles(id) on delete cascade,
-  ip_address inet,
   action text not null,
+  subject_key text not null default 'global',
+  request_fingerprint_hash text,
   metadata jsonb not null default '{}'::jsonb,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  expires_at timestamptz,
+  constraint rate_limit_events_action_length check (char_length(action) between 1 and 80),
+  constraint rate_limit_events_subject_key_length check (char_length(subject_key) between 1 and 160),
+  constraint rate_limit_events_fingerprint_safe check (
+    request_fingerprint_hash is null
+    or request_fingerprint_hash ~ '^[a-f0-9]{32,128}$'
+  ),
+  constraint rate_limit_events_metadata_size check (char_length(metadata::text) <= 1200)
 );
 
 create or replace function increment_favorite_count()
@@ -1015,7 +1024,15 @@ create index if not exists idx_report_moderation_events_report
 create index if not exists idx_report_moderation_events_admin
   on report_moderation_events(admin_id, created_at desc);
 create index if not exists idx_audit_logs_actor on audit_logs(actor_id, created_at desc);
-create index if not exists idx_rate_limit_events_lookup on rate_limit_events(action, user_id, ip_address, created_at desc);
+create index if not exists idx_rate_limit_events_user_created
+  on rate_limit_events(user_id, created_at desc);
+create index if not exists idx_rate_limit_events_action_created
+  on rate_limit_events(action, created_at desc);
+create index if not exists idx_rate_limit_events_user_action_subject_created
+  on rate_limit_events(user_id, action, subject_key, created_at desc);
+create index if not exists idx_rate_limit_events_cleanup
+  on rate_limit_events(created_at)
+  where expires_at is not null;
 
 do $$ begin
   alter publication supabase_realtime add table conversations;

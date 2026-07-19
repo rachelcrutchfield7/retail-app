@@ -296,12 +296,6 @@ create policy "Admins insert audit logs"
   on audit_logs for insert
   with check (is_admin());
 
-create policy "Users insert rate limit events"
-  on rate_limit_events for insert
-  with check (auth.uid() = user_id or user_id is null);
-
-create policy "Admins read rate limit events"
-  on rate_limit_events for select
-  using (is_admin());
+revoke all on table rate_limit_events from public, anon, authenticated;
 
 notify pgrst, 'reload schema';

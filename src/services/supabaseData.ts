@@ -54,6 +54,62 @@ export function throwSupabaseError(error: unknown, fallbackMessage = 'We could n
     );
   }
 
+  if (code === '42901' || message.includes('RETAIL_RATE_LIMITED')) {
+    throw createServiceError(
+      'RETAIL_RATE_LIMITED',
+      message,
+      'You have done that a lot recently. Please wait a bit and try again.'
+    );
+  }
+
+  if (message.includes('RETAIL_ACCOUNT_NOT_ACTIVE') || message.includes('RETAIL_ACCOUNT_INACTIVE')) {
+    throw createServiceError(
+      'RETAIL_ACCOUNT_NOT_ACTIVE',
+      message,
+      'This account cannot make changes right now. Contact support if this seems wrong.'
+    );
+  }
+
+  if (message.includes('RETAIL_SEARCH_LIMIT_EXCEEDED')) {
+    throw createServiceError(
+      'RETAIL_SEARCH_LIMIT_EXCEEDED',
+      message,
+      'That search is too broad. Try a shorter search or fewer results at a time.'
+    );
+  }
+
+  if (message.includes('RETAIL_SAVED_SEARCH_LIMIT_EXCEEDED')) {
+    throw createServiceError(
+      'RETAIL_SAVED_SEARCH_LIMIT_EXCEEDED',
+      message,
+      'You can keep up to 50 active saved searches. Remove one before adding another.'
+    );
+  }
+
+  if (message.includes('RETAIL_REPEATED_MESSAGE')) {
+    throw createServiceError(
+      'RETAIL_REPEATED_MESSAGE',
+      message,
+      'That looks like a repeated message. Please wait a moment before sending it again.'
+    );
+  }
+
+  if (message.includes('RETAIL_MESSAGE_LINK_LIMIT')) {
+    throw createServiceError(
+      'RETAIL_MESSAGE_LINK_LIMIT',
+      message,
+      'That message has too many links. Remove a few and try again.'
+    );
+  }
+
+  if (message.includes('RETAIL_MESSAGE_BODY_INVALID')) {
+    throw createServiceError(
+      'RETAIL_MESSAGE_BODY_INVALID',
+      message,
+      'That message could not be sent. Check the text and try again.'
+    );
+  }
+
   throw createServiceError(code, message, fallbackMessage);
 }
 

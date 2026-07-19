@@ -20,8 +20,6 @@ import type {
   UnreadMessages,
 } from './types';
 
-const messageWindowMs = 60 * 60 * 1000;
-const maxMessagesPerWindow = 100;
 const maxMessageLength = 2000;
 
 function normalizeTextBody(body: string | undefined): string {
@@ -127,6 +125,38 @@ function mapMessageRpcError(error: unknown): never {
     );
   }
 
+  if (message.includes('RETAIL_REPEATED_MESSAGE')) {
+    throw createServiceError(
+      'RETAIL_REPEATED_MESSAGE',
+      message,
+      'That looks like a repeated message. Please wait a moment before sending it again.'
+    );
+  }
+
+  if (message.includes('RETAIL_RATE_LIMITED') || details.code === '42901') {
+    throw createServiceError(
+      'RETAIL_RATE_LIMITED',
+      message,
+      'You have sent a lot of messages recently. Please wait before sending another.'
+    );
+  }
+
+  if (message.includes('RETAIL_MESSAGE_LINK_LIMIT')) {
+    throw createServiceError(
+      'RETAIL_MESSAGE_LINK_LIMIT',
+      message,
+      'That message has too many links. Remove a few and try again.'
+    );
+  }
+
+  if (message.includes('RETAIL_ACCOUNT_NOT_ACTIVE')) {
+    throw createServiceError(
+      'RETAIL_ACCOUNT_NOT_ACTIVE',
+      message,
+      'This account cannot send messages right now. Contact support if this seems wrong.'
+    );
+  }
+
   throwSupabaseError(error, 'We could not send that message.');
 }
 
@@ -136,27 +166,6 @@ async function deleteUploadedMessageAttachment(attachment: MessageAttachmentInpu
     .remove([attachment.path])
     .then(() => undefined)
     .catch(() => undefined);
-}
-
-async function enforceRateLimit(userId: string): Promise<void> {
-  const cutoff = new Date(Date.now() - messageWindowMs).toISOString();
-  const { count, error } = await supabase
-    .from('messages')
-    .select('id', { count: 'exact', head: true })
-    .eq('sender_id', userId)
-    .gte('created_at', cutoff);
-
-  if (error) {
-    throwSupabaseError(error, 'We could not send that message.');
-  }
-
-  if ((count ?? 0) >= maxMessagesPerWindow) {
-    throw createServiceError(
-      'MESSAGE_RATE_LIMITED',
-      `User ${userId} exceeded message rate limit`,
-      'You have sent a lot of messages recently. Please wait before sending another.'
-    );
-  }
 }
 
 export async function getMessages(conversationId: string, params: MessageQueryParams = {}): Promise<Message[]> {
@@ -202,7 +211,6 @@ export async function getPaginatedMessages(conversationId: string, params: Messa
 export async function sendMessage(input: SendMessageInput): Promise<Message> {
   const profile = await ensureCurrentProfile();
   await requireCanSendInConversation(input.conversationId);
-  await enforceRateLimit(profile.id);
   const messageType: SendableMessageType = input.messageType ?? 'text';
   const textBody = messageType === 'text' ? normalizeTextBody(input.body) : input.body?.trim() || null;
 
