@@ -267,6 +267,12 @@ export type Message = {
   message_type: MessageType;
   body?: string;
   image_url?: string;
+  attachment_bucket?: string;
+  attachment_path?: string;
+  attachment_mime_type?: string;
+  attachment_size_bytes?: number;
+  attachment_width?: number;
+  attachment_height?: number;
   is_read: boolean;
   read_at?: string;
   created_at: string;
@@ -280,6 +286,21 @@ export type SendMessageInput = {
   messageType?: MessageType;
   body?: string;
   imageUrl?: string;
+  attachmentBucket?: string;
+  attachmentPath?: string;
+  attachmentMimeType?: string;
+  attachmentSizeBytes?: number;
+  attachmentWidth?: number;
+  attachmentHeight?: number;
+};
+
+export type MessageAttachmentInput = {
+  bucket: string;
+  path: string;
+  mimeType: string;
+  sizeBytes: number;
+  width?: number;
+  height?: number;
 };
 
 export type MessageQueryParams = {

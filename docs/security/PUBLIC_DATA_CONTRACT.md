@@ -93,3 +93,26 @@ Never expose publicly:
 - Owner management screens may use owner-authenticated table reads where RLS enforces ownership.
 - Owner mutations for `profiles`, `listings`, and `rescue_profiles` must use Phase C controlled RPCs, not direct table writes.
 - New public fields require this document, the SQL RPC return contract, and security tests to be updated together.
+
+## Private Messaging Data
+
+Messaging data is not public discovery data.
+
+Allowed only to conversation participants or admins:
+
+- conversation rows
+- message rows
+- unread state
+- private message attachment metadata
+- signed message-image URLs
+
+Never expose publicly:
+
+- `messages.attachment_path`
+- `messages.attachment_bucket`
+- signed message-image URLs
+- raw `messages.image_url` legacy external values
+- block rows
+- conversation participant ids outside participant/admin contexts
+
+Message images must use the private `message-images` bucket and short-lived signed URLs. Signed URLs must not be persisted.

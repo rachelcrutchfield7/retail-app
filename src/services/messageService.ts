@@ -1,4 +1,5 @@
 import { cachePolicy } from '../lib/cachePolicy';
+import { config } from '../constants/config';
 import { trackEvent } from '../lib/analytics';
 import { supabase } from '../lib/supabase';
 import { createServiceError } from './errors';
@@ -8,9 +9,15 @@ import {
   getOrCreateConversation,
   requireCanSendInConversation,
 } from './conversationService';
-import { createMessageNotification } from './notificationService';
 import { ensureCurrentProfile, throwSupabaseError, toMessage } from './supabaseData';
-import type { Message, MessageQueryParams, PaginatedMessages, SendMessageInput, UnreadMessages } from './types';
+import type {
+  Message,
+  MessageAttachmentInput,
+  MessageQueryParams,
+  PaginatedMessages,
+  SendMessageInput,
+  UnreadMessages,
+} from './types';
 
 const messageWindowMs = 60 * 60 * 1000;
 const maxMessagesPerWindow = 100;
@@ -32,6 +39,63 @@ function normalizeTextBody(body: string | undefined): string {
   }
 
   return trimmed;
+}
+
+function randomUuid(): string {
+  if (typeof globalThis.crypto?.randomUUID === 'function') {
+    return globalThis.crypto.randomUUID();
+  }
+
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (character) => {
+    const random = Math.floor(Math.random() * 16);
+    const value = character === 'x' ? random : (random & 0x3) | 0x8;
+    return value.toString(16);
+  });
+}
+
+function safeLegacyMessageImageUrl(imageUrl?: string): string | undefined {
+  if (!imageUrl) {
+    return undefined;
+  }
+
+  try {
+    const parsedUrl = new URL(imageUrl);
+    const supabaseUrl = new URL(config.supabaseUrl);
+
+    if (
+      parsedUrl.origin === supabaseUrl.origin
+      && parsedUrl.pathname.includes('/storage/v1/object/')
+      && parsedUrl.pathname.includes('/message-images/')
+    ) {
+      return imageUrl;
+    }
+  } catch {
+    return undefined;
+  }
+
+  return undefined;
+}
+
+async function withSignedAttachmentUrl(message: Message): Promise<Message> {
+  if (!message.attachment_bucket || !message.attachment_path) {
+    return {
+      ...message,
+      image_url: safeLegacyMessageImageUrl(message.image_url),
+    };
+  }
+
+  const { data, error } = await supabase.storage
+    .from(message.attachment_bucket)
+    .createSignedUrl(message.attachment_path, 60 * 60);
+
+  if (error || !data?.signedUrl) {
+    return message;
+  }
+
+  return {
+    ...message,
+    image_url: data.signedUrl,
+  };
 }
 
 async function enforceRateLimit(userId: string): Promise<void> {
@@ -81,9 +145,12 @@ export async function getPaginatedMessages(conversationId: string, params: Messa
     throwSupabaseError(error, 'We could not load messages.');
   }
 
-  const messages = (data ?? [])
-    .map((message) => toMessage(message as Record<string, unknown>, profile.id))
-    .sort((first, second) => Date.parse(first.created_at) - Date.parse(second.created_at));
+  const messages = await Promise.all(
+    (data ?? [])
+      .map((message) => toMessage(message as Record<string, unknown>, profile.id))
+      .sort((first, second) => Date.parse(first.created_at) - Date.parse(second.created_at))
+      .map((message) => withSignedAttachmentUrl(message))
+  );
 
   return {
     items: messages,
@@ -94,35 +161,33 @@ export async function getPaginatedMessages(conversationId: string, params: Messa
 
 export async function sendMessage(input: SendMessageInput): Promise<Message> {
   const profile = await ensureCurrentProfile();
-  const conversation = await requireCanSendInConversation(input.conversationId);
+  await requireCanSendInConversation(input.conversationId);
   await enforceRateLimit(profile.id);
   const messageType = input.messageType ?? 'text';
   const textBody = messageType === 'text' || messageType === 'system' ? normalizeTextBody(input.body) : input.body?.trim() || null;
 
-  if (messageType === 'image' && !input.imageUrl?.trim()) {
-    throw createServiceError('IMAGE_REQUIRED', 'Image message was missing image URL', 'Choose an image to send.');
+  if (messageType === 'image' && !input.attachmentPath?.trim()) {
+    throw createServiceError('IMAGE_REQUIRED', 'Image message was missing private attachment metadata', 'Choose an image to send.');
   }
 
   const { data, error } = await supabase
-    .from('messages')
-    .insert({
-      conversation_id: input.conversationId,
-      sender_id: profile.id,
-      message_type: messageType,
-      body: textBody,
-      image_url: input.imageUrl?.trim() || null,
-      is_read: false,
-    })
-    .select('*')
-    .single();
+    .rpc('send_message', {
+      target_conversation_id: input.conversationId,
+      requested_message_type: messageType,
+      requested_body: textBody,
+      requested_attachment_bucket: input.attachmentBucket ?? null,
+      requested_attachment_path: input.attachmentPath ?? null,
+      requested_attachment_mime_type: input.attachmentMimeType ?? null,
+      requested_attachment_size_bytes: input.attachmentSizeBytes ?? null,
+      requested_attachment_width: input.attachmentWidth ?? null,
+      requested_attachment_height: input.attachmentHeight ?? null,
+    });
 
   if (error) {
     throwSupabaseError(error, 'We could not send that message.');
   }
 
-  const message = toMessage(data as Record<string, unknown>, profile.id);
-  const recipientId = conversation.buyerId === profile.id ? conversation.sellerId : conversation.buyerId;
-  await createMessageNotification(recipientId, input.conversationId, conversation.listingId, message).catch(() => null);
+  const message = await withSignedAttachmentUrl(toMessage(data as Record<string, unknown>, profile.id));
   trackEvent('Message Sent', { conversationId: input.conversationId, messageType });
   return message;
 }
@@ -142,11 +207,21 @@ export async function sendTextMessage(conversationId: string, senderId: string, 
 }
 
 export async function sendImageMessage(conversationId: string, imageUri: string, body?: string): Promise<Message> {
-  const imageUrl = await uploadMessageImage(imageUri, conversationId);
-  return sendMessage({ conversationId, messageType: 'image', imageUrl, body });
+  const attachment = await uploadMessageImage(imageUri, conversationId);
+  return sendMessage({
+    conversationId,
+    messageType: 'image',
+    body,
+    attachmentBucket: attachment.bucket,
+    attachmentPath: attachment.path,
+    attachmentMimeType: attachment.mimeType,
+    attachmentSizeBytes: attachment.sizeBytes,
+    attachmentWidth: attachment.width,
+    attachmentHeight: attachment.height,
+  });
 }
 
-export async function uploadMessageImage(fileUri: string, conversationId: string): Promise<string> {
+export async function uploadMessageImage(fileUri: string, conversationId: string): Promise<MessageAttachmentInput> {
   const profile = await ensureCurrentProfile();
   await requireCanSendInConversation(conversationId);
 
@@ -155,7 +230,11 @@ export async function uploadMessageImage(fileUri: string, conversationId: string
   }
 
   if (fileUri.startsWith('http')) {
-    return fileUri;
+    throw createServiceError(
+      'EXTERNAL_MESSAGE_IMAGE_BLOCKED',
+      'Message image upload rejected an external URL',
+      'Choose a photo from your device before sending.'
+    );
   }
 
   const response = await fetch(fileUri);
@@ -166,9 +245,10 @@ export async function uploadMessageImage(fileUri: string, conversationId: string
 
   const blob = await response.blob();
   const extension = blob.type.includes('png') ? 'png' : blob.type.includes('webp') ? 'webp' : 'jpg';
-  const path = `${conversationId}/${profile.id}/${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${extension}`;
+  const mimeType = blob.type && ['image/jpeg', 'image/png', 'image/webp'].includes(blob.type) ? blob.type : 'image/jpeg';
+  const path = `${conversationId}/${profile.id}/${randomUuid()}.${extension}`;
   const { error } = await supabase.storage.from('message-images').upload(path, blob, {
-    contentType: blob.type || 'image/jpeg',
+    contentType: mimeType,
     upsert: false,
   });
 
@@ -176,15 +256,12 @@ export async function uploadMessageImage(fileUri: string, conversationId: string
     throwSupabaseError(error, 'We could not upload that photo.');
   }
 
-  const { data, error: signedUrlError } = await supabase.storage
-    .from('message-images')
-    .createSignedUrl(path, 60 * 60);
-
-  if (signedUrlError) {
-    throwSupabaseError(signedUrlError, 'We could not prepare that photo.');
-  }
-
-  return data.signedUrl;
+  return {
+    bucket: 'message-images',
+    path,
+    mimeType,
+    sizeBytes: blob.size,
+  };
 }
 
 export async function markMessagesRead(conversationId: string): Promise<void> {

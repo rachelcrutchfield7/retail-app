@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { config } from '../constants/config';
 import { createServiceError } from './errors';
 import {
   ensureCurrentProfile,
@@ -13,14 +14,44 @@ function publicObjectPath(bucket: string, publicUrl?: string): string | null {
   }
 
   const marker = `/storage/v1/object/public/${bucket}/`;
-  const markerIndex = publicUrl.indexOf(marker);
+  let parsedUrl: URL;
 
-  return markerIndex >= 0 ? decodeURIComponent(publicUrl.slice(markerIndex + marker.length)) : null;
+  try {
+    parsedUrl = new URL(publicUrl);
+  } catch {
+    return null;
+  }
+
+  let supabaseUrl: URL;
+
+  try {
+    supabaseUrl = new URL(config.supabaseUrl);
+  } catch {
+    return null;
+  }
+
+  if (parsedUrl.origin !== supabaseUrl.origin) {
+    return null;
+  }
+
+  const markerIndex = parsedUrl.pathname.indexOf(marker);
+
+  return markerIndex >= 0 ? decodeURIComponent(parsedUrl.pathname.slice(markerIndex + marker.length)) : null;
 }
 
 async function uploadPublicFile(bucket: string, fileUri: string, folder: string): Promise<string> {
   if (fileUri.startsWith('http')) {
-    return fileUri;
+    const existingPath = publicObjectPath(bucket, fileUri);
+
+    if (existingPath) {
+      return fileUri;
+    }
+
+    throw createServiceError(
+      'EXTERNAL_LISTING_IMAGE_BLOCKED',
+      'Listing image upload rejected an external URL',
+      'Choose a photo from your device before saving this listing.'
+    );
   }
 
   const response = await fetch(fileUri);

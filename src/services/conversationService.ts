@@ -126,6 +126,25 @@ async function requireNotBlocked(firstUserId: string, secondUserId: string): Pro
   }
 }
 
+function mapConversationRpcError(error: unknown): never {
+  const details = typeof error === 'object' && error !== null ? error as { code?: string; message?: string } : {};
+  const message = details.message ?? '';
+
+  if (message.includes('Users cannot message themselves')) {
+    throw createServiceError('SELF_MESSAGE_NOT_ALLOWED', message, 'You cannot message yourself.');
+  }
+
+  if (message.includes('Blocked users cannot start conversations')) {
+    throw createServiceError('USER_BLOCKED', message, 'Messaging is unavailable between these accounts.');
+  }
+
+  if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23505') {
+    throwSupabaseError(error, 'We found your existing conversation.');
+  }
+
+  throwSupabaseError(error, 'We could not start this conversation.');
+}
+
 function deletedPublicProfile(userId: string) {
   return {
     id: userId,
@@ -257,94 +276,26 @@ export async function buildConversationSummary(conversation: Conversation | Conv
 export async function getOrCreateConversation(listingId: string, expectedSellerId?: string): Promise<ConversationDetail> {
   const profile = await ensureCurrentProfile();
   requireActiveMessageRecipient(profile);
-  const { data: listingData, error: listingError } = await supabase
-    .from('listings')
-    .select('id, seller_id, status, deleted_at')
-    .eq('id', listingId)
-    .maybeSingle();
+  const { data, error } = await supabase.rpc('create_or_get_conversation', {
+    target_listing_id: listingId,
+  });
 
-  if (listingError) {
-    throwSupabaseError(listingError, 'We could not load this listing.');
+  if (error) {
+    mapConversationRpcError(error);
   }
 
-  if (!listingData) {
-    throw createServiceError('LISTING_NOT_FOUND', `Listing ${listingId} was not found`, 'This listing is no longer available.');
-  }
+  const conversation = data as ConversationRow;
 
-  const listing = listingData as { id: string; seller_id: string; status?: string; deleted_at?: string | null };
-  const sellerId = listing.seller_id;
-
-  if (profile.id === sellerId) {
-    throw createServiceError('SELF_MESSAGE_NOT_ALLOWED', 'User tried to message themselves', 'You cannot message yourself.');
-  }
-
-  if (expectedSellerId && expectedSellerId !== sellerId && expectedSellerId !== profile.id) {
+  if (expectedSellerId && expectedSellerId !== conversation.seller_id && expectedSellerId !== profile.id) {
     throw createServiceError(
       'SELLER_MISMATCH',
-      `Expected seller ${expectedSellerId} did not match listing seller ${sellerId}`,
+      `Expected seller ${expectedSellerId} did not match listing seller ${conversation.seller_id}`,
       'We could not confirm the seller for this listing.'
     );
   }
 
-  const existing = await supabase
-    .from('conversations')
-    .select('*')
-    .eq('listing_id', listingId)
-    .eq('buyer_id', profile.id)
-    .eq('seller_id', sellerId)
-    .maybeSingle();
-
-  if (existing.error) {
-    throwSupabaseError(existing.error, 'We could not open this conversation.');
-  }
-
-  if (existing.data) {
-    trackEvent('Conversation Opened', { conversationId: String((existing.data as ConversationRow).id) });
-    return buildConversationSummary(existing.data as ConversationRow);
-  }
-
-  if (listing.status !== 'active' || listing.deleted_at) {
-    throw createServiceError(
-      'LISTING_UNAVAILABLE',
-      `Listing ${listingId} is not active`,
-      'This listing is no longer available for new conversations.'
-    );
-  }
-
-  requireActiveMessageRecipient(await loadProfile(sellerId));
-  await requireNotBlocked(profile.id, sellerId);
-
-  const { data, error } = await supabase
-    .from('conversations')
-    .insert({
-      listing_id: listingId,
-      buyer_id: profile.id,
-      seller_id: sellerId,
-      last_message_at: new Date().toISOString(),
-    })
-    .select('*')
-    .single();
-
-  if (error) {
-    if (error.code === '23505') {
-      const duplicate = await supabase
-        .from('conversations')
-        .select('*')
-        .eq('listing_id', listingId)
-        .eq('buyer_id', profile.id)
-        .eq('seller_id', sellerId)
-        .maybeSingle();
-
-      if (!duplicate.error && duplicate.data) {
-        return buildConversationSummary(duplicate.data as ConversationRow);
-      }
-    }
-
-    throwSupabaseError(error, 'We could not start this conversation.');
-  }
-
-  trackEvent('Conversation Started', { conversationId: String((data as ConversationRow).id), listingId });
-  return buildConversationSummary(data as ConversationRow);
+  trackEvent('Conversation Started', { conversationId: conversation.id, listingId });
+  return buildConversationSummary(conversation);
 }
 
 export async function getConversationById(conversationId: string, userId?: string): Promise<ConversationDetail> {

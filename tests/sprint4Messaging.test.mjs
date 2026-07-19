@@ -83,7 +83,11 @@ liveSupabaseTest('Sprint 4 message service sends, reads, attaches images, and cr
     body: 'Is pickup near the listed city still okay?',
     messageType: 'text',
   });
-  const imageMessage = await sendImageMessage(conversation.id, 'https://example.com/photo.jpg', 'Here is my carrier.');
+  const imageMessage = await sendImageMessage(
+    conversation.id,
+    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=',
+    'Here is my carrier.'
+  );
   const messages = await getMessages(conversation.id);
 
   assert.equal(textMessage.status, 'delivered');

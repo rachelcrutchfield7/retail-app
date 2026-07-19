@@ -451,6 +451,18 @@ export function toMessage(row: SupabaseRow, currentUserId?: string): Message {
     message_type: String(row.message_type ?? 'text') as Message['message_type'],
     body: optionalString(row.body),
     image_url: optionalString(row.image_url),
+    attachment_bucket: optionalString(row.attachment_bucket),
+    attachment_path: optionalString(row.attachment_path),
+    attachment_mime_type: optionalString(row.attachment_mime_type),
+    attachment_size_bytes: row.attachment_size_bytes === null || row.attachment_size_bytes === undefined
+      ? undefined
+      : integerValue(row.attachment_size_bytes),
+    attachment_width: row.attachment_width === null || row.attachment_width === undefined
+      ? undefined
+      : integerValue(row.attachment_width),
+    attachment_height: row.attachment_height === null || row.attachment_height === undefined
+      ? undefined
+      : integerValue(row.attachment_height),
     is_read: isRead,
     read_at: optionalString(row.read_at),
     created_at: timestampValue(row.created_at),

@@ -59,9 +59,9 @@ export async function blockUser(blockerId: string, blockedId: string): Promise<v
     throw createServiceError('CANNOT_BLOCK_SELF', 'User tried to block themselves', 'You cannot block yourself.');
   }
 
-  const { error } = await supabase
-    .from('blocks')
-    .upsert({ blocker_id: blockerId, blocked_id: blockedId }, { onConflict: 'blocker_id,blocked_id' });
+  const { error } = await supabase.rpc('block_user', {
+    target_user_id: blockedId,
+  });
 
   if (error) {
     throwSupabaseError(error, 'We could not block that user.');
@@ -81,11 +81,9 @@ export async function unblockUser(blockerId: string, blockedId: string): Promise
     );
   }
 
-  const { error } = await supabase
-    .from('blocks')
-    .delete()
-    .eq('blocker_id', blockerId)
-    .eq('blocked_id', blockedId);
+  const { error } = await supabase.rpc('unblock_user', {
+    target_user_id: blockedId,
+  });
 
   if (error) {
     throwSupabaseError(error, 'We could not unblock that user.');

@@ -155,6 +155,8 @@ Dependencies on earlier phases:
 
 ## Phase D: Conversations, Messages, Blocking, and Storage
 
+Status: Completed on 2026-07-18 in `20260719003237 phase_d_messaging_blocking_storage_security`.
+
 Exact goal:
 
 Ensure conversations and messages are participant-only, blocked users cannot interact, image messages cannot bypass private storage, and removed/abandoned images are controlled.
@@ -201,6 +203,15 @@ Dependencies on earlier phases:
 
 - Phase C should be complete so direct updates are constrained.
 - Phase B should decide public media and location privacy rules.
+
+Completion notes:
+
+- Direct app writes to `conversations`, `messages`, and `blocks` were replaced with controlled RPCs.
+- Message images now use private attachment metadata and short-lived signed URLs.
+- Blocks are enforced on conversation creation, message sending, and message-image uploads.
+- Avatar/listing public URL serving remains, but broad object enumeration policies were removed.
+- Removed listing image cleanup is queued in `storage_cleanup_jobs` for a future worker.
+- See `PHASE_D_RESULTS.md`, `PHASE_D_MESSAGING_AUTHORIZATION_MATRIX.md`, and `PHASE_D_STORAGE_MODEL.md`.
 
 ## Phase E: Transactions, Reviews, Reports, and Notifications
 
