@@ -67,6 +67,8 @@ test('private beta environment config fails safely for release-like builds', () 
 test('release build configuration keeps private beta separate from production', () => {
   const app = readJson('app.json').expo;
   const eas = readJson('eas.json');
+  const ciWorkflow = read('.github/workflows/ci.yml');
+  const securityWorkflow = read('.github/workflows/security.yml');
 
   assert.equal(app.name, 'ReTail');
   assert.equal(app.slug, 'retail');
@@ -78,6 +80,8 @@ test('release build configuration keeps private beta separate from production', 
   assert.equal(eas.build.preview.distribution, 'internal');
   assert.equal(eas.build.production.env.EXPO_PUBLIC_APP_ENV, 'production');
   assert.doesNotMatch(JSON.stringify({ app, eas }), /localhost|127\.0\.0\.1|example\.supabase\.co|ci-placeholder/);
+  assert.match(ciWorkflow, /private-beta-\*\*/);
+  assert.match(securityWorkflow, /private-beta-\*\*/);
 });
 
 test('unfinished high-risk payment flow remains gated for private beta', () => {

@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - "security-phase-**"
+      - "private-beta-**"
   pull_request:
 
 jobs:
