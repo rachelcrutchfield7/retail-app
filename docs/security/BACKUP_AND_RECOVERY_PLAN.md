@@ -69,12 +69,15 @@ Secure account deletion intentionally removes the Supabase Auth identity after d
 
 Deletion behavior:
 
+- database preparation runs through `public.prepare_account_deletion_for_user(target_user_id uuid)`, callable only by `service_role`
+- the deprecated `public.prepare_current_account_deletion()` client RPC is not available
 - public profile data is anonymized
 - active/draft/pending listings are archived
 - favorites, saved searches, notifications, device tokens, notification preferences, privacy settings, and owned blocks are removed
 - conversations, messages, transactions, reviews, reports, report moderation events, and audit logs are retained for safety and abuse investigation
 - account-owned `avatars/` and `listings/` Storage objects are removed by the Edge Function
 - private `message-images/` objects are retained with conversation history
+- the local app client removes persisted Auth session state with local-scope sign-out after the server confirms deletion
 
 Deleted accounts should not be reactivated through normal support. Any recovery would require a deliberate backup restore decision in a non-production project and owner approval.
 

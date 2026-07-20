@@ -79,13 +79,20 @@ Required assertions:
 
 - request body user IDs are ignored
 - only the authenticated caller can delete their own account
+- app clients cannot call the server-only preparation RPC directly
+- the obsolete authenticated preparation RPC is unavailable
 - profile data is anonymized
 - active listings are archived
 - convenience records are removed
 - conversations, messages, reports, transactions, reviews, and audit logs are retained for safety
-- account-owned avatar and listing Storage paths are removed
-- message images are retained
+- an actual account-owned avatar object is removed
+- an actual account-owned listing-image object is removed
+- an actual message-image object is retained with conversation history
 - deleted credentials cannot sign in again
 - deleted refresh tokens cannot renew a session
 - stale access tokens cannot mutate protected tables
+- local persisted session state clears even if global sign-out fails after Auth deletion
+- Realtime subscriptions are removed from the local app client
+- stale marked test fixtures are cleaned before a live run
+- current-run fixtures are cleaned in `finally`
 - all disposable fixtures are cleaned up

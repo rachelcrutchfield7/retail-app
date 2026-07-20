@@ -53,6 +53,8 @@ Do not export raw message bodies, device tokens, auth tokens, or private address
 
 Secure account deletion removes the Supabase Auth identity and anonymizes the public profile, but safety records remain available for moderation.
 
+Database preparation for deletion is server-only through `public.prepare_account_deletion_for_user(target_user_id uuid)`, with execution granted only to `service_role`. App clients cannot call the preparation RPC directly.
+
 After deletion, investigators should expect:
 
 - `profiles.display_name` to be `Deleted User`
@@ -61,6 +63,7 @@ After deletion, investigators should expect:
 - conversations, messages, reports, transactions, reviews, report moderation events, and audit logs to remain available according to admin policies
 - account-owned avatar and listing Storage objects to be removed
 - message-image Storage objects to remain private with conversation history
+- the deleted user's device session to be removed locally by the app after server confirmation
 
 Do not attempt to restore or reactivate a deleted Auth user during an incident without a documented owner approval and backup-restore plan.
 

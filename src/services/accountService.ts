@@ -9,10 +9,15 @@ import { logger } from '../lib/logger';
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-type DeleteAccountResponse = {
+export type DeleteAccountResponse = {
   deleted?: boolean;
   authDeleted?: boolean;
   status?: 'deleted' | 'already_deleted';
+  storageCleanup?: {
+    avatarsRemoved: number;
+    listingImagesRemoved: number;
+    messageImagesRetained: true;
+  };
   code?: string;
   message?: string;
   retryable?: boolean;
@@ -48,7 +53,26 @@ export async function updatePassword(input: { password: string }): Promise<void>
   trackEvent('account_password_updated', {});
 }
 
-export async function deleteAccount(): Promise<void> {
+export async function clearDeletedAccountLocalState(): Promise<void> {
+  try {
+    await signOut();
+  } catch (signOutError) {
+    logger.warning('Global sign-out failed after confirmed account deletion; clearing local session.', { error: signOutError });
+  }
+
+  const { error: localSignOutError } = await supabase.auth.signOut({ scope: 'local' });
+
+  if (localSignOutError) {
+    logger.warning('Local sign-out returned an error after confirmed account deletion.', { error: localSignOutError });
+  }
+
+  removeAllRealtimeSubscriptions();
+  resetAnalyticsUser();
+  await clearAllQueryData();
+  clearQueryData();
+}
+
+export async function deleteAccount(): Promise<DeleteAccountResponse> {
   trackEvent('account_deletion_started', {});
 
   const { data, error } = await supabase.functions.invoke<DeleteAccountResponse>('delete-account', {
@@ -71,14 +95,6 @@ export async function deleteAccount(): Promise<void> {
   }
 
   trackEvent('account_deleted', {});
-  try {
-    await signOut();
-  } catch (signOutError) {
-    logger.warning('Local sign-out failed after confirmed account deletion.', { error: signOutError });
-  } finally {
-    removeAllRealtimeSubscriptions();
-    resetAnalyticsUser();
-    await clearAllQueryData();
-    clearQueryData();
-  }
+  await clearDeletedAccountLocalState();
+  return data;
 }

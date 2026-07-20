@@ -8,10 +8,14 @@ const root = fileURLToPath(new URL('..', import.meta.url));
 const read = (path) => readFileSync(join(root, path), 'utf8');
 const migrationName = readdirSync(join(root, 'supabase/migrations'))
   .find((file) => /^\d{14}_private_beta_secure_account_deletion\.sql$/.test(file));
+const serverOnlyMigrationName = readdirSync(join(root, 'supabase/migrations'))
+  .find((file) => /^\d{14}_private_beta_account_deletion_server_only_preparation\.sql$/.test(file));
 
 assert.ok(migrationName, 'Expected generated private beta account deletion migration.');
+assert.ok(serverOnlyMigrationName, 'Expected server-only account deletion preparation migration.');
 
 const migrationSql = read(`supabase/migrations/${migrationName}`);
+const serverOnlyMigrationSql = read(`supabase/migrations/${serverOnlyMigrationName}`);
 
 function walkFiles(dir, files = []) {
   for (const entry of readdirSync(dir)) {
@@ -32,23 +36,28 @@ function walkFiles(dir, files = []) {
 test('private beta account deletion migration supersedes the old insecure RPC', () => {
   const activeDatabaseSql = [
     migrationSql,
+    serverOnlyMigrationSql,
     read('supabase/schema.sql'),
     ...readdirSync(join(root, 'supabase/migrations')).map((file) => read(`supabase/migrations/${file}`)),
   ].join('\n');
 
   assert.match(migrationSql, /drop function if exists public\.delete_current_account\(\)/);
-  assert.match(migrationSql, /create or replace function public\.prepare_current_account_deletion\(\)/);
-  assert.match(migrationSql, /caller_id uuid := \(select auth\.uid\(\)\)/);
-  assert.match(migrationSql, /set search_path = ''/);
+  assert.match(serverOnlyMigrationSql, /drop function if exists public\.prepare_current_account_deletion\(\)/);
+  assert.match(serverOnlyMigrationSql, /create or replace function public\.prepare_account_deletion_for_user\(target_user_id uuid\)/);
+  assert.match(serverOnlyMigrationSql, /perform pg_catalog\.set_config\('request\.jwt\.claim\.sub', target_user_id::text, true\)/);
+  assert.match(serverOnlyMigrationSql, /set search_path = ''/);
   assert.doesNotMatch(
     activeDatabaseSql,
     /create or replace function (public\.)?delete_current_account\(\)[\s\S]+?set search_path\s*=\s*public/i
   );
-  assert.match(migrationSql, /revoke all on function public\.prepare_current_account_deletion\(\)[\s\S]+from public, anon, authenticated/);
-  assert.match(migrationSql, /grant execute on function public\.prepare_current_account_deletion\(\)[\s\S]+to authenticated/);
+  assert.match(serverOnlyMigrationSql, /revoke all on function public\.prepare_account_deletion_for_user\(uuid\)[\s\S]+from public, anon, authenticated/);
+  assert.match(serverOnlyMigrationSql, /grant execute on function public\.prepare_account_deletion_for_user\(uuid\)[\s\S]+to service_role/);
+  assert.doesNotMatch(serverOnlyMigrationSql, /grant execute on function public\.prepare_account_deletion_for_user\(uuid\)[\s\S]+to authenticated/);
 });
 
 test('account deletion preparation anonymizes disposable profile data and preserves safety records', () => {
+  const accountDeletionSql = `${migrationSql}\n${serverOnlyMigrationSql}`;
+
   for (const tableName of [
     'listings',
     'favorites',
@@ -61,15 +70,15 @@ test('account deletion preparation anonymizes disposable profile data and preser
     'profiles',
     'audit_logs',
   ]) {
-    assert.match(migrationSql, new RegExp(`public\\.${tableName}`));
+    assert.match(accountDeletionSql, new RegExp(`public\\.${tableName}`));
   }
 
-  assert.match(migrationSql, /username = \('deleted_' \|\| pg_catalog\.substr\(pg_catalog\.md5\(caller_id::text\), 1, 24\)\)::public\.citext/);
-  assert.match(migrationSql, /city = null/);
-  assert.match(migrationSql, /latitude = null/);
-  assert.match(migrationSql, /longitude = null/);
-  assert.match(migrationSql, /retainedSafetyRecords/);
-  assert.doesNotMatch(migrationSql, /delete from public\.(transactions|reviews|messages|reports|report_moderation_events)/i);
+  assert.match(serverOnlyMigrationSql, /username = \('deleted_' \|\| pg_catalog\.substr\(pg_catalog\.md5\(target_user_id::text\), 1, 24\)\)::public\.citext/);
+  assert.match(serverOnlyMigrationSql, /city = null/);
+  assert.match(serverOnlyMigrationSql, /latitude = null/);
+  assert.match(serverOnlyMigrationSql, /longitude = null/);
+  assert.match(serverOnlyMigrationSql, /retainedSafetyRecords/);
+  assert.doesNotMatch(serverOnlyMigrationSql, /delete from public\.(transactions|reviews|messages|reports|report_moderation_events)/i);
 });
 
 test('delete-account Edge Function owns Admin Auth deletion and keeps the service key server-side', () => {
@@ -79,7 +88,8 @@ test('delete-account Edge Function owns Admin Auth deletion and keeps the servic
   assert.match(edgeFunction, /auth\.admin\.deleteUser\(user\.id, true\)/);
   assert.match(edgeFunction, /SUPABASE_SERVICE_ROLE_KEY/);
   assert.match(edgeFunction, /SUPABASE_SECRET_KEY/);
-  assert.match(edgeFunction, /prepare_current_account_deletion/);
+  assert.match(edgeFunction, /prepare_account_deletion_for_user/);
+  assert.match(edgeFunction, /target_user_id: user\.id/);
   assert.match(edgeFunction, /cleanupDisposableStorage/);
   assert.match(edgeFunction, /messageImagesRetained: true/);
   assert.match(config, /\[functions\.delete-account\]\s+verify_jwt = true/);
@@ -94,6 +104,8 @@ test('mobile account deletion waits for server confirmation and clears account-s
   assert.doesNotMatch(accountService, /auth\.admin|deleteUser\(/);
   assert.match(accountService, /!data\?\.deleted \|\| !data\.authDeleted/);
   assert.match(accountService, /ACCOUNT_DELETION_INCOMPLETE/);
+  assert.match(accountService, /clearDeletedAccountLocalState/);
+  assert.match(accountService, /supabase\.auth\.signOut\(\{ scope: 'local' \}\)/);
   assert.match(accountService, /removeAllRealtimeSubscriptions\(\)/);
   assert.match(accountService, /resetAnalyticsUser\(\)/);
   assert.match(accountService, /clearAllQueryData\(\)/);
@@ -120,9 +132,19 @@ test('live deletion verification exists for deleted credentials and cross-accoun
   const liveTest = read('tests/privateBetaGateClosureLive.test.mjs');
 
   assert.match(liveTest, /private beta secure account deletion endpoint anonymizes and disables a disposable user/);
+  assert.match(liveTest, /test_fixture/);
+  assert.match(liveTest, /cleanupMarkedFixturesSql/);
+  assert.match(liveTest, /prepare_account_deletion_for_user/);
+  assert.match(liveTest, /prepare_current_account_deletion/);
+  assert.match(liveTest, /uploadAvatarFixture/);
+  assert.match(liveTest, /avatarsRemoved/);
+  assert.match(liveTest, /messageImagesRetained/);
+  assert.match(liveTest, /clearDeletedAccountLocalState/);
+  assert.match(liveTest, /getActiveRealtimeSubscriptionCountForTests/);
   assert.match(liveTest, /userId: otherUserId/);
   assert.match(liveTest, /signInWithPassword/);
   assert.match(liveTest, /refreshSession/);
   assert.match(liveTest, /protectedMutation/);
+  assert.match(liveTest, /zeroFixtureVerificationSql/);
   assert.match(liveTest, /private_beta_account_deletion_live_tests_passed/);
 });

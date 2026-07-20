@@ -115,7 +115,8 @@ test('account deletion remains a server-side workflow rather than sign-out-only'
 
   assert.match(accountService, /functions\.invoke<DeleteAccountResponse>\('delete-account'/);
   assert.match(accountService, /!data\?\.deleted \|\| !data\.authDeleted/);
-  assert.match(accountService, /await signOut\(\)/);
+  assert.match(accountService, /clearDeletedAccountLocalState/);
+  assert.match(accountService, /supabase\.auth\.signOut\(\{ scope: 'local' \}\)/);
   assert.match(settings, /Type DELETE to confirm/);
   assert.match(settings, /Your public profile will be anonymized/);
 });

@@ -1,8 +1,8 @@
 # Private Beta Release Candidate
 
 Date: 2026-07-20
-Branch: `private-beta-gate-closure`
-Base commit: `1111e4119a7264b4d32b854a3d10e53649929e49`
+Branch: `private-beta-gate-closure-fix`
+Base commit: `31830255325acb0e32ba5a166d946514fc38e513`
 
 Allowed statuses:
 
@@ -18,8 +18,8 @@ not applicable
 | Item | Status | Evidence |
 | --- | --- | --- |
 | Phase A through Phase F complete | complete | Phase F branch closed at `4e1ad48a5f5d6a5d58a78d65759f0c8eb3f012e5` |
-| Private beta gate closure | complete | Secure account deletion, saved-search notification context, and profile deletion context migrations applied |
-| Migrations aligned | complete | Supabase migration list includes remote/local `20260720015350` |
+| Private beta gate closure | complete | Secure account deletion, saved-search notification context, profile deletion context, and server-only account-deletion preparation migrations applied |
+| Migrations aligned | complete | Supabase migration list includes remote/local `20260720120248` from full-history verification workspace |
 | Static tests passing | complete | `CI=true pnpm test`: 181 tests, 167 passed, 14 skipped |
 | Workflows green | manual verification required | Required for final private beta branch commit |
 | No high or critical advisory | complete | Dependency audit gate passes with one moderate transitive advisory |
@@ -36,7 +36,7 @@ not applicable
 | Reporting works | complete | Static and Phase F live tests cover report limits |
 | Reviews work | complete | Phase E/F tests cover review eligibility and limits |
 | Notifications work | complete | Persistent notification model and tests exist |
-| Account deletion works | complete | `delete-account` Edge Function deletes Auth identity after `prepare_current_account_deletion`; live disposable test passed |
+| Account deletion works | complete | `delete-account` Edge Function deletes Auth identity after service-role-only `prepare_account_deletion_for_user`; live disposable test passed |
 | Unfinished high-risk features disabled | complete | Stripe checkout remains disabled unless backend readiness is complete |
 
 ## Operations

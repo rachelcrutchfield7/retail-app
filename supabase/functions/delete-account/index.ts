@@ -171,7 +171,10 @@ Deno.serve(async (request: Request) => {
     return safeError(401, 'AUTH_SESSION_INVALID', 'Sign in again before deleting your account.', true);
   }
 
-  const preparation = await userClient.rpc('prepare_current_account_deletion');
+  const supabaseAdmin = createAdminClient(supabaseUrl, serviceRoleKey);
+  const preparation = await supabaseAdmin.rpc('prepare_account_deletion_for_user', {
+    target_user_id: user.id,
+  });
 
   if (preparation.error) {
     return safeError(
@@ -182,7 +185,6 @@ Deno.serve(async (request: Request) => {
     );
   }
 
-  const supabaseAdmin = createAdminClient(supabaseUrl, serviceRoleKey);
   let storageCleanup: DeleteAccountResponse['storageCleanup'];
 
   try {
