@@ -1,8 +1,8 @@
 # Private Beta Release Candidate
 
 Date: 2026-07-20
-Branch: `private-beta-gate-closure-fix`
-Base commit: `31830255325acb0e32ba5a166d946514fc38e513`
+Branch: `private-beta-build-prep`
+Base commit: `105bdb4f827a33b31e079e773ba02619521a6562`
 
 Allowed statuses:
 
@@ -21,7 +21,7 @@ not applicable
 | Private beta gate closure | complete | Secure account deletion, saved-search notification context, profile deletion context, and server-only account-deletion preparation migrations applied |
 | Migrations aligned | complete | Supabase migration list includes remote/local `20260720120248` from full-history verification workspace |
 | Static tests passing | complete | `CI=true pnpm test`: 181 tests, 167 passed, 14 skipped |
-| Workflows green | manual verification required | Required for final private beta branch commit |
+| Workflows green | complete | Base commit `105bdb4f827a33b31e079e773ba02619521a6562` passed `ReTail CI` run `29742649173` and `ReTail Security Baseline` run `29742649344` |
 | No high or critical advisory | complete | Dependency audit gate passes with one moderate transitive advisory |
 | Secret scans passing | complete | Working-tree and history secret scans |
 | No disposable fixtures | complete | Private beta gate live account-deletion test cleanup passed |
@@ -60,9 +60,10 @@ not applicable
 | Version confirmed | complete | `1.0.0` in `app.json` |
 | Preview profile configured | complete | EAS `preview` profile uses `EXPO_PUBLIC_APP_ENV=beta` |
 | Build generated | manual verification required | Do not run paid/cloud EAS build without explicit authorization |
-| EAS preview Supabase variables | blocked | Add `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` to EAS preview before building |
+| EAS preview Supabase variables | complete | Preview environment has `EXPO_PUBLIC_APP_ENV`, `EXPO_PUBLIC_SUPABASE_URL`, and `EXPO_PUBLIC_SUPABASE_ANON_KEY`; do not commit real values |
+| Build charge confirmation | manual verification required | EAS CLI does not expose plan quota/cost confirmation before starting a new cloud build |
 | Physical-device install tested | manual verification required | Required before inviting testers |
 
 ## Decision
 
-Private beta release candidate is not approved until final branch workflows are green and the remaining manual operational items above are either verified or explicitly accepted by Rachel as controlled private beta risks.
+Private beta release candidate is not approved until the final branch workflows are green, the Android build is generated or explicitly approved for generation, and the remaining manual operational items above are either verified or explicitly accepted by Rachel as controlled private beta risks.

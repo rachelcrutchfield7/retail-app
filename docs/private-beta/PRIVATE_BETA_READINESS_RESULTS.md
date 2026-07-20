@@ -1,8 +1,8 @@
 # Private Beta Readiness Results
 
 Date: 2026-07-20
-Branch: `private-beta-gate-closure-fix`
-Base commit: `31830255325acb0e32ba5a166d946514fc38e513`
+Branch: `private-beta-build-prep`
+Base commit: `105bdb4f827a33b31e079e773ba02619521a6562`
 
 ## Phase F Closure
 
@@ -130,12 +130,24 @@ Old disposable fixture cleanup:
 
 ## Final Workflow Evidence
 
-Final GitHub Actions evidence must be recorded after pushing `private-beta-gate-closure-fix`.
+Final GitHub Actions evidence for the base account-deletion branch has been verified.
 
 | Workflow | Run ID | Commit SHA | Conclusion |
 | --- | --- | --- | --- |
-| `ReTail CI` | pending final push | pending final push | pending |
-| `ReTail Security Baseline` | pending final push | pending final push | pending |
+| `ReTail CI` | `29742649173` | `105bdb4f827a33b31e079e773ba02619521a6562` | `success` |
+| `ReTail Security Baseline` | `29742649344` | `105bdb4f827a33b31e079e773ba02619521a6562` | `success` |
+
+## First Beta Build Preparation
+
+| Item | Status | Evidence |
+| --- | --- | --- |
+| EAS account authentication | complete | `npx eas-cli whoami` returned the `raecrutchfield` account |
+| EAS project link | complete | Project `@raecrutchfield/retail`, ID `288a25e1-5824-4f77-a3f4-0607df5f7d89` |
+| EAS preview variables | complete | Preview environment contains `EXPO_PUBLIC_APP_ENV`, `EXPO_PUBLIC_SUPABASE_URL`, and `EXPO_PUBLIC_SUPABASE_ANON_KEY` |
+| Feedback destination | manual verification required | No approved support email, feedback form, or private tester channel is configured in the repository |
+| Android build | blocked pending owner approval | EAS CLI does not expose charge/quota confirmation before starting a build |
+| Real-device smoke test checklist | complete | `docs/private-beta/FIRST_DEVICE_SMOKE_TEST.md` |
+| Supabase dashboard checklist | complete | `docs/private-beta/SUPABASE_BETA_DASHBOARD_REVIEW.md` |
 
 ## Release Decision
 
@@ -149,5 +161,4 @@ ReTail is not approved for a small controlled private beta until these items are
 - backup status review
 - incident response owner/contact route
 - tester feedback destination
-- EAS preview Supabase public environment values
-- installable preview build or documented build handoff
+- installable preview build or documented owner approval to start build
