@@ -1,6 +1,6 @@
 # Private Beta Test Plan
 
-Date: 2026-07-19
+Date: 2026-07-20
 
 Use disposable beta accounts and beta listings only.
 
@@ -23,7 +23,7 @@ App version:
 | Sign out | Signed in | Sign out from settings | Private data clears and welcome/auth state appears | High |
 | Reset password | Existing account | Request reset | App shows non-enumerating confirmation | Medium |
 | Edit profile | Signed in | Change display name, website, address, avatar | Profile updates persist | Medium |
-| Delete account | Disposable account | Complete delete flow | Account is anonymized/disabled and cannot mutate data | High |
+| Delete account | Disposable account | Complete delete flow | Account is anonymized, Auth identity is deleted, sign-in and token refresh fail, protected mutations fail, and safety records remain available for moderation | High |
 
 ## Listings
 
@@ -70,3 +70,22 @@ App version:
 | Scenario | Prerequisites | Steps | Expected Result | Severity If Failed |
 | --- | --- | --- | --- | --- |
 | Switch A to B | Two accounts on same device | Sign out A, sign in B | A's messages, profile, notifications, and cache are gone | High |
+
+## Automated Gate Coverage
+
+The private beta gate includes a live disposable account-deletion test against the linked Supabase project.
+
+Required assertions:
+
+- request body user IDs are ignored
+- only the authenticated caller can delete their own account
+- profile data is anonymized
+- active listings are archived
+- convenience records are removed
+- conversations, messages, reports, transactions, reviews, and audit logs are retained for safety
+- account-owned avatar and listing Storage paths are removed
+- message images are retained
+- deleted credentials cannot sign in again
+- deleted refresh tokens cannot renew a session
+- stale access tokens cannot mutate protected tables
+- all disposable fixtures are cleaned up

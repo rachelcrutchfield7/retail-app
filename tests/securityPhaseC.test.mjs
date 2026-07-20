@@ -108,7 +108,9 @@ test('Phase C app services use controlled RPCs for protected table writes', () =
   assert.match(rescueService, /rpc\('update_my_rescue_profile'/);
   assert.match(adminService, /rpc\('admin_set_rescue_verification'/);
   assert.match(transactionService, /rpc\('complete_listing_transaction'/);
-  assert.match(accountService, /rpc\('delete_current_account'/);
+  assert.match(accountService, /functions\.invoke<DeleteAccountResponse>\('delete-account'/);
+  assert.doesNotMatch(accountService, /rpc\('delete_current_account'/);
+  assert.doesNotMatch(accountService, /auth\.admin\.deleteUser/);
   assert.doesNotMatch(serviceTypes, /status\?: Listing\['status'\]/);
 
   const protectedWritePattern = /\.from\('(profiles|listings|rescue_profiles)'\)[\s\S]{0,220}\.(insert|update|upsert|delete)\(/;

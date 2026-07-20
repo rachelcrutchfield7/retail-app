@@ -1,10 +1,22 @@
-import { trackEvent } from '../lib/analytics';
+import { resetAnalyticsUser, trackEvent } from '../lib/analytics';
+import { clearAllQueryData, clearQueryData } from '../lib/queryClient';
 import { supabase } from '../lib/supabase';
+import { removeAllRealtimeSubscriptions } from './realtimeService';
 import { signOut } from './authService';
 import { createServiceError } from './errors';
-import { ensureCurrentProfile, throwSupabaseError } from './supabaseData';
+import { throwSupabaseError } from './supabaseData';
+import { logger } from '../lib/logger';
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+type DeleteAccountResponse = {
+  deleted?: boolean;
+  authDeleted?: boolean;
+  status?: 'deleted' | 'already_deleted';
+  code?: string;
+  message?: string;
+  retryable?: boolean;
+};
 
 export async function updateEmail(input: { email: string }): Promise<void> {
   const email = input.email.trim().toLowerCase();
@@ -37,15 +49,36 @@ export async function updatePassword(input: { password: string }): Promise<void>
 }
 
 export async function deleteAccount(): Promise<void> {
-  await ensureCurrentProfile();
   trackEvent('account_deletion_started', {});
 
-  const rpcResult = await supabase.rpc('delete_current_account');
+  const { data, error } = await supabase.functions.invoke<DeleteAccountResponse>('delete-account', {
+    method: 'POST',
+    body: { confirmation: 'delete-current-account' },
+  });
 
-  if (rpcResult.error) {
-    throwSupabaseError(rpcResult.error, 'We could not delete your account.');
+  if (error) {
+    throwSupabaseError(error, 'We could not delete your account. Please try again.');
+  }
+
+  if (!data?.deleted || !data.authDeleted) {
+    throw createServiceError(
+      data?.code ?? 'ACCOUNT_DELETION_INCOMPLETE',
+      data?.message ?? 'The account deletion endpoint did not confirm Auth deletion.',
+      data?.retryable === false
+        ? 'Account deletion is not available right now.'
+        : 'We could not finish deleting your account. Please try again.'
+    );
   }
 
   trackEvent('account_deleted', {});
-  await signOut();
+  try {
+    await signOut();
+  } catch (signOutError) {
+    logger.warning('Local sign-out failed after confirmed account deletion.', { error: signOutError });
+  } finally {
+    removeAllRealtimeSubscriptions();
+    resetAnalyticsUser();
+    await clearAllQueryData();
+    clearQueryData();
+  }
 }

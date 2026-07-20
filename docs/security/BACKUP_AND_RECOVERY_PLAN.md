@@ -1,6 +1,6 @@
 # Backup And Recovery Plan
 
-Date: 2026-07-19
+Date: 2026-07-20
 Project: ReTail
 
 ## Goals
@@ -62,6 +62,21 @@ Storage buckets to verify:
 - `message-images`
 
 Message images are private and should not be made public during recovery.
+
+## Account Deletion Recovery
+
+Secure account deletion intentionally removes the Supabase Auth identity after database preparation succeeds.
+
+Deletion behavior:
+
+- public profile data is anonymized
+- active/draft/pending listings are archived
+- favorites, saved searches, notifications, device tokens, notification preferences, privacy settings, and owned blocks are removed
+- conversations, messages, transactions, reviews, reports, report moderation events, and audit logs are retained for safety and abuse investigation
+- account-owned `avatars/` and `listings/` Storage objects are removed by the Edge Function
+- private `message-images/` objects are retained with conversation history
+
+Deleted accounts should not be reactivated through normal support. Any recovery would require a deliberate backup restore decision in a non-production project and owner approval.
 
 ## Restore Checklist
 

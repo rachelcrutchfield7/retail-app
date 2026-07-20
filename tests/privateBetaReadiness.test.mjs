@@ -113,7 +113,8 @@ test('account deletion remains a server-side workflow rather than sign-out-only'
   const accountService = read('src/services/accountService.ts');
   const settings = read('src/sprint4/Sprint4App.tsx');
 
-  assert.match(accountService, /rpc\('delete_current_account'\)/);
+  assert.match(accountService, /functions\.invoke<DeleteAccountResponse>\('delete-account'/);
+  assert.match(accountService, /!data\?\.deleted \|\| !data\.authDeleted/);
   assert.match(accountService, /await signOut\(\)/);
   assert.match(settings, /Type DELETE to confirm/);
   assert.match(settings, /Your public profile will be anonymized/);

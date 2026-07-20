@@ -1,6 +1,6 @@
 # Incident Response Plan
 
-Date: 2026-07-19
+Date: 2026-07-20
 Project: ReTail
 
 ## Incident Types
@@ -48,6 +48,21 @@ Do not commit private phone numbers, private email credentials, or personal emer
 - relevant Git commits and deployment IDs
 
 Do not export raw message bodies, device tokens, auth tokens, or private addresses unless required for a specific investigation.
+
+## Deleted Accounts
+
+Secure account deletion removes the Supabase Auth identity and anonymizes the public profile, but safety records remain available for moderation.
+
+After deletion, investigators should expect:
+
+- `profiles.display_name` to be `Deleted User`
+- direct sign-in and refresh-token use to fail
+- active listings from the deleted user to be archived
+- conversations, messages, reports, transactions, reviews, report moderation events, and audit logs to remain available according to admin policies
+- account-owned avatar and listing Storage objects to be removed
+- message-image Storage objects to remain private with conversation history
+
+Do not attempt to restore or reactivate a deleted Auth user during an incident without a documented owner approval and backup-restore plan.
 
 ## Emergency Actions
 

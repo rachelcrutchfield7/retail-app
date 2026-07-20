@@ -1,6 +1,7 @@
 import { createServiceError } from './errors';
 import { supabase } from '../lib/supabase';
 import type { Conversation, ConversationDetail, ConversationSearchParams, ConversationSummary, Message, Profile } from './types';
+import { getPublicProfile } from './profileService';
 import { isEitherUserBlocked } from './blockService';
 import { trackEvent } from '../lib/analytics';
 import {
@@ -156,6 +157,18 @@ async function loadProfileSafe(userId: string): Promise<Profile | null> {
   }
 
   return data ? toProfile(data as Record<string, unknown>) : null;
+}
+
+async function requirePublicMessageRecipient(userId: string): Promise<void> {
+  try {
+    await getPublicProfile(userId);
+  } catch (error) {
+    throw createServiceError(
+      'USER_NOT_AVAILABLE',
+      error instanceof Error ? error.message : `Public profile ${userId} was unavailable`,
+      'This user is no longer available.'
+    );
+  }
 }
 
 async function requireNotBlocked(firstUserId: string, secondUserId: string): Promise<void> {
@@ -409,7 +422,7 @@ export async function requireCanSendInConversation(conversationId: string): Prom
   const profile = await requireParticipant(conversation);
   const otherUserId = conversation.buyer_id === profile.id ? conversation.seller_id : conversation.buyer_id;
   requireActiveMessageRecipient(await loadProfile(profile.id));
-  requireActiveMessageRecipient(await loadProfile(otherUserId));
+  await requirePublicMessageRecipient(otherUserId);
   await requireNotBlocked(profile.id, otherUserId);
   return toConversation(conversation);
 }
