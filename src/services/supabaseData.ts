@@ -4,6 +4,7 @@ import type {
 } from '@supabase/supabase-js';
 
 import { CATEGORIES } from '../constants/categories';
+import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
 import type { Category, Listing, ListingCondition, ListingStatus } from '../types';
 import { createServiceError } from './errors';
@@ -35,7 +36,7 @@ export function throwSupabaseError(error: unknown, fallbackMessage = 'We could n
 
   if (!loggedSupabaseErrors.has(logKey)) {
     loggedSupabaseErrors.add(logKey);
-    console.warn('[ReTail Supabase]', { code, message, fallbackMessage });
+    logger.warning('Supabase request failed.', { code, message, fallbackMessage });
   }
 
   if (code === '23505') {
@@ -313,7 +314,7 @@ export async function getCurrentSessionFromSupabase(): Promise<Session | null> {
     const profile = await ensureCurrentProfile();
     return sessionFromSupabase(data.session, profile);
   } catch (profileError) {
-    console.warn('[ReTail Auth] Could not hydrate profile for active session.', profileError);
+    logger.warning('Could not hydrate profile for active session.', { error: profileError });
     return sessionFromSupabase(data.session, undefined);
   }
 }

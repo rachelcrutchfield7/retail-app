@@ -16,6 +16,20 @@ Date: 2026-07-19
 - [ ] Admin accounts are limited to Rachel and explicitly approved helpers.
 - [ ] Test accounts are labeled or removed before launch.
 
+## Private Beta Verification Status
+
+| Setting | Status | Manual Step |
+| --- | --- | --- |
+| Email confirmation | not verified | Supabase Dashboard -> Authentication -> Providers / Email |
+| Password reset branding | not verified | Supabase Dashboard -> Authentication -> Email Templates |
+| Site URL and redirect URLs | not verified | Supabase Dashboard -> Authentication -> URL Configuration |
+| JWT/session settings | not verified | Supabase Dashboard -> Authentication -> Sessions |
+| Leaked password protection | not verified | Supabase Dashboard -> Authentication -> Security |
+| Anonymous sign-in | not verified | Supabase Dashboard -> Authentication -> Providers |
+| OAuth providers | not verified | Supabase Dashboard -> Authentication -> Providers |
+| CAPTCHA/bot protection | future enhancement | Decide before public beta or broader launch |
+| MFA | future enhancement | Roadmap item, not required for small controlled private beta |
+
 ## Email Templates
 
 ReTail auth emails should be branded and should not expose internal implementation details.

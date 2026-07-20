@@ -1,4 +1,5 @@
 type RuntimeEnv = Record<string, string | undefined>;
+export type AppEnvironment = 'development' | 'beta' | 'production' | 'test';
 
 const unsafePublicSupabasePatterns = [
   'service_role',
@@ -10,6 +11,11 @@ const unsafePublicSupabasePatterns = [
   'database_password',
   'database_url',
 ];
+
+const supportedAppEnvironments = new Set<AppEnvironment>(['development', 'beta', 'production', 'test']);
+const releaseLikeAppEnvironments = new Set<AppEnvironment>(['beta', 'production']);
+const localUrlPattern = /(^|\.)localhost$|^127\.|^0\.0\.0\.0$|^10\.0\.2\.2$/;
+const placeholderUrlPattern = /example\.supabase\.co/i;
 
 export function readConfigFromEnv(env: RuntimeEnv = process.env) {
   return {
@@ -53,6 +59,54 @@ export function getMissingRequiredConfig(): string[] {
   return missing;
 }
 
+export function isSupportedAppEnvironment(value: string): value is AppEnvironment {
+  return supportedAppEnvironments.has(value as AppEnvironment);
+}
+
+export function isReleaseLikeEnvironment(value: string = config.appEnv): boolean {
+  return isSupportedAppEnvironment(value) && releaseLikeAppEnvironments.has(value);
+}
+
+export function getAppEnvironmentLabel(value: string = config.appEnv): string {
+  if (value === 'beta') {
+    return 'Private Beta';
+  }
+
+  if (value === 'production') {
+    return 'Production';
+  }
+
+  if (value === 'test') {
+    return 'Test';
+  }
+
+  if (value === 'development') {
+    return 'Development';
+  }
+
+  return 'Unsupported Environment';
+}
+
+export function getEnvironmentValidationError(env: RuntimeEnv = process.env): string | null {
+  const runtimeConfig = readConfigFromEnv(env);
+
+  if (!isSupportedAppEnvironment(runtimeConfig.appEnv)) {
+    return `Unsupported app environment: ${runtimeConfig.appEnv}`;
+  }
+
+  if (isReleaseLikeEnvironment(runtimeConfig.appEnv)) {
+    if (isLocalOrPlaceholderUrl(runtimeConfig.supabaseUrl)) {
+      return 'Release builds cannot use local or placeholder Supabase URLs.';
+    }
+
+    if (runtimeConfig.supabaseAnonKey.includes('ci-placeholder')) {
+      return 'Release builds cannot use CI placeholder Supabase credentials.';
+    }
+  }
+
+  return null;
+}
+
 export function isClientSafeSupabaseKey(value: string): boolean {
   return getUnsafePublicSupabaseCredentialReason(value) === null;
 }
@@ -69,4 +123,21 @@ export function getUnsafePublicSupabaseCredentialReason(value: string): string |
   }
 
   return null;
+}
+
+function isLocalOrPlaceholderUrl(value: string): boolean {
+  if (!value.trim()) {
+    return false;
+  }
+
+  if (placeholderUrlPattern.test(value)) {
+    return true;
+  }
+
+  try {
+    const parsed = new URL(value);
+    return localUrlPattern.test(parsed.hostname);
+  } catch {
+    return true;
+  }
 }

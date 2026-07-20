@@ -25,6 +25,17 @@ Examples:
 5. Document the timeline.
 6. Communicate clearly with affected users when required.
 
+## Ownership
+
+| Role | Status | Notes |
+| --- | --- | --- |
+| Incident owner | manual verification required | Rachel must assign before inviting private beta testers |
+| Supabase access owner | manual verification required | Must be able to review Auth, Database, Storage, Logs, and API keys |
+| GitHub access owner | manual verification required | Must be able to revoke tokens, review Actions, and ship emergency fixes |
+| Tester communication owner | manual verification required | Must control the selected feedback/support channel |
+
+Do not commit private phone numbers, private email credentials, or personal emergency contact details to the repository.
+
 ## Evidence To Preserve
 
 - report records

@@ -41,6 +41,7 @@ import {
   ToggleSwitch,
   UnreadBadge,
 } from '../components';
+import { config, getAppEnvironmentLabel } from '../constants/config';
 import { colors, radius, sizes, spacing, typography } from '../constants/theme';
 import { useAdminListingReports } from '../hooks/useAdminListingReports';
 import { useAdminRescueApprovals } from '../hooks/useAdminRescueApprovals';
@@ -1340,7 +1341,9 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
 
       <SectionCard title="About ReTail">
         <Text style={styles.body}>Version {version}</Text>
+        <Text style={styles.body}>Environment: {getAppEnvironmentLabel(config.appEnv)}</Text>
         <Text style={styles.body}>Secondhand Pet Marketplace for buying, selling, donating, and supporting local rescues.</Text>
+        <Text style={styles.body}>Private beta feedback: use the tester feedback process shared by Rachel.</Text>
       </SectionCard>
     </ScreenFrame>
   );

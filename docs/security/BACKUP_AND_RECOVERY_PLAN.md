@@ -23,6 +23,18 @@ Before beta:
 - [ ] Confirm point-in-time recovery availability for the selected Supabase plan.
 - [ ] Run or document a restore drill in a non-production project.
 
+## Private Beta Status
+
+| Item | Status | Evidence Required |
+| --- | --- | --- |
+| Automated database backups | not verified | Supabase project backup settings |
+| Backup retention | not verified | Supabase plan/dashboard value |
+| Point-in-time recovery | not verified | Supabase plan/dashboard value |
+| Storage recovery expectations | manual verification required | Bucket backup/export plan |
+| Restore drill | not verified | Non-production restore test notes |
+
+If backup status cannot be verified before a small controlled private beta, Rachel must explicitly accept the risk and limit beta data to disposable/non-critical records.
+
 ## Migration Safety
 
 Rules:

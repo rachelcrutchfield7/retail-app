@@ -1,6 +1,11 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-import { config, hasSupabaseConfig, getUnsafePublicSupabaseCredentialReason } from '../constants/config';
+import {
+  config,
+  getEnvironmentValidationError,
+  getUnsafePublicSupabaseCredentialReason,
+  hasSupabaseConfig,
+} from '../constants/config';
 import { createServiceError } from '../services/errors';
 
 export type SupabaseRuntimeConfig = {
@@ -120,6 +125,15 @@ export function getSupabaseRuntimeConfig(): SupabaseRuntimeConfig {
 
 function assertSupabaseConfigured(): SupabaseRuntimeConfig {
   const runtimeConfig = getSupabaseRuntimeConfig();
+  const environmentError = getEnvironmentValidationError();
+
+  if (environmentError) {
+    throw createServiceError(
+      'INVALID_APP_ENVIRONMENT',
+      environmentError,
+      'The app environment is not configured correctly. Check the beta environment settings and restart the app.'
+    );
+  }
 
   if (!runtimeConfig.configured) {
     throw createServiceError(

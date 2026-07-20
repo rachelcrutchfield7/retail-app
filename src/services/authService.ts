@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { identifyUser, resetAnalyticsUser, trackEvent } from '../lib/analytics';
+import { logger } from '../lib/logger';
 import { createServiceError } from './errors';
 import {
   ensureCurrentProfile,
@@ -97,7 +98,7 @@ export async function signUpWithEmail(
       trackEvent('Registration', { accountType: profile.account_type });
       return userFromSupabase(data.user, profile);
     } catch (profileError) {
-      console.warn('[ReTail Auth] Account was created, but profile setup needs attention.', profileError);
+      logger.warning('Account was created, but profile setup needs attention.', { error: profileError });
     }
   }
 
@@ -132,7 +133,7 @@ export async function signInWithEmail(email: string, password: string): Promise<
     trackEvent('Login', { accountType: profile.account_type });
     return sessionFromSupabase(data.session, profile);
   } catch (profileError) {
-    console.warn('[ReTail Auth] Signed in, but profile setup needs attention.', profileError);
+    logger.warning('Signed in, but profile setup needs attention.', { error: profileError });
     return sessionFromSupabase(data.session, undefined);
   }
 }

@@ -1,4 +1,4 @@
-import { config } from '../constants/config';
+import { config, isReleaseLikeEnvironment } from '../constants/config';
 
 type LogLevel = 'debug' | 'info' | 'warning' | 'error';
 type LogContext = Record<string, unknown>;
@@ -53,7 +53,7 @@ function write(level: LogLevel, message: string, context?: LogContext): void {
 
   entries.push(entry);
 
-  if (config.appEnv !== 'production' && level !== 'debug') {
+  if (!isReleaseLikeEnvironment(config.appEnv) && level !== 'debug') {
     const method = level === 'error' ? console.error : level === 'warning' ? console.warn : console.info;
     method(`[ReTail ${level}] ${message}`, entry.context ?? {});
   }
