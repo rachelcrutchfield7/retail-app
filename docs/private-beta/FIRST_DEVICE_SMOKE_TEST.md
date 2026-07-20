@@ -65,4 +65,3 @@ Use disposable accounts only. Do not use real payment information, private home 
 | Confirm the deleted account cannot sign in again. |  |  |  |  |
 | Confirm the app returns to the signed-out state. |  |  |  |  |
 | Confirm the other disposable account remains unchanged. |  |  |  |  |
-

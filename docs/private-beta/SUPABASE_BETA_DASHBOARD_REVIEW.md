@@ -77,4 +77,3 @@ Do not mark an item verified unless it is confirmed directly in the Supabase das
 | Point-in-time recovery availability is recorded. |  |  |
 | Storage backup limitations are reviewed. |  |  |
 | Accepted private-beta risk is documented, if applicable. |  |  |
-
