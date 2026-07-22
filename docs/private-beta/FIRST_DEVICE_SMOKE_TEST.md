@@ -4,64 +4,395 @@ Date: 2026-07-20
 Build profile: `preview`
 Platform: Android
 
+Tester:
+Device:
+Android version:
+Build ID:
+Build version:
+Test date:
+
 Use disposable accounts only. Do not use real payment information, private home addresses, or private rescue verification documents during this smoke test.
 
-## Installation
+For every check, record:
 
-| Check | Pass | Fail | Not tested | Notes |
-| --- | --- | --- | --- | --- |
-| Install the Android preview build. |  |  |  |  |
-| Launch the application. |  |  |  |  |
-| Confirm the app says `Private Beta`. |  |  |  |  |
-| Confirm no development or placeholder configuration warning appears. |  |  |  |  |
+```text
+Status: Pass / Fail / Not tested
+Notes:
+Screenshot or recording:
+```
+
+## Installation And Startup
+
+### Install from the EAS internal-distribution page
+
+Status:
+Notes:
+Screenshot or recording:
+
+### Launch the app
+
+Status:
+Notes:
+Screenshot or recording:
+
+### Verify the `Private Beta` indicator
+
+Status:
+Notes:
+Screenshot or recording:
+
+### Verify no development warning appears
+
+Status:
+Notes:
+Screenshot or recording:
+
+### Verify no placeholder backend warning appears
+
+Status:
+Notes:
+Screenshot or recording:
+
+### Close and reopen the app
+
+Status:
+Notes:
+Screenshot or recording:
 
 ## Authentication
 
-| Check | Pass | Fail | Not tested | Notes |
-| --- | --- | --- | --- | --- |
-| Create a disposable account. |  |  |  |  |
-| Confirm email if required. |  |  |  |  |
-| Sign in. |  |  |  |  |
-| Sign out. |  |  |  |  |
-| Start password reset. |  |  |  |  |
-| Switch between two disposable accounts. |  |  |  |  |
+### Create a disposable account
+
+Status:
+Notes:
+Screenshot or recording:
+
+### Complete email confirmation when enabled
+
+Status:
+Notes:
+Screenshot or recording:
+
+### Sign in
+
+Status:
+Notes:
+Screenshot or recording:
+
+### Sign out
+
+Status:
+Notes:
+Screenshot or recording:
+
+### Sign back in
+
+Status:
+Notes:
+Screenshot or recording:
+
+### Reset the password
+
+Status:
+Notes:
+Screenshot or recording:
+
+### Verify invalid credentials fail safely
+
+Status:
+Notes:
+Screenshot or recording:
+
+## Profile
+
+### Create or complete a profile
+
+Status:
+Notes:
+Screenshot or recording:
+
+### Update display name
+
+Status:
+Notes:
+Screenshot or recording:
+
+### Update city and state
+
+Status:
+Notes:
+Screenshot or recording:
+
+### Upload an avatar
+
+Status:
+Notes:
+Screenshot or recording:
+
+### Verify another account sees only intended public information
+
+Status:
+Notes:
+Screenshot or recording:
 
 ## Marketplace
 
-| Check | Pass | Fail | Not tested | Notes |
-| --- | --- | --- | --- | --- |
-| Create a listing with a real test image. |  |  |  |  |
-| Edit the listing. |  |  |  |  |
-| Search for the listing. |  |  |  |  |
-| Favorite the listing from another disposable account. |  |  |  |  |
-| Archive the listing. |  |  |  |  |
+### Create a listing
+
+Status:
+Notes:
+Screenshot or recording:
+
+### Upload a listing image
+
+Status:
+Notes:
+Screenshot or recording:
+
+### Edit the listing
+
+Status:
+Notes:
+Screenshot or recording:
+
+### Search for the listing
+
+Status:
+Notes:
+Screenshot or recording:
+
+### Filter listings
+
+Status:
+Notes:
+Screenshot or recording:
+
+### Favorite and unfavorite the listing
+
+Status:
+Notes:
+Screenshot or recording:
+
+### Archive or delete the listing as supported
+
+Status:
+Notes:
+Screenshot or recording:
+
+### Verify another account cannot edit the listing
+
+Status:
+Notes:
+Screenshot or recording:
+
+## Location
+
+### Select or update marketplace search area
+
+Status:
+Notes:
+Screenshot or recording:
+
+### Verify nearby listings load
+
+Status:
+Notes:
+Screenshot or recording:
+
+### Verify distance values appear reasonable
+
+Status:
+Notes:
+Screenshot or recording:
+
+### Verify no location query error appears
+
+Status:
+Notes:
+Screenshot or recording:
 
 ## Messaging
 
-| Check | Pass | Fail | Not tested | Notes |
-| --- | --- | --- | --- | --- |
-| Start a conversation from another disposable account. |  |  |  |  |
-| Send a text message. |  |  |  |  |
-| Send an image message. |  |  |  |  |
-| Verify account isolation after switching accounts. |  |  |  |  |
-| Block and unblock the other disposable account. |  |  |  |  |
+### Start a conversation from a second disposable account
+
+Status:
+Notes:
+Screenshot or recording:
+
+### Send a text message
+
+Status:
+Notes:
+Screenshot or recording:
+
+### Send an image message
+
+Status:
+Notes:
+Screenshot or recording:
+
+### Mark messages read
+
+Status:
+Notes:
+Screenshot or recording:
+
+### Verify account isolation
+
+Status:
+Notes:
+Screenshot or recording:
+
+### Block and unblock the other user
+
+Status:
+Notes:
+Screenshot or recording:
+
+## Notifications
+
+### Verify in-app notification creation
+
+Status:
+Notes:
+Screenshot or recording:
+
+### Mark one notification read
+
+Status:
+Notes:
+Screenshot or recording:
+
+### Mark all notifications read
+
+Status:
+Notes:
+Screenshot or recording:
+
+### Update notification preferences
+
+Status:
+Notes:
+Screenshot or recording:
+
+### Verify notification data does not appear in the wrong account
+
+Status:
+Notes:
+Screenshot or recording:
 
 ## Trust And Safety
 
-| Check | Pass | Fail | Not tested | Notes |
-| --- | --- | --- | --- | --- |
-| Report a listing. |  |  |  |  |
-| Report a message. |  |  |  |  |
-| Review eligible transaction behavior. |  |  |  |  |
-| Verify notifications appear where expected. |  |  |  |  |
-| Verify notification preferences can be changed. |  |  |  |  |
+### Report a listing
+
+Status:
+Notes:
+Screenshot or recording:
+
+### Report a message
+
+Status:
+Notes:
+Screenshot or recording:
+
+### Verify duplicate-report prevention
+
+Status:
+Notes:
+Screenshot or recording:
+
+### Verify blocked-user behavior
+
+Status:
+Notes:
+Screenshot or recording:
+
+### Verify live-animal listings remain prohibited
+
+Status:
+Notes:
+Screenshot or recording:
 
 ## Account Deletion
 
-| Check | Pass | Fail | Not tested | Notes |
-| --- | --- | --- | --- | --- |
-| Use only a disposable account. |  |  |  |  |
-| Complete the in-app deletion flow. |  |  |  |  |
-| Confirm the deleted account cannot sign in again. |  |  |  |  |
-| Confirm the app returns to the signed-out state. |  |  |  |  |
-| Confirm the other disposable account remains unchanged. |  |  |  |  |
+Use only a disposable test account.
+
+### Initiate account deletion
+
+Status:
+Notes:
+Screenshot or recording:
+
+### Complete confirmation
+
+Status:
+Notes:
+Screenshot or recording:
+
+### Verify the app returns to signed-out state
+
+Status:
+Notes:
+Screenshot or recording:
+
+### Verify the deleted account cannot sign in
+
+Status:
+Notes:
+Screenshot or recording:
+
+### Verify its refresh token cannot restore a session
+
+Status:
+Notes:
+Screenshot or recording:
+
+### Verify the second account remains unchanged
+
+Status:
+Notes:
+Screenshot or recording:
+
+### Verify avatar and listing images are removed as expected
+
+Status:
+Notes:
+Screenshot or recording:
+
+### Verify retained message history shows anonymized account information
+
+Status:
+Notes:
+Screenshot or recording:
+
+## Stability
+
+### Background and reopen the app
+
+Status:
+Notes:
+Screenshot or recording:
+
+### Change network connectivity
+
+Status:
+Notes:
+Screenshot or recording:
+
+### Retry a failed request
+
+Status:
+Notes:
+Screenshot or recording:
+
+### Verify loading and error states are understandable
+
+Status:
+Notes:
+Screenshot or recording:
+
+### Verify no developer stack trace is shown to the user
+
+Status:
+Notes:
+Screenshot or recording:

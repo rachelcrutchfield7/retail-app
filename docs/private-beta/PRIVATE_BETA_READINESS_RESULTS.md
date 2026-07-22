@@ -1,8 +1,10 @@
 # Private Beta Readiness Results
 
 Date: 2026-07-20
-Branch: `private-beta-build-prep`
-Base commit: `105bdb4f827a33b31e079e773ba02619521a6562`
+Branch: `private-beta-build-prep-final`
+Clean base branch: `private-beta-build-prep`
+Clean base commit: `4d0fa790e24a3f6133f23b541ae9232d2c70666e`
+Known secure account-deletion commit: `105bdb4f827a33b31e079e773ba02619521a6562`
 
 ## Phase F Closure
 
@@ -81,7 +83,7 @@ Old disposable fixture cleanup:
 | Item | Current Status | Private Beta Impact | Blocks Beta | Automated Fix Available | Manual Verification Required | Owner | Evidence |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Environment selection | Release-like envs are validated | Prevents local/CI config in beta builds | No | Complete | Confirm real beta env values | Rachel | `src/constants/config.ts` |
-| Supabase credentials | Public anon key only in app config; EAS preview env currently lacks Supabase URL/key | Prevents service-role exposure and build-time misconfiguration | Yes until EAS values are added | Complete | Add public Supabase URL/key to EAS preview environment | Rachel | `.env.example`, EAS config output |
+| Supabase credentials | Public anon key only in app config; EAS preview environment contains the required public client variable names | Prevents service-role exposure and build-time misconfiguration | No | Complete | Do not commit real values | Rachel | `.env.example`, EAS config output |
 | Payment processing | Stripe backend not enabled; button disabled when not ready | Prevents partial payment flow | No | Complete | Legal/payment review before enabling | Rachel | `src/services/paymentService.ts`, `PaymentChoiceCard.tsx` |
 | Shipping labels | Not implemented | Testers can only discuss shipping in chat | No | Not needed | Confirm known limitation with testers | Rachel | `docs/private-beta/KNOWN_BETA_LIMITATIONS.md` |
 | Account deletion | Edge Function deletes Auth identity after service-role-only database preparation | Required trust/safety workflow | No | Complete | Re-test before public launch | Codex | `delete-account`, `prepare_account_deletion_for_user`, live disposable test |
@@ -92,6 +94,7 @@ Old disposable fixture cleanup:
 | Incident response | Plan exists; owner/contact route pending | Safety response clarity | Yes until owner confirmed | No | Owner assignment | Rachel |
 | Legal/safety access | Settings includes legal/safety content and live-animal prohibition | Tester trust and policy clarity | No | Complete | Legal review before public launch | Rachel | `src/sprint4/Sprint4App.tsx`, docs/legal |
 | Private beta feedback | Process documented; destination pending | Tester support route | Yes until destination chosen | No | Choose feedback channel | Rachel | `docs/private-beta/TESTER_FEEDBACK_PROCESS.md` |
+| PostGIS Security Advisor warning | Open Supabase support issue `SU-426513` | Extension-managed table is reported by the advisor | No for Rachel's own device build; requires owner acceptance before wider beta | No | Await Supabase guidance | Supabase/Rachel | `docs/private-beta/PRIVATE_BETA_MANUAL_BLOCKERS.md` |
 
 ## Build Configuration
 
@@ -107,7 +110,7 @@ Old disposable fixture cleanup:
 | iOS build number | manual verification required | EAS remote versioning is enabled |
 | Preview profile | complete | EAS `preview` profile uses `EXPO_PUBLIC_APP_ENV=beta` |
 | Production profile | complete | EAS `production` profile uses `EXPO_PUBLIC_APP_ENV=production` |
-| EAS preview environment values | manual verification required | EAS config shows no plain text/sensitive preview variables beyond profile `EXPO_PUBLIC_APP_ENV`; add `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` before building |
+| EAS preview environment values | complete | EAS preview contains `EXPO_PUBLIC_APP_ENV`, `EXPO_PUBLIC_SUPABASE_URL`, and `EXPO_PUBLIC_SUPABASE_ANON_KEY`; full key value is not printed or committed |
 
 ## Baseline Verification
 
@@ -145,9 +148,11 @@ Final GitHub Actions evidence for the base account-deletion branch has been veri
 | EAS project link | complete | Project `@raecrutchfield/retail`, ID `288a25e1-5824-4f77-a3f4-0607df5f7d89` |
 | EAS preview variables | complete | Preview environment contains `EXPO_PUBLIC_APP_ENV`, `EXPO_PUBLIC_SUPABASE_URL`, and `EXPO_PUBLIC_SUPABASE_ANON_KEY` |
 | Feedback destination | manual verification required | No approved support email, feedback form, or private tester channel is configured in the repository |
-| Android build | blocked pending owner approval | EAS CLI does not expose charge/quota confirmation before starting a build |
+| Android build | manual verification required | Start only if credentials and cost/plan checks permit; do not submit to Google Play |
 | Real-device smoke test checklist | complete | `docs/private-beta/FIRST_DEVICE_SMOKE_TEST.md` |
 | Supabase dashboard checklist | complete | `docs/private-beta/SUPABASE_BETA_DASHBOARD_REVIEW.md` |
+| Manual blocker list | complete | `docs/private-beta/PRIVATE_BETA_MANUAL_BLOCKERS.md` |
+| Open PostGIS advisor issue | documented external platform issue | Supabase ticket `SU-426513`; no PostGIS migration included |
 
 ## Release Decision
 
@@ -162,3 +167,4 @@ ReTail is not approved for a small controlled private beta until these items are
 - incident response owner/contact route
 - tester feedback destination
 - installable preview build or documented owner approval to start build
+- open PostGIS advisor issue `SU-426513` accepted as pending Supabase support

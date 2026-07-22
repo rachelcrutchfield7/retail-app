@@ -1,8 +1,10 @@
 # Private Beta Release Candidate
 
 Date: 2026-07-20
-Branch: `private-beta-build-prep`
-Base commit: `105bdb4f827a33b31e079e773ba02619521a6562`
+Branch: `private-beta-build-prep-final`
+Clean base branch: `private-beta-build-prep`
+Clean base commit: `4d0fa790e24a3f6133f23b541ae9232d2c70666e`
+Known secure account-deletion commit: `105bdb4f827a33b31e079e773ba02619521a6562`
 
 Allowed statuses:
 
@@ -25,6 +27,7 @@ not applicable
 | No high or critical advisory | complete | Dependency audit gate passes with one moderate transitive advisory |
 | Secret scans passing | complete | Working-tree and history secret scans |
 | No disposable fixtures | complete | Private beta gate live account-deletion test cleanup passed |
+| PostGIS advisor item | manual verification required | Supabase ticket `SU-426513` remains open for `public.spatial_ref_sys`; no migration changes PostGIS |
 
 ## Product
 
@@ -51,6 +54,7 @@ not applicable
 | Support contact confirmed | manual verification required | Feedback destination not yet chosen |
 | Tester group defined | manual verification required | Rachel must choose testers |
 | Tester expectations prepared | complete | `docs/private-beta/PRIVATE_BETA_TEST_PLAN.md` and feedback docs |
+| PostGIS support ticket tracked | complete | `docs/private-beta/PRIVATE_BETA_MANUAL_BLOCKERS.md` records `SU-426513` as an external platform issue |
 
 ## Build
 
