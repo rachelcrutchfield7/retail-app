@@ -1,6 +1,6 @@
 # Private Beta Manual Blockers
 
-Date: 2026-07-20
+Date: 2026-07-22
 Branch: `private-beta-build-prep-final`
 
 Allowed statuses:
@@ -15,9 +15,9 @@ Not applicable
 
 | Item | Status | Owner | Notes |
 | --- | --- | --- | --- |
-| GitHub final workflow verification | Manual verification required | Codex | Verify `ReTail CI` and `ReTail Security Baseline` after the final branch push. |
+| GitHub final workflow verification | Complete | Codex | Final branch commit `05430288d93a80d6dc6b33244ec3f3cb58e350e0` passed `ReTail CI` run `29886032662` and `ReTail Security Baseline` run `29886032736`. |
 | EAS preview public environment variables | Complete | Codex/Rachel | EAS preview contains `EXPO_PUBLIC_APP_ENV`, `EXPO_PUBLIC_SUPABASE_URL`, and `EXPO_PUBLIC_SUPABASE_ANON_KEY`. Do not commit real values. |
-| Android build status | Manual verification required | Codex/Rachel | Start an Android `preview` internal-distribution build only when credentials and cost/plan checks permit. |
+| Android build status | Complete | Codex/Rachel | EAS Android preview APK build `a6fcb7b1-3b57-432a-b348-64e5541923dc` finished successfully from commit `05430288d93a80d6dc6b33244ec3f3cb58e350e0`. Build page: https://expo.dev/accounts/raecrutchfield/projects/retail/builds/a6fcb7b1-3b57-432a-b348-64e5541923dc |
 | First-device smoke test | Manual verification required | Rachel | Complete `docs/private-beta/FIRST_DEVICE_SMOKE_TEST.md` on Rachel's Android device before inviting outside testers. |
 | Supabase Auth dashboard review | Manual verification required | Rachel | Verify site URL, redirect URLs, email confirmation, password settings, rate limits, reset redirects, leaked-password protection, and CAPTCHA decision. |
 | Storage bucket review | Manual verification required | Rachel/Codex | Verify bucket privacy, file limits, MIME types, and ownership/read/update/delete policies for `avatars`, `listings`, and `message-images`. |

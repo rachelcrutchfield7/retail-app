@@ -1,6 +1,6 @@
 # Private Beta Readiness Results
 
-Date: 2026-07-20
+Date: 2026-07-22
 Branch: `private-beta-build-prep-final`
 Clean base branch: `private-beta-build-prep`
 Clean base commit: `4d0fa790e24a3f6133f23b541ae9232d2c70666e`
@@ -124,7 +124,7 @@ Old disposable fixture cleanup:
 | Expo Doctor | passed: 20/20 |
 | Web export | passed |
 | Expo public config | passed |
-| EAS Android preview config | passed; build not started |
+| EAS Android preview config | passed; Android preview APK build finished successfully |
 | EAS iOS preview config | passed; build not started |
 | Dependency audit | passed gate; one moderate transitive `uuid` advisory, no high or critical |
 | Working-tree secret scan | passed |
@@ -148,17 +148,36 @@ Final GitHub Actions evidence for the base account-deletion branch has been veri
 | EAS project link | complete | Project `@raecrutchfield/retail`, ID `288a25e1-5824-4f77-a3f4-0607df5f7d89` |
 | EAS preview variables | complete | Preview environment contains `EXPO_PUBLIC_APP_ENV`, `EXPO_PUBLIC_SUPABASE_URL`, and `EXPO_PUBLIC_SUPABASE_ANON_KEY` |
 | Feedback destination | manual verification required | No approved support email, feedback form, or private tester channel is configured in the repository |
-| Android build | manual verification required | Start only if credentials and cost/plan checks permit; do not submit to Google Play |
+| Android build | complete | EAS Android preview APK build `a6fcb7b1-3b57-432a-b348-64e5541923dc` finished successfully from commit `05430288d93a80d6dc6b33244ec3f3cb58e350e0`; build page: https://expo.dev/accounts/raecrutchfield/projects/retail/builds/a6fcb7b1-3b57-432a-b348-64e5541923dc |
 | Real-device smoke test checklist | complete | `docs/private-beta/FIRST_DEVICE_SMOKE_TEST.md` |
 | Supabase dashboard checklist | complete | `docs/private-beta/SUPABASE_BETA_DASHBOARD_REVIEW.md` |
 | Manual blocker list | complete | `docs/private-beta/PRIVATE_BETA_MANUAL_BLOCKERS.md` |
 | Open PostGIS advisor issue | documented external platform issue | Supabase ticket `SU-426513`; no PostGIS migration included |
 
+## First Android Private Beta Build
+
+| Field | Result |
+| --- | --- |
+| Build ID | `a6fcb7b1-3b57-432a-b348-64e5541923dc` |
+| Platform | Android |
+| Build profile | `preview` |
+| Distribution | Internal |
+| Build type | APK |
+| Git commit SHA | `05430288d93a80d6dc6b33244ec3f3cb58e350e0` |
+| App version | `1.0.0` |
+| Android version code | `1` |
+| Final status | `FINISHED` |
+| Completed at | `2026-07-22T02:40:42.123Z` |
+| Build page | https://expo.dev/accounts/raecrutchfield/projects/retail/builds/a6fcb7b1-3b57-432a-b348-64e5541923dc |
+| Installation availability | APK artifact is available from EAS; the direct artifact URL is not stored in repository documentation |
+| Credential status | Existing remote Android signing credentials were used |
+| Payment or upgrade request | None observed before or during build start |
+
 ## Release Decision
 
 The branch may become a private beta release candidate after final branch checks and GitHub Actions pass.
 
-ReTail is not approved for a small controlled private beta until these items are completed or explicitly accepted by Rachel as controlled private beta risks:
+ReTail is ready for Rachel's first personal Android-device smoke test. It is not approved for outside private beta testers until these items are completed or explicitly accepted by Rachel as controlled private beta risks:
 
 - Auth dashboard checklist
 - Storage live/dashboard verification
@@ -166,5 +185,5 @@ ReTail is not approved for a small controlled private beta until these items are
 - backup status review
 - incident response owner/contact route
 - tester feedback destination
-- installable preview build or documented owner approval to start build
+- first-device smoke test using the generated Android APK
 - open PostGIS advisor issue `SU-426513` accepted as pending Supabase support

@@ -1,6 +1,6 @@
 # Private Beta Release Candidate
 
-Date: 2026-07-20
+Date: 2026-07-22
 Branch: `private-beta-build-prep-final`
 Clean base branch: `private-beta-build-prep`
 Clean base commit: `4d0fa790e24a3f6133f23b541ae9232d2c70666e`
@@ -63,11 +63,29 @@ not applicable
 | Package identifiers confirmed | complete | `com.raecrutchfield.retail` in `app.json` |
 | Version confirmed | complete | `1.0.0` in `app.json` |
 | Preview profile configured | complete | EAS `preview` profile uses `EXPO_PUBLIC_APP_ENV=beta` |
-| Build generated | manual verification required | Do not run paid/cloud EAS build without explicit authorization |
+| Build generated | complete | Android preview APK build `a6fcb7b1-3b57-432a-b348-64e5541923dc` finished successfully from commit `05430288d93a80d6dc6b33244ec3f3cb58e350e0` |
 | EAS preview Supabase variables | complete | Preview environment has `EXPO_PUBLIC_APP_ENV`, `EXPO_PUBLIC_SUPABASE_URL`, and `EXPO_PUBLIC_SUPABASE_ANON_KEY`; do not commit real values |
-| Build charge confirmation | manual verification required | EAS CLI does not expose plan quota/cost confirmation before starting a new cloud build |
+| Build charge confirmation | complete | No payment, plan upgrade, or charge approval prompt appeared before or during build start |
 | Physical-device install tested | manual verification required | Required before inviting testers |
+
+## First Android Private Beta Build
+
+| Field | Result |
+| --- | --- |
+| Build ID | `a6fcb7b1-3b57-432a-b348-64e5541923dc` |
+| Platform | Android |
+| Build profile | `preview` |
+| Distribution | Internal |
+| Build type | APK |
+| Git commit SHA | `05430288d93a80d6dc6b33244ec3f3cb58e350e0` |
+| App version | `1.0.0` |
+| Android version code | `1` |
+| Final status | `FINISHED` |
+| Completed at | `2026-07-22T02:40:42.123Z` |
+| Build page | https://expo.dev/accounts/raecrutchfield/projects/retail/builds/a6fcb7b1-3b57-432a-b348-64e5541923dc |
+| Installation availability | APK artifact is available from EAS; the direct artifact URL is not stored in repository documentation |
+| Android credentials | Existing remote Android signing credentials were used |
 
 ## Decision
 
-Private beta release candidate is not approved until the final branch workflows are green, the Android build is generated or explicitly approved for generation, and the remaining manual operational items above are either verified or explicitly accepted by Rachel as controlled private beta risks.
+Private beta release candidate is ready for Rachel's personal Android-device smoke test. External private beta testers are not approved until the smoke test and remaining manual operational items above are either verified or explicitly accepted by Rachel as controlled private beta risks.
