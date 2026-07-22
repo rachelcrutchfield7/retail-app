@@ -47,6 +47,7 @@ test('EAS and CI are configured for beta verification', () => {
   assert.ok(eas.build.preview);
   assert.ok(eas.build.production);
   assert.equal(eas.build.preview.distribution, 'internal');
+  assert.equal(eas.build.preview.environment, 'preview');
   assert.equal(eas.build.preview.env.EXPO_PUBLIC_APP_ENV, 'beta');
   assert.match(ci, /pnpm typecheck/);
   assert.match(ci, /pnpm lint/);

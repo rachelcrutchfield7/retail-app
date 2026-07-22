@@ -1,7 +1,7 @@
 # Private Beta Release Candidate
 
 Date: 2026-07-22
-Branch: `private-beta-build-prep-final`
+Branch: `android-startup-crash-fix`
 Clean base branch: `private-beta-build-prep`
 Clean base commit: `4d0fa790e24a3f6133f23b541ae9232d2c70666e`
 Known secure account-deletion commit: `105bdb4f827a33b31e079e773ba02619521a6562`
@@ -63,7 +63,7 @@ not applicable
 | Package identifiers confirmed | complete | `com.raecrutchfield.retail` in `app.json` |
 | Version confirmed | complete | `1.0.0` in `app.json` |
 | Preview profile configured | complete | EAS `preview` profile uses `EXPO_PUBLIC_APP_ENV=beta` |
-| Build generated | complete | Android preview APK build `a6fcb7b1-3b57-432a-b348-64e5541923dc` finished successfully from commit `05430288d93a80d6dc6b33244ec3f3cb58e350e0` |
+| Build generated | blocked pending replacement confirmation | First Android preview APK build `a6fcb7b1-3b57-432a-b348-64e5541923dc` installed successfully, then failed initial startup with the global error boundary |
 | EAS preview Supabase variables | complete | Preview environment has `EXPO_PUBLIC_APP_ENV`, `EXPO_PUBLIC_SUPABASE_URL`, and `EXPO_PUBLIC_SUPABASE_ANON_KEY`; do not commit real values |
 | Build charge confirmation | complete | No payment, plan upgrade, or charge approval prompt appeared before or during build start |
 | Physical-device install tested | manual verification required | Required before inviting testers |
@@ -86,6 +86,17 @@ not applicable
 | Installation availability | APK artifact is available from EAS; the direct artifact URL is not stored in repository documentation |
 | Android credentials | Existing remote Android signing credentials were used |
 
+## Android Startup Crash Repair
+
+| Field | Result |
+| --- | --- |
+| Repair branch | `android-startup-crash-fix` |
+| Failed build ID | `a6fcb7b1-3b57-432a-b348-64e5541923dc` |
+| Failed build result | Installed successfully, failed initial startup with the global error boundary |
+| Most likely root cause | Startup auth listener setup could synchronously fail through the lazy Supabase proxy without a safe startup state or diagnostic details |
+| Fix | Auth startup now validates the Supabase client before subscribing, catches setup failures, surfaces an explicit startup state, and adds beta-only redacted diagnostics to the global error boundary |
+| Replacement build | Pending |
+
 ## Decision
 
-Private beta release candidate is ready for Rachel's personal Android-device smoke test. External private beta testers are not approved until the smoke test and remaining manual operational items above are either verified or explicitly accepted by Rachel as controlled private beta risks.
+Private beta release candidate is blocked pending replacement Android build confirmation. External private beta testers are not approved until the replacement APK opens successfully on Rachel's device and the remaining manual operational items above are either verified or explicitly accepted by Rachel as controlled private beta risks.

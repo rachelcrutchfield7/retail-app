@@ -1,6 +1,6 @@
 # First Device Smoke Test
 
-Date: 2026-07-20
+Date: 2026-07-22
 Build profile: `preview`
 Platform: Android
 
@@ -12,6 +12,15 @@ Build version:
 Test date:
 
 Use disposable accounts only. Do not use real payment information, private home addresses, or private rescue verification documents during this smoke test.
+
+## Smoke Test Attempts
+
+| Build ID | Source commit | Result |
+| --- | --- | --- |
+| `a6fcb7b1-3b57-432a-b348-64e5541923dc` | `05430288d93a80d6dc6b33244ec3f3cb58e350e0` | Installed successfully, failed initial startup with the global error boundary. |
+| Replacement build pending | `android-startup-crash-fix` | Awaiting replacement APK installation and launch confirmation. |
+
+The first-device smoke test remains incomplete until the replacement APK opens successfully on Rachel's Android device.
 
 For every check, record:
 
@@ -25,14 +34,14 @@ Screenshot or recording:
 
 ### Install from the EAS internal-distribution page
 
-Status:
-Notes:
+Status: Fail on first build; retest pending for replacement build.
+Notes: First APK installed successfully, but launch failed immediately with the global error boundary.
 Screenshot or recording:
 
 ### Launch the app
 
-Status:
-Notes:
+Status: Fail on first build; retest pending for replacement build.
+Notes: First APK displayed "Something went wrong" and "ReTail ran into a problem. Your account and listings are still safe."
 Screenshot or recording:
 
 ### Verify the `Private Beta` indicator

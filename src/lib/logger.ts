@@ -1,4 +1,5 @@
 import { config, isReleaseLikeEnvironment } from '../constants/config';
+import { sanitizeDiagnosticText } from '../utils/betaDiagnostics';
 
 type LogLevel = 'debug' | 'info' | 'warning' | 'error';
 type LogContext = Record<string, unknown>;
@@ -64,6 +65,19 @@ export const logger = {
   info: (message: string, context?: LogContext) => write('info', message, context),
   warning: (message: string, context?: LogContext) => write('warning', message, context),
   error: (message: string, context?: LogContext) => write('error', message, context),
+  diagnosticError: (message: string, context?: LogContext) => {
+    write('error', message, context);
+
+    if (config.appEnv !== 'beta') {
+      return;
+    }
+
+    try {
+      console.error(`[ReTail diagnostic] ${sanitizeDiagnosticText(message)}`, redactContext(context) ?? {});
+    } catch {
+      // Diagnostics must never become the cause of a startup failure.
+    }
+  },
 };
 
 export function getLogEntries(): LogEntry[] {

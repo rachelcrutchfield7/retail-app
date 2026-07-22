@@ -77,6 +77,7 @@ test('release build configuration keeps private beta separate from production', 
   assert.equal(app.android.package, 'com.raecrutchfield.retail');
   assert.ok(app.extra.eas.projectId);
   assert.equal(eas.build.preview.env.EXPO_PUBLIC_APP_ENV, 'beta');
+  assert.equal(eas.build.preview.environment, 'preview');
   assert.equal(eas.build.preview.distribution, 'internal');
   assert.equal(eas.build.production.env.EXPO_PUBLIC_APP_ENV, 'production');
   assert.doesNotMatch(JSON.stringify({ app, eas }), /localhost|127\.0\.0\.1|example\.supabase\.co|ci-placeholder/);

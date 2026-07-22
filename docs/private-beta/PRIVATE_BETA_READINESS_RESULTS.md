@@ -1,7 +1,7 @@
 # Private Beta Readiness Results
 
 Date: 2026-07-22
-Branch: `private-beta-build-prep-final`
+Branch: `android-startup-crash-fix`
 Clean base branch: `private-beta-build-prep`
 Clean base commit: `4d0fa790e24a3f6133f23b541ae9232d2c70666e`
 Known secure account-deletion commit: `105bdb4f827a33b31e079e773ba02619521a6562`
@@ -148,7 +148,7 @@ Final GitHub Actions evidence for the base account-deletion branch has been veri
 | EAS project link | complete | Project `@raecrutchfield/retail`, ID `288a25e1-5824-4f77-a3f4-0607df5f7d89` |
 | EAS preview variables | complete | Preview environment contains `EXPO_PUBLIC_APP_ENV`, `EXPO_PUBLIC_SUPABASE_URL`, and `EXPO_PUBLIC_SUPABASE_ANON_KEY` |
 | Feedback destination | manual verification required | No approved support email, feedback form, or private tester channel is configured in the repository |
-| Android build | complete | EAS Android preview APK build `a6fcb7b1-3b57-432a-b348-64e5541923dc` finished successfully from commit `05430288d93a80d6dc6b33244ec3f3cb58e350e0`; build page: https://expo.dev/accounts/raecrutchfield/projects/retail/builds/a6fcb7b1-3b57-432a-b348-64e5541923dc |
+| Android build | blocked pending replacement confirmation | First EAS Android preview APK build `a6fcb7b1-3b57-432a-b348-64e5541923dc` finished successfully from commit `05430288d93a80d6dc6b33244ec3f3cb58e350e0`, installed on Rachel's device, then failed initial startup with the global error boundary. Replacement build is required. |
 | Real-device smoke test checklist | complete | `docs/private-beta/FIRST_DEVICE_SMOKE_TEST.md` |
 | Supabase dashboard checklist | complete | `docs/private-beta/SUPABASE_BETA_DASHBOARD_REVIEW.md` |
 | Manual blocker list | complete | `docs/private-beta/PRIVATE_BETA_MANUAL_BLOCKERS.md` |
@@ -173,11 +173,22 @@ Final GitHub Actions evidence for the base account-deletion branch has been veri
 | Credential status | Existing remote Android signing credentials were used |
 | Payment or upgrade request | None observed before or during build start |
 
+## Android Startup Crash Repair
+
+| Field | Result |
+| --- | --- |
+| Repair branch | `android-startup-crash-fix` |
+| Failed build ID | `a6fcb7b1-3b57-432a-b348-64e5541923dc` |
+| Failed build result | Installed successfully, failed initial startup with the global error boundary |
+| Most likely root cause | Startup auth listener setup could synchronously fail through the lazy Supabase proxy without a safe startup state or diagnostic details |
+| Fix | Auth startup now validates the Supabase client before subscribing, catches setup failures, surfaces an explicit startup state, and adds beta-only redacted diagnostics to the global error boundary |
+| Replacement build | Pending |
+
 ## Release Decision
 
 The branch may become a private beta release candidate after final branch checks and GitHub Actions pass.
 
-ReTail is ready for Rachel's first personal Android-device smoke test. It is not approved for outside private beta testers until these items are completed or explicitly accepted by Rachel as controlled private beta risks:
+ReTail is not approved for outside private beta testers until the replacement Android build opens successfully on Rachel's device and these items are completed or explicitly accepted by Rachel as controlled private beta risks:
 
 - Auth dashboard checklist
 - Storage live/dashboard verification
@@ -185,5 +196,5 @@ ReTail is ready for Rachel's first personal Android-device smoke test. It is not
 - backup status review
 - incident response owner/contact route
 - tester feedback destination
-- first-device smoke test using the generated Android APK
+- first-device smoke test using the replacement Android APK
 - open PostGIS advisor issue `SU-426513` accepted as pending Supabase support
