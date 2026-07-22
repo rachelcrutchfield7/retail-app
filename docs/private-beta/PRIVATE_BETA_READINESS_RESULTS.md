@@ -182,7 +182,10 @@ Final GitHub Actions evidence for the base account-deletion branch has been veri
 | Failed build result | Installed successfully, failed initial startup with the global error boundary |
 | Most likely root cause | Startup auth listener setup could synchronously fail through the lazy Supabase proxy without a safe startup state or diagnostic details |
 | Fix | Auth startup now validates the Supabase client before subscribing, catches setup failures, surfaces an explicit startup state, and adds beta-only redacted diagnostics to the global error boundary |
-| Replacement build | Pending |
+| Replacement build ID | `7a9364af-eadb-4580-ba66-2df791e3ce92` |
+| Replacement build source commit | `73574ad9e3c87a73f57cafa4d4af1b9e8daec902` |
+| Replacement build status | `IN_QUEUE` |
+| Replacement build page | https://expo.dev/accounts/raecrutchfield/projects/retail/builds/7a9364af-eadb-4580-ba66-2df791e3ce92 |
 
 ## Release Decision
 

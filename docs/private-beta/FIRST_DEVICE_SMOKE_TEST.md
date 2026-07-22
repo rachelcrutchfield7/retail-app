@@ -18,7 +18,7 @@ Use disposable accounts only. Do not use real payment information, private home 
 | Build ID | Source commit | Result |
 | --- | --- | --- |
 | `a6fcb7b1-3b57-432a-b348-64e5541923dc` | `05430288d93a80d6dc6b33244ec3f3cb58e350e0` | Installed successfully, failed initial startup with the global error boundary. |
-| Replacement build pending | `android-startup-crash-fix` | Awaiting replacement APK installation and launch confirmation. |
+| `7a9364af-eadb-4580-ba66-2df791e3ce92` | `73574ad9e3c87a73f57cafa4d4af1b9e8daec902` | Replacement build queued in EAS; awaiting APK installation and launch confirmation. |
 
 The first-device smoke test remains incomplete until the replacement APK opens successfully on Rachel's Android device.
 
