@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, BackHandler, SafeAreaView, StyleSheet, View } from 'react-native';
+import { Alert, BackHandler, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthModal, ReportListingModal, TabBar } from './components';
 import type { AuthModalSubmission, AuthPrompt } from './components';
 import { colors } from './constants/theme';

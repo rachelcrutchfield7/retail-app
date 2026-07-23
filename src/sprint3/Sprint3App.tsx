@@ -7,13 +7,13 @@ import {
   Image,
   Platform,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Archive,
   AlertCircle,
@@ -112,6 +112,12 @@ import type {
 import type { Category, IconComponent, Listing, ListingCondition, ListingStatus, RescueNeedUrgency, RescueOrganizationType } from '../types';
 import { handleAppError } from '../utils/errorHandler';
 import { listingLocationLabel } from '../utils/format';
+import {
+  bottomTabBarContentClearance,
+  bottomTabBarGap,
+  scrollContentBottomClearance,
+  topSafeAreaPadding,
+} from '../utils/safeAreaLayout';
 import { validateCreateListingInput } from '../validation/createListing';
 
 type SprintTab = 'home' | 'search' | 'sell' | 'favorites' | 'profile';
@@ -273,11 +279,14 @@ function TabsShell({
   onChangeTab: (tab: SprintTab) => void;
   children: ReactNode;
 }) {
+  const insets = useSafeAreaInsets();
+  const tabBarGap = bottomTabBarGap(insets.bottom);
+
   return (
-    <SafeAreaView style={styles.app}>
+    <SafeAreaView edges={['left', 'right']} style={[styles.app, { paddingTop: topSafeAreaPadding(insets.top) }]}>
       <StatusBar style="dark" />
-      <View style={styles.tabContent}>{children}</View>
-      <View style={styles.tabBar}>
+      <View style={[styles.tabContent, { paddingBottom: bottomTabBarContentClearance(insets.bottom) }]}>{children}</View>
+      <View style={[styles.tabBar, { bottom: tabBarGap }]}>
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const selected = tab.key === activeTab;
@@ -1039,7 +1048,7 @@ export function CreateListingScreen({
   };
 
   return (
-    <SafeAreaView style={styles.app}>
+    <ScreenContainer>
       <StatusBar style="dark" />
       <ScrollView style={styles.listScreen} contentContainerStyle={styles.listContent} keyboardShouldPersistTaps="handled">
         <BackButton onPress={onBack} />
@@ -1058,7 +1067,7 @@ export function CreateListingScreen({
         {mutation.error ? <Text style={styles.errorText}>{mutation.error}</Text> : null}
         <Button title="Publish Listing" onPress={submit} loading={mutation.loading || uploading} fullWidth />
       </ScrollView>
-    </SafeAreaView>
+    </ScreenContainer>
   );
 }
 
@@ -1223,7 +1232,7 @@ function ListingDetailContent({
   };
 
   return (
-    <SafeAreaView style={styles.app}>
+    <ScreenContainer>
       <StatusBar style="dark" />
       <ScrollView style={styles.listScreen} contentContainerStyle={styles.detailContent}>
         <View>
@@ -1464,7 +1473,7 @@ function ListingDetailContent({
           ) : null}
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </ScreenContainer>
   );
 }
 
@@ -2491,7 +2500,7 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
   };
 
   return (
-    <SafeAreaView style={styles.app}>
+    <ScreenContainer>
       <StatusBar style="dark" />
       <ScrollView style={styles.listScreen} contentContainerStyle={styles.listContent} keyboardShouldPersistTaps="handled">
         <BackButton onPress={onBack} />
@@ -2565,7 +2574,7 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
         {notice ? <NoticeCard notice={notice} /> : null}
         <Button title="Save Changes" onPress={save} loading={mutation.loading || rescueActions.loading} fullWidth />
       </ScrollView>
-    </SafeAreaView>
+    </ScreenContainer>
   );
 }
 
@@ -2628,7 +2637,7 @@ export function PublicProfileScreen({
   };
 
   return (
-    <SafeAreaView style={styles.app}>
+    <ScreenContainer>
       <StatusBar style="dark" />
       <ScrollView style={styles.listScreen} contentContainerStyle={styles.listContent}>
         <BackButton onPress={onBack} />
@@ -2702,7 +2711,7 @@ export function PublicProfileScreen({
           emptyBody="This seller does not have active listings right now."
         />
       </ScrollView>
-    </SafeAreaView>
+    </ScreenContainer>
   );
 }
 
@@ -2783,7 +2792,7 @@ export function MyListingsScreen({
   const allListings = listings.data ?? [];
 
   return (
-    <SafeAreaView style={styles.app}>
+    <ScreenContainer>
       <StatusBar style="dark" />
       <ScrollView style={styles.listScreen} contentContainerStyle={styles.listContent}>
         <BackButton onPress={onBack} />
@@ -2902,7 +2911,7 @@ export function MyListingsScreen({
           );
         })}
       </ScrollView>
-    </SafeAreaView>
+    </ScreenContainer>
   );
 }
 
@@ -3009,7 +3018,7 @@ function EditListingForm({
   };
 
   return (
-    <SafeAreaView style={styles.app}>
+    <ScreenContainer>
       <StatusBar style="dark" />
       <ScrollView style={styles.listScreen} contentContainerStyle={styles.listContent} keyboardShouldPersistTaps="handled">
         <BackButton onPress={onBack} />
@@ -3031,7 +3040,7 @@ function EditListingForm({
         {mutation.error ? <Text style={styles.errorText}>{mutation.error}</Text> : null}
         <Button title="Save Listing" onPress={save} loading={mutation.loading} disabled={!editable} fullWidth />
       </ScrollView>
-    </SafeAreaView>
+    </ScreenContainer>
   );
 }
 
@@ -3247,12 +3256,27 @@ function NoticeCard({
 }
 
 function ScreenFrame({ children }: { children: ReactNode }) {
+  const insets = useSafeAreaInsets();
+
   return (
-    <SafeAreaView style={styles.app}>
+    <SafeAreaView edges={['left', 'right']} style={[styles.app, { paddingTop: topSafeAreaPadding(insets.top) }]}>
       <StatusBar style="dark" />
-      <ScrollView style={styles.listScreen} contentContainerStyle={styles.listContent}>
+      <ScrollView
+        style={styles.listScreen}
+        contentContainerStyle={[styles.listContent, { paddingBottom: scrollContentBottomClearance(insets.bottom) }]}
+      >
         {children}
       </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+function ScreenContainer({ children }: { children: ReactNode }) {
+  const insets = useSafeAreaInsets();
+
+  return (
+    <SafeAreaView edges={['left', 'right']} style={[styles.app, { paddingTop: topSafeAreaPadding(insets.top) }]}>
+      {children}
     </SafeAreaView>
   );
 }
@@ -3493,14 +3517,23 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   tabBar: {
+    position: 'absolute',
+    left: spacing.md,
+    right: spacing.md,
     minHeight: sizes.tabBarHeight,
     flexDirection: 'row',
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.large,
     backgroundColor: colors.surface,
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
-    paddingBottom: sizes.tabBarBottomOffset + spacing.sm,
+    paddingBottom: spacing.sm,
+    shadowColor: colors.textPrimary,
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 8,
   },
   tabButton: {
     flex: 1,
@@ -3522,11 +3555,12 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
+    paddingTop: sizes.screenTopGap,
     paddingBottom: spacing.xxl,
     gap: spacing.lg,
   },
   detailContent: {
+    paddingTop: sizes.screenTopGap,
     paddingBottom: spacing.xxl,
     gap: spacing.lg,
   },

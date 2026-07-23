@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Alert, BackHandler, FlatList, Image, Linking, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, BackHandler, FlatList, Image, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Bell,
   CheckCheck,
@@ -88,6 +89,12 @@ import { reportReasons } from '../services/reportService';
 import { useListing } from '../hooks/useListing';
 import type { AdminListingReport, Message, Notification, ReportReason, RescueProfile, ReportStatus } from '../services/types';
 import { handleAppError } from '../utils/errorHandler';
+import {
+  bottomTabBarContentClearance,
+  bottomTabBarGap,
+  scrollContentBottomClearance,
+  topSafeAreaPadding,
+} from '../utils/safeAreaLayout';
 
 type SprintTab = 'home' | 'search' | 'sell' | 'favorites' | 'profile';
 type SprintRoute =
@@ -356,12 +363,14 @@ function TabsShell({
   children: ReactNode;
 }) {
   const unread = useUnreadMessages();
+  const insets = useSafeAreaInsets();
+  const tabBarGap = bottomTabBarGap(insets.bottom);
 
   return (
-    <SafeAreaView style={styles.app}>
+    <SafeAreaView edges={['left', 'right']} style={[styles.app, { paddingTop: topSafeAreaPadding(insets.top) }]}>
       <StatusBar style="dark" />
-      <View style={styles.tabContent}>{children}</View>
-      <View style={styles.tabBar}>
+      <View style={[styles.tabContent, { paddingBottom: bottomTabBarContentClearance(insets.bottom) }]}>{children}</View>
+      <View style={[styles.tabBar, { bottom: tabBarGap }]}>
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const selected = tab.key === activeTab;
@@ -420,7 +429,7 @@ export function MessagesScreen({
   }
 
   return (
-    <SafeAreaView style={styles.app}>
+    <ScreenContainer>
       <StatusBar style="dark" />
       <View style={styles.screenHeader}>
         <BackButton onPress={onBack} />
@@ -439,7 +448,7 @@ export function MessagesScreen({
       ) : (
         <ConversationList conversations={conversations.data ?? []} onOpenConversation={onOpenConversation} />
       )}
-    </SafeAreaView>
+    </ScreenContainer>
   );
 }
 
@@ -697,7 +706,7 @@ export function ConversationScreen({
   };
 
   return (
-    <SafeAreaView style={styles.app}>
+    <ScreenContainer>
       <StatusBar style="dark" />
       <View style={styles.conversationHeader}>
         <BackButton onPress={onBack} />
@@ -816,7 +825,7 @@ export function ConversationScreen({
         sending={sender.loading}
         error={sender.error}
       />
-    </SafeAreaView>
+    </ScreenContainer>
   );
 }
 
@@ -995,7 +1004,7 @@ export function NotificationsScreen({
   }
 
   return (
-    <SafeAreaView style={styles.app}>
+    <ScreenContainer>
       <StatusBar style="dark" />
       <View style={styles.screenHeader}>
         <BackButton onPress={onBack} />
@@ -1052,7 +1061,7 @@ export function NotificationsScreen({
           }
         />
       )}
-    </SafeAreaView>
+    </ScreenContainer>
   );
 }
 
@@ -1707,12 +1716,27 @@ function adminRescueAddress(rescue: RescueProfile): string {
 }
 
 function ScreenFrame({ children }: { children: ReactNode }) {
+  const insets = useSafeAreaInsets();
+
   return (
-    <SafeAreaView style={styles.app}>
+    <SafeAreaView edges={['left', 'right']} style={[styles.app, { paddingTop: topSafeAreaPadding(insets.top) }]}>
       <StatusBar style="dark" />
-      <ScrollView style={styles.listScreen} contentContainerStyle={styles.listContent}>
+      <ScrollView
+        style={styles.listScreen}
+        contentContainerStyle={[styles.listContent, { paddingBottom: scrollContentBottomClearance(insets.bottom) }]}
+      >
         {children}
       </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+function ScreenContainer({ children }: { children: ReactNode }) {
+  const insets = useSafeAreaInsets();
+
+  return (
+    <SafeAreaView edges={['left', 'right']} style={[styles.app, { paddingTop: topSafeAreaPadding(insets.top) }]}>
+      {children}
     </SafeAreaView>
   );
 }
@@ -1761,14 +1785,23 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   tabBar: {
+    position: 'absolute',
+    left: spacing.md,
+    right: spacing.md,
     minHeight: sizes.tabBarHeight,
     flexDirection: 'row',
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.large,
     backgroundColor: colors.surface,
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
-    paddingBottom: sizes.tabBarBottomOffset + spacing.sm,
+    paddingBottom: spacing.sm,
+    shadowColor: colors.textPrimary,
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 8,
   },
   tabButton: {
     flex: 1,
@@ -1794,7 +1827,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
+    paddingTop: sizes.screenTopGap,
     paddingBottom: spacing.xxl,
     gap: spacing.lg,
   },
@@ -1887,7 +1920,7 @@ const styles = StyleSheet.create({
   messageList: {
     flexGrow: 1,
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
+    paddingTop: sizes.screenTopGap,
     paddingBottom: spacing.xxl,
   },
   messageListHeader: {
@@ -1899,7 +1932,7 @@ const styles = StyleSheet.create({
   },
   notificationList: {
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
+    paddingTop: sizes.screenTopGap,
     paddingBottom: spacing.xxl,
   },
   separator: {

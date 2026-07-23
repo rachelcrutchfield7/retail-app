@@ -1,7 +1,9 @@
 import { Heart, Home, MessageCircle, Plus, UserRound } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radius, sizes, spacing, typography } from '../../constants/theme';
 import type { IconComponent, TabKey } from '../../types.ts';
+import { bottomTabBarGap } from '../../utils/safeAreaLayout';
 
 type TabBarProps = {
   activeTab: TabKey;
@@ -17,6 +19,7 @@ type TabItem = {
 };
 
 export function TabBar({ activeTab, onChange, favoritesCount }: TabBarProps) {
+  const insets = useSafeAreaInsets();
   const tabs: TabItem[] = [
     { key: 'browse', label: 'Browse', icon: Home },
     { key: 'favorites', label: 'Saved', icon: Heart, badge: favoritesCount },
@@ -26,7 +29,7 @@ export function TabBar({ activeTab, onChange, favoritesCount }: TabBarProps) {
   ];
 
   return (
-    <View style={styles.tabBar}>
+    <View style={[styles.tabBar, { bottom: bottomTabBarGap(insets.bottom) }]}>
       {tabs.map((tab) => {
         const Icon = tab.icon;
         const active = activeTab === tab.key;
@@ -56,7 +59,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: spacing.md,
     right: spacing.md,
-    bottom: sizes.tabBarBottomOffset,
+    bottom: sizes.tabBarMinimumBottomGap,
     minHeight: sizes.tabBarHeight,
     flexDirection: 'row',
     justifyContent: 'space-around',

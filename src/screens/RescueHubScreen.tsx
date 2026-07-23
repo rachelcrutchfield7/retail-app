@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { AlertCircle, HeartHandshake, MapPin, ShieldCheck } from 'lucide-react-native';
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Badge, Card, DistanceFilter, EmptyState, ErrorState, HeaderBar, LoadingSpinner, Metric, SearchBar } from '../components';
 import { colors, radius, sizes, spacing, typography } from '../constants/theme';
 import {
@@ -11,12 +12,14 @@ import {
 import { useRescueHub } from '../hooks/useRescueHub';
 import type { MarketplaceSearchArea, RescueNeedUrgency, RescueOrganization } from '../types.ts';
 import { handleAppError } from '../utils/errorHandler';
+import { scrollContentBottomClearance, topSafeAreaPadding } from '../utils/safeAreaLayout';
 
 type RescueHubScreenProps = {
   onBack: () => void;
 };
 
 export function RescueHubScreen({ onBack }: RescueHubScreenProps) {
+  const insets = useSafeAreaInsets();
   const [search, setSearch] = useState('');
   const searchAreas = useMarketplaceSearchAreas();
   const searchPreference = useMarketplaceSearchPreference();
@@ -44,8 +47,17 @@ export function RescueHubScreen({ onBack }: RescueHubScreenProps) {
   );
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.screenContent}>
-      <HeaderBar title="Rescue Hub" onBack={onBack} backLabel="Back" />
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={[
+        styles.screenContent,
+        {
+          paddingTop: topSafeAreaPadding(insets.top) + sizes.screenTopGap,
+          paddingBottom: scrollContentBottomClearance(insets.bottom),
+        },
+      ]}
+    >
+      <HeaderBar title="Rescue Hub" onBack={onBack} backLabel="Back" backVariant="prominent" />
 
       <View style={styles.hero}>
         <View style={styles.heroIcon}>
@@ -260,8 +272,8 @@ const styles = StyleSheet.create({
   },
   screenContent: {
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-    paddingBottom: sizes.tabBarHeight + sizes.tabBarBottomOffset + spacing.xxl,
+    paddingTop: sizes.screenTopGap,
+    paddingBottom: spacing.xxl,
     gap: spacing.lg,
   },
   hero: {
