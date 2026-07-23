@@ -44,6 +44,12 @@ Recommended project name:
 retail-prelaunch
 ```
 
+Cloudflare Pages project created:
+
+```text
+retail-prelaunch.pages.dev
+```
+
 Cloudflare Pages settings:
 
 ```text
@@ -53,6 +59,25 @@ Output directory: dist
 ```
 
 No database, Supabase connection, Stripe key, or server secret is required.
+
+## Deployment Status
+
+The Cloudflare Pages project was created, but the first deployment was not completed from Codex.
+
+Blocked deployment paths:
+
+- Wrangler direct upload could not run because the local shell does not have a `CLOUDFLARE_API_TOKEN`.
+- Cloudflare Pages source connection to GitHub returned a Cloudflare Git installation issue for the account.
+
+Next recommended action:
+
+1. In Cloudflare, open Workers & Pages.
+2. Select the `retail-prelaunch` Pages project.
+3. Reconnect or reinstall the GitHub integration if prompted.
+4. Connect repository `rachelcrutchfield7/retail-app`.
+5. Use branch `prelaunch-website`.
+6. Use root directory `marketing-site`, build command `pnpm build`, and output directory `dist`.
+7. After the first deployment succeeds, attach `retailpetapp.com` and `www.retailpetapp.com` as custom domains.
 
 ## Custom Domains
 
@@ -84,7 +109,7 @@ These records support the domain email system and should be preserved.
 
 ## DNS Records Changed
 
-None at the time this handoff was written.
+None. No MX, TXT, DKIM, SPF, or Email Routing records were changed.
 
 ## Email DNS Preservation
 
