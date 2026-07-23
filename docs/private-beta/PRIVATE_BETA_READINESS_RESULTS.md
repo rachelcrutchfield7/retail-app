@@ -120,7 +120,7 @@ Old disposable fixture cleanup:
 | Install | passed |
 | Lint | passed |
 | TypeScript | passed |
-| Static tests | passed: 181 tests, 167 passed, 14 skipped |
+| Static tests | passed: 195 tests, 181 passed, 14 skipped |
 | Expo Doctor | passed: 20/20 |
 | Web export | passed |
 | Expo public config | passed |
@@ -148,7 +148,7 @@ Final GitHub Actions evidence for the base account-deletion branch has been veri
 | EAS project link | complete | Project `@raecrutchfield/retail`, ID `288a25e1-5824-4f77-a3f4-0607df5f7d89` |
 | EAS preview variables | complete | Preview build profile provides `EXPO_PUBLIC_APP_ENV=beta`; EAS preview environment contains `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY`. Safe validation passed without printing the public key. |
 | Feedback destination | complete | `contact@retailpetapp.com` is used for general contact and beta access; `support@retailpetapp.com` is used for payment issues, user issues, account access, reports, and safety concerns |
-| Android build | blocked pending corrected build confirmation | First EAS Android preview APK build `a6fcb7b1-3b57-432a-b348-64e5541923dc` finished successfully from commit `05430288d93a80d6dc6b33244ec3f3cb58e350e0`, installed on Rachel's device, then failed initial startup with the global error boundary. Second build `7a9364af-eadb-4580-ba66-2df791e3ce92` installed and opened successfully, but startup was blocked because compiled Supabase public configuration was missing. Third corrected build is required. |
+| Android build | complete pending first-device smoke test | Corrected EAS Android preview APK build `1bacbcf6-bfb9-4a36-9e69-39e3b7e7b59b` finished successfully from commit `99998e9d8b3e55c289ad96894d0ed7f00335fb74`. Rachel must install and open this corrected APK on device before inviting outside testers. |
 | Real-device smoke test checklist | complete | `docs/private-beta/FIRST_DEVICE_SMOKE_TEST.md` |
 | Supabase dashboard checklist | complete | `docs/private-beta/SUPABASE_BETA_DASHBOARD_REVIEW.md` |
 | Manual blocker list | complete | `docs/private-beta/PRIVATE_BETA_MANUAL_BLOCKERS.md` |
@@ -188,13 +188,16 @@ Final GitHub Actions evidence for the base account-deletion branch has been veri
 | Replacement build result | Startup was blocked by "Startup needs attention" because compiled Supabase public configuration was missing. |
 | Replacement build page | https://expo.dev/accounts/raecrutchfield/projects/retail/builds/7a9364af-eadb-4580-ba66-2df791e3ce92 |
 | Corrected build-time gate | Added `scripts/validate-beta-build-config.mjs` through the `eas-build-pre-install` hook. |
-| Corrected build status | Pending third Android preview APK build. |
+| Corrected build ID | `1bacbcf6-bfb9-4a36-9e69-39e3b7e7b59b` |
+| Corrected build source commit | `99998e9d8b3e55c289ad96894d0ed7f00335fb74` |
+| Corrected build status | `FINISHED`; physical-device smoke test pending. |
+| Corrected build page | https://expo.dev/accounts/raecrutchfield/projects/retail/builds/1bacbcf6-bfb9-4a36-9e69-39e3b7e7b59b |
 
 ## Release Decision
 
 The branch may become a private beta release candidate after final branch checks and GitHub Actions pass.
 
-ReTail is not approved for outside private beta testers until the corrected Android build opens successfully on Rachel's device without the Supabase startup warning and these items are completed or explicitly accepted by Rachel as controlled private beta risks:
+ReTail is not approved for outside private beta testers until corrected Android build `1bacbcf6-bfb9-4a36-9e69-39e3b7e7b59b` opens successfully on Rachel's device without the Supabase startup warning and these items are completed or explicitly accepted by Rachel as controlled private beta risks:
 
 - Auth dashboard checklist
 - Storage live/dashboard verification

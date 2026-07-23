@@ -22,7 +22,7 @@ not applicable
 | Phase A through Phase F complete | complete | Phase F branch closed at `4e1ad48a5f5d6a5d58a78d65759f0c8eb3f012e5` |
 | Private beta gate closure | complete | Secure account deletion, saved-search notification context, profile deletion context, and server-only account-deletion preparation migrations applied |
 | Migrations aligned | complete | Supabase migration list includes remote/local `20260720120248` from full-history verification workspace |
-| Static tests passing | complete | `CI=true pnpm test`: 181 tests, 167 passed, 14 skipped |
+| Static tests passing | complete | `CI=true pnpm test`: 195 tests, 181 passed, 14 skipped |
 | Workflows green | complete | Base commit `105bdb4f827a33b31e079e773ba02619521a6562` passed `ReTail CI` run `29742649173` and `ReTail Security Baseline` run `29742649344` |
 | No high or critical advisory | complete | Dependency audit gate passes with one moderate transitive advisory |
 | Secret scans passing | complete | Working-tree and history secret scans |
@@ -63,7 +63,7 @@ not applicable
 | Package identifiers confirmed | complete | `com.raecrutchfield.retail` in `app.json` |
 | Version confirmed | complete | `1.0.0` in `app.json` |
 | Preview profile configured | complete | EAS `preview` profile uses `EXPO_PUBLIC_APP_ENV=beta` |
-| Build generated | blocked pending replacement confirmation | First Android preview APK build `a6fcb7b1-3b57-432a-b348-64e5541923dc` installed successfully, then failed initial startup with the global error boundary |
+| Build generated | complete pending first-device smoke test | Corrected Android preview APK build `1bacbcf6-bfb9-4a36-9e69-39e3b7e7b59b` finished successfully from commit `99998e9d8b3e55c289ad96894d0ed7f00335fb74` |
 | EAS preview Supabase variables | complete | Preview environment has `EXPO_PUBLIC_APP_ENV`, `EXPO_PUBLIC_SUPABASE_URL`, and `EXPO_PUBLIC_SUPABASE_ANON_KEY`; do not commit real values |
 | Build charge confirmation | complete | No payment, plan upgrade, or charge approval prompt appeared before or during build start |
 | Physical-device install tested | manual verification required | Required before inviting testers |
@@ -101,8 +101,11 @@ not applicable
 | Replacement build result | Startup was blocked by "Startup needs attention" because compiled Supabase public configuration was missing. |
 | Replacement build page | https://expo.dev/accounts/raecrutchfield/projects/retail/builds/7a9364af-eadb-4580-ba66-2df791e3ce92 |
 | Corrected build-time gate | Added `scripts/validate-beta-build-config.mjs` through the `eas-build-pre-install` hook. |
-| Corrected build status | Pending third Android preview APK build. |
+| Corrected build ID | `1bacbcf6-bfb9-4a36-9e69-39e3b7e7b59b` |
+| Corrected build source commit | `99998e9d8b3e55c289ad96894d0ed7f00335fb74` |
+| Corrected build status | `FINISHED`; physical-device smoke test pending. |
+| Corrected build page | https://expo.dev/accounts/raecrutchfield/projects/retail/builds/1bacbcf6-bfb9-4a36-9e69-39e3b7e7b59b |
 
 ## Decision
 
-Private beta release candidate is blocked pending corrected Android build confirmation. External private beta testers are not approved until the corrected APK opens successfully on Rachel's device without the Supabase startup warning and the remaining manual operational items above are either verified or explicitly accepted by Rachel as controlled private beta risks.
+Private beta release candidate is ready for Rachel's corrected Android first-device smoke test. External private beta testers are not approved until corrected build `1bacbcf6-bfb9-4a36-9e69-39e3b7e7b59b` opens successfully on Rachel's device without the Supabase startup warning and the remaining manual operational items above are either verified or explicitly accepted by Rachel as controlled private beta risks.
