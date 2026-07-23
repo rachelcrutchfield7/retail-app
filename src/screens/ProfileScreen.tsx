@@ -135,8 +135,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   screenContent: {
-    padding: spacing.md,
-    paddingBottom: sizes.tabBarHeight + spacing.xl,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: sizes.tabBarHeight + sizes.tabBarBottomOffset + spacing.xxl,
     gap: spacing.lg,
   },
   profileHeader: {

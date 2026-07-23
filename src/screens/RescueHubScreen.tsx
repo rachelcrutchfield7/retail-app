@@ -39,13 +39,13 @@ export function RescueHubScreen({ onBack }: RescueHubScreenProps) {
   const rescues = useRescueHub(rescueParams);
   const filteredRescues = rescues.data ?? [];
   const urgentNeedCount = filteredRescues.reduce(
-    (total, rescue) => total + rescue.urgentNeeds.filter((need) => need.urgency === 'High').length,
+    (total, rescue) => total + rescue.urgentNeeds.length,
     0
   );
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.screenContent}>
-      <HeaderBar title="Rescue Hub" onBack={onBack} />
+      <HeaderBar title="Rescue Hub" onBack={onBack} backLabel="Back" />
 
       <View style={styles.hero}>
         <View style={styles.heroIcon}>
@@ -61,7 +61,7 @@ export function RescueHubScreen({ onBack }: RescueHubScreenProps) {
 
       <View style={styles.metricRow}>
         <Metric label="Nearby rescues" value={`${filteredRescues.length}`} />
-        <Metric label="High priority" value={`${urgentNeedCount}`} tone="coral" />
+        <Metric label="Urgent needs" value={`${urgentNeedCount}`} tone="coral" />
       </View>
 
       <SearchBar
@@ -259,8 +259,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   screenContent: {
-    padding: spacing.md,
-    paddingBottom: sizes.tabBarHeight + spacing.xl,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: sizes.tabBarHeight + sizes.tabBarBottomOffset + spacing.xxl,
     gap: spacing.lg,
   },
   hero: {

@@ -12,7 +12,6 @@ import {
   RescueHubBanner,
   SearchBar,
 } from '../components';
-import { rescueOrganizations } from '../data/mockData';
 import type { CategoryFilter, Listing } from '../types.ts';
 
 type BrowseScreenProps = {
@@ -28,6 +27,8 @@ type BrowseScreenProps = {
   onOpenListing: (listing: Listing) => void;
   onFavorite: (listingId: string) => void;
   onOpenRescueHub: () => void;
+  rescueCount: number;
+  urgentNeedCount: number;
 };
 
 export function BrowseScreen({
@@ -43,12 +44,9 @@ export function BrowseScreen({
   onRetry,
   onFavorite,
   onOpenRescueHub,
+  rescueCount,
+  urgentNeedCount,
 }: BrowseScreenProps) {
-  const urgentNeedCount = rescueOrganizations.reduce(
-    (total, rescue) => total + rescue.urgentNeeds.filter((need) => need.urgency === 'High').length,
-    0
-  );
-
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.screenContent}>
       <View style={styles.topBar}>
@@ -68,7 +66,7 @@ export function BrowseScreen({
       </View>
 
       <RescueHubBanner
-        rescueCount={rescueOrganizations.length}
+        rescueCount={rescueCount}
         urgentNeedCount={urgentNeedCount}
         onPress={onOpenRescueHub}
       />
@@ -120,8 +118,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   screenContent: {
-    padding: spacing.md,
-    paddingBottom: sizes.tabBarHeight + spacing.xl,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: sizes.tabBarHeight + sizes.tabBarBottomOffset + spacing.xxl,
     gap: spacing.lg,
   },
   topBar: {

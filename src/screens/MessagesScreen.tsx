@@ -75,8 +75,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   screenContent: {
-    padding: spacing.md,
-    paddingBottom: sizes.tabBarHeight + spacing.xl,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: sizes.tabBarHeight + sizes.tabBarBottomOffset + spacing.xxl,
     gap: spacing.lg,
   },
   title: {
@@ -90,9 +91,9 @@ const styles = StyleSheet.create({
   },
   messageComposer: {
     position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: sizes.tabBarHeight,
+    left: spacing.lg,
+    right: spacing.lg,
+    bottom: sizes.tabBarHeight + sizes.tabBarBottomOffset + spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,

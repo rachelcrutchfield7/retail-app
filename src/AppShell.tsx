@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Alert, SafeAreaView, StyleSheet, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { Alert, BackHandler, SafeAreaView, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { AuthModal, ReportListingModal, TabBar } from './components';
 import type { AuthModalSubmission, AuthPrompt } from './components';
@@ -13,6 +13,7 @@ import { useListings } from './hooks/useListings';
 import { useMarketplaceSearchPreference } from './hooks/useMarketplaceSearchArea';
 import { useProfile } from './hooks/useProfile';
 import { useReports } from './hooks/useReports';
+import { useRescueHub } from './hooks/useRescueHub';
 import { useUpdateListing } from './hooks/useUpdateListing';
 import {
   BrowseScreen,
@@ -65,13 +66,19 @@ function AppExperience() {
   const listingParams = useMemo(
     () => ({
       search: query.trim() || undefined,
-      categoryId: categoryToSlug(category),
       radiusMiles: searchPreference.data?.radius_miles,
-      limit: 20,
+      limit: 50,
     }),
-    [category, query, searchPreference.data?.radius_miles]
+    [query, searchPreference.data?.radius_miles]
+  );
+  const rescueSummaryParams = useMemo(
+    () => ({
+      radiusMiles: searchPreference.data?.radius_miles,
+    }),
+    [searchPreference.data?.radius_miles]
   );
   const listings = useListings(listingParams);
+  const rescueSummary = useRescueHub(rescueSummaryParams);
   const favorites = useFavorites(Boolean(auth.user));
   const profile = useProfile();
   const createListing = useCreateListing();
@@ -79,7 +86,19 @@ function AppExperience() {
   const reports = useReports();
   const currentProfile = (profile.data ?? auth.profile) as Profile | null;
   const accountType: AccountType = currentProfile?.account_type === 'rescue' ? 'rescue' : 'regular';
-  const visibleListings = listings.data?.items ?? [];
+  const allListings = listings.data?.items ?? [];
+  const visibleListings = useMemo(
+    () => filterListingsByCategory(allListings, category),
+    [allListings, category]
+  );
+  const rescueHubStats = useMemo(() => {
+    const rescues = rescueSummary.data ?? [];
+
+    return {
+      rescueCount: rescues.length,
+      urgentNeedCount: rescues.reduce((total, rescue) => total + rescue.urgentNeeds.length, 0),
+    };
+  }, [rescueSummary.data]);
 
   const favoriteListings = useMemo(
     () => favorites.data ?? [],
@@ -260,6 +279,38 @@ function AppExperience() {
     await auth.signOut();
   };
 
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (showRescueHub) {
+        setShowRescueHub(false);
+        return true;
+      }
+
+      if (selectedListing) {
+        setSelectedListing(null);
+        setReportingListing(null);
+        setPendingReportListing(null);
+        return true;
+      }
+
+      if (editingListing) {
+        setEditingListing(null);
+        setForm(emptyListingForm);
+        setActiveTab('browse');
+        return true;
+      }
+
+      if (activeTab !== 'browse') {
+        setActiveTab('browse');
+        return true;
+      }
+
+      return false;
+    });
+
+    return () => subscription.remove();
+  }, [activeTab, editingListing, selectedListing, showRescueHub]);
+
   const changeTab = (nextTab: TabKey) => {
     setSelectedListing(null);
     setReportingListing(null);
@@ -320,6 +371,8 @@ function AppExperience() {
           favorites={favoriteIds}
           onFavorite={toggleFavorite}
           onOpenRescueHub={() => setShowRescueHub(true)}
+          rescueCount={rescueHubStats.rescueCount}
+          urgentNeedCount={rescueHubStats.urgentNeedCount}
         />
       );
     }
@@ -426,12 +479,12 @@ function AppExperience() {
   );
 }
 
-function categoryToSlug(category: CategoryFilter): string | undefined {
+function filterListingsByCategory(listings: Listing[], category: CategoryFilter): Listing[] {
   if (category === 'All') {
-    return undefined;
+    return listings;
   }
 
-  return category === 'General' ? 'general' : category.toLowerCase().replaceAll(' ', '-');
+  return listings.filter((listing) => listing.category === category);
 }
 
 function createListingInputFromForm(

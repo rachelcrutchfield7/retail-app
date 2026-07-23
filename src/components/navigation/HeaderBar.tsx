@@ -6,15 +6,22 @@ import { colors, sizes, spacing, typography } from '../../constants/theme';
 type HeaderBarProps = {
   title: string;
   onBack?: () => void;
+  backLabel?: string;
   action?: ReactNode;
 };
 
-export function HeaderBar({ title, onBack, action }: HeaderBarProps) {
+export function HeaderBar({ title, onBack, backLabel, action }: HeaderBarProps) {
   return (
     <View style={styles.headerBar}>
       {onBack ? (
-        <Pressable accessibilityRole="button" style={styles.iconButton} onPress={onBack} accessibilityLabel="Go back">
+        <Pressable
+          accessibilityRole="button"
+          style={[styles.iconButton, backLabel ? styles.labeledBackButton : null]}
+          onPress={onBack}
+          accessibilityLabel="Go back"
+        >
           <ChevronLeft size={24} color={colors.textPrimary} />
+          {backLabel ? <Text style={styles.backLabel}>{backLabel}</Text> : null}
         </Pressable>
       ) : null}
       <Text style={styles.title}>{title}</Text>
@@ -35,6 +42,17 @@ const styles = StyleSheet.create({
     height: sizes.iconButton,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  labeledBackButton: {
+    width: 'auto',
+    minWidth: sizes.iconButton,
+    flexDirection: 'row',
+    gap: spacing.xs,
+    paddingRight: spacing.sm,
+  },
+  backLabel: {
+    color: colors.textPrimary,
+    ...typography.button,
   },
   title: {
     flex: 1,

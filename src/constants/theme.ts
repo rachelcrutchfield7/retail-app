@@ -50,6 +50,7 @@ export const sizes = {
   touchTarget: 44,
   buttonHeight: 52,
   tabBarHeight: 76,
+  tabBarBottomOffset: 18,
   avatar: 48,
   avatarLarge: 76,
   iconFrame: 64,
