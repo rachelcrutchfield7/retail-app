@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" role="img" aria-labelledby="title desc">
+  <title id="title">ReTail pre-launch website</title>
+  <desc id="desc">ReTail logo on a warm cream and green branded background.</desc>
+  <rect width="1200" height="630" fill="#F8F3EA"/>
+  <rect x="64" y="64" width="1072" height="502" rx="42" fill="#3F8F6B"/>
+  <circle cx="986" cy="142" r="76" fill="#7BA7BC" opacity="0.35"/>
+  <circle cx="178" cy="510" r="96" fill="#FFFFFF" opacity="0.18"/>
+  <image href="/assets/retail-logo-header.png" x="250" y="150" width="700" height="313" preserveAspectRatio="xMidYMid meet"/>
+  <text x="600" y="500" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="42" font-weight="700" fill="#FFFFFF">Secondhand Pet Supplies Marketplace</text>
+</svg>

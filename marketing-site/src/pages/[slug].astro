@@ -1,0 +1,53 @@
+---
+import { pages, type SitePage } from '../data/sitePages';
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+export function getStaticPaths() {
+  return pages.map((page) => ({
+    params: { slug: page.slug },
+    props: { page },
+  }));
+}
+
+const { page } = Astro.props as { page: SitePage };
+const contactLinks = {
+  general: [{ href: 'mailto:contact@retailpetapp.com', label: 'Email contact@retailpetapp.com' }],
+  support: [{ href: 'mailto:support@retailpetapp.com', label: 'Email support@retailpetapp.com' }],
+  both: [
+    { href: 'mailto:contact@retailpetapp.com', label: 'General questions' },
+    { href: 'mailto:support@retailpetapp.com', label: 'Support and safety' },
+  ],
+};
+---
+<BaseLayout title={page.title} description={page.description} path={`/${page.slug}`}>
+  <section class="section page-hero narrow">
+    <span class="eyebrow">{page.eyebrow}</span>
+    <h1>{page.heading}</h1>
+    <p class="lead">{page.intro}</p>
+    {page.updated && <p class="updated">{page.updated}</p>}
+  </section>
+
+  <section class="section narrow policy-body">
+    {page.sections.map((section) => (
+      <section>
+        <h2>{section.heading}</h2>
+        {section.body?.map((paragraph) => <p>{paragraph}</p>)}
+        {section.list && (
+          <ul>
+            {section.list.map((item) => <li>{item}</li>)}
+          </ul>
+        )}
+      </section>
+    ))}
+
+    {page.contact && (
+      <div class="card">
+        <h2>Contact ReTail</h2>
+        <p>Use the appropriate ReTail domain email address so your message reaches the right place.</p>
+        <div class="actions">
+          {contactLinks[page.contact].map((link) => <a class="button secondary" href={link.href}>{link.label}</a>)}
+        </div>
+      </div>
+    )}
+  </section>
+</BaseLayout>

@@ -1,0 +1,121 @@
+---
+import '../styles/global.css';
+
+type Props = {
+  title: string;
+  description: string;
+  path?: string;
+};
+
+const {
+  title,
+  description,
+  path = '/',
+} = Astro.props;
+
+const canonical = new URL(path, 'https://retailpetapp.com').toString();
+const navLinks = [
+  { href: '/how-it-works', label: 'How It Works' },
+  { href: '/rescue-hub', label: 'Rescue Hub' },
+  { href: '/safety', label: 'Safety' },
+  { href: '/about', label: 'About' },
+  { href: '/contact', label: 'Contact' },
+];
+const legalLinks = [
+  { href: '/privacy', label: 'Privacy' },
+  { href: '/terms', label: 'Terms' },
+  { href: '/community-guidelines', label: 'Community Guidelines' },
+  { href: '/refunds-and-disputes', label: 'Refunds & Disputes' },
+  { href: '/shipping-and-fulfillment', label: 'Shipping' },
+  { href: '/prohibited-items', label: 'Prohibited Items' },
+];
+const structuredData = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'Organization',
+      name: 'Crutchfield Interactive LLC',
+      url: 'https://retailpetapp.com',
+      email: 'contact@retailpetapp.com',
+      brand: {
+        '@type': 'Brand',
+        name: 'ReTail',
+      },
+    },
+    {
+      '@type': 'WebSite',
+      name: 'ReTail',
+      url: 'https://retailpetapp.com',
+      description,
+      publisher: {
+        '@type': 'Organization',
+        name: 'Crutchfield Interactive LLC',
+      },
+    },
+  ],
+};
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <link rel="icon" href="/assets/app-icon.png" type="image/png" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="ReTail" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content="https://retailpetapp.com/og-image.svg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content="https://retailpetapp.com/og-image.svg" />
+    <script is:inline type="application/ld+json" set:html={JSON.stringify(structuredData)} />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <div class="nav-shell">
+        <a class="brand" href="/" aria-label="ReTail home">
+          <img src="/assets/retail-logo-header.png" alt="ReTail" width="991" height="443" />
+        </a>
+        <nav class="desktop-nav" aria-label="Primary navigation">
+          {navLinks.map((link) => <a href={link.href}>{link.label}</a>)}
+          <a class="beta-pill" href="/private-beta">Private Beta</a>
+        </nav>
+        <details class="mobile-nav">
+          <summary>Menu</summary>
+          <nav class="mobile-menu" aria-label="Mobile navigation">
+            {navLinks.map((link) => <a href={link.href}>{link.label}</a>)}
+            <a href="/private-beta">Private Beta</a>
+          </nav>
+        </details>
+      </div>
+    </header>
+    <main id="main">
+      <slot />
+    </main>
+    <footer class="site-footer">
+      <div class="footer-inner">
+        <div>
+          <img class="footer-logo" src="/assets/retail-logo-header.png" alt="ReTail" width="991" height="443" />
+          <p>ReTail is owned and operated by Crutchfield Interactive LLC.</p>
+          <p class="footer-note">ReTail is currently in private beta. Public marketplace access and payment services are not yet available.</p>
+        </div>
+        <div>
+          <div class="footer-links" aria-label="Company contact">
+            <a href="mailto:contact@retailpetapp.com">contact@retailpetapp.com</a>
+            <a href="mailto:support@retailpetapp.com">support@retailpetapp.com</a>
+          </div>
+          <div class="legal-links" aria-label="Legal and safety links">
+            {legalLinks.map((link) => <a href={link.href}>{link.label}</a>)}
+          </div>
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>
