@@ -103,6 +103,29 @@ Apply SQL files through the Supabase SQL Editor in order:
 
 Use a staging or beta Supabase project for beta testers. Do not point closed beta builds at production user data.
 
+## Public Domain
+
+ReTail's public domain is `retailpetapp.com`.
+
+Public pages live in `site/` and are ready to deploy through Cloudflare Pages:
+
+```text
+Build command: none
+Build output directory: site
+```
+
+The app links to:
+
+- `https://retailpetapp.com`
+- `https://retailpetapp.com/beta`
+- `https://retailpetapp.com/privacy`
+- `https://retailpetapp.com/terms`
+- `https://retailpetapp.com/community-guidelines`
+- `contact@retailpetapp.com`
+- `support@retailpetapp.com`
+
+Use `contact@retailpetapp.com` for general questions, beta access, partnerships, rescue outreach, and press. Use `support@retailpetapp.com` for payment issues, user issues, account access, reports, safety concerns, and moderation questions. See [Domain Setup](docs/domain/retailpetapp-domain-setup.md).
+
 ## EAS Beta Builds
 
 Preview builds:

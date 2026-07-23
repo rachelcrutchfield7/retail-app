@@ -93,7 +93,7 @@ Old disposable fixture cleanup:
 | Backup and recovery | Plan documented; plan status not verified | Operational recovery risk | Yes until reviewed or accepted | No | Supabase plan/dashboard review | Rachel | `docs/security/BACKUP_AND_RECOVERY_PLAN.md` |
 | Incident response | Plan exists; owner/contact route pending | Safety response clarity | Yes until owner confirmed | No | Owner assignment | Rachel |
 | Legal/safety access | Settings includes legal/safety content and live-animal prohibition | Tester trust and policy clarity | No | Complete | Legal review before public launch | Rachel | `src/sprint4/Sprint4App.tsx`, docs/legal |
-| Private beta feedback | Process documented; destination pending | Tester support route | Yes until destination chosen | No | Choose feedback channel | Rachel | `docs/private-beta/TESTER_FEEDBACK_PROCESS.md` |
+| Private beta feedback | `contact@retailpetapp.com` and `support@retailpetapp.com` live | Tester support route | No | Complete | Confirm monitoring owner and response windows | Rachel | `docs/private-beta/TESTER_FEEDBACK_PROCESS.md` |
 | PostGIS Security Advisor warning | Open Supabase support issue `SU-426513` | Extension-managed table is reported by the advisor | No for Rachel's own device build; requires owner acceptance before wider beta | No | Await Supabase guidance | Supabase/Rachel | `docs/private-beta/PRIVATE_BETA_MANUAL_BLOCKERS.md` |
 
 ## Build Configuration
@@ -146,9 +146,9 @@ Final GitHub Actions evidence for the base account-deletion branch has been veri
 | --- | --- | --- |
 | EAS account authentication | complete | `npx eas-cli whoami` returned the `raecrutchfield` account |
 | EAS project link | complete | Project `@raecrutchfield/retail`, ID `288a25e1-5824-4f77-a3f4-0607df5f7d89` |
-| EAS preview variables | complete | Preview environment contains `EXPO_PUBLIC_APP_ENV`, `EXPO_PUBLIC_SUPABASE_URL`, and `EXPO_PUBLIC_SUPABASE_ANON_KEY` |
-| Feedback destination | manual verification required | No approved support email, feedback form, or private tester channel is configured in the repository |
-| Android build | blocked pending replacement confirmation | First EAS Android preview APK build `a6fcb7b1-3b57-432a-b348-64e5541923dc` finished successfully from commit `05430288d93a80d6dc6b33244ec3f3cb58e350e0`, installed on Rachel's device, then failed initial startup with the global error boundary. Replacement build is required. |
+| EAS preview variables | complete | Preview build profile provides `EXPO_PUBLIC_APP_ENV=beta`; EAS preview environment contains `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY`. Safe validation passed without printing the public key. |
+| Feedback destination | complete | `contact@retailpetapp.com` is used for general contact and beta access; `support@retailpetapp.com` is used for payment issues, user issues, account access, reports, and safety concerns |
+| Android build | blocked pending corrected build confirmation | First EAS Android preview APK build `a6fcb7b1-3b57-432a-b348-64e5541923dc` finished successfully from commit `05430288d93a80d6dc6b33244ec3f3cb58e350e0`, installed on Rachel's device, then failed initial startup with the global error boundary. Second build `7a9364af-eadb-4580-ba66-2df791e3ce92` installed and opened successfully, but startup was blocked because compiled Supabase public configuration was missing. Third corrected build is required. |
 | Real-device smoke test checklist | complete | `docs/private-beta/FIRST_DEVICE_SMOKE_TEST.md` |
 | Supabase dashboard checklist | complete | `docs/private-beta/SUPABASE_BETA_DASHBOARD_REVIEW.md` |
 | Manual blocker list | complete | `docs/private-beta/PRIVATE_BETA_MANUAL_BLOCKERS.md` |
@@ -184,20 +184,23 @@ Final GitHub Actions evidence for the base account-deletion branch has been veri
 | Fix | Auth startup now validates the Supabase client before subscribing, catches setup failures, surfaces an explicit startup state, and adds beta-only redacted diagnostics to the global error boundary |
 | Replacement build ID | `7a9364af-eadb-4580-ba66-2df791e3ce92` |
 | Replacement build source commit | `73574ad9e3c87a73f57cafa4d4af1b9e8daec902` |
-| Replacement build status | `IN_QUEUE` |
+| Replacement build status | `FINISHED`; installed and opened successfully on Rachel's Android device |
+| Replacement build result | Startup was blocked by "Startup needs attention" because compiled Supabase public configuration was missing. |
 | Replacement build page | https://expo.dev/accounts/raecrutchfield/projects/retail/builds/7a9364af-eadb-4580-ba66-2df791e3ce92 |
+| Corrected build-time gate | Added `scripts/validate-beta-build-config.mjs` through the `eas-build-pre-install` hook. |
+| Corrected build status | Pending third Android preview APK build. |
 
 ## Release Decision
 
 The branch may become a private beta release candidate after final branch checks and GitHub Actions pass.
 
-ReTail is not approved for outside private beta testers until the replacement Android build opens successfully on Rachel's device and these items are completed or explicitly accepted by Rachel as controlled private beta risks:
+ReTail is not approved for outside private beta testers until the corrected Android build opens successfully on Rachel's device without the Supabase startup warning and these items are completed or explicitly accepted by Rachel as controlled private beta risks:
 
 - Auth dashboard checklist
 - Storage live/dashboard verification
 - Realtime multi-account isolation test
 - backup status review
 - incident response owner/contact route
-- tester feedback destination
-- first-device smoke test using the replacement Android APK
+- incident-response owner and response windows for `support@retailpetapp.com`
+- first-device smoke test using the corrected Android APK
 - open PostGIS advisor issue `SU-426513` accepted as pending Supabase support

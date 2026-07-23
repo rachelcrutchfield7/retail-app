@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Alert, FlatList, Image, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, FlatList, Image, Linking, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import {
   Bell,
@@ -42,6 +42,7 @@ import {
   UnreadBadge,
 } from '../components';
 import { config, getAppEnvironmentLabel } from '../constants/config';
+import { appLinks } from '../constants/links';
 import { colors, radius, sizes, spacing, typography } from '../constants/theme';
 import { useAdminListingReports } from '../hooks/useAdminListingReports';
 import { useAdminRescueApprovals } from '../hooks/useAdminRescueApprovals';
@@ -114,6 +115,14 @@ const tabs: Array<{ key: SprintTab; label: string; icon: typeof Home }> = [
   { key: 'favorites', label: 'Favorites', icon: Heart },
   { key: 'profile', label: 'Profile', icon: User },
 ];
+
+async function openAppLink(url: string): Promise<void> {
+  try {
+    await Linking.openURL(url);
+  } catch {
+    Alert.alert('Link unavailable', 'We could not open that link right now.');
+  }
+}
 
 export function Sprint4App() {
   return (
@@ -1327,23 +1336,32 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
           Use honest listing details, communicate respectfully, arrange safe local exchanges, and follow applicable laws.
           ReTail may remove listings, restrict accounts, and preserve moderation records when needed for safety.
         </Text>
+        <Button title="Open Terms" variant="outline" onPress={() => void openAppLink(appLinks.termsUrl)} fullWidth />
         <Text style={styles.bodyStrong}>Privacy Policy</Text>
         <Text style={styles.body}>
           ReTail shows city/state and approximate distance, never exact home addresses, private email addresses,
           authentication identifiers, or street-level GPS coordinates in public marketplace views.
         </Text>
+        <Button title="Open Privacy Policy" variant="outline" onPress={() => void openAppLink(appLinks.privacyUrl)} fullWidth />
         <Text style={styles.bodyStrong}>Community Guidelines</Text>
         <Text style={styles.body}>
           Be honest, avoid spam, report unsafe content, inspect items before completing a transaction, and meet in public
           places when possible.
         </Text>
+        <Button title="Open Community Guidelines" variant="outline" onPress={() => void openAppLink(appLinks.communityGuidelinesUrl)} fullWidth />
       </SectionCard>
 
       <SectionCard title="About ReTail">
         <Text style={styles.body}>Version {version}</Text>
         <Text style={styles.body}>Environment: {getAppEnvironmentLabel(config.appEnv)}</Text>
         <Text style={styles.body}>Secondhand Pet Marketplace for buying, selling, donating, and supporting local rescues.</Text>
-        <Text style={styles.body}>Private beta feedback: use the tester feedback process shared by Rachel.</Text>
+        <Text style={styles.body}>Website: {appLinks.baseUrl}</Text>
+        <Text style={styles.body}>General contact: {appLinks.contactEmail}</Text>
+        <Text style={styles.body}>Support, payments, user issues, and reports: {appLinks.supportEmail}</Text>
+        <Button title="Open ReTail Website" variant="outline" onPress={() => void openAppLink(appLinks.baseUrl)} fullWidth />
+        <Button title="Private Beta Page" variant="outline" onPress={() => void openAppLink(appLinks.betaUrl)} fullWidth />
+        <Button title="Email General Contact" variant="outline" onPress={() => void openAppLink(appLinks.contactMailto)} fullWidth />
+        <Button title="Email Support" variant="outline" onPress={() => void openAppLink(appLinks.supportMailto)} fullWidth />
       </SectionCard>
     </ScreenFrame>
   );

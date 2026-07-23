@@ -2,6 +2,7 @@
   "expo": {
     "name": "ReTail",
     "slug": "retail",
+    "scheme": "retail",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
@@ -13,6 +14,10 @@
       "supportsTablet": true,
       "icon": "./assets/app-icon.png",
       "bundleIdentifier": "com.raecrutchfield.retail",
+      "associatedDomains": [
+        "applinks:retailpetapp.com",
+        "applinks:www.retailpetapp.com"
+      ],
       "infoPlist": {
         "NSCameraUsageDescription": "ReTail uses the camera so you can add photos to listings and messages.",
         "NSPhotoLibraryUsageDescription": "ReTail uses your photo library so you can upload listing and message photos.",
@@ -34,6 +39,26 @@
     },
     "android": {
       "package": "com.raecrutchfield.retail",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "retailpetapp.com"
+            },
+            {
+              "scheme": "https",
+              "host": "www.retailpetapp.com"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ],
       "permissions": [
         "CAMERA",
         "READ_MEDIA_IMAGES",

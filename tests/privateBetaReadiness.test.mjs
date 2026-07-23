@@ -101,7 +101,8 @@ test('private beta legal, safety, and feedback access points are documented and 
   assert.match(settings, /Legal & Safety/);
   assert.match(settings, /Live animals may not be listed/);
   assert.match(settings, /Environment: \{getAppEnvironmentLabel\(config\.appEnv\)\}/);
-  assert.match(settings, /Private beta feedback/);
+  assert.match(settings, /appLinks\.betaUrl/);
+  assert.match(settings, /appLinks\.supportMailto/);
   assert.ok(existsSync(join(root, 'docs/legal/privacy-policy.md')));
   assert.ok(existsSync(join(root, 'docs/legal/terms-of-service.md')));
   assert.ok(existsSync(join(root, 'docs/legal/community-guidelines.md')));

@@ -9,7 +9,11 @@ const read = (path) => readFileSync(join(root, path), 'utf8');
 
 test('dependencies are pinned and beta scripts are available', () => {
   const packageJson = JSON.parse(read('package.json'));
-  assert.equal(packageJson.dependencies.expo, '57.0.7');
+  assert.equal(packageJson.dependencies.expo, '57.0.8');
+  assert.equal(packageJson.dependencies['@expo/metro-runtime'], '~57.0.7');
+  assert.equal(packageJson.dependencies['expo-constants'], '~57.0.7');
+  assert.equal(packageJson.dependencies['expo-notifications'], '~57.0.7');
+  assert.equal(packageJson.dependencies['expo-splash-screen'], '~57.0.5');
   assert.equal(packageJson.dependencies['@supabase/supabase-js'], '2.110.2');
 
   for (const group of ['dependencies', 'devDependencies']) {
@@ -22,6 +26,8 @@ test('dependencies are pinned and beta scripts are available', () => {
   assert.equal(packageJson.scripts.typecheck, 'tsc --noEmit');
   assert.match(packageJson.scripts.lint, /scripts\/lint\.mjs/);
   assert.match(packageJson.scripts.format, /scripts\/format-check\.mjs/);
+  assert.equal(packageJson.scripts['eas-build-pre-install'], 'node scripts/validate-beta-build-config.mjs');
+  assert.match(packageJson.scripts['validate:beta-build-config'], /validate-beta-build-config\.mjs/);
   assert.match(packageJson.scripts['build:preview:ios'], /eas build --profile preview --platform ios/);
   assert.match(packageJson.scripts['build:preview:android'], /eas build --profile preview --platform android/);
 });

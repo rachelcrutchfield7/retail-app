@@ -51,7 +51,7 @@ not applicable
 | Realtime verified | manual verification required | Multi-account hosted realtime test required |
 | Backup configuration reviewed | manual verification required | Supabase plan/dashboard review required |
 | Incident response owner assigned | manual verification required | Rachel must confirm owner/contact route |
-| Support contact confirmed | manual verification required | Feedback destination not yet chosen |
+| Support contact confirmed | complete | `contact@retailpetapp.com` and `support@retailpetapp.com` are live through the domain; support is reserved for payment issues, user issues, account access, reports, safety concerns, and moderation questions |
 | Tester group defined | manual verification required | Rachel must choose testers |
 | Tester expectations prepared | complete | `docs/private-beta/PRIVATE_BETA_TEST_PLAN.md` and feedback docs |
 | PostGIS support ticket tracked | complete | `docs/private-beta/PRIVATE_BETA_MANUAL_BLOCKERS.md` records `SU-426513` as an external platform issue |
@@ -97,9 +97,12 @@ not applicable
 | Fix | Auth startup now validates the Supabase client before subscribing, catches setup failures, surfaces an explicit startup state, and adds beta-only redacted diagnostics to the global error boundary |
 | Replacement build ID | `7a9364af-eadb-4580-ba66-2df791e3ce92` |
 | Replacement build source commit | `73574ad9e3c87a73f57cafa4d4af1b9e8daec902` |
-| Replacement build status | `IN_QUEUE` |
+| Replacement build status | `FINISHED`; installed and opened successfully on Rachel's Android device |
+| Replacement build result | Startup was blocked by "Startup needs attention" because compiled Supabase public configuration was missing. |
 | Replacement build page | https://expo.dev/accounts/raecrutchfield/projects/retail/builds/7a9364af-eadb-4580-ba66-2df791e3ce92 |
+| Corrected build-time gate | Added `scripts/validate-beta-build-config.mjs` through the `eas-build-pre-install` hook. |
+| Corrected build status | Pending third Android preview APK build. |
 
 ## Decision
 
-Private beta release candidate is blocked pending replacement Android build confirmation. External private beta testers are not approved until the replacement APK opens successfully on Rachel's device and the remaining manual operational items above are either verified or explicitly accepted by Rachel as controlled private beta risks.
+Private beta release candidate is blocked pending corrected Android build confirmation. External private beta testers are not approved until the corrected APK opens successfully on Rachel's device without the Supabase startup warning and the remaining manual operational items above are either verified or explicitly accepted by Rachel as controlled private beta risks.

@@ -8,13 +8,12 @@ Private beta testers need a safe way to report bugs, safety issues, and confusin
 
 ## Feedback Destination
 
-Tester feedback destination: **manual verification required**.
+Tester feedback destinations:
 
-Rachel should choose one controlled channel before inviting testers:
+- General beta access and ordinary questions: `contact@retailpetapp.com`
+- Payment issues, account problems, user issues, reports, and urgent safety concerns: `support@retailpetapp.com`
 
-- a support email address controlled by Rachel
-- an approved private feedback form
-- a private tester group channel
+If a private feedback form is added later, configure the URL through `EXPO_PUBLIC_BETA_FEEDBACK_URL` and keep `support@retailpetapp.com` available for urgent safety reports.
 
 Do not expose the private GitHub repository to testers unless Rachel explicitly chooses that workflow.
 
