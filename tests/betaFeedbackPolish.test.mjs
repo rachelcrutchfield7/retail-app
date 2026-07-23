@@ -8,24 +8,25 @@ const root = fileURLToPath(new URL('..', import.meta.url));
 const read = (path) => readFileSync(join(root, path), 'utf8');
 
 test('home Rescue Hub banner uses live rescue hub counts', () => {
-  const appShell = read('src/AppShell.tsx');
-  const browseScreen = read('src/screens/BrowseScreen.tsx');
+  const appEntry = read('App.tsx');
+  const sprint3App = read('src/sprint3/Sprint3App.tsx');
 
-  assert.match(appShell, /useRescueHub\(rescueSummaryParams\)/);
-  assert.match(appShell, /rescueCount: rescues\.length/);
-  assert.match(appShell, /urgentNeedCount: rescues\.reduce\(\(total, rescue\) => total \+ rescue\.urgentNeeds\.length, 0\)/);
-  assert.match(appShell, /rescueCount=\{rescueHubStats\.rescueCount\}/);
-  assert.match(appShell, /urgentNeedCount=\{rescueHubStats\.urgentNeedCount\}/);
-  assert.doesNotMatch(browseScreen, /rescueOrganizations/);
+  assert.match(appEntry, /Sprint4App/);
+  assert.match(sprint3App, /useRescueHub/);
+  assert.match(sprint3App, /rescueCount: rescues\.length/);
+  assert.match(sprint3App, /urgentNeedCount: rescues\.reduce\(\(total, rescue\) => total \+ rescue\.urgentNeeds\.length, 0\)/);
+  assert.match(sprint3App, /rescueCount=\{rescueHubStats\.rescueCount\}/);
+  assert.match(sprint3App, /urgentNeedCount=\{rescueHubStats\.urgentNeedCount\}/);
+  assert.doesNotMatch(sprint3App, /rescueOrganizations/);
 });
 
 test('Rescue Hub has explicit back behavior and matching urgent need totals', () => {
-  const appShell = read('src/AppShell.tsx');
+  const sprint4App = read('src/sprint4/Sprint4App.tsx');
   const rescueHubScreen = read('src/screens/RescueHubScreen.tsx');
   const headerBar = read('src/components/navigation/HeaderBar.tsx');
 
-  assert.match(appShell, /BackHandler\.addEventListener\('hardwareBackPress'/);
-  assert.match(appShell, /if \(showRescueHub\) \{\s*setShowRescueHub\(false\);\s*return true;/s);
+  assert.match(sprint4App, /BackHandler\.addEventListener\('hardwareBackPress'/);
+  assert.match(sprint4App, /setRoute\(\{ name: 'tabs', tab: 'home' \}\)/);
   assert.match(rescueHubScreen, /<HeaderBar title="Rescue Hub" onBack=\{onBack\} backLabel="Back" \/>/);
   assert.match(rescueHubScreen, /total \+ rescue\.urgentNeeds\.length/);
   assert.match(rescueHubScreen, /Metric label="Urgent needs"/);
@@ -33,16 +34,19 @@ test('Rescue Hub has explicit back behavior and matching urgent need totals', ()
 });
 
 test('animal type chips filter against visible listing category labels', () => {
-  const appShell = read('src/AppShell.tsx');
+  const sprint3App = read('src/sprint3/Sprint3App.tsx');
 
-  assert.match(appShell, /filterListingsByCategory\(allListings, category\)/);
-  assert.match(appShell, /return listings\.filter\(\(listing\) => listing\.category === category\)/);
-  assert.doesNotMatch(appShell, /categoryId: categoryToSlug\(category\)/);
+  assert.match(sprint3App, /filteredMarketplaceListings = \(listings\.data\?\.items \?\? \[\]\)\.filter/);
+  assert.match(sprint3App, /const filteredItems = \(listings\.data\?\.items \?\? \[\]\)\.filter/);
+  assert.match(sprint3App, /listingCategorySlug\(listing\) === filters\.categorySlug/);
+  assert.doesNotMatch(sprint3App, /categoryId,\s*\n\s*condition,/);
 });
 
 test('current tab screens leave space for phone system navigation', () => {
   const theme = read('src/constants/theme.ts');
   const tabBar = read('src/components/navigation/TabBar.tsx');
+  const sprint3App = read('src/sprint3/Sprint3App.tsx');
+  const sprint4App = read('src/sprint4/Sprint4App.tsx');
   const screenFiles = [
     'src/screens/BrowseScreen.tsx',
     'src/screens/FavoritesScreen.tsx',
@@ -56,6 +60,10 @@ test('current tab screens leave space for phone system navigation', () => {
   assert.match(tabBar, /bottom: sizes\.tabBarBottomOffset/);
   assert.match(tabBar, /left: spacing\.md/);
   assert.match(tabBar, /right: spacing\.md/);
+  assert.match(sprint3App, /paddingBottom: sizes\.tabBarBottomOffset \+ spacing\.sm/);
+  assert.match(sprint4App, /paddingBottom: sizes\.tabBarBottomOffset \+ spacing\.sm/);
+  assert.match(sprint3App, /paddingHorizontal: spacing\.lg/);
+  assert.match(sprint4App, /paddingHorizontal: spacing\.lg/);
 
   for (const file of screenFiles) {
     assert.match(

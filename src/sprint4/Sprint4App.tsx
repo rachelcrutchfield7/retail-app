@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Alert, FlatList, Image, Linking, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, BackHandler, FlatList, Image, Linking, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import {
   Bell,
@@ -159,6 +159,34 @@ function Sprint4Experience() {
     setRoute({ name: 'report', targetType, targetId, title });
   const openReview = (listingId: string, revieweeId: string, transactionId?: string) =>
     setRoute({ name: 'review', listingId, revieweeId, transactionId });
+
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (route.name === 'tabs') {
+        if (route.tab !== 'home') {
+          setRoute({ name: 'tabs', tab: 'home' });
+          return true;
+        }
+
+        return false;
+      }
+
+      if (route.name === 'conversation') {
+        setRoute({ name: 'messages' });
+        return true;
+      }
+
+      if (route.name === 'messages' || route.name === 'settings' || route.name === 'my-listings') {
+        setRoute({ name: 'tabs', tab: 'profile' });
+        return true;
+      }
+
+      setRoute({ name: 'tabs', tab: 'home' });
+      return true;
+    });
+
+    return () => subscription.remove();
+  }, [route]);
 
   const startConversation = async (listingId: string, sellerId: string) => {
     if (auth.isGuest) {
@@ -1738,8 +1766,9 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.border,
     backgroundColor: colors.surface,
-    paddingHorizontal: spacing.sm,
+    paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
+    paddingBottom: sizes.tabBarBottomOffset + spacing.sm,
   },
   tabButton: {
     flex: 1,
@@ -1764,7 +1793,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   listContent: {
-    padding: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.xxl,
     gap: spacing.lg,
   },
   headerBlock: {
@@ -1855,8 +1886,9 @@ const styles = StyleSheet.create({
   },
   messageList: {
     flexGrow: 1,
-    padding: spacing.md,
-    paddingBottom: spacing.xl,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.xxl,
   },
   messageListHeader: {
     gap: spacing.md,
@@ -1866,7 +1898,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   notificationList: {
-    padding: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
     paddingBottom: spacing.xxl,
   },
   separator: {

@@ -73,7 +73,6 @@ import {
 import { CONDITIONS } from '../constants/categories';
 import { findManualLocationByZipCode } from '../constants/location';
 import { colors, radius, sizes, spacing, typography } from '../constants/theme';
-import { rescueOrganizations } from '../data/mockData';
 import { useAuth } from '../hooks/useAuth';
 import { useCategories, useTopLevelCategories } from '../hooks/useCategories';
 import { useCompleteTransaction, useEligibleTransactionParticipants } from '../hooks/useCompleteTransaction';
@@ -88,6 +87,7 @@ import { useNotifications } from '../hooks/useNotifications';
 import { usePendingReviews } from '../hooks/usePendingReviews';
 import { useProfile } from '../hooks/useProfile';
 import { usePublicRescueProfile } from '../hooks/usePublicRescueProfile';
+import { useRescueHub } from '../hooks/useRescueHub';
 import { useRescueActions, useRescueDashboard } from '../hooks/useRescueDashboard';
 import { useReviews, useReviewSummary } from '../hooks/useReviews';
 import { useSavedSearches } from '../hooks/useSavedSearches';
@@ -329,12 +329,17 @@ export function HomeScreen({
   const params = useMemo<ListingQueryParams>(
     () => ({
       search,
-      categoryId,
       radiusMiles: location.radiusMiles,
-      limit: 20,
+      limit: 50,
     }),
-    [categoryId, location.radiusMiles, search]
+    [location.radiusMiles, search]
   );
+  const rescueSummary = useRescueHub(useMemo(
+    () => ({
+      radiusMiles: location.radiusMiles,
+    }),
+    [location.radiusMiles]
+  ));
   const listings = useListings(params);
   const recentListings = useListings(useMemo(
     () => ({
@@ -352,16 +357,26 @@ export function HomeScreen({
       categorySlug: categoryId,
     })
   );
-  const items = mergeFeedListings(ownFilteredListings, listings.data?.items ?? []);
+  const filteredMarketplaceListings = (listings.data?.items ?? []).filter((listing) =>
+    listingMatchesFeedFilters(listing, {
+      search,
+      categorySlug: categoryId,
+    })
+  );
+  const items = mergeFeedListings(ownFilteredListings, filteredMarketplaceListings);
   const recentItems = mergeFeedListings(ownActiveListings, recentListings.data?.items ?? []);
   const favoriteIds = (favorites.data ?? []).map((listing) => listing.id);
   const unreadTotal = unreadMessages.data?.total ?? 0;
   const unreadNotificationTotal = notifications.unreadCount ?? 0;
   const locationLabel = [location.city, location.state].filter(Boolean).join(', ');
-  const urgentNeedCount = rescueOrganizations.reduce(
-    (total, rescue) => total + rescue.urgentNeeds.filter((need) => need.urgency === 'High').length,
-    0
-  );
+  const rescueHubStats = useMemo(() => {
+    const rescues = rescueSummary.data ?? [];
+
+    return {
+      rescueCount: rescues.length,
+      urgentNeedCount: rescues.reduce((total, rescue) => total + rescue.urgentNeeds.length, 0),
+    };
+  }, [rescueSummary.data]);
 
   const handleFavorite = async (listing: Listing) => {
     if (auth.isGuest) {
@@ -429,8 +444,8 @@ export function HomeScreen({
 
           {onOpenRescueHub ? (
             <RescueHubBanner
-              rescueCount={rescueOrganizations.length}
-              urgentNeedCount={urgentNeedCount}
+              rescueCount={rescueHubStats.rescueCount}
+              urgentNeedCount={rescueHubStats.urgentNeedCount}
               onPress={onOpenRescueHub}
             />
           ) : null}
@@ -537,17 +552,22 @@ export function SearchScreen({
   const params = useMemo<ListingQueryParams>(
     () => ({
       search,
-      categoryId,
       condition,
       listingType,
       radiusMiles: location.radiusMiles,
       minPrice: parsedMinPrice,
       maxPrice: parsedMaxPrice,
-      limit: 20,
+      limit: 50,
     }),
-    [categoryId, condition, listingType, location.radiusMiles, parsedMaxPrice, parsedMinPrice, search]
+    [condition, listingType, location.radiusMiles, parsedMaxPrice, parsedMinPrice, search]
   );
   const listings = useListings(params);
+  const filteredItems = (listings.data?.items ?? []).filter((listing) =>
+    listingMatchesFeedFilters(listing, {
+      search,
+      categorySlug: categoryId,
+    })
+  );
   const favoriteIds = (favorites.data ?? []).map((listing) => listing.id);
 
   const buildSavedSearchInput = (): CreateSavedSearchInput => ({
@@ -648,7 +668,7 @@ export function SearchScreen({
     <FlatList
       style={styles.listScreen}
       contentContainerStyle={styles.listContent}
-      data={listings.data?.items ?? []}
+      data={filteredItems}
       keyExtractor={(item) => item.id}
       ListHeaderComponent={
         <View style={styles.stackLarge}>
@@ -724,7 +744,7 @@ export function SearchScreen({
               ))}
             </View>
           ) : null}
-          <SectionTitle title="Results" hint={`${listings.data?.total ?? 0} within ${location.radiusMiles} mi`} />
+          <SectionTitle title="Results" hint={`${filteredItems.length} within ${location.radiusMiles} mi`} />
           {listings.isLoading ? <LoadingCards /> : null}
           {listings.isError ? <ErrorState message={handleAppError(listings.error).userMessage} onRetry={listings.refetch} /> : null}
         </View>
@@ -3478,8 +3498,9 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.border,
     backgroundColor: colors.surface,
-    paddingHorizontal: spacing.sm,
+    paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
+    paddingBottom: sizes.tabBarBottomOffset + spacing.sm,
   },
   tabButton: {
     flex: 1,
@@ -3500,7 +3521,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   listContent: {
-    padding: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
     paddingBottom: spacing.xxl,
     gap: spacing.lg,
   },
