@@ -148,7 +148,7 @@ Final GitHub Actions evidence for the base account-deletion branch has been veri
 | EAS project link | complete | Project `@raecrutchfield/retail`, ID `288a25e1-5824-4f77-a3f4-0607df5f7d89` |
 | EAS preview variables | complete | Preview build profile provides `EXPO_PUBLIC_APP_ENV=beta`; EAS preview environment contains `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY`. Safe validation passed without printing the public key. |
 | Feedback destination | complete | `contact@retailpetapp.com` is used for general contact and beta access; `support@retailpetapp.com` is used for payment issues, user issues, account access, reports, and safety concerns |
-| Android build | complete pending first-device smoke test | Corrected EAS Android preview APK build `1bacbcf6-bfb9-4a36-9e69-39e3b7e7b59b` finished successfully from commit `99998e9d8b3e55c289ad96894d0ed7f00335fb74`. Rachel must install and open this corrected APK on device before inviting outside testers. |
+| Android build | complete pending first-device smoke test | Expo inlining-corrected EAS Android preview APK build `5622183a-fff9-4c01-888b-abff277088c5` finished successfully from commit `9d5b9eba4cf62c8653cb53b623bca4eb4872cc9a`. Rachel must install and open this APK on device before inviting outside testers. |
 | Real-device smoke test checklist | complete | `docs/private-beta/FIRST_DEVICE_SMOKE_TEST.md` |
 | Supabase dashboard checklist | complete | `docs/private-beta/SUPABASE_BETA_DASHBOARD_REVIEW.md` |
 | Manual blocker list | complete | `docs/private-beta/PRIVATE_BETA_MANUAL_BLOCKERS.md` |
@@ -190,14 +190,20 @@ Final GitHub Actions evidence for the base account-deletion branch has been veri
 | Corrected build-time gate | Added `scripts/validate-beta-build-config.mjs` through the `eas-build-pre-install` hook. |
 | Corrected build ID | `1bacbcf6-bfb9-4a36-9e69-39e3b7e7b59b` |
 | Corrected build source commit | `99998e9d8b3e55c289ad96894d0ed7f00335fb74` |
-| Corrected build status | `FINISHED`; physical-device smoke test pending. |
+| Corrected build status | `FINISHED`; installed and opened, but still displayed the missing Supabase configuration warning because the Expo client bundle used indirect `process.env` access and did not inline the public variables. |
 | Corrected build page | https://expo.dev/accounts/raecrutchfield/projects/retail/builds/1bacbcf6-bfb9-4a36-9e69-39e3b7e7b59b |
+| Expo public environment inlining fix | Real app config now passes a statically referenced `bundledRuntimeEnv` object into `readConfigFromEnv`, and `readConfigFromEnv` no longer defaults to `process.env`. |
+| Android bundle inlining verification | `Bundled Supabase URL present: yes`; `Bundled Supabase public key present: yes`; `Bundled app environment beta: yes`. |
+| Inlining-corrected build ID | `5622183a-fff9-4c01-888b-abff277088c5` |
+| Inlining-corrected build source commit | `9d5b9eba4cf62c8653cb53b623bca4eb4872cc9a` |
+| Inlining-corrected build status | `FINISHED`; physical-device smoke test pending. |
+| Inlining-corrected build page | https://expo.dev/accounts/raecrutchfield/projects/retail/builds/5622183a-fff9-4c01-888b-abff277088c5 |
 
 ## Release Decision
 
 The branch may become a private beta release candidate after final branch checks and GitHub Actions pass.
 
-ReTail is not approved for outside private beta testers until corrected Android build `1bacbcf6-bfb9-4a36-9e69-39e3b7e7b59b` opens successfully on Rachel's device without the Supabase startup warning and these items are completed or explicitly accepted by Rachel as controlled private beta risks:
+ReTail is not approved for outside private beta testers until Android build `5622183a-fff9-4c01-888b-abff277088c5` opens successfully on Rachel's device without the Supabase startup warning and these items are completed or explicitly accepted by Rachel as controlled private beta risks:
 
 - Auth dashboard checklist
 - Storage live/dashboard verification

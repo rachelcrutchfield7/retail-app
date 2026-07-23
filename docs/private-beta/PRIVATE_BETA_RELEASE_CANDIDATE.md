@@ -63,7 +63,7 @@ not applicable
 | Package identifiers confirmed | complete | `com.raecrutchfield.retail` in `app.json` |
 | Version confirmed | complete | `1.0.0` in `app.json` |
 | Preview profile configured | complete | EAS `preview` profile uses `EXPO_PUBLIC_APP_ENV=beta` |
-| Build generated | complete pending first-device smoke test | Corrected Android preview APK build `1bacbcf6-bfb9-4a36-9e69-39e3b7e7b59b` finished successfully from commit `99998e9d8b3e55c289ad96894d0ed7f00335fb74` |
+| Build generated | complete pending first-device smoke test | Expo inlining-corrected Android preview APK build `5622183a-fff9-4c01-888b-abff277088c5` finished successfully from commit `9d5b9eba4cf62c8653cb53b623bca4eb4872cc9a` |
 | EAS preview Supabase variables | complete | Preview environment has `EXPO_PUBLIC_APP_ENV`, `EXPO_PUBLIC_SUPABASE_URL`, and `EXPO_PUBLIC_SUPABASE_ANON_KEY`; do not commit real values |
 | Build charge confirmation | complete | No payment, plan upgrade, or charge approval prompt appeared before or during build start |
 | Physical-device install tested | manual verification required | Required before inviting testers |
@@ -103,9 +103,15 @@ not applicable
 | Corrected build-time gate | Added `scripts/validate-beta-build-config.mjs` through the `eas-build-pre-install` hook. |
 | Corrected build ID | `1bacbcf6-bfb9-4a36-9e69-39e3b7e7b59b` |
 | Corrected build source commit | `99998e9d8b3e55c289ad96894d0ed7f00335fb74` |
-| Corrected build status | `FINISHED`; physical-device smoke test pending. |
+| Corrected build status | `FINISHED`; installed and opened, but still displayed the missing Supabase configuration warning because the Expo client bundle used indirect `process.env` access and did not inline the public variables. |
 | Corrected build page | https://expo.dev/accounts/raecrutchfield/projects/retail/builds/1bacbcf6-bfb9-4a36-9e69-39e3b7e7b59b |
+| Expo public environment inlining fix | Real app config now passes a statically referenced `bundledRuntimeEnv` object into `readConfigFromEnv`, and `readConfigFromEnv` no longer defaults to `process.env`. |
+| Android bundle inlining verification | `Bundled Supabase URL present: yes`; `Bundled Supabase public key present: yes`; `Bundled app environment beta: yes`. |
+| Inlining-corrected build ID | `5622183a-fff9-4c01-888b-abff277088c5` |
+| Inlining-corrected build source commit | `9d5b9eba4cf62c8653cb53b623bca4eb4872cc9a` |
+| Inlining-corrected build status | `FINISHED`; physical-device smoke test pending. |
+| Inlining-corrected build page | https://expo.dev/accounts/raecrutchfield/projects/retail/builds/5622183a-fff9-4c01-888b-abff277088c5 |
 
 ## Decision
 
-Private beta release candidate is ready for Rachel's corrected Android first-device smoke test. External private beta testers are not approved until corrected build `1bacbcf6-bfb9-4a36-9e69-39e3b7e7b59b` opens successfully on Rachel's device without the Supabase startup warning and the remaining manual operational items above are either verified or explicitly accepted by Rachel as controlled private beta risks.
+Private beta release candidate is ready for Rachel's Expo inlining-corrected Android first-device smoke test. External private beta testers are not approved until build `5622183a-fff9-4c01-888b-abff277088c5` opens successfully on Rachel's device without the Supabase startup warning and the remaining manual operational items above are either verified or explicitly accepted by Rachel as controlled private beta risks.
