@@ -4,6 +4,7 @@ import type {
   Conversation as PrototypeConversation,
   Listing,
   ListingCondition,
+  ListingSort,
   ShippingPayer,
   MarketplaceSearchArea as PrototypeMarketplaceSearchArea,
   MarketplaceSearchPreference as PrototypeMarketplaceSearchPreference,
@@ -124,6 +125,7 @@ export type ListingQueryParams = {
   maxPrice?: number;
   condition?: ListingCondition;
   listingType?: ListingType;
+  sort?: ListingSort;
   page?: number;
   limit?: number;
 };

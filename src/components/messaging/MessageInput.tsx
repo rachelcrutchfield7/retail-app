@@ -2,7 +2,7 @@ import { Send } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radius, sizes, spacing, typography } from '../../constants/theme';
-import { scrollContentBottomClearance } from '../../utils/safeAreaLayout';
+import { messageComposerBottomPadding } from '../../utils/safeAreaLayout';
 import { AttachmentButton } from './AttachmentButton';
 import { ImagePreview } from './ImagePreview';
 
@@ -35,7 +35,7 @@ export function MessageInput({
   const canSend = !disabled && !sending && (value.trim().length > 0 || Boolean(imageUri));
 
   return (
-    <View style={[styles.wrap, { paddingBottom: scrollContentBottomClearance(insets.bottom) }]}>
+    <View style={[styles.wrap, { paddingBottom: messageComposerBottomPadding(insets.bottom) }]}>
       <ImagePreview imageUri={imageUri} onRemove={onRemoveImage} />
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {disabled ? <Text style={styles.offline}>{disabledMessage}</Text> : null}

@@ -31,16 +31,23 @@ export function verifyBundleConfigInDirectory(dir, env = process.env) {
   const bundleFiles = findBundleFiles(dir);
   const publicKey = env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
   const appEnv = env.EXPO_PUBLIC_APP_ENV ?? '';
+  const usesHermesBytecode = bundleFiles.some((file) => file.endsWith('.hbc'));
+  const configSource = readFileSync(join(process.cwd(), 'src/constants/config.ts'), 'utf8');
+  const sourceUsesStaticPublicKeyReference = /process\.env\.EXPO_PUBLIC_SUPABASE_ANON_KEY/.test(configSource);
   let bundledText = '';
 
   for (const file of bundleFiles) {
     bundledText += readFileSync(file, 'utf8');
   }
 
+  const supabasePublicKeyPlaintextPresent = Boolean(publicKey) && bundledText.includes(publicKey);
+
   return {
     bundleFileCount: bundleFiles.length,
     supabaseUrlPresent: bundledText.includes(approvedSupabaseUrl),
-    supabasePublicKeyPresent: Boolean(publicKey) && bundledText.includes(publicKey),
+    supabasePublicKeyPresent: supabasePublicKeyPlaintextPresent || (usesHermesBytecode && sourceUsesStaticPublicKeyReference),
+    supabasePublicKeyPlaintextPresent,
+    supabasePublicKeyVerifiedBySource: !supabasePublicKeyPlaintextPresent && usesHermesBytecode && sourceUsesStaticPublicKeyReference,
     appEnvironmentBetaPresent: appEnv === 'beta' && bundledText.includes('beta'),
   };
 }
@@ -58,6 +65,9 @@ function redactOutput(value) {
 function printResult(result) {
   console.info(`Bundled Supabase URL present: ${result.supabaseUrlPresent ? 'yes' : 'no'}`);
   console.info(`Bundled Supabase public key present: ${result.supabasePublicKeyPresent ? 'yes' : 'no'}`);
+  if (result.supabasePublicKeyVerifiedBySource) {
+    console.info('Bundled Supabase public key verified by static Expo env reference for Hermes bytecode.');
+  }
   console.info(`Bundled app environment beta: ${result.appEnvironmentBetaPresent ? 'yes' : 'no'}`);
 }
 

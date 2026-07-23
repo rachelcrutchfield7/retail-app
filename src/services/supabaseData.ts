@@ -6,7 +6,7 @@ import type {
 import { CATEGORIES } from '../constants/categories';
 import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
-import type { Category, Listing, ListingCondition, ListingStatus } from '../types';
+import type { Category, Listing, ListingCondition, ListingStatus, ListingType } from '../types';
 import { createServiceError } from './errors';
 import type {
   AccountType,
@@ -92,6 +92,22 @@ export function throwSupabaseError(error: unknown, fallbackMessage = 'We could n
       'RETAIL_REPEATED_MESSAGE',
       message,
       'That looks like a repeated message. Please wait a moment before sending it again.'
+    );
+  }
+
+  if (message.includes('RETAIL_VERIFIED_RESCUE_REQUIRED')) {
+    throw createServiceError(
+      'RETAIL_VERIFIED_RESCUE_REQUIRED',
+      message,
+      'Your rescue must be verified before requesting rescue donations.'
+    );
+  }
+
+  if (message.includes('RETAIL_RESCUE_DONATION_RESERVED')) {
+    throw createServiceError(
+      'RETAIL_RESCUE_DONATION_RESERVED',
+      message,
+      'This item is reserved for verified rescue organizations.'
     );
   }
 
@@ -338,13 +354,14 @@ export function toListing(row: SupabaseRow): Listing {
   const title = String(row.title ?? 'Pet supply listing');
   const city = optionalString(row.city);
   const state = optionalString(row.state);
-  const listingType = String(row.listing_type ?? 'sale');
+  const listingType = listingTypeFromDb(row.listing_type);
+  const priceAmount = listingType === 'sale' ? optionalNumber(row.price) ?? 0 : null;
   const price =
     listingType === 'donation'
-      ? 'Donation'
+      ? 'Rescue Donation'
       : listingType === 'free'
         ? 'Free'
-        : formatDisplayPrice(row.price);
+        : formatDisplayPrice(priceAmount);
   const legacyPickupAvailable = row.pickup_available !== false;
   const porchPickup = Boolean(row.porch_pickup_available);
   const meetup = row.meetup_available === undefined ? legacyPickupAvailable : Boolean(row.meetup_available);
@@ -355,6 +372,8 @@ export function toListing(row: SupabaseRow): Listing {
     title,
     description: String(row.description ?? ''),
     price,
+    listingType,
+    priceAmount,
     category: categoryFromRow(categoryRow),
     condition: conditionFromDb(row.condition),
     image: images[0]?.thumbnail_url ?? images[0]?.image_url ?? '',
@@ -362,12 +381,15 @@ export function toListing(row: SupabaseRow): Listing {
     state,
     location: [city, state].filter(Boolean).join(', '),
     distance: distanceFromRow(row),
+    distanceMiles: optionalNumber(row.distance_miles),
     status: statusFromDb(row.status),
     sellerId: optionalString(row.seller_id) ?? optionalString(sellerRow?.id),
     seller: sellerRow ? String(sellerRow.display_name ?? 'ReTail User') : 'ReTail User',
     sellerRating: sellerRow ? numberValue(sellerRow.seller_rating) : 0,
     sellerReviews: sellerRow ? integerValue(sellerRow.review_count) : 0,
     posted: relativeDate(row.published_at ?? row.created_at),
+    createdAt: timestampValue(row.created_at),
+    publishedAt: optionalString(row.published_at),
     brand: optionalString(row.brand),
     itemDimensions: optionalString(row.item_dimensions),
     petSize: optionalString(row.pet_size),
@@ -384,6 +406,14 @@ export function toListing(row: SupabaseRow): Listing {
     handlingTime: optionalString(row.handling_time),
     favoritedBy: integerValue(row.favorite_count),
   };
+}
+
+function listingTypeFromDb(value: unknown): ListingType {
+  if (value === 'free' || value === 'donation') {
+    return value;
+  }
+
+  return 'sale';
 }
 
 function shippingPayerFromDb(value: unknown): Listing['shippingPayer'] {

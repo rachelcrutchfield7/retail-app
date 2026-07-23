@@ -8,11 +8,17 @@ type CreateLocalListingParams = {
 };
 
 export function createLocalListing({ form, listingCount }: CreateLocalListingParams): Listing {
+  const listingType = form.donation ? 'free' : 'sale';
+  const priceAmount = listingType === 'sale' ? Number(form.price.replace(/[^0-9.]/g, '')) || 0 : null;
+  const createdAt = new Date().toISOString();
+
   return {
     id: `l${Date.now()}`,
     title: form.title.trim(),
     description: form.description.trim(),
     price: normalizeListingPrice(form),
+    listingType,
+    priceAmount,
     category: form.category,
     condition: form.condition,
     image: listingImages[listingCount % listingImages.length],
@@ -23,6 +29,8 @@ export function createLocalListing({ form, listingCount }: CreateLocalListingPar
     sellerRating: 4.9,
     sellerReviews: 8,
     posted: 'Just now',
+    createdAt,
+    publishedAt: createdAt,
     pickup: form.pickup,
     porchPickup: false,
     meetup: form.pickup,

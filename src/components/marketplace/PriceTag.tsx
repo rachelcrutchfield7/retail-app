@@ -21,8 +21,8 @@ export function formatPrice(value: string | number): string {
   }
 
   const normalized = value.trim().toLowerCase();
-  if (normalized === 'free' || normalized === '$0' || normalized === 'donation') {
-    return normalized === 'donation' ? 'DONATION' : 'FREE';
+  if (normalized === 'free' || normalized === '$0' || normalized === 'donation' || normalized === 'rescue donation') {
+    return normalized === 'donation' || normalized === 'rescue donation' ? 'RESCUE DONATION' : 'FREE';
   }
 
   return value;

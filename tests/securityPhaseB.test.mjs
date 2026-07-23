@@ -129,7 +129,7 @@ test('Phase B mappers do not copy exact location fields into public listing or r
   assert.doesNotMatch(listingMapper, /zipCode:/);
   assert.doesNotMatch(listingMapper, /latitude:/);
   assert.doesNotMatch(listingMapper, /longitude:/);
-  assert.doesNotMatch(listingMapper, /distanceMiles:/);
+  assert.match(listingMapper, /distanceMiles:/);
   assert.doesNotMatch(listingMapper, /shipFromZipCode:/);
   assert.match(rescueMapper, /distance_band/);
   assert.doesNotMatch(rescueMapper, /latitude:/);

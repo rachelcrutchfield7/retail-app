@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { AlertCircle, HeartHandshake, MapPin, ShieldCheck } from 'lucide-react-native';
-import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Badge, Card, DistanceFilter, EmptyState, ErrorState, HeaderBar, LoadingSpinner, Metric, SearchBar } from '../components';
 import { colors, radius, sizes, spacing, typography } from '../constants/theme';
@@ -10,15 +10,19 @@ import {
   useSetMarketplaceSearchArea,
 } from '../hooks/useMarketplaceSearchArea';
 import { useRescueHub } from '../hooks/useRescueHub';
-import type { MarketplaceSearchArea, RescueNeedUrgency, RescueOrganization } from '../types.ts';
+import { useRescueDonationListings } from '../hooks/useListings';
+import type { Listing, MarketplaceSearchArea, RescueNeedUrgency, RescueOrganization } from '../types.ts';
 import { handleAppError } from '../utils/errorHandler';
 import { scrollContentBottomClearance, topSafeAreaPadding } from '../utils/safeAreaLayout';
+import { listingTypeBadgeLabel } from '../utils/listingPresentation';
+import { listingLocationLabel } from '../utils/format';
 
 type RescueHubScreenProps = {
   onBack: () => void;
+  onOpenListing: (listingId: string) => void;
 };
 
-export function RescueHubScreen({ onBack }: RescueHubScreenProps) {
+export function RescueHubScreen({ onBack, onOpenListing }: RescueHubScreenProps) {
   const insets = useSafeAreaInsets();
   const [search, setSearch] = useState('');
   const searchAreas = useMarketplaceSearchAreas();
@@ -40,7 +44,17 @@ export function RescueHubScreen({ onBack }: RescueHubScreenProps) {
     [radiusMiles, search]
   );
   const rescues = useRescueHub(rescueParams);
+  const donationListings = useRescueDonationListings(useMemo(
+    () => ({
+      search,
+      radiusMiles,
+      limit: 12,
+      sort: 'distance',
+    }),
+    [radiusMiles, search]
+  ));
   const filteredRescues = rescues.data ?? [];
+  const donationItems = donationListings.data?.items ?? [];
   const urgentNeedCount = filteredRescues.reduce(
     (total, rescue) => total + rescue.urgentNeeds.length,
     0
@@ -57,7 +71,11 @@ export function RescueHubScreen({ onBack }: RescueHubScreenProps) {
         },
       ]}
     >
-      <HeaderBar title="Rescue Hub" onBack={onBack} backLabel="Back" backVariant="prominent" />
+      <View style={styles.headingBlock}>
+        <HeaderBar title="" onBack={onBack} backLabel="Back" backVariant="prominent" />
+        <Text style={styles.pageTitle}>Rescue Hub</Text>
+        <Text style={styles.pageSubtitle}>Find verified rescues and supplies they need.</Text>
+      </View>
 
       <View style={styles.hero}>
         <View style={styles.heroIcon}>
@@ -100,6 +118,23 @@ export function RescueHubScreen({ onBack }: RescueHubScreenProps) {
       />
 
       <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Available rescue donations</Text>
+        <Text style={styles.sectionHint}>{donationItems.length} nearby</Text>
+      </View>
+
+      {donationListings.isLoading ? <LoadingSpinner /> : null}
+      {donationListings.isError ? <ErrorState message={handleAppError(donationListings.error).userMessage} onRetry={donationListings.refetch} /> : null}
+      {!donationListings.isLoading && donationItems.length === 0 ? (
+        <Text style={styles.nonIntrusiveText}>No rescue donations nearby yet.</Text>
+      ) : (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.donationScroller}>
+          {donationItems.map((listing) => (
+            <RescueDonationListingCard key={listing.id} listing={listing} onOpen={() => onOpenListing(listing.id)} />
+          ))}
+        </ScrollView>
+      )}
+
+      <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Rescues nearby</Text>
         <Text style={styles.sectionHint}>{filteredRescues.length} within {radiusMiles} mi</Text>
       </View>
@@ -125,6 +160,20 @@ export function RescueHubScreen({ onBack }: RescueHubScreenProps) {
         </View>
       )}
     </ScrollView>
+  );
+}
+
+function RescueDonationListingCard({ listing, onOpen }: { listing: Listing; onOpen: () => void }) {
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel={`Open rescue donation listing ${listing.title}`} onPress={onOpen} style={styles.donationCard}>
+      <Image source={{ uri: listing.image }} style={styles.donationImage} />
+      <View style={styles.donationCardBody}>
+        <Badge label={listingTypeBadgeLabel(listing.listingType)} tone="info" />
+        <Text numberOfLines={2} style={styles.donationTitle}>{listing.title}</Text>
+        <Text numberOfLines={1} style={styles.locationText}>{listingLocationLabel(listing)}</Text>
+        <Text style={styles.sectionHint}>{listing.condition}</Text>
+      </View>
+    </Pressable>
   );
 }
 
@@ -276,6 +325,21 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xxl,
     gap: spacing.lg,
   },
+  headingBlock: {
+    gap: spacing.sm,
+    alignItems: 'flex-start',
+  },
+  pageTitle: {
+    color: colors.textPrimary,
+    fontSize: 34,
+    fontWeight: '800',
+    lineHeight: 39,
+  },
+  pageSubtitle: {
+    color: colors.textSecondary,
+    ...typography.body,
+    lineHeight: 23,
+  },
   hero: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -323,6 +387,37 @@ const styles = StyleSheet.create({
   sectionHint: {
     color: colors.textSecondary,
     ...typography.small,
+  },
+  nonIntrusiveText: {
+    color: colors.textSecondary,
+    ...typography.small,
+  },
+  donationScroller: {
+    gap: spacing.md,
+    paddingRight: spacing.md,
+  },
+  donationCard: {
+    width: 190,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.medium,
+    backgroundColor: colors.surface,
+  },
+  donationImage: {
+    width: '100%',
+    aspectRatio: 1,
+    backgroundColor: colors.primarySoft,
+  },
+  donationCardBody: {
+    padding: spacing.sm,
+    gap: spacing.xs,
+  },
+  donationTitle: {
+    color: colors.textPrimary,
+    ...typography.small,
+    fontWeight: '700',
+    lineHeight: 18,
   },
   rescueList: {
     gap: spacing.md,

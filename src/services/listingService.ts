@@ -22,6 +22,12 @@ import type {
   UpdateListingInput,
 } from './types';
 
+const allowedSorts = new Set(['recent', 'price_asc', 'price_desc', 'distance', 'favorites']);
+
+function sortParam(params: ListingQueryParams): string {
+  return params.sort && allowedSorts.has(params.sort) ? params.sort : 'recent';
+}
+
 function assertCreateListingInput(input: CreateListingInput): void {
   if (!input.title.trim() || input.title.trim().length < 3) {
     throw createServiceError('TITLE_REQUIRED', 'Listing title was blank or too short', 'Add a clear title for your item.');
@@ -141,7 +147,7 @@ async function getNearbyListingsFromRpc({
   page: number;
   limit: number;
 }): Promise<PaginatedListings> {
-  const { data, error } = await supabase.rpc('get_nearby_listings', {
+  const { data, error } = await supabase.rpc('get_nearby_listings_sorted', {
     page_number: page,
     page_size: limit,
     category_filter: categoryId ?? null,
@@ -150,9 +156,38 @@ async function getNearbyListingsFromRpc({
     max_price_filter: params.maxPrice ?? null,
     condition_filter: condition ?? null,
     listing_type_filter: params.listingType ?? null,
+    sort_order: sortParam(params),
   });
 
   if (error) {
+    if (isMissingRpcError(error)) {
+      const fallback = await supabase.rpc('get_nearby_listings', {
+        page_number: page,
+        page_size: limit,
+        category_filter: categoryId ?? null,
+        search_query: params.search?.trim() ?? null,
+        min_price_filter: params.minPrice ?? null,
+        max_price_filter: params.maxPrice ?? null,
+        condition_filter: condition ?? null,
+        listing_type_filter: params.listingType ?? null,
+      });
+
+      if (fallback.error) {
+        throwSupabaseError(fallback.error, 'We could not load nearby listings.');
+      }
+
+      const fallbackRows = (fallback.data ?? []) as Array<Record<string, unknown>>;
+      const fallbackItems = fallbackRows.map((row) => toListing(row));
+
+      return {
+        items: fallbackItems,
+        page,
+        limit,
+        total: fallbackItems.length,
+        hasMore: fallbackItems.length === limit,
+      };
+    }
+
     throwSupabaseError(error, 'We could not load nearby listings.');
   }
 
@@ -192,7 +227,7 @@ async function getPublicListingFeedFromRpc({
   page: number;
   limit: number;
 }): Promise<PaginatedListings> {
-  const { data, error } = await supabase.rpc('get_public_listing_feed', {
+  const { data, error } = await supabase.rpc('get_public_listing_feed_sorted', {
     page_number: page,
     page_size: limit,
     category_filter: categoryId ?? null,
@@ -203,9 +238,40 @@ async function getPublicListingFeedFromRpc({
     listing_type_filter: params.listingType ?? null,
     city_filter: null,
     state_filter: null,
+    sort_order: sortParam(params),
   });
 
   if (error) {
+    if (isMissingRpcError(error)) {
+      const fallback = await supabase.rpc('get_public_listing_feed', {
+        page_number: page,
+        page_size: limit,
+        category_filter: categoryId ?? null,
+        search_query: params.search?.trim() ?? null,
+        min_price_filter: params.minPrice ?? null,
+        max_price_filter: params.maxPrice ?? null,
+        condition_filter: condition ?? null,
+        listing_type_filter: params.listingType ?? null,
+        city_filter: null,
+        state_filter: null,
+      });
+
+      if (fallback.error) {
+        throwSupabaseError(fallback.error, 'We could not load listings.');
+      }
+
+      const fallbackRows = (fallback.data ?? []) as Array<Record<string, unknown>>;
+      const fallbackItems = fallbackRows.map((row) => toListing(row));
+
+      return {
+        items: fallbackItems,
+        page,
+        limit,
+        total: fallbackItems.length,
+        hasMore: fallbackItems.length === limit,
+      };
+    }
+
     throwSupabaseError(error, 'We could not load listings.');
   }
 
@@ -221,8 +287,21 @@ async function getPublicListingFeedFromRpc({
   };
 }
 
+function isMissingRpcError(error: unknown): boolean {
+  const details = typeof error === 'object' && error !== null ? error as { code?: string; message?: string } : {};
+  return details.code === 'PGRST202' || Boolean(details.message?.includes('Could not find the function'));
+}
+
 export async function getListings(params: ListingQueryParams = {}): Promise<PaginatedListings> {
   return getNearbyListings(params);
+}
+
+export async function getRescueDonationListings(params: ListingQueryParams = {}): Promise<PaginatedListings> {
+  return getNearbyListings({
+    ...params,
+    listingType: 'donation',
+    sort: params.sort ?? 'distance',
+  });
 }
 
 export async function getListingById(listingId: string): Promise<ListingDetail> {
@@ -283,7 +362,7 @@ export async function createListing(input: CreateListingInput): Promise<Listing>
   assertCreateListingInput(input);
   const categoryId = await resolveCategoryId(input.category_id, input.category);
   const listingType = input.listing_type;
-  const price = listingType === 'sale' ? priceNumber(input.price) : 0;
+  const price = listingType === 'sale' ? priceNumber(input.price) : null;
 
   const { data, error } = await supabase.rpc('create_listing', {
     requested_category_id: categoryId,

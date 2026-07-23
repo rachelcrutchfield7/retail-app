@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Alert, BackHandler, FlatList, Image, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, BackHandler, FlatList, Image, Keyboard, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -29,6 +29,7 @@ import {
   DateSeparator,
   EmptyState,
   ErrorState,
+  GuestTutorial,
   LoadingSpinner,
   MessageInput,
   OfferMessageCard,
@@ -58,6 +59,7 @@ import {
   useUnreadMessages,
 } from '../hooks/useMessages';
 import { useNotifications } from '../hooks/useNotifications';
+import { useOnboardingDecision } from '../hooks/useOnboarding';
 import { useCreateReview } from '../hooks/useReviews';
 import { useReports } from '../hooks/useReports';
 import { useSettings } from '../hooks/useSettings';
@@ -89,6 +91,8 @@ import { reportReasons } from '../services/reportService';
 import { useListing } from '../hooks/useListing';
 import type { AdminListingReport, Message, Notification, ReportReason, RescueProfile, ReportStatus } from '../services/types';
 import { handleAppError } from '../utils/errorHandler';
+import { useTheme } from '../theme/ThemeProvider';
+import type { AppearancePreference } from '../theme/types';
 import {
   bottomTabBarContentClearance,
   bottomTabBarGap,
@@ -148,6 +152,9 @@ function Sprint4Experience() {
   const auth = useAuth();
   const starter = useStartConversation();
   const [route, setRoute] = useState<SprintRoute>({ name: 'tabs', tab: 'home' });
+  const onboarding = useOnboardingDecision({ authLoading: auth.loading, signedIn: Boolean(auth.user) });
+  const [tutorialReplayOpen, setTutorialReplayOpen] = useState(false);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
 
   const openTab = (tab: SprintTab) => setRoute({ name: 'tabs', tab });
   const openListing = (listingId: string) => setRoute({ name: 'listing-detail', listingId });
@@ -179,6 +186,11 @@ function Sprint4Experience() {
       }
 
       if (route.name === 'conversation') {
+        if (keyboardVisible) {
+          Keyboard.dismiss();
+          return true;
+        }
+
         setRoute({ name: 'messages' });
         return true;
       }
@@ -193,7 +205,17 @@ function Sprint4Experience() {
     });
 
     return () => subscription.remove();
-  }, [route]);
+  }, [keyboardVisible, route]);
+
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardDidShow', () => setKeyboardVisible(true));
+    const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboardVisible(false));
+
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
 
   const startConversation = async (listingId: string, sellerId: string) => {
     if (auth.isGuest) {
@@ -204,6 +226,29 @@ function Sprint4Experience() {
     const conversation = await starter.startConversation(listingId, sellerId);
     openConversation(conversation.id);
   };
+
+  if (auth.loading || onboarding.loading) {
+    return (
+      <ScreenFrame>
+        <LoadingSpinner />
+      </ScreenFrame>
+    );
+  }
+
+  if (onboarding.shouldShow || tutorialReplayOpen) {
+    return (
+      <GuestTutorial
+        onComplete={async () => {
+          if (tutorialReplayOpen) {
+            setTutorialReplayOpen(false);
+            return;
+          }
+
+          await onboarding.complete();
+        }}
+      />
+    );
+  }
 
   if (route.name === 'listing-detail') {
     return (
@@ -297,11 +342,11 @@ function Sprint4Experience() {
   }
 
   if (route.name === 'rescue-hub') {
-    return <RescueHubScreen onBack={() => openTab('home')} />;
+    return <RescueHubScreen onBack={() => openTab('home')} onOpenListing={openListing} />;
   }
 
   if (route.name === 'settings') {
-    return <SettingsScreen onBack={() => openTab('profile')} />;
+    return <SettingsScreen onBack={() => openTab('profile')} onReplayTutorial={() => setTutorialReplayOpen(true)} />;
   }
 
   if (route.name === 'admin') {
@@ -364,11 +409,12 @@ function TabsShell({
 }) {
   const unread = useUnreadMessages();
   const insets = useSafeAreaInsets();
+  const theme = useTheme();
   const tabBarGap = bottomTabBarGap(insets.bottom);
 
   return (
-    <SafeAreaView edges={['left', 'right']} style={[styles.app, { paddingTop: topSafeAreaPadding(insets.top) }]}>
-      <StatusBar style="dark" />
+    <SafeAreaView edges={['left', 'right']} style={[styles.app, { backgroundColor: theme.palette.background, paddingTop: topSafeAreaPadding(insets.top) }]}>
+      <StatusBar style={theme.resolved === 'dark' ? 'light' : 'dark'} />
       <View style={[styles.tabContent, { paddingBottom: bottomTabBarContentClearance(insets.bottom) }]}>{children}</View>
       <View style={[styles.tabBar, { bottom: tabBarGap }]}>
         {tabs.map((tab) => {
@@ -708,123 +754,130 @@ export function ConversationScreen({
   return (
     <ScreenContainer>
       <StatusBar style="dark" />
-      <View style={styles.conversationHeader}>
-        <BackButton onPress={onBack} />
-        <View style={styles.conversationListingRow}>
-          <Image source={{ uri: conversationDetail.listingThumbnail ?? conversationDetail.listingSummary.image }} style={styles.listingThumb} />
-          <View style={styles.conversationHeaderText}>
-            <Text style={styles.cardTitle}>{conversationDetail.otherUser.display_name}</Text>
-            <Text numberOfLines={1} style={styles.body}>{conversationDetail.listingSummary.title}</Text>
-          </View>
-          <View style={styles.conversationActions}>
-            <Button title="View Listing" variant="outline" onPress={() => onOpenListing(conversationDetail.listingId)} />
-            {acceptedAmount && onPaymentOptions ? (
-              <Button title="Checkout" variant="outline" icon={CreditCard} onPress={() => onPaymentOptions(conversationDetail.listingId, acceptedAmount)} />
-            ) : null}
-            {canReview && onReview ? (
-              <Button title="Review" variant="outline" icon={Star} onPress={() => onReview(conversationDetail.listingId, conversationDetail.otherUser.id)} />
-            ) : null}
-            {latestReportableMessage && onReportMessage ? (
-              <Button title="Report" variant="ghost" icon={Flag} onPress={() => onReportMessage(latestReportableMessage.id)} />
-            ) : null}
-            {!messagingBlocked ? (
-              <Button title="Block" variant="ghost" icon={ShieldCheck} onPress={confirmBlockUser} />
-            ) : null}
+      <KeyboardAvoidingView
+        style={styles.keyboardAwareConversation}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 24 : 0}
+      >
+        <View style={styles.conversationHeader}>
+          <BackButton onPress={onBack} />
+          <View style={styles.conversationListingRow}>
+            <Image source={{ uri: conversationDetail.listingThumbnail ?? conversationDetail.listingSummary.image }} style={styles.listingThumb} />
+            <View style={styles.conversationHeaderText}>
+              <Text style={styles.cardTitle}>{conversationDetail.otherUser.display_name}</Text>
+              <Text numberOfLines={1} style={styles.body}>{conversationDetail.listingSummary.title}</Text>
+            </View>
+            <View style={styles.conversationActions}>
+              <Button title="View Listing" variant="outline" onPress={() => onOpenListing(conversationDetail.listingId)} />
+              {acceptedAmount && onPaymentOptions ? (
+                <Button title="Checkout" variant="outline" icon={CreditCard} onPress={() => onPaymentOptions(conversationDetail.listingId, acceptedAmount)} />
+              ) : null}
+              {canReview && onReview ? (
+                <Button title="Review" variant="outline" icon={Star} onPress={() => onReview(conversationDetail.listingId, conversationDetail.otherUser.id)} />
+              ) : null}
+              {latestReportableMessage && onReportMessage ? (
+                <Button title="Report" variant="ghost" icon={Flag} onPress={() => onReportMessage(latestReportableMessage.id)} />
+              ) : null}
+              {!messagingBlocked ? (
+                <Button title="Block" variant="ghost" icon={ShieldCheck} onPress={confirmBlockUser} />
+              ) : null}
+            </View>
           </View>
         </View>
-      </View>
 
-      <FlatList
-        ref={messageListRef}
-        style={styles.messageListFrame}
-        data={messageItems}
-        keyExtractor={(item) => item.key}
-        contentContainerStyle={[styles.messageList, messageItems.length === 0 && styles.messageListEmpty]}
-        keyboardShouldPersistTaps="handled"
-        onContentSizeChange={() => {
-          if (!messages.isFetchingNextPage) {
+        <FlatList
+          ref={messageListRef}
+          style={styles.messageListFrame}
+          data={messageItems}
+          keyExtractor={(item) => item.key}
+          contentContainerStyle={[styles.messageList, messageItems.length === 0 && styles.messageListEmpty]}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+          onContentSizeChange={() => {
+            if (!messages.isFetchingNextPage) {
+              messageListRef.current?.scrollToEnd({ animated: false });
+            }
+          }}
+          onLayout={() => {
             messageListRef.current?.scrollToEnd({ animated: false });
-          }
-        }}
-        onLayout={() => {
-          messageListRef.current?.scrollToEnd({ animated: false });
-        }}
-        renderItem={({ item, index }) => {
-          if (item.kind === 'date') {
-            return <DateSeparator label={item.label} />;
-          }
+          }}
+          renderItem={({ item, index }) => {
+            if (item.kind === 'date') {
+              return <DateSeparator label={item.label} />;
+            }
 
-          const offer = parseOfferMessage(item.message);
+            const offer = parseOfferMessage(item.message);
 
-          if (offer) {
-            const responded = hasOfferResponse(messages.data ?? [], offer.messageId);
-            const canRespond = isSeller && offer.kind === 'offer' && item.message.sender_id !== auth.user?.id && !responded;
+            if (offer) {
+              const responded = hasOfferResponse(messages.data ?? [], offer.messageId);
+              const canRespond = isSeller && offer.kind === 'offer' && item.message.sender_id !== auth.user?.id && !responded;
+              return (
+                <OfferMessageCard
+                  offer={offer}
+                  outgoing={item.message.sender_id === auth.user?.id}
+                  responded={responded}
+                  canRespond={canRespond}
+                  showCounterInput={counterOfferFor === offer.messageId}
+                  counterValue={counterAmount}
+                  onAccept={() => {
+                    void acceptOffer(conversationId, offer)
+                      .then(() => messages.refetch())
+                      .catch((error) => setNotice(handleAppError(error).userMessage));
+                  }}
+                  onDecline={() => {
+                    void declineOffer(conversationId, offer)
+                      .then(() => messages.refetch())
+                      .catch((error) => setNotice(handleAppError(error).userMessage));
+                  }}
+                  onToggleCounter={() => {
+                    setCounterOfferFor((current) => current === offer.messageId ? null : offer.messageId);
+                    setCounterAmount('');
+                  }}
+                  onCounterChange={setCounterAmount}
+                  onSubmitCounter={() => {
+                    void counterOffer(conversationId, offer, counterAmount)
+                      .then(() => {
+                        setCounterOfferFor(null);
+                        setCounterAmount('');
+                        return messages.refetch();
+                      })
+                      .catch((error) => setNotice(handleAppError(error).userMessage));
+                  }}
+                />
+              );
+            }
+
             return (
-              <OfferMessageCard
-                offer={offer}
-                outgoing={item.message.sender_id === auth.user?.id}
-                responded={responded}
-                canRespond={canRespond}
-                showCounterInput={counterOfferFor === offer.messageId}
-                counterValue={counterAmount}
-                onAccept={() => {
-                  void acceptOffer(conversationId, offer)
-                    .then(() => messages.refetch())
-                    .catch((error) => setNotice(handleAppError(error).userMessage));
-                }}
-                onDecline={() => {
-                  void declineOffer(conversationId, offer)
-                    .then(() => messages.refetch())
-                    .catch((error) => setNotice(handleAppError(error).userMessage));
-                }}
-                onToggleCounter={() => {
-                  setCounterOfferFor((current) => current === offer.messageId ? null : offer.messageId);
-                  setCounterAmount('');
-                }}
-                onCounterChange={setCounterAmount}
-                onSubmitCounter={() => {
-                  void counterOffer(conversationId, offer, counterAmount)
-                    .then(() => {
-                      setCounterOfferFor(null);
-                      setCounterAmount('');
-                      return messages.refetch();
-                    })
-                    .catch((error) => setNotice(handleAppError(error).userMessage));
-                }}
+              <ChatBubble
+                message={item.message}
+                currentUserId={auth.user?.id ?? ''}
+                showStatus={index === messageItems.length - 1}
               />
             );
+          }}
+          ListHeaderComponent={messageListHeader}
+          ListEmptyComponent={
+            <EmptyState title="No messages yet" body="Send the first message to coordinate pickup, meetup, or shipping." icon={MessageCircle} />
           }
-
-          return (
-            <ChatBubble
-              message={item.message}
-              currentUserId={auth.user?.id ?? ''}
-              showStatus={index === messageItems.length - 1}
-            />
-          );
-        }}
-        ListHeaderComponent={messageListHeader}
-        ListEmptyComponent={
-          <EmptyState title="No messages yet" body="Send the first message to coordinate pickup, meetup, or shipping." icon={MessageCircle} />
-        }
-      />
-      <TypingIndicator visible={false} name={conversation.data.otherUser.display_name} />
-      <MessageInput
-        value={text}
-        onChangeText={setText}
-        imageUri={imageUri}
-        onRemoveImage={() => setImageUri(null)}
-        onAttach={chooseImage}
-        onSend={() => void send()}
-        disabled={offline || messagingBlocked}
-        disabledMessage={
-          messagingBlocked
-            ? 'Messaging is unavailable because one of the participants has blocked the other.'
-            : 'Messages are unavailable while offline.'
-        }
-        sending={sender.loading}
-        error={sender.error}
-      />
+        />
+        <TypingIndicator visible={false} name={conversation.data.otherUser.display_name} />
+        <MessageInput
+          value={text}
+          onChangeText={setText}
+          imageUri={imageUri}
+          onRemoveImage={() => setImageUri(null)}
+          onAttach={chooseImage}
+          onSend={() => void send()}
+          disabled={offline || messagingBlocked}
+          disabledMessage={
+            messagingBlocked
+              ? 'Messaging is unavailable because one of the participants has blocked the other.'
+              : 'Messages are unavailable while offline.'
+          }
+          sending={sender.loading}
+          error={sender.error}
+        />
+      </KeyboardAvoidingView>
     </ScreenContainer>
   );
 }
@@ -1182,10 +1235,11 @@ export function ReviewScreen({
   );
 }
 
-export function SettingsScreen({ onBack }: { onBack: () => void }) {
+export function SettingsScreen({ onBack, onReplayTutorial }: { onBack: () => void; onReplayTutorial: () => void }) {
   const auth = useAuth();
   const settings = useSettings(Boolean(auth.user));
   const blockedAccounts = useBlockUser();
+  const theme = useTheme();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState('');
   const [email, setEmail] = useState('');
@@ -1263,6 +1317,28 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
         <Text style={styles.body}>Manage notifications, privacy, account safety, and app information.</Text>
       </View>
       {settingsNotice ? <NoticeCard title={settingsNotice.title} body={settingsNotice.body} /> : null}
+
+      <SectionCard title="App Tutorial">
+        <Text style={styles.body}>Replay the quick ReTail walkthrough for browsing, listing, Rescue Hub, and safe messaging.</Text>
+        <Button title="Replay Tutorial" variant="outline" onPress={onReplayTutorial} fullWidth />
+      </SectionCard>
+
+      <SectionCard title="Appearance">
+        <View style={styles.wrapRow}>
+          {([
+            ['system', 'Use device setting'],
+            ['light', 'Light'],
+            ['dark', 'Dark'],
+          ] as Array<[AppearancePreference, string]>).map(([value, label]) => (
+            <Button
+              key={value}
+              title={label}
+              variant={theme.preference === value ? 'primary' : 'outline'}
+              onPress={() => void theme.setPreference(value)}
+            />
+          ))}
+        </View>
+      </SectionCard>
 
       <SectionCard title="Notification Settings">
         <ToggleSwitch label="New messages" value={settings.data.notifications.messages} onValueChange={(messages) => void settings.updateNotifications({ messages })} />
@@ -1717,10 +1793,11 @@ function adminRescueAddress(rescue: RescueProfile): string {
 
 function ScreenFrame({ children }: { children: ReactNode }) {
   const insets = useSafeAreaInsets();
+  const theme = useTheme();
 
   return (
-    <SafeAreaView edges={['left', 'right']} style={[styles.app, { paddingTop: topSafeAreaPadding(insets.top) }]}>
-      <StatusBar style="dark" />
+    <SafeAreaView edges={['left', 'right']} style={[styles.app, { backgroundColor: theme.palette.background, paddingTop: topSafeAreaPadding(insets.top) }]}>
+      <StatusBar style={theme.resolved === 'dark' ? 'light' : 'dark'} />
       <ScrollView
         style={styles.listScreen}
         contentContainerStyle={[styles.listContent, { paddingBottom: scrollContentBottomClearance(insets.bottom) }]}
@@ -1733,9 +1810,10 @@ function ScreenFrame({ children }: { children: ReactNode }) {
 
 function ScreenContainer({ children }: { children: ReactNode }) {
   const insets = useSafeAreaInsets();
+  const theme = useTheme();
 
   return (
-    <SafeAreaView edges={['left', 'right']} style={[styles.app, { paddingTop: topSafeAreaPadding(insets.top) }]}>
+    <SafeAreaView edges={['left', 'right']} style={[styles.app, { backgroundColor: theme.palette.background, paddingTop: topSafeAreaPadding(insets.top) }]}>
       {children}
     </SafeAreaView>
   );
@@ -1782,6 +1860,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   tabContent: {
+    flex: 1,
+  },
+  keyboardAwareConversation: {
     flex: 1,
   },
   tabBar: {

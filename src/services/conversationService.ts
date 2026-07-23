@@ -193,6 +193,22 @@ function mapConversationRpcError(error: unknown): never {
     throw createServiceError('USER_BLOCKED', message, 'Messaging is unavailable between these accounts.');
   }
 
+  if (message.includes('RETAIL_VERIFIED_RESCUE_REQUIRED')) {
+    throw createServiceError(
+      'RETAIL_VERIFIED_RESCUE_REQUIRED',
+      message,
+      'Your rescue must be verified before requesting rescue donations.'
+    );
+  }
+
+  if (message.includes('RETAIL_RESCUE_DONATION_RESERVED')) {
+    throw createServiceError(
+      'RETAIL_RESCUE_DONATION_RESERVED',
+      message,
+      'This item is reserved for verified rescue organizations.'
+    );
+  }
+
   if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23505') {
     throwSupabaseError(error, 'We found your existing conversation.');
   }
@@ -226,6 +242,8 @@ function unavailableListing(listingId: string): Listing {
     title: 'Listing unavailable',
     description: 'This listing is no longer available.',
     price: '',
+    listingType: 'sale',
+    priceAmount: null,
     category: 'General',
     condition: 'Good',
     image: '',
@@ -236,6 +254,7 @@ function unavailableListing(listingId: string): Listing {
     sellerRating: 0,
     sellerReviews: 0,
     posted: 'Previously listed',
+    createdAt: new Date().toISOString(),
     pickup: false,
     porchPickup: false,
     meetup: false,

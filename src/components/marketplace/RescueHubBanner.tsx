@@ -30,7 +30,7 @@ export function RescueHubBanner({ rescueCount, urgentNeedCount, onPress }: Rescu
         </View>
       </View>
 
-      <ChevronRight size={22} color={colors.primary} />
+      <ChevronRight size={22} color={colors.white} />
     </Pressable>
   );
 }
@@ -42,10 +42,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.md,
     padding: spacing.md,
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.primary,
     borderRadius: radius.large,
     borderWidth: 1,
-    borderColor: colors.primarySoft,
+    borderColor: colors.primary,
   },
   pressed: {
     opacity: 0.82,
@@ -56,23 +56,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.large,
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.secondary,
   },
   content: {
     flex: 1,
     gap: spacing.xs,
   },
   eyebrow: {
-    color: colors.primary,
+    color: colors.secondary,
     ...typography.caption,
     textTransform: 'uppercase',
   },
   title: {
-    color: colors.textPrimary,
+    color: colors.white,
     ...typography.sectionTitle,
   },
   body: {
-    color: colors.textSecondary,
+    color: colors.secondary,
     ...typography.small,
   },
   statRow: {
@@ -82,7 +82,11 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   stat: {
-    color: colors.primary,
+    color: colors.white,
     ...typography.caption,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
   },
 });

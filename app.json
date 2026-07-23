@@ -5,7 +5,7 @@
     "scheme": "retail",
     "version": "1.0.0",
     "orientation": "portrait",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "icon": "./assets/app-icon.png",
     "assetBundlePatterns": [
       "**/*"
@@ -39,6 +39,7 @@
     },
     "android": {
       "package": "com.raecrutchfield.retail",
+      "softwareKeyboardLayoutMode": "resize",
       "intentFilters": [
         {
           "action": "VIEW",
@@ -82,6 +83,7 @@
     "plugins": [
       "expo-status-bar",
       "expo-notifications",
+      "expo-image-picker",
       [
         "expo-splash-screen",
         {

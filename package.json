@@ -31,11 +31,13 @@
   },
   "dependencies": {
     "@expo/metro-runtime": "~57.0.7",
+    "@react-native-async-storage/async-storage": "2.2.0",
     "@supabase/supabase-js": "2.110.2",
     "@tanstack/react-query": "5.101.2",
     "expo": "57.0.8",
     "expo-constants": "~57.0.7",
     "expo-device": "~57.0.1",
+    "expo-image-picker": "~57.0.6",
     "expo-notifications": "~57.0.7",
     "expo-secure-store": "57.0.1",
     "expo-splash-screen": "~57.0.5",

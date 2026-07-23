@@ -4,6 +4,8 @@ import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, radius, sizes, spacing, typography } from '../../constants/theme';
 import type { Listing } from '../../types.ts';
 import { listingLocationLabel } from '../../utils/format';
+import { listingTypeBadgeLabel } from '../../utils/listingPresentation';
+import { Badge } from '../ui/Badge';
 import { ConditionBadge } from './ConditionBadge';
 import { FavoriteButton } from './FavoriteButton';
 import { PriceTag } from './PriceTag';
@@ -46,6 +48,7 @@ export function ListingCard({ listing, isFavorite, onOpen, onFavorite, variant =
         </View>
         <View style={[styles.cardFooter, grid && styles.gridFooter]}>
           <ConditionBadge condition={listing.condition} />
+          <Badge label={listingTypeBadgeLabel(listing.listingType)} tone={listing.listingType === 'donation' ? 'info' : listing.listingType === 'free' ? 'success' : 'neutral'} />
           {!grid ? <Text style={styles.posted}>{listing.posted}</Text> : null}
         </View>
       </View>

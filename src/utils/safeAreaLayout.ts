@@ -15,3 +15,7 @@ export function bottomTabBarContentClearance(bottomInset: number): number {
 export function scrollContentBottomClearance(bottomInset: number): number {
   return bottomInset + spacing.xxl;
 }
+
+export function messageComposerBottomPadding(bottomInset: number): number {
+  return Math.max(bottomInset, spacing.sm) + spacing.sm;
+}

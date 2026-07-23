@@ -19,3 +19,4 @@ minimumReleaseAgeExclude:
   - babel-preset-expo@57.0.4
   - expo-modules-jsi@57.0.4
   - expo-splash-screen@57.0.5
+  - expo-image-picker@57.0.6

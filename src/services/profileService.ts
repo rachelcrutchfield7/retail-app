@@ -85,8 +85,11 @@ export async function uploadAvatar(fileUri: string): Promise<string> {
   }
 
   if (fileUri.startsWith('http')) {
-    await updateProfile({ avatar_url: fileUri });
-    return fileUri;
+    throw createServiceError(
+      'AVATAR_REMOTE_URL_NOT_ALLOWED',
+      'Avatar upload received a remote URL',
+      'Choose a photo from your device.'
+    );
   }
 
   const response = await fetch(fileUri);
@@ -96,6 +99,23 @@ export async function uploadAvatar(fileUri: string): Promise<string> {
   }
 
   const blob = await response.blob();
+
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(blob.type)) {
+    throw createServiceError(
+      'AVATAR_TYPE_UNSUPPORTED',
+      `Avatar MIME type was ${blob.type}`,
+      'Choose a JPEG, PNG, or WebP profile picture.'
+    );
+  }
+
+  if (blob.size > 10 * 1024 * 1024) {
+    throw createServiceError(
+      'AVATAR_TOO_LARGE',
+      `Avatar size was ${blob.size} bytes`,
+      'Choose a profile picture under 10 MB.'
+    );
+  }
+
   const extension = blob.type.includes('png') ? 'png' : blob.type.includes('webp') ? 'webp' : 'jpg';
   const path = `${profile.id}/${Date.now()}.${extension}`;
   const { error: uploadError } = await supabase.storage.from('avatars').upload(path, blob, {

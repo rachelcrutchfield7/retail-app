@@ -321,6 +321,15 @@ function AppExperience() {
     setActiveTab(nextTab);
   };
 
+  const openRescueHubListing = (listingId: string) => {
+    const listing = allListings.find((item) => item.id === listingId);
+
+    if (listing) {
+      setSelectedListing(listing);
+      setShowRescueHub(false);
+    }
+  };
+
   const startEditingListing = (listing: Listing) => {
     setForm(listingFormFromListing(listing));
     setEditingListing(listing);
@@ -333,7 +342,7 @@ function AppExperience() {
 
   const renderContent = () => {
     if (showRescueHub) {
-      return <RescueHubScreen onBack={() => setShowRescueHub(false)} />;
+      return <RescueHubScreen onBack={() => setShowRescueHub(false)} onOpenListing={openRescueHubListing} />;
     }
 
     if (selectedListing) {

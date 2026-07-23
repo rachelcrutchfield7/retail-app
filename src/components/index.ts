@@ -3,6 +3,7 @@ export { AuthModal } from './feedback/AuthModal';
 export type { AuthModalSubmission, AuthPrompt } from './feedback/AuthModal';
 export { EmptyState } from './feedback/EmptyState';
 export { ErrorState } from './feedback/ErrorState';
+export { GuestTutorial } from './feedback/GuestTutorial';
 export { LockedScreen } from './feedback/LockedScreen';
 export { OfflineBanner } from './feedback/OfflineBanner';
 export { ReportListingModal, reportReasonOptions } from './feedback/ReportListingModal';

@@ -14,6 +14,8 @@ export type TabKey = 'browse' | 'favorites' | 'create' | 'messages' | 'profile';
 export type AccountType = 'regular' | 'rescue';
 export type ShippingPayer = 'buyer' | 'seller' | 'discuss';
 export type MarketplaceSearchRadius = 10 | 25 | 50 | 100;
+export type ListingType = 'sale' | 'free' | 'donation';
+export type ListingSort = 'recent' | 'price_asc' | 'price_desc' | 'distance' | 'favorites';
 
 export type MarketplaceSearchArea = {
   id: string;
@@ -38,6 +40,8 @@ export type Listing = {
   title: string;
   description: string;
   price: string;
+  listingType: ListingType;
+  priceAmount?: number | null;
   category: Category;
   condition: ListingCondition;
   image: string;
@@ -55,6 +59,8 @@ export type Listing = {
   sellerRating: number;
   sellerReviews: number;
   posted: string;
+  createdAt: string;
+  publishedAt?: string;
   brand?: string;
   itemDimensions?: string;
   petSize?: string;

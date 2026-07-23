@@ -41,7 +41,8 @@ test('Rescue Hub has explicit back behavior and matching urgent need totals', ()
 
   assert.match(sprint4App, /BackHandler\.addEventListener\('hardwareBackPress'/);
   assert.match(sprint4App, /setRoute\(\{ name: 'tabs', tab: 'home' \}\)/);
-  assert.match(rescueHubScreen, /<HeaderBar title="Rescue Hub" onBack=\{onBack\} backLabel="Back" backVariant="prominent" \/>/);
+  assert.match(rescueHubScreen, /<HeaderBar title="" onBack=\{onBack\} backLabel="Back" backVariant="prominent" \/>/);
+  assert.match(rescueHubScreen, /style=\{styles\.pageTitle\}>Rescue Hub<\/Text>/);
   assert.match(rescueHubScreen, /total \+ rescue\.urgentNeeds\.length/);
   assert.match(rescueHubScreen, /Metric label="Urgent needs"/);
   assert.match(headerBar, /backLabel\?: string/);
@@ -51,7 +52,7 @@ test('animal type chips filter against visible listing category labels', () => {
   const sprint3App = read('src/sprint3/Sprint3App.tsx');
 
   assert.match(sprint3App, /filteredMarketplaceListings = \(listings\.data\?\.items \?\? \[\]\)\.filter/);
-  assert.match(sprint3App, /const filteredItems = \(listings\.data\?\.items \?\? \[\]\)\.filter/);
+  assert.match(sprint3App, /const filteredItems = sortListingsForPreview\(\(listings\.data\?\.items \?\? \[\]\)\.filter/);
   assert.match(sprint3App, /listingCategorySlug\(listing\) === filters\.categorySlug/);
   assert.doesNotMatch(sprint3App, /categoryId,\s*\n\s*condition,/);
 });
@@ -112,7 +113,7 @@ test('message composer and Rescue Hub route account for device safe areas', () =
   const rescueHubScreen = read('src/screens/RescueHubScreen.tsx');
 
   assert.match(messageInput, /useSafeAreaInsets/);
-  assert.match(messageInput, /scrollContentBottomClearance\(insets\.bottom\)/);
+  assert.match(messageInput, /messageComposerBottomPadding\(insets\.bottom\)/);
   assert.match(rescueHubScreen, /useSafeAreaInsets/);
   assert.match(rescueHubScreen, /topSafeAreaPadding\(insets\.top\) \+ sizes\.screenTopGap/);
   assert.match(rescueHubScreen, /scrollContentBottomClearance\(insets\.bottom\)/);
