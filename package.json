@@ -20,6 +20,7 @@
     "security:secrets": "node scripts/secret-scan.mjs",
     "security:secrets:history": "node scripts/secret-scan.mjs --git-history",
     "validate:beta-build-config": "node scripts/validate-beta-build-config.mjs --profile-preview",
+    "validate:preview-bundle-config": "node scripts/verify-preview-bundle-config.mjs",
     "eas-build-pre-install": "node scripts/validate-beta-build-config.mjs",
     "build:preview:ios": "eas build --profile preview --platform ios",
     "build:preview:android": "eas build --profile preview --platform android",

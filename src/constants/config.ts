@@ -14,10 +14,24 @@ const unsafePublicSupabasePatterns = [
 
 const supportedAppEnvironments = new Set<AppEnvironment>(['development', 'beta', 'production', 'test']);
 const releaseLikeAppEnvironments = new Set<AppEnvironment>(['beta', 'production']);
+const approvedSupabaseProjectRef = 'ycwgsdigvpmprqreoqiz';
+const approvedSupabaseUrl = `https://${approvedSupabaseProjectRef}.supabase.co`;
+const publicWebsiteHost = 'retailpetapp.com';
 const localUrlPattern = /(^|\.)localhost$|^127\.|^0\.0\.0\.0$|^10\.0\.2\.2$/;
 const placeholderUrlPattern = /example\.supabase\.co/i;
 
-export function readConfigFromEnv(env: RuntimeEnv = process.env) {
+const bundledRuntimeEnv: RuntimeEnv = {
+  EXPO_PUBLIC_APP_ENV: process.env.EXPO_PUBLIC_APP_ENV,
+  EXPO_PUBLIC_SUPABASE_URL: process.env.EXPO_PUBLIC_SUPABASE_URL,
+  EXPO_PUBLIC_SUPABASE_ANON_KEY: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
+  EXPO_PUBLIC_GOOGLE_MAPS_API_KEY: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
+  EXPO_PUBLIC_POSTHOG_KEY: process.env.EXPO_PUBLIC_POSTHOG_KEY,
+  EXPO_PUBLIC_SENTRY_DSN: process.env.EXPO_PUBLIC_SENTRY_DSN,
+  EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY: process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY,
+  EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED: process.env.EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED,
+};
+
+export function readConfigFromEnv(env: RuntimeEnv) {
   return {
     appEnv: env.EXPO_PUBLIC_APP_ENV ?? 'development',
     supabaseUrl: env.EXPO_PUBLIC_SUPABASE_URL ?? '',
@@ -30,7 +44,7 @@ export function readConfigFromEnv(env: RuntimeEnv = process.env) {
   } as const;
 }
 
-export const config = readConfigFromEnv();
+export const config = readConfigFromEnv(bundledRuntimeEnv);
 
 export function hasSupabaseConfig(): boolean {
   return Boolean(config.supabaseUrl && config.supabaseAnonKey && isClientSafeSupabaseKey(config.supabaseAnonKey));
@@ -87,7 +101,7 @@ export function getAppEnvironmentLabel(value: string = config.appEnv): string {
   return 'Unsupported Environment';
 }
 
-export function getEnvironmentValidationError(env: RuntimeEnv = process.env): string | null {
+export function getEnvironmentValidationError(env: RuntimeEnv = bundledRuntimeEnv): string | null {
   const runtimeConfig = readConfigFromEnv(env);
 
   if (!isSupportedAppEnvironment(runtimeConfig.appEnv)) {
@@ -97,6 +111,14 @@ export function getEnvironmentValidationError(env: RuntimeEnv = process.env): st
   if (isReleaseLikeEnvironment(runtimeConfig.appEnv)) {
     if (isLocalOrPlaceholderUrl(runtimeConfig.supabaseUrl)) {
       return 'Release builds cannot use local or placeholder Supabase URLs.';
+    }
+
+    if (isPublicWebsiteUrl(runtimeConfig.supabaseUrl)) {
+      return 'Release builds cannot use the public ReTail website domain as the Supabase API URL.';
+    }
+
+    if (runtimeConfig.supabaseUrl.trim().toLowerCase() !== approvedSupabaseUrl) {
+      return 'Release builds must use the approved ReTail Supabase project URL.';
     }
 
     if (runtimeConfig.supabaseAnonKey.includes('ci-placeholder')) {
@@ -139,5 +161,19 @@ function isLocalOrPlaceholderUrl(value: string): boolean {
     return localUrlPattern.test(parsed.hostname);
   } catch {
     return true;
+  }
+}
+
+function isPublicWebsiteUrl(value: string): boolean {
+  if (!value.trim()) {
+    return false;
+  }
+
+  try {
+    const parsed = new URL(value);
+    const host = parsed.hostname.toLowerCase();
+    return host === publicWebsiteHost || host === `www.${publicWebsiteHost}`;
+  } catch {
+    return false;
   }
 }
