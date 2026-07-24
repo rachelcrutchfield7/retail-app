@@ -13,6 +13,7 @@ export type ThemePalette = {
   primaryContrast: string;
   error: string;
   warning: string;
+  rescueAccent: string;
   inputBackground: string;
   overlay: string;
   rescueBannerBackground: string;

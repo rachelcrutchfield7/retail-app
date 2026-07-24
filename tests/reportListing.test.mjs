@@ -45,11 +45,13 @@ test('listing details expose an owner edit action', () => {
   assert.match(sprint4, /onEditListing=\{openEditListing\}/);
 });
 
-test('admin review panel surfaces listing reports', () => {
-  assert.match(sprint4, /Listing Reports/);
+test('admin review panel surfaces listing, message, and user reports', () => {
+  assert.match(sprint4, /Reports/);
   assert.match(sprint4, /AdminListingReportCard/);
   assert.match(sprint4, /useAdminListingReports/);
   assert.match(adminService, /\.from\('reports'\)/);
-  assert.match(adminService, /\.eq\('report_type', 'listing'\)/);
+  assert.match(adminService, /\.in\('report_type', \['listing', 'message', 'user'\]\)/);
+  assert.match(adminService, /Reported message/);
+  assert.match(adminService, /Reported user/);
   assert.match(adminService, /updateListingReportStatus/);
 });

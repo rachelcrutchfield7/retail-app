@@ -586,7 +586,6 @@ export function ConversationScreen({
 
     try {
       await makeOffer(conversationId, offerAmount);
-      setOfferAmount('');
       setOfferOpen(false);
       setNotice(null);
       await messages.refetch();
@@ -594,6 +593,16 @@ export function ConversationScreen({
       setNotice(handleAppError(error).userMessage);
     }
   };
+
+  useEffect(() => {
+    if (!offerOpen || !conversation.data?.listingSummary) {
+      return;
+    }
+
+    if (!offerAmount.trim()) {
+      setOfferAmount(defaultOfferAmount(conversation.data.listingSummary.price));
+    }
+  }, [conversation.data?.listingSummary, offerAmount, offerOpen]);
 
   useEffect(() => {
     if (conversation.isLoading || messages.isLoading || messageItems.length === 0) {
@@ -644,6 +653,77 @@ export function ConversationScreen({
 
     setNotice('Outside payments are not covered by ReTail. If you use cash, Venmo, Cash App, PayPal, or another method, ReTail cannot help with payment disputes.');
   };
+  const openOfferForm = () => {
+    setOfferAmount((current) => current.trim() || defaultOfferAmount(conversationDetail.listingSummary.price));
+    setOfferOpen((current) => !current);
+  };
+  const dealPanel = paidListing ? (
+    <View style={styles.dealPanel}>
+      <Card>
+        <View style={styles.stack}>
+          <Text style={styles.cardTitle}>{acceptedAmount ? 'Offer accepted' : 'Deal options'}</Text>
+          {acceptedAmount ? (
+            <Text style={styles.body}>
+              Accepted price: {acceptedAmount}. Use ReTail Protected Checkout for a payment record and receipt, or arrange payment outside ReTail if both sides prefer.
+            </Text>
+          ) : (
+            <Text style={styles.body}>
+              Message first, agree on the details, then make or respond to an offer. Checkout options appear after an offer is accepted.
+            </Text>
+          )}
+          {acceptedAmount ? (
+            <View style={styles.dealActions}>
+              {onPaymentOptions ? (
+                <Button
+                  title="ReTail Protected Checkout"
+                  icon={CreditCard}
+                  onPress={() => onPaymentOptions(conversationDetail.listingId, acceptedAmount)}
+                  fullWidth
+                />
+              ) : null}
+              <Button
+                title="Arrange Outside ReTail"
+                variant="outline"
+                icon={Wallet}
+                onPress={arrangeOutsideReTail}
+                fullWidth
+              />
+              <Text style={styles.metaText}>
+                Outside payments are not covered by ReTail payment dispute support.
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.dealActions}>
+              {canMakeOffer ? (
+                <Button
+                  title={offerOpen ? 'Hide Offer Form' : 'Make Offer'}
+                  variant="secondary"
+                  onPress={openOfferForm}
+                  fullWidth
+                />
+              ) : (
+                <Text style={styles.metaText}>
+                  {isSeller ? 'Review offers in the conversation and choose accept, decline, or counter.' : 'Checkout will unlock after the seller accepts an offer.'}
+                </Text>
+              )}
+            </View>
+          )}
+          {offerOpen && canMakeOffer ? (
+            <View style={styles.offerForm}>
+              <TextInput
+                label="Offer Amount"
+                value={offerAmount}
+                onChangeText={setOfferAmount}
+                placeholder={defaultOfferAmount(conversationDetail.listingSummary.price)}
+                keyboardType="decimal-pad"
+              />
+              <Button title="Send Offer" onPress={() => void submitOffer()} fullWidth />
+            </View>
+          ) : null}
+        </View>
+      </Card>
+    </View>
+  ) : null;
   const messageListHeader = (
     <View style={styles.messageListHeader}>
       {messages.isError ? <ErrorState message={handleAppError(messages.error).userMessage} onRetry={messages.refetch} /> : null}
@@ -651,71 +731,6 @@ export function ConversationScreen({
       {messagingBlocked ? (
         <Card>
           <Text style={styles.body}>Messaging is unavailable because one of the participants has blocked the other.</Text>
-        </Card>
-      ) : null}
-      {paidListing ? (
-        <Card>
-          <View style={styles.stack}>
-            <Text style={styles.cardTitle}>{acceptedAmount ? 'Offer accepted' : 'Deal options'}</Text>
-            {acceptedAmount ? (
-              <Text style={styles.body}>
-                Accepted price: {acceptedAmount}. Use ReTail Protected Checkout for a payment record and receipt, or arrange payment outside ReTail if both sides prefer.
-              </Text>
-            ) : (
-              <Text style={styles.body}>
-                Message first, agree on the details, then make or respond to an offer. Checkout options appear after an offer is accepted.
-              </Text>
-            )}
-            {acceptedAmount ? (
-              <View style={styles.conversationOptionGrid}>
-                {onPaymentOptions ? (
-                  <Button
-                    title="ReTail Protected Checkout"
-                    icon={CreditCard}
-                    onPress={() => onPaymentOptions(conversationDetail.listingId, acceptedAmount)}
-                    fullWidth
-                  />
-                ) : null}
-                <Button
-                  title="Arrange Outside ReTail"
-                  variant="outline"
-                  icon={Wallet}
-                  onPress={arrangeOutsideReTail}
-                  fullWidth
-                />
-                <Text style={styles.metaText}>
-                  Outside payments are not covered by ReTail payment dispute support.
-                </Text>
-              </View>
-            ) : (
-              <View style={styles.conversationOptionGrid}>
-                {canMakeOffer ? (
-                <Button
-                  title={offerOpen ? 'Hide Offer Form' : 'Make Offer'}
-                  variant="secondary"
-                  onPress={() => setOfferOpen((current) => !current)}
-                  fullWidth
-                />
-                ) : (
-                  <Text style={styles.metaText}>
-                    {isSeller ? 'Review offers in the conversation and choose accept, decline, or counter.' : 'Checkout will unlock after the seller accepts an offer.'}
-                  </Text>
-                )}
-              </View>
-            )}
-            {offerOpen && canMakeOffer ? (
-              <View style={styles.offerForm}>
-                <TextInput
-                  label="Offer Amount"
-                  value={offerAmount}
-                  onChangeText={setOfferAmount}
-                  placeholder="$25"
-                  keyboardType="decimal-pad"
-                />
-                <Button title="Send Offer" onPress={() => void submitOffer()} fullWidth />
-              </View>
-            ) : null}
-          </View>
         </Card>
       ) : null}
       {messages.hasNextPage ? (
@@ -767,23 +782,24 @@ export function ConversationScreen({
               <Text style={styles.cardTitle}>{conversationDetail.otherUser.display_name}</Text>
               <Text numberOfLines={1} style={styles.body}>{conversationDetail.listingSummary.title}</Text>
             </View>
-            <View style={styles.conversationActions}>
-              <Button title="View Listing" variant="outline" onPress={() => onOpenListing(conversationDetail.listingId)} />
-              {acceptedAmount && onPaymentOptions ? (
-                <Button title="Checkout" variant="outline" icon={CreditCard} onPress={() => onPaymentOptions(conversationDetail.listingId, acceptedAmount)} />
-              ) : null}
-              {canReview && onReview ? (
-                <Button title="Review" variant="outline" icon={Star} onPress={() => onReview(conversationDetail.listingId, conversationDetail.otherUser.id)} />
-              ) : null}
-              {latestReportableMessage && onReportMessage ? (
-                <Button title="Report" variant="ghost" icon={Flag} onPress={() => onReportMessage(latestReportableMessage.id)} />
-              ) : null}
-              {!messagingBlocked ? (
-                <Button title="Block" variant="ghost" icon={ShieldCheck} onPress={confirmBlockUser} />
-              ) : null}
-            </View>
+          </View>
+          <View style={styles.conversationActions}>
+            <Button title="View Listing" variant="outline" onPress={() => onOpenListing(conversationDetail.listingId)} />
+            {acceptedAmount && onPaymentOptions ? (
+              <Button title="Checkout" variant="outline" icon={CreditCard} onPress={() => onPaymentOptions(conversationDetail.listingId, acceptedAmount)} />
+            ) : null}
+            {canReview && onReview ? (
+              <Button title="Review" variant="outline" icon={Star} onPress={() => onReview(conversationDetail.listingId, conversationDetail.otherUser.id)} />
+            ) : null}
+            {latestReportableMessage && onReportMessage ? (
+              <Button title="Report" variant="ghost" icon={Flag} onPress={() => onReportMessage(latestReportableMessage.id)} />
+            ) : null}
+            {!messagingBlocked ? (
+              <Button title="Block" variant="ghost" icon={ShieldCheck} onPress={confirmBlockUser} />
+            ) : null}
           </View>
         </View>
+        {dealPanel}
 
         <FlatList
           ref={messageListRef}
@@ -1511,7 +1527,7 @@ export function AdminReviewScreen({ onBack, onOpenListing }: { onBack: () => voi
       await listingReports.updateStatus(report.id, status);
       setNotice({
         title: 'Report updated',
-        body: `${report.listing_title ?? 'The listing report'} was marked ${adminReportStatusLabel(status).toLowerCase()}.`,
+        body: `${report.target_title ?? report.listing_title ?? 'The report'} was marked ${adminReportStatusLabel(status).toLowerCase()}.`,
       });
     } catch (error) {
       setNotice({ title: 'Report update failed', body: handleAppError(error).userMessage });
@@ -1525,7 +1541,7 @@ export function AdminReviewScreen({ onBack, onOpenListing }: { onBack: () => voi
         <Card>
           <View style={styles.stack}>
             <Text style={styles.cardTitle}>Admin access required</Text>
-            <Text style={styles.body}>Only ReTail admin accounts can review listing reports and rescue verification requests.</Text>
+            <Text style={styles.body}>Only ReTail admin accounts can review reports and rescue verification requests.</Text>
           </View>
         </Card>
       </ScreenFrame>
@@ -1540,9 +1556,9 @@ export function AdminReviewScreen({ onBack, onOpenListing }: { onBack: () => voi
         <Text style={styles.body}>Review listing reports and rescue verification requests from your admin account.</Text>
       </View>
 
-      <SectionCard title="Listing Reports">
+      <SectionCard title="Reports">
         <Text style={styles.bodyStrong}>{pendingReportCount} open</Text>
-        <Text style={styles.body}>Reported listings appear here so you can review spam, fraud, harassment, or inappropriate content.</Text>
+        <Text style={styles.body}>Reported listings, messages, and users appear here so you can review spam, fraud, harassment, or inappropriate content.</Text>
       </SectionCard>
 
       {listingReports.actionError ? <NoticeCard title="Report action failed" body={listingReports.actionError} /> : null}
@@ -1550,7 +1566,7 @@ export function AdminReviewScreen({ onBack, onOpenListing }: { onBack: () => voi
       {listingReports.isError ? <ErrorState message={handleAppError(listingReports.error).userMessage} onRetry={listingReports.refetch} /> : null}
 
       {!listingReports.isLoading && !listingReports.isError && (listingReports.data ?? []).length === 0 ? (
-        <EmptyState title="No listing reports waiting" body="Listings reported by users will appear here for review." icon={Flag} />
+        <EmptyState title="No reports waiting" body="Listings, messages, and users reported by the community will appear here for review." icon={Flag} />
       ) : null}
 
       {(listingReports.data ?? []).map((report) => (
@@ -1613,8 +1629,8 @@ function AdminListingReportCard({
       <View style={styles.stack}>
         <View style={styles.notificationRow}>
           <View style={styles.notificationText}>
-            <Text style={styles.cardTitle}>{report.listing_title ?? 'Reported listing'}</Text>
-            <Text style={styles.body}>{report.listing_location || 'Location unavailable'}</Text>
+            <Text style={styles.cardTitle}>{report.target_title ?? report.listing_title ?? 'Reported content'}</Text>
+            <Text style={styles.body}>{report.target_subtitle || report.listing_location || 'Context unavailable'}</Text>
           </View>
           <Text style={styles.metaText}>{adminReportStatusLabel(report.status)}</Text>
         </View>
@@ -1622,6 +1638,9 @@ function AdminListingReportCard({
         <Text style={styles.bodyStrong}>Reason: {report.reason}</Text>
         {report.details ? <Text style={styles.body}>Details: {report.details}</Text> : null}
         <Text style={styles.body}>Reporter: {report.reporter_name ?? 'ReTail user'}</Text>
+        <Text style={styles.body}>Report type: {adminReportTypeLabel(report.report_type)}</Text>
+        {report.reported_user_name ? <Text style={styles.body}>Reported user: {report.reported_user_name}</Text> : null}
+        {report.message_preview ? <Text style={styles.body}>Message: {report.message_preview}</Text> : null}
         {report.listing_price ? <Text style={styles.body}>Listing price: {report.listing_price}</Text> : null}
         {report.listing_status ? <Text style={styles.body}>Listing status: {report.listing_status}</Text> : null}
         <Text style={styles.metaText}>Reported {formatAdminDate(report.created_at)}</Text>
@@ -1731,6 +1750,16 @@ function findLatestAcceptedOffer(messages: Message[]) {
     .find((offer) => offer?.kind === 'offer_response' && offer.status === 'accepted') ?? null;
 }
 
+function defaultOfferAmount(price: string): string {
+  const amount = Number(price.replace(/[^0-9.]/g, ''));
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return '';
+  }
+
+  return amount % 1 === 0 ? `$${amount.toFixed(0)}` : `$${amount.toFixed(2)}`;
+}
+
 function adminStatusLabel(rescue: RescueProfile): string {
   if (rescue.verification_status === 'verified') {
     return 'Verified';
@@ -1761,6 +1790,18 @@ function adminReportStatusLabel(status: ReportStatus): string {
   }
 
   return 'Open';
+}
+
+function adminReportTypeLabel(type: AdminListingReport['report_type']): string {
+  if (type === 'message') {
+    return 'Message';
+  }
+
+  if (type === 'user') {
+    return 'User';
+  }
+
+  return 'Listing';
 }
 
 function formatAdminDate(date: string): string {
@@ -1875,9 +1916,9 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: radius.large,
     backgroundColor: colors.surface,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.xs,
     shadowColor: colors.textPrimary,
     shadowOpacity: 0.08,
     shadowRadius: 12,
@@ -1979,8 +2020,18 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   conversationActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing.sm,
-    alignItems: 'stretch',
+    alignItems: 'center',
+  },
+  dealPanel: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    backgroundColor: colors.background,
+  },
+  dealActions: {
+    gap: spacing.sm,
   },
   conversationOptionGrid: {
     gap: spacing.sm,

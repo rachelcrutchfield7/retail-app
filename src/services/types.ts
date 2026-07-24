@@ -405,6 +405,11 @@ export type Report = {
 };
 
 export type AdminListingReport = Report & {
+  target_title?: string;
+  target_subtitle?: string;
+  message_preview?: string;
+  message_type?: MessageType;
+  reported_user_name?: string;
   listing_title?: string;
   listing_location?: string;
   listing_status?: string;

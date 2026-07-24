@@ -7,6 +7,7 @@ export const colors = {
   textDisabled: '#9CA3AF',
   success: '#3F8F6B',
   warning: '#D99A2B',
+  rescueAccent: '#F47C58',
   error: '#D9534F',
   info: '#7BA7BC',
   white: '#FFFFFF',
@@ -49,7 +50,7 @@ export const typography = {
 export const sizes = {
   touchTarget: 44,
   buttonHeight: 52,
-  tabBarHeight: 76,
+  tabBarHeight: 66,
   tabBarBottomOffset: 18,
   screenTopGap: 16,
   tabBarMinimumBottomGap: 32,

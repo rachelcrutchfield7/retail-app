@@ -330,7 +330,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   pageTitle: {
-    color: colors.textPrimary,
+    color: colors.rescueAccent,
     fontSize: 34,
     fontWeight: '800',
     lineHeight: 39,
@@ -348,7 +348,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceWarm,
     borderRadius: radius.large,
     borderWidth: 1,
-    borderColor: colors.primarySoft,
+    borderColor: colors.rescueAccent,
   },
   heroIcon: {
     width: sizes.iconFrame,
@@ -381,7 +381,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   sectionTitle: {
-    color: colors.textPrimary,
+    color: colors.rescueAccent,
     ...typography.sectionTitle,
   },
   sectionHint: {
@@ -481,7 +481,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
   },
   needsTitle: {
-    color: colors.textPrimary,
+    color: colors.rescueAccent,
     ...typography.button,
   },
   needList: {
@@ -513,11 +513,13 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     padding: spacing.md,
     borderRadius: radius.medium,
-    backgroundColor: colors.accentSoft,
+    backgroundColor: colors.surfaceWarm,
+    borderWidth: 1,
+    borderColor: colors.rescueAccent,
     gap: spacing.xs,
   },
   contactLabel: {
-    color: colors.textPrimary,
+    color: colors.rescueAccent,
     ...typography.button,
   },
   contactText: {

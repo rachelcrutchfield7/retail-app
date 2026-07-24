@@ -29,6 +29,9 @@ const bundledRuntimeEnv: RuntimeEnv = {
   EXPO_PUBLIC_SENTRY_DSN: process.env.EXPO_PUBLIC_SENTRY_DSN,
   EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY: process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY,
   EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED: process.env.EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED,
+  EXPO_PUBLIC_ENABLE_STRIPE_CHECKOUT: process.env.EXPO_PUBLIC_ENABLE_STRIPE_CHECKOUT,
+  RETAIL_PLATFORM_FEE_PERCENT: process.env.RETAIL_PLATFORM_FEE_PERCENT,
+  RETAIL_PLATFORM_MIN_FEE_CENTS: process.env.RETAIL_PLATFORM_MIN_FEE_CENTS,
 };
 
 export function readConfigFromEnv(env: RuntimeEnv) {
@@ -40,7 +43,11 @@ export function readConfigFromEnv(env: RuntimeEnv) {
     posthogKey: env.EXPO_PUBLIC_POSTHOG_KEY ?? '',
     sentryDsn: env.EXPO_PUBLIC_SENTRY_DSN ?? '',
     stripePublishableKey: env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? '',
-    stripePaymentsEnabled: env.EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED === 'true',
+    stripePaymentsEnabled:
+      env.EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED === 'true' ||
+      env.EXPO_PUBLIC_ENABLE_STRIPE_CHECKOUT === 'true',
+    stripePlatformFeePercent: Number(env.RETAIL_PLATFORM_FEE_PERCENT ?? '10'),
+    stripePlatformMinFeeCents: Number(env.RETAIL_PLATFORM_MIN_FEE_CENTS ?? '100'),
   } as const;
 }
 
