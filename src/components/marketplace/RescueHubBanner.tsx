@@ -17,7 +17,7 @@ export function RescueHubBanner({ rescueCount, urgentNeedCount, onPress }: Rescu
       style={({ pressed }) => [styles.banner, pressed && styles.pressed]}
     >
       <View style={styles.iconFrame}>
-        <HeartHandshake size={24} color={colors.primary} />
+        <HeartHandshake size={24} color={colors.logoOrange} />
       </View>
 
       <View style={styles.content}>
@@ -30,7 +30,7 @@ export function RescueHubBanner({ rescueCount, urgentNeedCount, onPress }: Rescu
         </View>
       </View>
 
-      <ChevronRight size={22} color={colors.primary} />
+      <ChevronRight size={22} color={colors.logoOrange} />
     </Pressable>
   );
 }
@@ -42,10 +42,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.md,
     padding: spacing.md,
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: colors.logoOrangeSoft,
     borderRadius: radius.large,
     borderWidth: 1,
-    borderColor: colors.primarySoft,
+    borderColor: colors.logoOrange,
   },
   pressed: {
     opacity: 0.82,
@@ -56,14 +56,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.large,
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.surface,
   },
   content: {
     flex: 1,
     gap: spacing.xs,
   },
   eyebrow: {
-    color: colors.primary,
+    color: colors.logoOrange,
     ...typography.caption,
     textTransform: 'uppercase',
   },
@@ -72,7 +72,7 @@ const styles = StyleSheet.create({
     ...typography.sectionTitle,
   },
   body: {
-    color: colors.textSecondary,
+    color: colors.textPrimary,
     ...typography.small,
   },
   statRow: {
@@ -82,7 +82,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   stat: {
-    color: colors.primary,
+    color: colors.textPrimary,
     ...typography.caption,
   },
 });

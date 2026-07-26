@@ -18,12 +18,16 @@ import {
   Archive,
   AlertCircle,
   Bell,
+  Camera,
   ChevronLeft,
+  ClipboardCheck,
   Edit3,
   Flag,
   Heart,
   HeartHandshake,
+  HelpCircle,
   Home,
+  ListChecks,
   LogOut,
   MapPin,
   MessageCircle,
@@ -32,6 +36,7 @@ import {
   Search,
   Settings,
   ShieldCheck,
+  Sparkles,
   Trash2,
   User,
 } from 'lucide-react-native';
@@ -109,12 +114,11 @@ import type {
   TransactionOutcome,
   UpdateListingInput,
 } from '../services/types';
-import type { Category, IconComponent, Listing, ListingCondition, ListingStatus, RescueNeedUrgency, RescueOrganizationType } from '../types';
+import type { Category, IconComponent, Listing, ListingCondition, ListingStatus, RescueNeedUrgency, RescueOrganization, RescueOrganizationType } from '../types';
 import { handleAppError } from '../utils/errorHandler';
 import { listingLocationLabel } from '../utils/format';
 import {
   bottomTabBarContentClearance,
-  bottomTabBarGap,
   scrollContentBottomClearance,
   topSafeAreaPadding,
 } from '../utils/safeAreaLayout';
@@ -130,6 +134,8 @@ type SprintRoute =
   | { name: 'public-profile'; userId: string }
   | { name: 'my-listings' };
 
+type HomeListingSort = 'recent' | 'nearby' | 'price-low' | 'price-high';
+
 type Notice = {
   title: string;
   body: string;
@@ -141,6 +147,13 @@ const tabs: Array<{ key: SprintTab; label: string; icon: typeof Home }> = [
   { key: 'sell', label: 'Sell', icon: Plus },
   { key: 'favorites', label: 'Favorites', icon: Heart },
   { key: 'profile', label: 'Profile', icon: User },
+];
+
+const homeListingSortOptions: Array<{ label: string; value: HomeListingSort }> = [
+  { label: 'Most recent', value: 'recent' },
+  { label: 'Nearby', value: 'nearby' },
+  { label: 'Lowest price', value: 'price-low' },
+  { label: 'Highest price', value: 'price-high' },
 ];
 
 const rescueDonationInstructionOptions = [
@@ -280,13 +293,12 @@ function TabsShell({
   children: ReactNode;
 }) {
   const insets = useSafeAreaInsets();
-  const tabBarGap = bottomTabBarGap(insets.bottom);
 
   return (
     <SafeAreaView edges={['left', 'right']} style={[styles.app, { paddingTop: topSafeAreaPadding(insets.top) }]}>
       <StatusBar style="dark" />
       <View style={[styles.tabContent, { paddingBottom: bottomTabBarContentClearance(insets.bottom) }]}>{children}</View>
-      <View style={[styles.tabBar, { bottom: tabBarGap }]}>
+      <View style={[styles.tabBar, { paddingBottom: Math.max(insets.bottom, spacing.sm) }]}>
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const selected = tab.key === activeTab;
@@ -296,7 +308,7 @@ function TabsShell({
               accessibilityRole="button"
               accessibilityLabel={tab.label}
               onPress={() => onChangeTab(tab.key)}
-              style={styles.tabButton}
+              style={[styles.tabButton, selected && styles.tabButtonActive]}
             >
               <Icon size={22} color={selected ? colors.primary : colors.textSecondary} />
               <Text style={[styles.tabLabel, selected && styles.tabLabelActive]}>{tab.label}</Text>
@@ -314,16 +326,19 @@ export function HomeScreen({
   onMessages,
   onNotifications,
   onOpenRescueHub,
+  onOpenSearch,
 }: {
   onOpenListing: (listingId: string) => void;
   onOpenProfile: () => void;
   onMessages?: () => void;
   onNotifications?: () => void;
   onOpenRescueHub?: () => void;
+  onOpenSearch?: () => void;
 }) {
   const auth = useAuth();
   const [search, setSearch] = useState('');
   const [categoryId, setCategoryId] = useState<string | undefined>();
+  const [sort, setSort] = useState<HomeListingSort>('recent');
   const [notice, setNotice] = useState<Notice | null>(null);
   const {
     location,
@@ -350,13 +365,6 @@ export function HomeScreen({
     [location.radiusMiles]
   ));
   const listings = useListings(params);
-  const recentListings = useListings(useMemo(
-    () => ({
-      radiusMiles: location.radiusMiles,
-      limit: 5,
-    }),
-    [location.radiusMiles]
-  ));
   const myListings = useMyListings();
 
   const ownActiveListings = (myListings.data ?? []).filter((listing) => listing.status === 'Active');
@@ -373,7 +381,7 @@ export function HomeScreen({
     })
   );
   const items = mergeFeedListings(ownFilteredListings, filteredMarketplaceListings);
-  const recentItems = mergeFeedListings(ownActiveListings, recentListings.data?.items ?? []);
+  const sortedItems = sortHomeListings(items, sort);
   const favoriteIds = (favorites.data ?? []).map((listing) => listing.id);
   const unreadTotal = unreadMessages.data?.total ?? 0;
   const unreadNotificationTotal = notifications.unreadCount ?? 0;
@@ -409,7 +417,7 @@ export function HomeScreen({
     <FlatList
       style={styles.listScreen}
       contentContainerStyle={styles.listContent}
-      data={items}
+      data={sortedItems}
       keyExtractor={(item) => item.id}
       ListHeaderComponent={
         <View style={styles.stackLarge}>
@@ -461,6 +469,21 @@ export function HomeScreen({
 
           <SearchBar value={search} onChangeText={setSearch} onClear={() => setSearch('')} />
 
+          {onOpenSearch ? (
+            <Card>
+              <View style={styles.featureCallout}>
+                <View style={styles.featureIconFrame}>
+                  <Bell size={22} color={colors.accent} />
+                </View>
+                <View style={styles.featureCopy}>
+                  <Text style={styles.cardTitle}>Looking for something specific?</Text>
+                  <Text style={styles.body}>Save a search like crates under $50 or cat trees nearby, then turn alerts on.</Text>
+                </View>
+                <Button title="Set Alert" icon={Search} variant="outline" onPress={onOpenSearch} />
+              </View>
+            </Card>
+          ) : null}
+
           <DistanceFilter
             city={location.city}
             state={location.state}
@@ -482,23 +505,21 @@ export function HomeScreen({
             ))}
           </ScrollView>
 
-          <SectionTitle title="Recently added" hint={`${recentItems.length} listings`} />
-          <View style={styles.marketplaceGrid}>
-            {recentListings.isLoading ? <LoadingCards /> : null}
-            {!recentListings.isLoading && recentItems.slice(0, 3).map((listing) => (
-              <View key={listing.id} style={styles.marketplaceGridTile}>
-                <ListingCard
-                  listing={listing}
-                  variant="grid"
-                  isFavorite={favoriteIds.includes(listing.id)}
-                  onOpen={() => onOpenListing(listing.id)}
-                  onFavorite={() => void handleFavorite(listing)}
+          <View style={styles.stack}>
+            <Text style={styles.filterLabel}>Sort listings</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipScroller}>
+              {homeListingSortOptions.map((option) => (
+                <FilterChip
+                  key={option.value}
+                  label={option.label}
+                  selected={sort === option.value}
+                  onPress={() => setSort(option.value)}
                 />
-              </View>
-            ))}
+              ))}
+            </ScrollView>
           </View>
 
-          <SectionTitle title="Nearby listings" hint={`${items.length} within ${location.radiusMiles} mi`} />
+          <SectionTitle title="Marketplace listings" hint={`${sortedItems.length} within ${location.radiusMiles} mi`} />
           {listings.isLoading ? <LoadingCards /> : null}
           {listings.isError ? <ErrorState message={handleAppError(listings.error).userMessage} onRetry={listings.refetch} /> : null}
         </View>
@@ -921,13 +942,39 @@ export function SellScreen({
   return (
     <ScreenFrame>
       <Card>
-        <View style={styles.stack}>
-          <Text style={styles.cardTitle}>Create listing</Text>
-          <Text style={styles.body}>Add photos, details, price or donation status, and pickup location.</Text>
+        <View style={styles.sellHero}>
+          <View style={styles.sellHeroHeader}>
+            <View style={styles.sellHeroIcon}>
+              <Plus size={26} color={colors.logoOrange} />
+            </View>
+            <View style={styles.sellStepCopy}>
+              <Text style={styles.cardTitle}>Create listing</Text>
+              <Text style={styles.body}>Turn extra pet supplies into a local sale, free pickup, or rescue donation.</Text>
+            </View>
+          </View>
+          <View style={styles.sellStepList}>
+            <SellStep icon={Camera} title="Add clear photos" body="Show the full item, condition, and any size details." />
+            <SellStep icon={ClipboardCheck} title="Pick the right exchange" body="Choose sale, free, donation, pickup, meetup, or shipping." />
+            <SellStep icon={ShieldCheck} title="Keep it comfortable" body="Use messages to confirm timing and safe handoff details." />
+          </View>
           <Button title="Start Listing" onPress={onCreateListing} fullWidth />
         </View>
       </Card>
     </ScreenFrame>
+  );
+}
+
+function SellStep({ icon: Icon, title, body }: { icon: IconComponent; title: string; body: string }) {
+  return (
+    <View style={styles.sellStepRow}>
+      <View style={styles.sellStepIcon}>
+        <Icon size={18} color={colors.primary} />
+      </View>
+      <View style={styles.sellStepCopy}>
+        <Text style={styles.bodyStrong}>{title}</Text>
+        <Text style={styles.metaText}>{body}</Text>
+      </View>
+    </View>
   );
 }
 
@@ -1095,7 +1142,7 @@ export function ListingDetailScreen({
   if (listing.isLoading) {
     return (
       <ScreenFrame>
-        <LoadingSpinner />
+        <BrandedLoadingPanel title="Loading listing" body="Fetching the photos, seller details, and handoff options." />
       </ScreenFrame>
     );
   }
@@ -1484,6 +1531,9 @@ export function ProfileScreen({
   onMessages,
   onNotifications,
   onSettings,
+  onPreferences,
+  onSafetyCenter,
+  onFAQ,
   onAdmin,
   onReviewTransaction,
 }: {
@@ -1493,6 +1543,9 @@ export function ProfileScreen({
   onMessages?: () => void;
   onNotifications?: () => void;
   onSettings?: () => void;
+  onPreferences?: () => void;
+  onSafetyCenter?: () => void;
+  onFAQ?: () => void;
   onAdmin?: () => void;
   onReviewTransaction?: (listingId: string, revieweeId: string, transactionId: string) => void;
 }) {
@@ -1523,6 +1576,14 @@ export function ProfileScreen({
   const reviews = useReviews(auth.profile?.id ?? '');
   const reviewSummary = useReviewSummary(auth.profile?.id ?? '', Boolean(auth.profile));
   const pendingReviews = usePendingReviews(Boolean(auth.profile));
+
+  if (auth.loading && !auth.profile) {
+    return (
+      <ScreenFrame>
+        <BrandedLoadingPanel title="Loading your ReTail profile" body="Getting your listings, rescue tools, and saved activity ready." />
+      </ScreenFrame>
+    );
+  }
 
   const submitAuth = async () => {
     setBusy(true);
@@ -1583,6 +1644,10 @@ export function ProfileScreen({
           <View style={styles.stack}>
             <Text style={styles.cardTitle}>{authMode === 'register' ? 'Create your ReTail account.' : 'Log in to ReTail.'}</Text>
             <Text style={styles.body}>Create listings, save favorites, and manage your profile from here.</Text>
+            <View style={styles.actionGrid}>
+              {onFAQ ? <Button title="FAQ" icon={HelpCircle} variant="outline" onPress={onFAQ} fullWidth /> : null}
+              {onSafetyCenter ? <Button title="Safety Center" icon={ShieldCheck} variant="outline" onPress={onSafetyCenter} fullWidth /> : null}
+            </View>
             <View style={styles.wrapRow}>
               <FilterChip label="Log In" selected={authMode === 'login'} onPress={() => setAuthMode('login')} />
               <FilterChip label="Create Account" selected={authMode === 'register'} onPress={() => setAuthMode('register')} />
@@ -1658,6 +1723,9 @@ export function ProfileScreen({
         profile={auth.profile}
         onEditProfile={onEditProfile}
         onSettings={onSettings}
+        onPreferences={onPreferences}
+        onSafetyCenter={onSafetyCenter}
+        onFAQ={onFAQ}
         onMessages={onMessages}
         onNotifications={onNotifications}
         onAdmin={onAdmin}
@@ -1691,8 +1759,10 @@ export function ProfileScreen({
         <Button title="Edit Profile" icon={Edit3} onPress={onEditProfile} fullWidth />
         <Button title="My Listings" icon={PackageOpen} variant="outline" onPress={onMyListings} fullWidth />
         {onMessages ? <Button title="Messages" icon={MessageCircle} variant="outline" onPress={onMessages} fullWidth /> : null}
-        {onNotifications ? <Button title="Notifications" icon={Bell} variant="outline" onPress={onNotifications} fullWidth /> : null}
         {onSettings ? <Button title="Settings" icon={Settings} variant="outline" onPress={onSettings} fullWidth /> : null}
+        {onPreferences ? <Button title="Preferences" icon={ListChecks} variant="outline" onPress={onPreferences} fullWidth /> : null}
+        {onSafetyCenter ? <Button title="Safety Center" icon={ShieldCheck} variant="outline" onPress={onSafetyCenter} fullWidth /> : null}
+        {onFAQ ? <Button title="FAQ" icon={HelpCircle} variant="outline" onPress={onFAQ} fullWidth /> : null}
         {auth.profile.is_admin && onAdmin ? <Button title="Admin Review" icon={ShieldCheck} variant="outline" onPress={onAdmin} fullWidth /> : null}
         <Button title="Log Out" icon={LogOut} variant="outline" onPress={signOut} fullWidth />
       </View>
@@ -1847,6 +1917,9 @@ function RescueDashboardScreen({
   profile,
   onEditProfile,
   onSettings,
+  onPreferences,
+  onSafetyCenter,
+  onFAQ,
   onMessages,
   onNotifications,
   onAdmin,
@@ -1855,6 +1928,9 @@ function RescueDashboardScreen({
   profile: Profile;
   onEditProfile: () => void;
   onSettings?: () => void;
+  onPreferences?: () => void;
+  onSafetyCenter?: () => void;
+  onFAQ?: () => void;
   onMessages?: () => void;
   onNotifications?: () => void;
   onAdmin?: () => void;
@@ -2010,7 +2086,7 @@ function RescueDashboardScreen({
   if (dashboard.isLoading) {
     return (
       <ScreenFrame>
-        <LoadingSpinner />
+        <BrandedLoadingPanel title="Loading rescue dashboard" body="Gathering your public rescue profile, urgent needs, and wishlist." />
       </ScreenFrame>
     );
   }
@@ -2070,8 +2146,10 @@ function RescueDashboardScreen({
       <View style={styles.actionGrid}>
         <Button title="Edit Profile" icon={Edit3} onPress={onEditProfile} fullWidth />
         {onMessages ? <Button title="Messages" icon={MessageCircle} variant="outline" onPress={onMessages} fullWidth /> : null}
-        {onNotifications ? <Button title="Notifications" icon={Bell} variant="outline" onPress={onNotifications} fullWidth /> : null}
         {onSettings ? <Button title="Settings" icon={Settings} variant="outline" onPress={onSettings} fullWidth /> : null}
+        {onPreferences ? <Button title="Preferences" icon={ListChecks} variant="outline" onPress={onPreferences} fullWidth /> : null}
+        {onSafetyCenter ? <Button title="Safety Center" icon={ShieldCheck} variant="outline" onPress={onSafetyCenter} fullWidth /> : null}
+        {onFAQ ? <Button title="FAQ" icon={HelpCircle} variant="outline" onPress={onFAQ} fullWidth /> : null}
         {profile.is_admin && onAdmin ? <Button title="Admin Review" icon={ShieldCheck} variant="outline" onPress={onAdmin} fullWidth /> : null}
         <Button title="Log Out" icon={LogOut} variant="outline" onPress={onSignOut} fullWidth />
       </View>
@@ -2601,7 +2679,7 @@ export function PublicProfileScreen({
   if (profile.isLoading) {
     return (
       <ScreenFrame>
-        <LoadingSpinner />
+        <BrandedLoadingPanel title="Loading profile" body="Pulling together this seller's profile, listings, and reviews." />
       </ScreenFrame>
     );
   }
@@ -2930,7 +3008,7 @@ export function EditListingScreen({
   if (listing.isLoading) {
     return (
       <ScreenFrame>
-        <LoadingSpinner />
+        <BrandedLoadingPanel title="Loading listing editor" body="Opening the saved details so you can make changes." />
       </ScreenFrame>
     );
   }
@@ -3092,6 +3170,7 @@ function ListingForm({
         placeholder="Condition, size, pickup notes..."
         error={errors.description}
       />
+      <ListingQualityChecklist form={form} />
       <Text style={styles.filterLabel}>Item details</Text>
       <TextInput
         label="Brand"
@@ -3138,6 +3217,7 @@ function ListingForm({
         <FilterChip label="Free" selected={form.listing_type === 'free'} onPress={() => onChange('listing_type', 'free')} />
         <FilterChip label="Donation" selected={form.listing_type === 'donation'} onPress={() => onChange('listing_type', 'donation')} />
       </View>
+      <RescueWishlistMatch form={form} />
       {form.listing_type === 'sale' ? (
         <PriceInput value={String(form.price ?? '')} onChangeText={(value) => onChange('price', value)} error={errors.price} />
       ) : null}
@@ -3232,6 +3312,73 @@ function ListingForm({
       />
       {errors.safety_confirmation ? <Text style={styles.errorText}>{errors.safety_confirmation}</Text> : null}
     </>
+  );
+}
+
+function ListingQualityChecklist({ form }: { form: CreateListingInput }) {
+  const checklist = [
+    { label: 'Add at least one clear photo', complete: (form.images ?? []).length > 0 },
+    { label: 'Include size, dimensions, or pet fit', complete: Boolean(((form.item_dimensions ?? '') || (form.pet_size ?? '')).trim()) },
+    { label: 'Describe condition honestly', complete: Boolean((form.condition_notes ?? '').trim() || form.description.trim().length >= 40) },
+    { label: 'Share pickup, meetup, or shipping availability', complete: Boolean(form.porch_pickup_available || form.meetup_available || form.shipping_available) },
+  ];
+  const completedCount = checklist.filter((item) => item.complete).length;
+
+  return (
+    <Card>
+      <View style={styles.stack}>
+        <View style={styles.locationRow}>
+          <Sparkles size={20} color={colors.logoOrange} />
+          <Text style={styles.cardTitle}>Listing quality</Text>
+          <Badge label={`${completedCount}/${checklist.length}`} tone={completedCount === checklist.length ? 'success' : 'neutral'} />
+        </View>
+        <Text style={styles.body}>Complete listings get clearer messages and fewer back-and-forth questions.</Text>
+        <View style={styles.qualityList}>
+          {checklist.map((item) => (
+            <View key={item.label} style={styles.qualityRow}>
+              <View style={[styles.qualityDot, item.complete && styles.qualityDotComplete]} />
+              <Text style={item.complete ? styles.bodyStrong : styles.metaText}>{item.label}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+    </Card>
+  );
+}
+
+function RescueWishlistMatch({ form }: { form: CreateListingInput }) {
+  const rescueHub = useRescueHub(useMemo(() => ({ radiusMiles: 50, limit: 10 }), []));
+  const rescues = rescueHub.data ?? [];
+  const matches = rescueWishlistMatches(form, rescues);
+
+  if (form.listing_type === 'sale') {
+    return null;
+  }
+
+  return (
+    <Card>
+      <View style={styles.stack}>
+        <View style={styles.locationRow}>
+          <HeartHandshake size={20} color={colors.logoOrange} />
+          <Text style={styles.cardTitle}>Rescue wishlist match</Text>
+        </View>
+        {matches.length > 0 ? (
+          <>
+            <Text style={styles.body}>These nearby rescues may need something like this listing.</Text>
+            <View style={styles.matchList}>
+              {matches.map((match) => (
+                <View key={`${match.rescueName}-${match.item}`} style={styles.matchRow}>
+                  <Text style={styles.bodyStrong}>{match.item}</Text>
+                  <Text style={styles.metaText}>{match.rescueName} - {match.priority}</Text>
+                </View>
+              ))}
+            </View>
+          </>
+        ) : (
+          <Text style={styles.body}>After you publish, check Rescue Hub for nearby organizations that accept donated supplies.</Text>
+        )}
+      </View>
+    </Card>
   );
 }
 
@@ -3336,6 +3483,26 @@ function LoadingCards() {
   );
 }
 
+function BrandedLoadingPanel({ title, body }: { title: string; body: string }) {
+  return (
+    <Card>
+      <View style={styles.loadingPanel}>
+        <View style={styles.loadingIconFrame}>
+          <Sparkles size={26} color={colors.logoOrange} />
+        </View>
+        <View style={styles.loadingTextBlock}>
+          <Text style={styles.cardTitle}>{title}</Text>
+          <Text style={styles.body}>{body}</Text>
+        </View>
+        <View style={styles.loadingBars}>
+          <View style={styles.loadingBarWide} />
+          <View style={styles.loadingBar} />
+        </View>
+      </View>
+    </Card>
+  );
+}
+
 function mergeFeedListings(primaryListings: Listing[], secondaryListings: Listing[]): Listing[] {
   const listingIds = new Set<string>();
   const mergedListings: Listing[] = [];
@@ -3350,6 +3517,95 @@ function mergeFeedListings(primaryListings: Listing[], secondaryListings: Listin
   }
 
   return mergedListings;
+}
+
+function sortHomeListings(listings: Listing[], sort: HomeListingSort): Listing[] {
+  if (sort === 'recent') {
+    return listings;
+  }
+
+  const sortedListings = [...listings];
+
+  if (sort === 'price-low') {
+    return sortedListings.sort((first, second) => listingPriceValue(first) - listingPriceValue(second));
+  }
+
+  if (sort === 'price-high') {
+    return sortedListings.sort((first, second) => listingPriceValue(second) - listingPriceValue(first));
+  }
+
+  return sortedListings.sort((first, second) => listingDistanceValue(first) - listingDistanceValue(second));
+}
+
+function listingPriceValue(listing: Listing): number {
+  const normalizedPrice = String(listing.price).trim().toLowerCase();
+
+  if (!normalizedPrice || normalizedPrice === 'free' || normalizedPrice === 'donation') {
+    return 0;
+  }
+
+  const numericPrice = Number(normalizedPrice.replace(/[^0-9.]/g, ''));
+  return Number.isFinite(numericPrice) ? numericPrice : Number.MAX_SAFE_INTEGER;
+}
+
+function listingDistanceValue(listing: Listing): number {
+  if (typeof listing.distanceMiles === 'number' && Number.isFinite(listing.distanceMiles)) {
+    return listing.distanceMiles;
+  }
+
+  const normalizedDistance = listing.distance.toLowerCase();
+
+  if (normalizedDistance.includes('same area')) {
+    return 0;
+  }
+
+  const numericDistance = Number(normalizedDistance.replace(/[^0-9.]/g, ''));
+  return Number.isFinite(numericDistance) ? numericDistance : Number.MAX_SAFE_INTEGER;
+}
+
+function rescueWishlistMatches(form: CreateListingInput, rescues: RescueOrganization[] | null) {
+  if (!rescues) {
+    return [];
+  }
+
+  const listingText = [
+    form.title,
+    form.description,
+    form.category,
+    form.brand,
+    form.item_dimensions,
+    form.pet_size,
+    form.condition_notes,
+  ].filter(Boolean).join(' ').toLowerCase();
+
+  if (!listingText.trim()) {
+    return [];
+  }
+
+  return rescues
+    .flatMap((rescue) => [
+      ...rescue.urgentNeeds.map((need) => ({
+        rescueName: rescue.name,
+        item: need.item,
+        priority: `${need.urgency} urgency`,
+      })),
+      ...rescue.wishlistItems.map((item) => ({
+        rescueName: rescue.name,
+        item: item.item,
+        priority: `${item.priority} wishlist`,
+      })),
+    ])
+    .filter((need) => rescueNeedMatchesListing(need.item, listingText))
+    .slice(0, 3);
+}
+
+function rescueNeedMatchesListing(needItem: string, listingText: string): boolean {
+  const terms = needItem
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((term) => term.length >= 4);
+
+  return terms.some((term) => listingText.includes(term));
 }
 
 function listingMatchesFeedFilters(
@@ -3518,19 +3774,20 @@ const styles = StyleSheet.create({
   },
   tabBar: {
     position: 'absolute',
-    left: spacing.md,
-    right: spacing.md,
+    left: 0,
+    right: 0,
+    bottom: 0,
     minHeight: sizes.tabBarHeight,
     flexDirection: 'row',
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.large,
-    backgroundColor: colors.surface,
+    borderColor: colors.primary,
+    borderRadius: 0,
+    backgroundColor: colors.primarySoft,
     paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
+    paddingTop: 2,
     paddingBottom: spacing.sm,
     shadowColor: colors.textPrimary,
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.12,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 5 },
     elevation: 8,
@@ -3540,14 +3797,26 @@ const styles = StyleSheet.create({
     minHeight: sizes.touchTarget,
     alignItems: 'center',
     justifyContent: 'center',
+    marginHorizontal: 2,
+    marginVertical: 5,
     gap: spacing.xs,
+  },
+  tabButtonActive: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.medium,
+    shadowColor: colors.textPrimary,
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 3,
   },
   tabLabel: {
     color: colors.textSecondary,
     ...typography.caption,
+    fontWeight: '600',
   },
   tabLabelActive: {
-    color: colors.primary,
+    color: colors.textPrimary,
   },
   listScreen: {
     flex: 1,
@@ -3648,6 +3917,129 @@ const styles = StyleSheet.create({
   },
   cardStack: {
     gap: spacing.md,
+  },
+  featureCallout: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    flexWrap: 'wrap',
+  },
+  featureIconFrame: {
+    width: 48,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.medium,
+    backgroundColor: colors.accentSoft,
+  },
+  featureCopy: {
+    flex: 1,
+    minWidth: 170,
+    gap: spacing.xs,
+  },
+  sellHero: {
+    gap: spacing.lg,
+  },
+  sellHeroHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+  },
+  sellHeroIcon: {
+    width: 58,
+    height: 58,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.large,
+    backgroundColor: colors.logoOrangeSoft,
+    borderWidth: 1,
+    borderColor: colors.logoOrange,
+  },
+  sellStepList: {
+    gap: spacing.sm,
+  },
+  sellStepRow: {
+    minHeight: 62,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    padding: spacing.sm,
+    borderRadius: radius.medium,
+    backgroundColor: colors.surfaceWarm,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  sellStepIcon: {
+    width: 38,
+    height: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.medium,
+    backgroundColor: colors.primarySoft,
+  },
+  sellStepCopy: {
+    flex: 1,
+    gap: spacing.xs,
+  },
+  loadingPanel: {
+    gap: spacing.md,
+  },
+  loadingIconFrame: {
+    width: sizes.iconFrame,
+    height: sizes.iconFrame,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.large,
+    backgroundColor: colors.logoOrangeSoft,
+    borderWidth: 1,
+    borderColor: colors.logoOrange,
+  },
+  loadingTextBlock: {
+    gap: spacing.xs,
+  },
+  loadingBars: {
+    gap: spacing.sm,
+  },
+  loadingBarWide: {
+    height: 12,
+    width: '78%',
+    borderRadius: radius.pill,
+    backgroundColor: colors.primarySoft,
+  },
+  loadingBar: {
+    height: 12,
+    width: '48%',
+    borderRadius: radius.pill,
+    backgroundColor: colors.logoOrangeSoft,
+  },
+  qualityList: {
+    gap: spacing.sm,
+  },
+  qualityRow: {
+    minHeight: 30,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  qualityDot: {
+    width: 12,
+    height: 12,
+    borderRadius: radius.pill,
+    backgroundColor: colors.border,
+  },
+  qualityDotComplete: {
+    backgroundColor: colors.primary,
+  },
+  matchList: {
+    gap: spacing.sm,
+  },
+  matchRow: {
+    gap: spacing.xs,
+    padding: spacing.sm,
+    borderRadius: radius.medium,
+    backgroundColor: colors.surfaceWarm,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   rowBetween: {
     minHeight: sizes.touchTarget,

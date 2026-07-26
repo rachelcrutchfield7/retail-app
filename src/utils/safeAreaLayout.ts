@@ -9,7 +9,7 @@ export function bottomTabBarGap(bottomInset: number): number {
 }
 
 export function bottomTabBarContentClearance(bottomInset: number): number {
-  return sizes.tabBarHeight + bottomTabBarGap(bottomInset) + sizes.tabBarContentClearance;
+  return sizes.tabBarHeight + bottomInset + spacing.sm;
 }
 
 export function scrollContentBottomClearance(bottomInset: number): number {

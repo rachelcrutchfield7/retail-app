@@ -26,13 +26,20 @@ export function ListingCard({ listing, isFavorite, onOpen, onFavorite, variant =
 
   return (
     <Pressable style={[styles.listingCard, grid && styles.gridCard]} onPress={onOpen}>
-      <Image source={{ uri: listing.image }} style={grid ? styles.gridImage : styles.listingImage} />
-      <View style={[styles.favoriteButton, grid && styles.gridFavoriteButton]}>
-        <FavoriteButton selected={isFavorite} onPress={handleFavorite} />
+      <View style={styles.imageFrame}>
+        <Image source={{ uri: listing.image }} style={grid ? styles.gridImage : styles.listingImage} />
+        <View style={[styles.categoryTag, grid && styles.gridCategoryTag]}>
+          <Text style={styles.categoryText} numberOfLines={1}>{listing.category}</Text>
+        </View>
+        <View style={[styles.favoriteButton, grid && styles.gridFavoriteButton]}>
+          <FavoriteButton selected={isFavorite} onPress={handleFavorite} />
+        </View>
       </View>
       <View style={[styles.listingBody, grid && styles.gridBody]}>
         <View style={styles.priceRow}>
-          <PriceTag value={listing.price} size={grid ? 'compact' : 'default'} />
+          <View style={styles.priceBadge}>
+            <PriceTag value={listing.price} size={grid ? 'compact' : 'default'} />
+          </View>
           {!grid || listing.status !== 'Active' ? <StatusPill status={listing.status} /> : null}
         </View>
         <Text numberOfLines={2} style={[styles.cardTitle, grid && styles.gridTitle]}>
@@ -60,9 +67,18 @@ const styles = StyleSheet.create({
     borderRadius: radius.large,
     borderWidth: 1,
     borderColor: colors.border,
+    shadowColor: colors.textPrimary,
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
   },
   gridCard: {
     borderRadius: radius.medium,
+  },
+  imageFrame: {
+    position: 'relative',
+    backgroundColor: colors.primarySoft,
   },
   listingImage: {
     width: '100%',
@@ -83,6 +99,33 @@ const styles = StyleSheet.create({
     top: 8,
     right: 8,
   },
+  categoryTag: {
+    position: 'absolute',
+    left: 12,
+    bottom: 12,
+    maxWidth: '70%',
+    minHeight: 28,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    shadowColor: colors.textPrimary,
+    shadowOpacity: 0.10,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 3,
+  },
+  gridCategoryTag: {
+    left: 8,
+    bottom: 8,
+    minHeight: 24,
+    paddingHorizontal: spacing.sm,
+  },
+  categoryText: {
+    color: colors.textPrimary,
+    ...typography.caption,
+    fontWeight: '600',
+  },
   listingBody: {
     padding: spacing.md,
     gap: spacing.sm,
@@ -96,6 +139,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.md,
+  },
+  priceBadge: {
+    alignSelf: 'flex-start',
   },
   cardTitle: {
     color: colors.textPrimary,
@@ -125,8 +171,12 @@ const styles = StyleSheet.create({
   },
   cardFooter: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.md,
+    paddingTop: spacing.xs,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
   },
   gridFooter: {
     justifyContent: 'flex-start',

@@ -7,6 +7,7 @@ export const colors = {
   textDisabled: '#9CA3AF',
   success: '#3F8F6B',
   warning: '#D99A2B',
+  logoOrange: '#F36F4A',
   error: '#D9534F',
   info: '#7BA7BC',
   white: '#FFFFFF',
@@ -16,6 +17,7 @@ export const colors = {
   surfaceWarm: '#FFFDF8',
   primarySoft: '#DCEFE7',
   accentSoft: '#E8F2F6',
+  logoOrangeSoft: '#FFE3D5',
   errorSoft: '#FBE4E3',
   modalOverlay: 'rgba(31, 41, 51, 0.42)',
 } as const;
@@ -49,7 +51,7 @@ export const typography = {
 export const sizes = {
   touchTarget: 44,
   buttonHeight: 52,
-  tabBarHeight: 54,
+  tabBarHeight: 62,
   tabBarBottomOffset: 14,
   screenTopGap: 16,
   tabBarMinimumBottomGap: 18,

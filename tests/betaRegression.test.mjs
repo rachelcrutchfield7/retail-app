@@ -28,6 +28,17 @@ test('home rescue banner uses live rescue hub data instead of mock counts', () =
   assert.match(sprint3, /urgentNeedCount: rescues\.reduce/);
 });
 
+test('home marketplace uses one sorted listing feed', () => {
+  assert.doesNotMatch(sprint3, /Recently added/);
+  assert.doesNotMatch(sprint3, /recentListings/);
+  assert.doesNotMatch(sprint3, /recentItems/);
+  assert.match(sprint3, /Most recent/);
+  assert.match(sprint3, /Lowest price/);
+  assert.match(sprint3, /Highest price/);
+  assert.match(sprint3, /Marketplace listings/);
+  assert.match(sprint3, /sortHomeListings/);
+});
+
 test('rescue hub cards navigate to public rescue profiles', () => {
   assert.match(rescueHub, /onOpenRescueProfile/);
   assert.match(rescueHub, /accessibilityLabel=\{`Open \$\{rescue\.name\} rescue profile`\}/);
@@ -39,8 +50,26 @@ test('rescue hub cards navigate to public rescue profiles', () => {
 test('android hardware back uses route history before default exit behavior', () => {
   assert.match(sprint4, /BackHandler\.addEventListener\('hardwareBackPress'/);
   assert.match(sprint4, /route\.name === 'conversation'/);
-  assert.match(sprint4, /route\.name === 'messages' \|\| route\.name === 'settings' \|\| route\.name === 'my-listings'/);
+  assert.match(sprint4, /route\.name === 'messages'/);
+  assert.match(sprint4, /route\.name === 'settings'/);
+  assert.match(sprint4, /route\.name === 'preferences'/);
+  assert.match(sprint4, /route\.name === 'safety-center'/);
+  assert.match(sprint4, /route\.name === 'faq'/);
+  assert.match(sprint4, /route\.name === 'my-listings'/);
   assert.match(sprint4, /setRoute\(\{ name: 'tabs', tab: 'home' \}\)/);
+});
+
+test('beta feature additions are discoverable in the app shell', () => {
+  assert.match(sprint3, /Looking for something specific\?/);
+  assert.match(sprint3, /Listing quality/);
+  assert.match(sprint3, /Rescue wishlist match/);
+  assert.match(sprint4, /Exchange plan/);
+  assert.match(sprint4, /function OnboardingPreferencesScreen/);
+  assert.match(sprint4, /function SafetyCenterScreen/);
+  assert.match(sprint4, /function FAQScreen/);
+  assert.match(sprint4, /Why does ReTail charge a fee for payments through the app\?/);
+  assert.match(sprint4, /Rachel Crutchfield is an animal lover/);
+  assert.doesNotMatch(sprint4, /function MeetCreatorScreen/);
 });
 
 test('settings renders request errors instead of an endless loading state', () => {

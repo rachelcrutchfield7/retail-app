@@ -12,7 +12,9 @@ import {
   Flag,
   Heart,
   HeartHandshake,
+  HelpCircle,
   Home,
+  ListChecks,
   MapPin,
   MessageCircle,
   Plus,
@@ -33,6 +35,7 @@ import {
   DateSeparator,
   EmptyState,
   ErrorState,
+  FilterChip,
   LoadingSpinner,
   Metric,
   MessageInput,
@@ -98,7 +101,6 @@ import type { RescueOrganization } from '../types';
 import { handleAppError } from '../utils/errorHandler';
 import {
   bottomTabBarContentClearance,
-  bottomTabBarGap,
   scrollContentBottomClearance,
   topSafeAreaPadding,
 } from '../utils/safeAreaLayout';
@@ -119,6 +121,9 @@ type SprintRoute =
   | { name: 'rescue-hub' }
   | { name: 'rescue-profile'; rescue: RescueOrganization }
   | { name: 'settings' }
+  | { name: 'preferences' }
+  | { name: 'safety-center' }
+  | { name: 'faq' }
   | { name: 'admin' }
   | { name: 'report'; targetType: 'listing' | 'user' | 'message'; targetId: string; title: string }
   | { name: 'review'; listingId: string; revieweeId: string; transactionId?: string };
@@ -170,6 +175,9 @@ function Sprint4Experience() {
   const openRescueHub = () => setRoute({ name: 'rescue-hub' });
   const openRescueProfile = (rescue: RescueOrganization) => setRoute({ name: 'rescue-profile', rescue });
   const openSettings = () => setRoute({ name: 'settings' });
+  const openPreferences = () => setRoute({ name: 'preferences' });
+  const openSafetyCenter = () => setRoute({ name: 'safety-center' });
+  const openFAQ = () => setRoute({ name: 'faq' });
   const openAdmin = () => setRoute({ name: 'admin' });
   const openReport = (targetType: 'listing' | 'user' | 'message', targetId: string, title: string) =>
     setRoute({ name: 'report', targetType, targetId, title });
@@ -192,7 +200,14 @@ function Sprint4Experience() {
         return true;
       }
 
-      if (route.name === 'messages' || route.name === 'settings' || route.name === 'my-listings') {
+      if (
+        route.name === 'messages' ||
+        route.name === 'settings' ||
+        route.name === 'preferences' ||
+        route.name === 'safety-center' ||
+        route.name === 'faq' ||
+        route.name === 'my-listings'
+      ) {
         setRoute({ name: 'tabs', tab: 'profile' });
         return true;
       }
@@ -325,7 +340,26 @@ function Sprint4Experience() {
   }
 
   if (route.name === 'settings') {
-    return <SettingsScreen onBack={() => openTab('profile')} />;
+    return (
+      <SettingsScreen
+        onBack={() => openTab('profile')}
+        onPreferences={openPreferences}
+        onSafetyCenter={openSafetyCenter}
+        onFAQ={openFAQ}
+      />
+    );
+  }
+
+  if (route.name === 'preferences') {
+    return <OnboardingPreferencesScreen onBack={() => openTab('profile')} onOpenSearch={() => openTab('search')} />;
+  }
+
+  if (route.name === 'safety-center') {
+    return <SafetyCenterScreen onBack={() => openTab('profile')} onFAQ={openFAQ} />;
+  }
+
+  if (route.name === 'faq') {
+    return <FAQScreen onBack={() => openTab('profile')} />;
   }
 
   if (route.name === 'admin') {
@@ -356,6 +390,7 @@ function Sprint4Experience() {
           onMessages={openMessages}
           onNotifications={openNotifications}
           onOpenRescueHub={openRescueHub}
+          onOpenSearch={() => openTab('search')}
         />
       ) : null}
       {route.tab === 'search' ? <SearchScreen onOpenListing={openListing} onOpenProfile={() => openTab('profile')} /> : null}
@@ -369,6 +404,9 @@ function Sprint4Experience() {
           onMessages={openMessages}
           onNotifications={openNotifications}
           onSettings={openSettings}
+          onPreferences={openPreferences}
+          onSafetyCenter={openSafetyCenter}
+          onFAQ={openFAQ}
           onAdmin={openAdmin}
           onReviewTransaction={openReview}
         />
@@ -509,13 +547,12 @@ function TabsShell({
 }) {
   const unread = useUnreadMessages();
   const insets = useSafeAreaInsets();
-  const tabBarGap = bottomTabBarGap(insets.bottom);
 
   return (
     <SafeAreaView edges={['left', 'right']} style={[styles.app, { paddingTop: topSafeAreaPadding(insets.top) }]}>
       <StatusBar style="dark" />
       <View style={[styles.tabContent, { paddingBottom: bottomTabBarContentClearance(insets.bottom) }]}>{children}</View>
-      <View style={[styles.tabBar, { bottom: tabBarGap }]}>
+      <View style={[styles.tabBar, { paddingBottom: Math.max(insets.bottom, 2) }]}>
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const selected = tab.key === activeTab;
@@ -525,7 +562,7 @@ function TabsShell({
               accessibilityRole="button"
               accessibilityLabel={tab.label}
               onPress={() => onChangeTab(tab.key)}
-              style={styles.tabButton}
+              style={[styles.tabButton, selected && styles.tabButtonActive]}
             >
               <View>
                 <Icon size={22} color={selected ? colors.primary : colors.textSecondary} />
@@ -752,6 +789,7 @@ export function ConversationScreen({
           <Text style={styles.body}>Messaging is unavailable because one of the participants has blocked the other.</Text>
         </Card>
       ) : null}
+      <DealFlowCard paidListing={paidListing} acceptedAmount={acceptedAmount} isSeller={isSeller} />
       {paidListing ? (
         <Card>
           <View style={styles.stack}>
@@ -971,6 +1009,52 @@ export function ConversationScreen({
         error={sender.error}
       />
     </ScreenContainer>
+  );
+}
+
+function DealFlowCard({
+  paidListing,
+  acceptedAmount,
+  isSeller,
+}: {
+  paidListing: boolean;
+  acceptedAmount?: string;
+  isSeller: boolean;
+}) {
+  const steps = paidListing
+    ? [
+      { label: 'Message about condition, timing, and pickup options', complete: true },
+      { label: acceptedAmount ? `Offer accepted at ${acceptedAmount}` : isSeller ? 'Review offers from the buyer' : 'Make an offer when details feel right', complete: Boolean(acceptedAmount) },
+      { label: 'Choose ReTail checkout or arrange outside payment', complete: false },
+      { label: 'Confirm pickup, meetup, or shipping plan', complete: false },
+      { label: 'Mark complete and leave a review', complete: false },
+    ]
+    : [
+      { label: 'Message about condition and donation timing', complete: true },
+      { label: 'Confirm pickup, meetup, or drop-off plan', complete: false },
+      { label: 'Mark donated or complete after handoff', complete: false },
+      { label: 'Leave a review when eligible', complete: false },
+    ];
+
+  return (
+    <Card>
+      <View style={styles.stack}>
+        <View style={styles.locationRow}>
+          <HeartHandshake size={20} color={colors.logoOrange} />
+          <Text style={styles.cardTitle}>Exchange plan</Text>
+        </View>
+        <View style={styles.dealStepList}>
+          {steps.map((step, index) => (
+            <View key={step.label} style={styles.dealStepRow}>
+              <View style={[styles.dealStepBadge, step.complete && styles.dealStepBadgeComplete]}>
+                {step.complete ? <CheckCheck size={14} color={colors.white} /> : <Text style={styles.dealStepNumber}>{index + 1}</Text>}
+              </View>
+              <Text style={step.complete ? styles.bodyStrong : styles.metaText}>{step.label}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+    </Card>
   );
 }
 
@@ -1327,7 +1411,17 @@ export function ReviewScreen({
   );
 }
 
-export function SettingsScreen({ onBack }: { onBack: () => void }) {
+export function SettingsScreen({
+  onBack,
+  onPreferences,
+  onSafetyCenter,
+  onFAQ,
+}: {
+  onBack: () => void;
+  onPreferences: () => void;
+  onSafetyCenter: () => void;
+  onFAQ: () => void;
+}) {
   const auth = useAuth();
   const settings = useSettings(Boolean(auth.user));
   const blockedAccounts = useBlockUser();
@@ -1425,8 +1519,18 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
         <ToggleSwitch label="Reviews" value={settings.data.notifications.reviews} onValueChange={(reviews) => void settings.updateNotifications({ reviews })} />
         <ToggleSwitch label="Listing updates" value={settings.data.notifications.listingUpdates} onValueChange={(listingUpdates) => void settings.updateNotifications({ listingUpdates })} />
         <ToggleSwitch label="System notices" value={settings.data.notifications.system} onValueChange={(system) => void settings.updateNotifications({ system })} />
-        <ToggleSwitch label="Future push: messages" value={Boolean(settings.data.notifications.pushMessages)} onValueChange={(pushMessages) => void settings.updateNotifications({ pushMessages })} />
-        <ToggleSwitch label="Future push: reviews" value={Boolean(settings.data.notifications.pushReviews)} onValueChange={(pushReviews) => void settings.updateNotifications({ pushReviews })} />
+        <ToggleSwitch
+          label="Push alerts for messages"
+          helperText="Get notified on your phone when message alerts are enabled for beta."
+          value={Boolean(settings.data.notifications.pushMessages)}
+          onValueChange={(pushMessages) => void settings.updateNotifications({ pushMessages })}
+        />
+        <ToggleSwitch
+          label="Push alerts for reviews"
+          helperText="Get notified when review alerts are enabled for beta."
+          value={Boolean(settings.data.notifications.pushReviews)}
+          onValueChange={(pushReviews) => void settings.updateNotifications({ pushReviews })}
+        />
       </SectionCard>
 
       <SectionCard title="Privacy Settings">
@@ -1440,6 +1544,11 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
             onValueChange={(rescuePublicContactEnabled) => void settings.updatePrivacy({ rescuePublicContactEnabled })}
           />
         ) : null}
+      </SectionCard>
+
+      <SectionCard title="Preferences">
+        <Text style={styles.body}>Set pet interests, default distance, donation visibility, and search alert preferences for your ReTail experience.</Text>
+        <Button title="Open Preferences" icon={ListChecks} variant="outline" onPress={onPreferences} fullWidth />
       </SectionCard>
 
       <SectionCard title="Account Settings">
@@ -1548,6 +1657,7 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
           places when possible.
         </Text>
         <Button title="Open Community Guidelines" variant="outline" onPress={() => void openAppLink(appLinks.communityGuidelinesUrl)} fullWidth />
+        <Button title="Open Safety Center" icon={ShieldCheck} variant="outline" onPress={onSafetyCenter} fullWidth />
       </SectionCard>
 
       <SectionCard title="About ReTail">
@@ -1559,8 +1669,131 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
         <Text style={styles.body}>Support, payments, user issues, and reports: {appLinks.supportEmail}</Text>
         <Button title="Open ReTail Website" variant="outline" onPress={() => void openAppLink(appLinks.baseUrl)} fullWidth />
         <Button title="Private Beta Page" variant="outline" onPress={() => void openAppLink(appLinks.betaUrl)} fullWidth />
+        <Button title="FAQ" icon={HelpCircle} variant="outline" onPress={onFAQ} fullWidth />
         <Button title="Email General Contact" variant="outline" onPress={() => void openAppLink(appLinks.contactMailto)} fullWidth />
         <Button title="Email Support" variant="outline" onPress={() => void openAppLink(appLinks.supportMailto)} fullWidth />
+      </SectionCard>
+    </ScreenFrame>
+  );
+}
+
+function OnboardingPreferencesScreen({
+  onBack,
+  onOpenSearch,
+}: {
+  onBack: () => void;
+  onOpenSearch: () => void;
+}) {
+  const [selectedPets, setSelectedPets] = useState(['Dogs', 'Cats']);
+  const [defaultRadius, setDefaultRadius] = useState('25');
+  const [showRescueMatches, setShowRescueMatches] = useState(true);
+  const [searchAlerts, setSearchAlerts] = useState(true);
+  const [notice, setNotice] = useState<string | null>(null);
+  const petOptions = ['Dogs', 'Cats', 'Birds', 'Fish & Aquatic', 'Reptiles', 'Small Pets', 'Farm Animals', 'Horses', 'General Pet Supplies'];
+
+  const togglePet = (pet: string) => {
+    setSelectedPets((current) =>
+      current.includes(pet) ? current.filter((item) => item !== pet) : [...current, pet]
+    );
+  };
+
+  return (
+    <ScreenFrame>
+      <BackButton onPress={onBack} />
+      <View style={styles.headerBlock}>
+        <Text style={styles.title}>Preferences</Text>
+        <Text style={styles.body}>Tune ReTail around the pets, distance, alerts, and rescue opportunities you care about.</Text>
+      </View>
+      {notice ? <NoticeCard title="Preferences saved" body={notice} /> : null}
+      <SectionCard title="Pets you shop for">
+        <View style={styles.wrapRow}>
+          {petOptions.map((pet) => (
+            <FilterChip key={pet} label={pet} selected={selectedPets.includes(pet)} onPress={() => togglePet(pet)} />
+          ))}
+        </View>
+      </SectionCard>
+      <SectionCard title="Marketplace defaults">
+        <TextInput label="Default distance" value={defaultRadius} onChangeText={setDefaultRadius} keyboardType="number-pad" placeholder="25" />
+        <ToggleSwitch label="Show rescue donation matches" value={showRescueMatches} onValueChange={setShowRescueMatches} />
+        <ToggleSwitch label="Turn on saved search alerts by default" value={searchAlerts} onValueChange={setSearchAlerts} />
+        <Button
+          title="Save Preferences"
+          icon={ListChecks}
+          onPress={() => setNotice(`ReTail will prioritize ${selectedPets.join(', ') || 'all pets'} within ${defaultRadius || '25'} miles.`)}
+          fullWidth
+        />
+        <Button title="Create a Search Alert" icon={Search} variant="outline" onPress={onOpenSearch} fullWidth />
+      </SectionCard>
+    </ScreenFrame>
+  );
+}
+
+function SafetyCenterScreen({ onBack, onFAQ }: { onBack: () => void; onFAQ: () => void }) {
+  return (
+    <ScreenFrame>
+      <BackButton onPress={onBack} />
+      <View style={styles.headerBlock}>
+        <Text style={styles.title}>Safety Center</Text>
+        <Text style={styles.body}>Quick guidance for buying, selling, donating, reporting, and choosing payment options.</Text>
+      </View>
+      <SectionCard title="Meetups and pickups">
+        <Text style={styles.body}>Meet in public when possible, confirm the item before paying, and keep exact home details private until both sides are comfortable.</Text>
+        <Text style={styles.body}>For porch pickup, agree on a window and use messages so there is a written record.</Text>
+      </SectionCard>
+      <SectionCard title="Payments">
+        <Text style={styles.body}>ReTail Protected Checkout creates a payment record and receipt inside the app. Outside payments can be arranged, but ReTail cannot help with payment disputes for those.</Text>
+        <Button title="Why fees exist" icon={HelpCircle} variant="outline" onPress={onFAQ} fullWidth />
+      </SectionCard>
+      <SectionCard title="Reports and moderation">
+        <Text style={styles.body}>Report spam, unsafe listings, harassment, suspected fraud, prohibited items, or live animal listings from listing, profile, and message screens.</Text>
+        <Text style={styles.body}>ReTail may remove listings, restrict accounts, and keep safety records when needed.</Text>
+      </SectionCard>
+    </ScreenFrame>
+  );
+}
+
+function FAQScreen({ onBack }: { onBack: () => void }) {
+  const faqs = [
+    {
+      question: 'Why does ReTail charge a fee for payments through the app?',
+      answer: 'The fee helps cover secure payment processing, receipts, payment records, dispute support tools, moderation, fraud prevention, and ongoing app maintenance. You can arrange outside payment, but outside payments are not covered by ReTail payment support.',
+    },
+    {
+      question: 'Can I donate items to rescues?',
+      answer: 'Yes. Use donation listings and Rescue Hub to see nearby organizations, urgent needs, wishlist items, and donation instructions.',
+    },
+    {
+      question: 'Can live animals be listed?',
+      answer: 'No. ReTail is only for pet supplies. Live animals, rehoming, breeding, adoption, fostering, and animal transfers are not allowed through the app.',
+    },
+    {
+      question: 'How does ReTail protect location privacy?',
+      answer: 'Public marketplace views use city, state, and approximate distance. Exact addresses and private location details should only be shared in messages when both sides are ready.',
+    },
+  ];
+
+  return (
+    <ScreenFrame>
+      <BackButton onPress={onBack} />
+      <View style={styles.headerBlock}>
+        <Text style={styles.title}>FAQ</Text>
+        <Text style={styles.body}>Answers for common beta questions about payments, rescue donations, safety, and privacy.</Text>
+      </View>
+      {faqs.map((faq) => (
+        <SectionCard key={faq.question} title={faq.question}>
+          <Text style={styles.body}>{faq.answer}</Text>
+        </SectionCard>
+      ))}
+      <SectionCard title="Rachel Crutchfield">
+        <Text style={styles.body}>
+          Rachel Crutchfield is an animal lover who has been working in animal rescue since 2018.
+        </Text>
+        <Text style={styles.body}>
+          She created ReTail after seeing a real need for it through the donations coming into the rescue she works for.
+        </Text>
+        <Text style={styles.body}>
+          Rachel lives with her husband, son, five cats, three dogs, and a betta fish.
+        </Text>
       </SectionCard>
     </ScreenFrame>
   );
@@ -1948,19 +2181,20 @@ const styles = StyleSheet.create({
   },
   tabBar: {
     position: 'absolute',
-    left: spacing.lg,
-    right: spacing.lg,
+    left: 0,
+    right: 0,
+    bottom: 0,
     minHeight: sizes.tabBarHeight,
     flexDirection: 'row',
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.medium,
-    backgroundColor: colors.surface,
+    borderColor: colors.primary,
+    borderRadius: 0,
+    backgroundColor: colors.primarySoft,
     paddingHorizontal: spacing.sm,
-    paddingTop: 2,
+    paddingTop: 0,
     paddingBottom: 2,
     shadowColor: colors.textPrimary,
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.12,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 5 },
     elevation: 8,
@@ -1970,7 +2204,18 @@ const styles = StyleSheet.create({
     minHeight: sizes.touchTarget,
     alignItems: 'center',
     justifyContent: 'center',
+    marginHorizontal: 2,
+    marginVertical: 5,
     gap: 0,
+  },
+  tabButtonActive: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.medium,
+    shadowColor: colors.textPrimary,
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 3,
   },
   tabBadge: {
     position: 'absolute',
@@ -1980,9 +2225,10 @@ const styles = StyleSheet.create({
   tabLabel: {
     color: colors.textSecondary,
     ...typography.caption,
+    fontWeight: '600',
   },
   tabLabelActive: {
-    color: colors.primary,
+    color: colors.textPrimary,
   },
   listScreen: {
     flex: 1,
@@ -2085,6 +2331,31 @@ const styles = StyleSheet.create({
   },
   offerForm: {
     gap: spacing.sm,
+  },
+  dealStepList: {
+    gap: spacing.sm,
+  },
+  dealStepRow: {
+    minHeight: 34,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  dealStepBadge: {
+    width: 26,
+    height: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.pill,
+    backgroundColor: colors.secondary,
+  },
+  dealStepBadgeComplete: {
+    backgroundColor: colors.primary,
+  },
+  dealStepNumber: {
+    color: colors.textSecondary,
+    ...typography.caption,
+    fontWeight: '700',
   },
   listingThumb: {
     width: 58,

@@ -58,5 +58,5 @@ test('settings exposes account safety, blocked accounts, and confirmed deletion'
   assert.match(settingsScreen, /Type DELETE to confirm/);
   assert.match(settingsScreen, /Update Email/);
   assert.match(settingsScreen, /Change Password/);
-  assert.match(settingsScreen, /Future push: messages/);
+  assert.match(settingsScreen, /Push alerts for messages/);
 });
