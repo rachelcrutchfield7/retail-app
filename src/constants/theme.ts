@@ -49,7 +49,7 @@ export const typography = {
 export const sizes = {
   touchTarget: 44,
   buttonHeight: 52,
-  tabBarHeight: 60,
+  tabBarHeight: 54,
   tabBarBottomOffset: 14,
   screenTopGap: 16,
   tabBarMinimumBottomGap: 18,
