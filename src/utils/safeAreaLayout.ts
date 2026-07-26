@@ -5,7 +5,7 @@ export function topSafeAreaPadding(topInset: number): number {
 }
 
 export function bottomTabBarGap(bottomInset: number): number {
-  return Math.max(bottomInset + spacing.md, sizes.tabBarMinimumBottomGap);
+  return Math.max(bottomInset + spacing.sm, sizes.tabBarMinimumBottomGap);
 }
 
 export function bottomTabBarContentClearance(bottomInset: number): number {
