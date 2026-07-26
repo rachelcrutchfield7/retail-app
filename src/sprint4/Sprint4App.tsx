@@ -1416,6 +1416,7 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
         <Text style={styles.title}>Settings</Text>
         <Text style={styles.body}>Manage notifications, privacy, account safety, and app information.</Text>
       </View>
+      {settings.data.loadWarning ? <NoticeCard title="Some settings are using defaults" body={settings.data.loadWarning} /> : null}
       {settingsNotice ? <NoticeCard title={settingsNotice.title} body={settingsNotice.body} /> : null}
 
       <SectionCard title="Notification Settings">

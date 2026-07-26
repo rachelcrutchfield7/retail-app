@@ -5,7 +5,7 @@ import { formatOfferMessagePreview } from './offerMessageFormat';
 import type { DevicePlatform, Message, Notification, NotificationPreferences, NotificationType } from './types';
 import { ensureCurrentProfile, throwSupabaseError } from './supabaseData';
 
-const defaultNotificationPreferences: NotificationPreferences = {
+export const defaultNotificationPreferences: NotificationPreferences = {
   messages: true,
   favorites: true,
   reviews: true,

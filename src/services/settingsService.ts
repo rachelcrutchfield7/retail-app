@@ -1,4 +1,5 @@
 import {
+  defaultNotificationPreferences,
   getNotificationPreferences,
   updateNotificationPreferences,
 } from './notificationService';
@@ -7,7 +8,7 @@ import { createServiceError } from './errors';
 import { supabase } from '../lib/supabase';
 import { ensureCurrentProfile, getSupabaseAuthUser, throwSupabaseError } from './supabaseData';
 
-const defaultPrivacySettings: PrivacySettings = {
+export const defaultPrivacySettings: PrivacySettings = {
   showCityState: true,
   allowMessagesFromBuyers: true,
   allowProfileInSearch: true,
@@ -82,11 +83,32 @@ export async function getSettings(): Promise<{
   account: AccountSettings;
   notifications: NotificationPreferences;
   privacy: PrivacySettings;
+  loadWarning?: string;
 }> {
+  const account = await getAccountSettings();
+  const [notificationsResult, privacyResult] = await Promise.allSettled([
+    getNotificationPreferences(),
+    getPrivacySettings(),
+  ]);
+  const loadWarnings: string[] = [];
+
+  if (notificationsResult.status === 'rejected') {
+    loadWarnings.push('Notification settings are using safe defaults right now.');
+  }
+
+  if (privacyResult.status === 'rejected') {
+    loadWarnings.push('Privacy settings are using safe defaults right now.');
+  }
+
   return {
-    account: await getAccountSettings(),
-    notifications: await getNotificationPreferences(),
-    privacy: await getPrivacySettings(),
+    account,
+    notifications: notificationsResult.status === 'fulfilled'
+      ? notificationsResult.value
+      : defaultNotificationPreferences,
+    privacy: privacyResult.status === 'fulfilled'
+      ? privacyResult.value
+      : defaultPrivacySettings,
+    loadWarning: loadWarnings.length ? loadWarnings.join(' ') : undefined,
   };
 }
 

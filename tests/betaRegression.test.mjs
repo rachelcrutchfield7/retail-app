@@ -6,6 +6,7 @@ const sprint3 = readFileSync(new URL('../src/sprint3/Sprint3App.tsx', import.met
 const sprint4 = readFileSync(new URL('../src/sprint4/Sprint4App.tsx', import.meta.url), 'utf8');
 const app = readFileSync(new URL('../App.tsx', import.meta.url), 'utf8');
 const rescueHub = readFileSync(new URL('../src/screens/RescueHubScreen.tsx', import.meta.url), 'utf8');
+const settingsService = readFileSync(new URL('../src/services/settingsService.ts', import.meta.url), 'utf8');
 const founderChecklist = readFileSync(new URL('../docs/private-beta/FOUNDER_PREVIEW_REGRESSION_CHECKLIST.md', import.meta.url), 'utf8');
 
 test('app shell uses the restored safe-area mobile layout', () => {
@@ -49,6 +50,14 @@ test('settings renders request errors instead of an endless loading state', () =
   assert.ok(errorBranchIndex < loadingBranchIndex);
   assert.match(sprint4, /ErrorState message=\{handleAppError\(settings\.error\)\.userMessage\}/);
   assert.match(sprint4, /onRetry=\{settings\.refetch\}/);
+});
+
+test('settings uses safe preference defaults when optional settings fail', () => {
+  assert.match(settingsService, /Promise\.allSettled/);
+  assert.match(settingsService, /defaultNotificationPreferences/);
+  assert.match(settingsService, /defaultPrivacySettings/);
+  assert.match(settingsService, /loadWarning/);
+  assert.match(sprint4, /Some settings are using defaults/);
 });
 
 test('listing detail retains mobile-safe buyer and owner actions', () => {
