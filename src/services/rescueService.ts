@@ -140,6 +140,8 @@ export async function createOrUpdateRescueProfile(input: RescueSignupInput): Pro
     throwSupabaseError(error, 'We could not save your rescue profile.');
   }
 
+  await enablePublicRescueDonationInstructions(profile.id);
+
   return toRescueProfile(data as Row);
 }
 
@@ -299,7 +301,7 @@ export async function getNearbyRescues(params: RescueHubQueryParams = {}): Promi
     });
 
     if (!nearbyResult.error) {
-      return ((nearbyResult.data ?? []) as Row[]).map((row) => hubRescueFromRow(row));
+      return mergeCurrentRescueContactHint(((nearbyResult.data ?? []) as Row[]).map((row) => hubRescueFromRow(row)));
     }
 
     try {
@@ -321,7 +323,7 @@ export async function getNearbyRescues(params: RescueHubQueryParams = {}): Promi
     throwSupabaseError(publicResult.error, 'We could not load local rescues.');
   }
 
-  return ((publicResult.data ?? []) as Row[]).map((row) => hubRescueFromRow(row));
+  return mergeCurrentRescueContactHint(((publicResult.data ?? []) as Row[]).map((row) => hubRescueFromRow(row)));
 }
 
 async function requireCurrentRescueProfile(): Promise<RescueProfile> {
@@ -336,6 +338,43 @@ async function requireCurrentRescueProfile(): Promise<RescueProfile> {
   }
 
   return rescueProfile;
+}
+
+async function enablePublicRescueDonationInstructions(ownerId: string): Promise<void> {
+  const { error } = await supabase
+    .from('privacy_settings')
+    .upsert({
+      user_id: ownerId,
+      rescue_public_contact_enabled: true,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id' });
+
+  if (error) {
+    throwSupabaseError(error, 'We saved your rescue profile, but could not update donation instruction visibility.');
+  }
+}
+
+async function mergeCurrentRescueContactHint(rescues: RescueOrganization[]): Promise<RescueOrganization[]> {
+  if (rescues.length === 0) {
+    return rescues;
+  }
+
+  try {
+    const currentRescueProfile = await getCurrentRescueProfile();
+    const contactHint = currentRescueProfile?.contact_hint?.trim();
+
+    if (!currentRescueProfile || !contactHint) {
+      return rescues;
+    }
+
+    return rescues.map((rescue) =>
+      rescue.id === currentRescueProfile.id
+        ? { ...rescue, contactHint }
+        : rescue
+    );
+  } catch {
+    return rescues;
+  }
 }
 
 async function getRescueNeeds(rescueId: string): Promise<RescueNeed[]> {

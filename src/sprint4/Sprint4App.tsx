@@ -1433,6 +1433,13 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
         <ToggleSwitch label="Show city and state" value={settings.data.privacy.showCityState} onValueChange={(showCityState) => void settings.updatePrivacy({ showCityState })} />
         <ToggleSwitch label="Allow buyer messages" value={settings.data.privacy.allowMessagesFromBuyers} onValueChange={(allowMessagesFromBuyers) => void settings.updatePrivacy({ allowMessagesFromBuyers })} />
         <ToggleSwitch label="Show profile in search" value={settings.data.privacy.allowProfileInSearch} onValueChange={(allowProfileInSearch) => void settings.updatePrivacy({ allowProfileInSearch })} />
+        {settings.data.account.accountType === 'rescue' ? (
+          <ToggleSwitch
+            label="Show rescue donation instructions"
+            value={settings.data.privacy.rescuePublicContactEnabled}
+            onValueChange={(rescuePublicContactEnabled) => void settings.updatePrivacy({ rescuePublicContactEnabled })}
+          />
+        ) : null}
       </SectionCard>
 
       <SectionCard title="Account Settings">

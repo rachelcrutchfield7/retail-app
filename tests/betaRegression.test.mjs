@@ -6,7 +6,9 @@ const sprint3 = readFileSync(new URL('../src/sprint3/Sprint3App.tsx', import.met
 const sprint4 = readFileSync(new URL('../src/sprint4/Sprint4App.tsx', import.meta.url), 'utf8');
 const app = readFileSync(new URL('../App.tsx', import.meta.url), 'utf8');
 const rescueHub = readFileSync(new URL('../src/screens/RescueHubScreen.tsx', import.meta.url), 'utf8');
+const rescueService = readFileSync(new URL('../src/services/rescueService.ts', import.meta.url), 'utf8');
 const settingsService = readFileSync(new URL('../src/services/settingsService.ts', import.meta.url), 'utf8');
+const useSettings = readFileSync(new URL('../src/hooks/useSettings.ts', import.meta.url), 'utf8');
 const founderChecklist = readFileSync(new URL('../docs/private-beta/FOUNDER_PREVIEW_REGRESSION_CHECKLIST.md', import.meta.url), 'utf8');
 
 test('app shell uses the restored safe-area mobile layout', () => {
@@ -58,6 +60,15 @@ test('settings uses safe preference defaults when optional settings fail', () =>
   assert.match(settingsService, /defaultPrivacySettings/);
   assert.match(settingsService, /loadWarning/);
   assert.match(sprint4, /Some settings are using defaults/);
+});
+
+test('rescue donation instructions are visible in the rescue hub after profile updates', () => {
+  assert.match(rescueService, /requested_contact_hint: donationInstructions/);
+  assert.match(rescueService, /enablePublicRescueDonationInstructions\(profile\.id\)/);
+  assert.match(rescueService, /rescue_public_contact_enabled: true/);
+  assert.match(rescueService, /mergeCurrentRescueContactHint/);
+  assert.match(sprint4, /Show rescue donation instructions/);
+  assert.match(useSettings, /invalidateQuery\(\['rescue-hub'\]\)/);
 });
 
 test('listing detail retains mobile-safe buyer and owner actions', () => {
