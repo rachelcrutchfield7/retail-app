@@ -1,7 +1,7 @@
 import { Check, RefreshCw, X } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { colors, radius, sizes, spacing, typography } from '../../constants/theme';
+import { colors, radius, sizes, spacing, typography, createThemedStyles } from '../../constants/theme';
 import type { OfferEvent } from '../../services/offerService';
 import { Button } from '../ui/Button';
 
@@ -92,7 +92,7 @@ export function OfferMessageCard({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((colors) => ({
   row: {
     marginVertical: spacing.xs,
   },
@@ -170,4 +170,4 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     ...typography.body,
   },
-});
+}));

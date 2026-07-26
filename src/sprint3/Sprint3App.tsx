@@ -9,7 +9,6 @@ import {
   Pressable,
   SafeAreaView,
   ScrollView,
-  StyleSheet,
   Text,
   View,
 } from 'react-native';
@@ -72,8 +71,7 @@ import {
 } from '../components';
 import { CONDITIONS } from '../constants/categories';
 import { findManualLocationByZipCode } from '../constants/location';
-import { colors, radius, sizes, spacing, typography } from '../constants/theme';
-import { rescueOrganizations } from '../data/mockData';
+import { colors, radius, sizes, spacing, typography, createThemedStyles } from '../constants/theme';
 import { useAuth } from '../hooks/useAuth';
 import { useCategories, useTopLevelCategories } from '../hooks/useCategories';
 import { useCompleteTransaction, useEligibleTransactionParticipants } from '../hooks/useCompleteTransaction';
@@ -88,6 +86,7 @@ import { useNotifications } from '../hooks/useNotifications';
 import { usePendingReviews } from '../hooks/usePendingReviews';
 import { useProfile } from '../hooks/useProfile';
 import { usePublicRescueProfile } from '../hooks/usePublicRescueProfile';
+import { useRescueHub } from '../hooks/useRescueHub';
 import { useRescueActions, useRescueDashboard } from '../hooks/useRescueDashboard';
 import { useReviews, useReviewSummary } from '../hooks/useReviews';
 import { useSavedSearches } from '../hooks/useSavedSearches';
@@ -95,6 +94,7 @@ import { useUnreadMessages } from '../hooks/useUnreadMessages';
 import { useUpdateListing } from '../hooks/useUpdateListing';
 import { useUpdateProfile } from '../hooks/useUpdateProfile';
 import { QueryClientProvider } from '../lib/queryClient';
+import { getPaymentReadiness, isPaidListing } from '../services/paymentService';
 import type {
   CreateListingInput,
   CreateSavedSearchInput,
@@ -343,6 +343,12 @@ export function HomeScreen({
     }),
     [location.radiusMiles]
   ));
+  const rescueHub = useRescueHub(useMemo(
+    () => ({
+      radiusMiles: location.radiusMiles,
+    }),
+    [location.radiusMiles]
+  ));
   const myListings = useMyListings();
 
   const ownActiveListings = (myListings.data ?? []).filter((listing) => listing.status === 'Active');
@@ -358,10 +364,12 @@ export function HomeScreen({
   const unreadTotal = unreadMessages.data?.total ?? 0;
   const unreadNotificationTotal = notifications.unreadCount ?? 0;
   const locationLabel = [location.city, location.state].filter(Boolean).join(', ');
-  const urgentNeedCount = rescueOrganizations.reduce(
+  const rescueHubItems = rescueHub.data ?? [];
+  const urgentNeedCount = rescueHubItems.reduce(
     (total, rescue) => total + rescue.urgentNeeds.filter((need) => need.urgency === 'High').length,
     0
   );
+  const wishlistCount = rescueHubItems.reduce((total, rescue) => total + rescue.wishlistItems.length, 0);
 
   const handleFavorite = async (listing: Listing) => {
     if (auth.isGuest) {
@@ -429,8 +437,11 @@ export function HomeScreen({
 
           {onOpenRescueHub ? (
             <RescueHubBanner
-              rescueCount={rescueOrganizations.length}
+              rescueCount={rescueHubItems.length}
               urgentNeedCount={urgentNeedCount}
+              wishlistCount={wishlistCount}
+              loading={rescueHub.isLoading}
+              errorMessage={rescueHub.isError ? handleAppError(rescueHub.error).userMessage : null}
               onPress={onOpenRescueHub}
             />
           ) : null}
@@ -479,8 +490,7 @@ export function HomeScreen({
           {listings.isError ? <ErrorState message={handleAppError(listings.error).userMessage} onRetry={listings.refetch} /> : null}
         </View>
       }
-      numColumns={2}
-      columnWrapperStyle={styles.marketplaceGridRow}
+      numColumns={1}
       renderItem={({ item, index }) => (
         <View style={[styles.marketplaceGridItem, index % 2 === 0 ? styles.marketplaceGridItemLeft : styles.marketplaceGridItemRight]}>
           <ListingCard
@@ -729,8 +739,7 @@ export function SearchScreen({
           {listings.isError ? <ErrorState message={handleAppError(listings.error).userMessage} onRetry={listings.refetch} /> : null}
         </View>
       }
-      numColumns={2}
-      columnWrapperStyle={styles.marketplaceGridRow}
+      numColumns={1}
       renderItem={({ item, index }) => (
         <View style={[styles.marketplaceGridItem, index % 2 === 0 ? styles.marketplaceGridItemLeft : styles.marketplaceGridItemRight]}>
           <ListingCard
@@ -953,8 +962,7 @@ export function FavoritesScreen({
           {favorites.isError ? <ErrorState message={handleAppError(favorites.error).userMessage} onRetry={favorites.refetch} /> : null}
         </View>
       }
-      numColumns={2}
-      columnWrapperStyle={styles.marketplaceGridRow}
+      numColumns={1}
       renderItem={({ item, index }) => (
         <View style={[styles.marketplaceGridItem, index % 2 === 0 ? styles.marketplaceGridItemLeft : styles.marketplaceGridItemRight]}>
           <ListingCard
@@ -1143,6 +1151,15 @@ function ListingDetailContent({
   const completionDisabled = ['Sold', 'Donated', 'Archived', 'Removed'].includes(item.status);
   const archiveDisabled = ['Sold', 'Donated', 'Archived', 'Removed'].includes(item.status);
   const deleteDisabled = item.status === 'Removed';
+  const listingType = listingTypeFor(item.price);
+  const paidListing = isPaidListing(item);
+  const paymentReadiness = getPaymentReadiness();
+  const unavailable = ['Sold', 'Donated', 'Archived', 'Removed'].includes(item.status);
+  const messageLabel = listingType === 'donation' ? 'Message Donor' : 'Message Seller';
+  const requestLabel = listingType === 'donation' ? 'Request Donation' : listingType === 'free' ? 'Request Item' : 'Make Offer';
+  const paymentNote = paidListing && !paymentReadiness.protectedCheckoutEnabled
+    ? 'Protected checkout is not available yet. Message the seller and agree on pickup or payment details before exchanging items.'
+    : null;
 
   const toggleFavorite = async () => {
     if (isGuest) {
@@ -1402,36 +1419,64 @@ function ListingDetailContent({
               </Card>
             </>
           ) : (
-            <>
-              <Button
-                title="Message Seller"
-                icon={MessageCircle}
-                onPress={() => {
-                  if (onMessageSeller) {
-                    void Promise.resolve(onMessageSeller(item.id, detail.seller.id)).catch((error) => {
-                      setNotice({ title: 'Messaging is unavailable', body: handleAppError(error).userMessage });
-                    });
-                    return;
-                  }
+            <Card>
+              <View style={styles.stack}>
+                <Text style={styles.cardTitle}>{unavailable ? 'Listing unavailable' : 'Listing actions'}</Text>
+                {unavailable ? (
+                  <Text style={styles.body}>This listing is marked {item.status}. You can still report it if something looks unsafe.</Text>
+                ) : paymentNote ? (
+                  <Text style={styles.body}>{paymentNote}</Text>
+                ) : null}
+                <View style={styles.actionGrid}>
+                  <Button
+                    title={messageLabel}
+                    icon={MessageCircle}
+                    disabled={unavailable}
+                    onPress={() => {
+                      if (onMessageSeller) {
+                        void Promise.resolve(onMessageSeller(item.id, detail.seller.id)).catch((error) => {
+                          setNotice({ title: 'Messaging is unavailable', body: handleAppError(error).userMessage });
+                        });
+                        return;
+                      }
 
-                  setNotice({ title: 'Messaging unavailable', body: 'Log in and open a marketplace listing to contact the seller.' });
-                }}
-                fullWidth
-              />
-              <Button
-                title="Report"
-                icon={Flag}
-                variant="ghost"
-                onPress={() => {
-                  if (onReportListing) {
-                    onReportListing(item.id);
-                    return;
-                  }
-                  setNotice({ title: 'Report listing', body: 'Log in to report spam, fraud, harassment, or inappropriate content.' });
-                }}
-                fullWidth
-              />
-            </>
+                      setNotice({ title: 'Messaging unavailable', body: 'Log in and open a marketplace listing to contact the seller.' });
+                    }}
+                    fullWidth
+                  />
+                  <Button
+                    title={requestLabel}
+                    icon={listingType === 'sale' ? Heart : HeartHandshake}
+                    variant="secondary"
+                    disabled={unavailable}
+                    onPress={() => {
+                      if (onMessageSeller) {
+                        void Promise.resolve(onMessageSeller(item.id, detail.seller.id)).catch((error) => {
+                          setNotice({ title: 'Request not sent', body: handleAppError(error).userMessage });
+                        });
+                        return;
+                      }
+
+                      setNotice({ title: 'Messaging unavailable', body: 'Log in and open this listing to coordinate with the seller.' });
+                    }}
+                    fullWidth
+                  />
+                  <Button
+                    title="Report Listing"
+                    icon={Flag}
+                    variant="ghost"
+                    onPress={() => {
+                      if (onReportListing) {
+                        onReportListing(item.id);
+                        return;
+                      }
+                      setNotice({ title: 'Report listing', body: 'Log in to report spam, fraud, harassment, or inappropriate content.' });
+                    }}
+                    fullWidth
+                  />
+                </View>
+              </View>
+            </Card>
           )}
           {!owner && ['Sold', 'Donated'].includes(item.status) && onReviewListing ? (
             <Button
@@ -3464,7 +3509,7 @@ function zipCodeFor(location: string) {
   return location.match(/\b\d{5}\b/)?.[0] ?? '';
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((colors) => ({
   app: {
     flex: 1,
     backgroundColor: colors.background,
@@ -3605,27 +3650,24 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   marketplaceGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginHorizontal: -spacing.xs,
+    gap: spacing.md,
     rowGap: spacing.md,
   },
   marketplaceGridTile: {
-    width: '50%',
-    paddingHorizontal: spacing.xs,
+    width: '100%',
   },
   marketplaceGridRow: {
     alignItems: 'stretch',
   },
   marketplaceGridItem: {
-    width: '50%',
+    width: '100%',
     minWidth: 0,
   },
   marketplaceGridItemLeft: {
-    paddingRight: spacing.xs,
+    paddingRight: 0,
   },
   marketplaceGridItemRight: {
-    paddingLeft: spacing.xs,
+    paddingLeft: 0,
   },
   gridSeparator: {
     height: spacing.md,
@@ -3789,4 +3831,4 @@ const styles = StyleSheet.create({
     height: 76,
     borderRadius: radius.medium,
   },
-});
+}));

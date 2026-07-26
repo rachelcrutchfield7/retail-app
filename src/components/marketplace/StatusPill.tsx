@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
-import { colors, radius, spacing, typography } from '../../constants/theme';
+import { colors, radius, spacing, typography, createThemedStyles } from '../../constants/theme';
 import type { ListingStatus } from '../../types.ts';
 
 type StatusPillProps = {
@@ -29,7 +29,7 @@ export function StatusPill({ status }: StatusPillProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((colors) => ({
   statusPill: {
     minHeight: 28,
     justifyContent: 'center',
@@ -56,4 +56,4 @@ const styles = StyleSheet.create({
   statusTextLight: {
     color: colors.white,
   },
-});
+}));

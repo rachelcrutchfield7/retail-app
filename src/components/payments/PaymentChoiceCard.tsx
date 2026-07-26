@@ -1,7 +1,7 @@
 import { CreditCard, ShieldCheck, Wallet } from 'lucide-react-native';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { colors, radius, spacing, typography } from '../../constants/theme';
+import { colors, radius, spacing, typography, createThemedStyles } from '../../constants/theme';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 
@@ -68,7 +68,7 @@ export function PaymentChoiceCard({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((colors) => ({
   stack: {
     gap: spacing.md,
   },
@@ -130,4 +130,4 @@ const styles = StyleSheet.create({
     ...typography.small,
     lineHeight: 19,
   },
-});
+}));

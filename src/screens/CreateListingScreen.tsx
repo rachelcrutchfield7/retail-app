@@ -9,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import { CATEGORIES, CONDITIONS } from '../constants/categories';
-import { colors, radius, sizes, spacing, typography } from '../constants/theme';
+import { colors, radius, sizes, spacing, typography, createThemedStyles } from '../constants/theme';
 import { Chip, formStyles, LockedScreen, PriceInput, TextArea, TextField, ToggleSwitch } from '../components';
 import type { Category, ListingCondition, ListingForm } from '../types.ts';
 
@@ -127,7 +127,7 @@ export function CreateListingScreen({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((colors) => ({
   flex: {
     flex: 1,
   },
@@ -187,4 +187,4 @@ const styles = StyleSheet.create({
     color: colors.white,
     ...typography.button,
   },
-});
+}));

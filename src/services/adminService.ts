@@ -72,12 +72,12 @@ export async function getListingReportQueue(): Promise<AdminListingReport[]> {
   const { data, error } = await supabase
     .from('reports')
     .select('*')
-    .eq('report_type', 'listing')
+    .in('report_type', ['listing', 'message', 'user'])
     .in('status', ['open', 'reviewing'])
     .order('created_at', { ascending: false });
 
   if (error) {
-    throwSupabaseError(error, 'We could not load listing reports.');
+    throwSupabaseError(error, 'We could not load reports.');
   }
 
   const reports = ((data ?? []) as Row[]).map(toAdminListingReport);
@@ -131,20 +131,34 @@ async function requireAdminProfile() {
 
 async function hydrateListingReports(reports: AdminListingReport[]): Promise<AdminListingReport[]> {
   const listingIds = Array.from(new Set(reports.map((report) => report.listing_id).filter(Boolean))) as string[];
+  const messageIds = Array.from(new Set(reports.map((report) => report.message_id).filter(Boolean))) as string[];
   const reporterIds = Array.from(new Set(reports.map((report) => report.reporter_id).filter(Boolean))) as string[];
+  const reportedUserIds = Array.from(new Set(reports.map((report) => report.reported_user_id).filter(Boolean))) as string[];
 
-  const [listingsResult, reportersResult] = await Promise.all([
+  const [listingsResult, messagesResult, reportersResult, reportedUsersResult] = await Promise.all([
     listingIds.length
       ? supabase
           .from('listings')
           .select('id,title,price,listing_type,status,city,state,zip_code')
           .in('id', listingIds)
       : Promise.resolve({ data: [], error: null }),
+    messageIds.length
+      ? supabase
+          .from('messages')
+          .select('id,body,message_type,sender_id,conversation_id,created_at')
+          .in('id', messageIds)
+      : Promise.resolve({ data: [], error: null }),
     reporterIds.length
       ? supabase
           .from('profiles')
           .select('id,display_name,username')
           .in('id', reporterIds)
+      : Promise.resolve({ data: [], error: null }),
+    reportedUserIds.length
+      ? supabase
+          .from('profiles')
+          .select('id,display_name,username')
+          .in('id', reportedUserIds)
       : Promise.resolve({ data: [], error: null }),
   ]);
 
@@ -156,16 +170,77 @@ async function hydrateListingReports(reports: AdminListingReport[]): Promise<Adm
     throwSupabaseError(reportersResult.error, 'We could not load reporter details.');
   }
 
-  const listingsById = new Map(((listingsResult.data ?? []) as Row[]).map((listing) => [stringValue(listing.id), listing]));
+  if (messagesResult.error) {
+    throwSupabaseError(messagesResult.error, 'We could not load reported message details.');
+  }
+
+  if (reportedUsersResult.error) {
+    throwSupabaseError(reportedUsersResult.error, 'We could not load reported user details.');
+  }
+
+  const messages = (messagesResult.data ?? []) as Row[];
+  const conversationIds = Array.from(new Set(messages.map((message) => optionalString(message.conversation_id)).filter(Boolean))) as string[];
+  let listingsById = new Map(((listingsResult.data ?? []) as Row[]).map((listing) => [stringValue(listing.id), listing]));
+  const messagesById = new Map(messages.map((message) => [stringValue(message.id), message]));
   const reportersById = new Map(((reportersResult.data ?? []) as Row[]).map((reporter) => [stringValue(reporter.id), reporter]));
+  const reportedUsersById = new Map(((reportedUsersResult.data ?? []) as Row[]).map((profile) => [stringValue(profile.id), profile]));
+  const conversationsResult = conversationIds.length
+    ? await supabase
+        .from('conversations')
+        .select('id,listing_id')
+        .in('id', conversationIds)
+    : { data: [], error: null };
+
+  if (conversationsResult.error) {
+    throwSupabaseError(conversationsResult.error, 'We could not load reported conversation details.');
+  }
+
+  const conversationsById = new Map(((conversationsResult.data ?? []) as Row[]).map((conversation) => [stringValue(conversation.id), conversation]));
+  const conversationListingIds = Array.from(
+    new Set(
+      ((conversationsResult.data ?? []) as Row[])
+        .map((conversation) => optionalString(conversation.listing_id))
+        .filter((id): id is string => typeof id === 'string' && !listingsById.has(id))
+    )
+  );
+
+  if (conversationListingIds.length) {
+    const conversationListingsResult = await supabase
+      .from('listings')
+      .select('id,title,price,listing_type,status,city,state,zip_code')
+      .in('id', conversationListingIds);
+
+    if (conversationListingsResult.error) {
+      throwSupabaseError(conversationListingsResult.error, 'We could not load listing details for reported messages.');
+    }
+
+    listingsById = new Map([
+      ...listingsById,
+      ...((conversationListingsResult.data ?? []) as Row[]).map((listing) => [stringValue(listing.id), listing] as const),
+    ]);
+  }
 
   return reports.map((report) => {
-    const listing = report.listing_id ? listingsById.get(report.listing_id) : undefined;
+    const message = report.message_id ? messagesById.get(report.message_id) : undefined;
+    const messageConversation = message ? conversationsById.get(stringValue(message.conversation_id)) : undefined;
+    const messageListingId = messageConversation ? optionalString(messageConversation.listing_id) : undefined;
+    const listing = report.listing_id ? listingsById.get(report.listing_id) : messageListingId ? listingsById.get(messageListingId) : undefined;
     const reporter = report.reporter_id ? reportersById.get(report.reporter_id) : undefined;
+    const reportedUser = report.reported_user_id ? reportedUsersById.get(report.reported_user_id) : undefined;
+    const listingTitle = listing ? stringValue(listing.title, 'Reported listing') : undefined;
+    const reportedUserName = reportedUser
+      ? stringValue(reportedUser.display_name, optionalString(reportedUser.username) ?? 'Reported user')
+      : undefined;
+    const messagePreview = message ? messagePreviewLabel(message) : undefined;
 
     return {
       ...report,
-      listing_title: listing ? stringValue(listing.title, 'Reported listing') : 'Reported listing unavailable',
+      target_title: adminReportTargetTitle(report, listingTitle, reportedUserName),
+      target_subtitle: adminReportTargetSubtitle(report, listing),
+      message_preview: messagePreview,
+      message_type: messageTypeValue(message?.message_type),
+      reported_user_name: reportedUserName,
+      listing_title: listingTitle ?? (report.report_type === 'listing' ? 'Reported listing unavailable' : undefined),
       listing_location: listing
         ? [optionalString(listing.city), [optionalString(listing.state), optionalString(listing.zip_code)].filter(Boolean).join(' ')]
             .filter(Boolean)
@@ -185,7 +260,7 @@ function toAdminListingReport(row: Row): AdminListingReport {
     reported_user_id: optionalString(row.reported_user_id),
     listing_id: optionalString(row.listing_id),
     message_id: optionalString(row.message_id),
-    report_type: 'listing',
+    report_type: reportTypeValue(row.report_type),
     reason: reportReasonLabels[stringValue(row.reason)] ?? 'Other',
     details: optionalString(row.details),
     status: reportStatusValue(row.status),
@@ -193,6 +268,74 @@ function toAdminListingReport(row: Row): AdminListingReport {
     created_at: stringValue(row.created_at),
     updated_at: stringValue(row.updated_at),
   };
+}
+
+function reportTypeValue(value: unknown): AdminListingReport['report_type'] {
+  if (value === 'message' || value === 'user') {
+    return value;
+  }
+
+  return 'listing';
+}
+
+function messageTypeValue(value: unknown): AdminListingReport['message_type'] | undefined {
+  if (value === 'text' || value === 'image' || value === 'system') {
+    return value;
+  }
+
+  return undefined;
+}
+
+function adminReportTargetTitle(report: AdminListingReport, listingTitle?: string, reportedUserName?: string): string {
+  if (report.report_type === 'message') {
+    return 'Reported message';
+  }
+
+  if (report.report_type === 'user') {
+    return reportedUserName ?? 'Reported user';
+  }
+
+  return listingTitle ?? 'Reported listing unavailable';
+}
+
+function adminReportTargetSubtitle(report: AdminListingReport, listing?: Row): string | undefined {
+  if (report.report_type === 'message') {
+    return listing ? `Message about ${stringValue(listing.title, 'a listing')}` : 'Conversation message';
+  }
+
+  if (report.report_type === 'user') {
+    return 'User profile report';
+  }
+
+  return listing
+    ? [optionalString(listing.city), [optionalString(listing.state), optionalString(listing.zip_code)].filter(Boolean).join(' ')]
+        .filter(Boolean)
+        .join(', ')
+    : undefined;
+}
+
+function messagePreviewLabel(row: Row): string {
+  const messageType = stringValue(row.message_type, 'text');
+
+  if (messageType === 'image') {
+    return 'Photo message';
+  }
+
+  if (messageType === 'system') {
+    return 'Conversation update';
+  }
+
+  const body = optionalString(row.body);
+
+  if (!body) {
+    return 'Empty message';
+  }
+
+  if (body.startsWith('RETAIL_OFFER::')) {
+    return 'Offer update';
+  }
+
+  return body.length > 180 ? `${body.slice(0, 177)}...` : body;
 }
 
 function reportStatusValue(value: unknown): ReportStatus {

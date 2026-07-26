@@ -1,6 +1,6 @@
 import { AlertCircle } from 'lucide-react-native';
 import { StyleSheet, Text, View } from 'react-native';
-import { colors, radius, sizes, spacing, typography } from '../../constants/theme';
+import { colors, radius, sizes, spacing, typography, createThemedStyles } from '../../constants/theme';
 import { Button } from '../ui/Button';
 
 type ErrorStateProps = {
@@ -35,7 +35,7 @@ export function ErrorState({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((colors) => ({
   errorState: {
     alignItems: 'center',
     gap: spacing.md,
@@ -67,4 +67,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing.sm,
   },
-});
+}));

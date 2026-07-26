@@ -27,7 +27,7 @@ import {
   ToggleSwitch,
 } from '../components';
 import { CATEGORIES, CONDITIONS } from '../constants/categories';
-import { colors, sizes, spacing, typography } from '../constants/theme';
+import { colors, sizes, spacing, typography, createThemedStyles } from '../constants/theme';
 import { useAuth as useAuthHook } from '../hooks/useAuth';
 import { useCreateListing } from '../hooks/useCreateListing';
 import { useListing } from '../hooks/useListing';
@@ -696,7 +696,7 @@ function ScreenFrame({ children }: { children: ReactNode }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((colors) => ({
   app: {
     flex: 1,
     backgroundColor: colors.background,
@@ -868,4 +868,4 @@ const styles = StyleSheet.create({
     color: colors.error,
     ...typography.small,
   },
-});
+}));

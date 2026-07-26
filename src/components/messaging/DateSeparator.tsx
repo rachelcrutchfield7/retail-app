@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
-import { colors, radius, spacing, typography } from '../../constants/theme';
+import { colors, radius, spacing, typography, createThemedStyles } from '../../constants/theme';
 
 type DateSeparatorProps = {
   label: string;
@@ -13,7 +13,7 @@ export function DateSeparator({ label }: DateSeparatorProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((colors) => ({
   wrap: {
     alignItems: 'center',
     paddingVertical: spacing.sm,
@@ -27,4 +27,4 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     ...typography.caption,
   },
-});
+}));

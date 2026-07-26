@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
-import { colors, radius, spacing, typography } from '../../constants/theme';
+import { colors, radius, spacing, typography, createThemedStyles } from '../../constants/theme';
 
 type StatItem = {
   label: string;
@@ -23,7 +23,7 @@ export function StatsCard({ stats }: StatsCardProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((colors) => ({
   card: {
     flexDirection: 'row',
     gap: spacing.sm,
@@ -48,4 +48,4 @@ const styles = StyleSheet.create({
     ...typography.caption,
     textTransform: 'uppercase',
   },
-});
+}));

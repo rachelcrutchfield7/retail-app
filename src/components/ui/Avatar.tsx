@@ -1,6 +1,6 @@
 import { CheckCircle2 } from 'lucide-react-native';
 import { Image, StyleSheet, Text, View } from 'react-native';
-import { colors, radius, sizes, typography } from '../../constants/theme';
+import { colors, radius, sizes, typography, createThemedStyles } from '../../constants/theme';
 
 type AvatarSize = 'sm' | 'md' | 'lg';
 
@@ -32,7 +32,7 @@ export function Avatar({ image, initials, verified = false, size = 'md' }: Avata
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((colors) => ({
   avatar: {
     borderRadius: radius.medium,
     alignItems: 'center',
@@ -61,4 +61,4 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.white,
   },
-});
+}));

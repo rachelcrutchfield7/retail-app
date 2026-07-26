@@ -1,6 +1,6 @@
 import { Heart, Home, MessageCircle, Plus, UserRound } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, radius, sizes, spacing, typography } from '../../constants/theme';
+import { colors, radius, sizes, spacing, typography, createThemedStyles } from '../../constants/theme';
 import type { IconComponent, TabKey } from '../../types.ts';
 
 type TabBarProps = {
@@ -51,7 +51,7 @@ export function TabBar({ activeTab, onChange, favoritesCount }: TabBarProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((colors) => ({
   tabBar: {
     position: 'absolute',
     left: 0,
@@ -103,4 +103,4 @@ const styles = StyleSheet.create({
   tabLabelActive: {
     color: colors.primary,
   },
-});
+}));

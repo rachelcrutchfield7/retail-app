@@ -1,6 +1,7 @@
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, radius, sizes, spacing, typography } from '../../constants/theme';
+import { colors, radius, sizes, spacing, typography, createThemedStyles } from '../../constants/theme';
 import type { ConversationSummary } from '../../services/types';
+import { formatOfferBodyPreview } from '../../services/offerMessageFormat';
 import { Avatar } from '../ui/Avatar';
 import { UnreadBadge } from './UnreadBadge';
 
@@ -31,7 +32,8 @@ export function ConversationCard({
 }: ConversationCardProps) {
   const displayName = conversation?.otherUser.display_name ?? name ?? 'Seller';
   const displayListing = conversation?.listingSummary.title ?? listing ?? 'Listing';
-  const displayPreview = conversation?.preview ?? preview ?? 'No messages yet';
+  const rawPreview = conversation?.preview ?? preview ?? 'No messages yet';
+  const displayPreview = formatOfferBodyPreview(rawPreview) ?? rawPreview;
   const displayTime = conversation?.time ?? time ?? '';
   const selectedUnreadCount = conversation?.unreadCount ?? unreadCount ?? (unread ? 1 : 0);
   const avatarInitials = initials ?? displayName.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase();
@@ -59,7 +61,7 @@ export function ConversationCard({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((colors) => ({
   conversationRow: {
     minHeight: 94,
     flexDirection: 'row',
@@ -110,4 +112,4 @@ const styles = StyleSheet.create({
     borderRadius: radius.small,
     backgroundColor: colors.primarySoft,
   },
-});
+}));

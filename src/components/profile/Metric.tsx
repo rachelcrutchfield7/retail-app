@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
-import { colors, radius, spacing, typography } from '../../constants/theme';
+import { colors, radius, spacing, typography, createThemedStyles } from '../../constants/theme';
 
 type MetricTone = 'green' | 'coral' | 'gold';
 
@@ -19,13 +19,15 @@ export function Metric({ label, value, tone = 'green' }: MetricProps) {
 }
 
 export const metricLabelStyle = {
-  color: colors.textSecondary,
+  get color() {
+    return colors.textSecondary;
+  },
   ...typography.caption,
   marginTop: spacing.xs,
   textTransform: 'uppercase' as const,
 };
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((colors) => ({
   metric: {
     flex: 1,
     minHeight: 78,
@@ -39,10 +41,15 @@ const styles = StyleSheet.create({
   metricValue: {
     ...typography.title,
   },
-  metricLabel: metricLabelStyle,
-});
+  metricLabel: {
+    color: colors.textSecondary,
+    ...typography.caption,
+    marginTop: spacing.xs,
+    textTransform: 'uppercase',
+  },
+}));
 
-const metricToneStyles = StyleSheet.create<Record<MetricTone, { color: string }>>({
+const metricToneStyles = createThemedStyles((colors) => ({
   green: {
     color: colors.primary,
   },
@@ -52,4 +59,4 @@ const metricToneStyles = StyleSheet.create<Record<MetricTone, { color: string }>
   gold: {
     color: colors.warning,
   },
-});
+}));

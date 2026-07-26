@@ -1,6 +1,6 @@
 import { Search, X } from 'lucide-react-native';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
-import { colors, radius, sizes, spacing, typography } from '../../constants/theme';
+import { colors, radius, sizes, spacing, typography, createThemedStyles } from '../../constants/theme';
 
 type SearchBarProps = {
   value: string;
@@ -30,7 +30,7 @@ export function SearchBar({ value, onChangeText, placeholder = 'Search pet suppl
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((colors) => ({
   searchRow: {
     minHeight: sizes.buttonHeight,
     flexDirection: 'row',
@@ -48,4 +48,4 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     ...typography.body,
   },
-});
+}));

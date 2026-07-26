@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
-import { colors, radius, sizes, spacing, typography } from '../../constants/theme';
+import { colors, radius, sizes, spacing, typography, createThemedStyles } from '../../constants/theme';
 import type { IconComponent } from '../../types.ts';
 
 type EmptyStateProps = {
@@ -20,7 +20,7 @@ export function EmptyState({ title, body, icon: Icon }: EmptyStateProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((colors) => ({
   emptyState: {
     alignItems: 'center',
     gap: spacing.md,
@@ -47,4 +47,4 @@ const styles = StyleSheet.create({
     lineHeight: 23,
     textAlign: 'center',
   },
-});
+}));

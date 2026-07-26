@@ -1,6 +1,6 @@
 import { Send } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { colors, radius, sizes, spacing, typography } from '../../constants/theme';
+import { colors, radius, sizes, spacing, typography, createThemedStyles } from '../../constants/theme';
 import { AttachmentButton } from './AttachmentButton';
 import { ImagePreview } from './ImagePreview';
 
@@ -63,7 +63,7 @@ export function MessageInput({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((colors) => ({
   wrap: {
     padding: spacing.md,
     borderTopWidth: 1,
@@ -109,4 +109,4 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     ...typography.caption,
   },
-});
+}));

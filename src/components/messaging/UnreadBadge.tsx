@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
-import { colors, radius, spacing, typography } from '../../constants/theme';
+import { colors, radius, spacing, typography, createThemedStyles } from '../../constants/theme';
 
 type UnreadBadgeProps = {
   count: number;
@@ -17,7 +17,7 @@ export function UnreadBadge({ count }: UnreadBadgeProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((colors) => ({
   badge: {
     minWidth: 24,
     height: 24,
@@ -31,4 +31,4 @@ const styles = StyleSheet.create({
     color: colors.white,
     ...typography.caption,
   },
-});
+}));

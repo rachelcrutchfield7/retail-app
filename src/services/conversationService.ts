@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import type { Conversation, ConversationDetail, ConversationSearchParams, ConversationSummary, Message, Profile } from './types';
 import { isEitherUserBlocked } from './blockService';
 import { trackEvent } from '../lib/analytics';
+import { formatOfferMessagePreview } from './offerMessageFormat';
 import {
   ensureCurrentProfile,
   imagesFromListingRow,
@@ -203,6 +204,28 @@ async function unreadCountFor(conversationId: string, userId: string): Promise<n
   return count ?? 0;
 }
 
+function previewForMessage(message: Message | undefined, fallback: string): string {
+  if (!message) {
+    return fallback;
+  }
+
+  const offerPreview = formatOfferMessagePreview(message);
+
+  if (offerPreview) {
+    return offerPreview;
+  }
+
+  if (message.message_type === 'image') {
+    return 'Photo message';
+  }
+
+  if (message.message_type === 'system') {
+    return 'Conversation update';
+  }
+
+  return message.body?.trim() || fallback;
+}
+
 export async function buildConversationSummary(conversation: Conversation | ConversationRow): Promise<ConversationSummary> {
   const row = 'listing_id' in conversation
     ? conversation as ConversationRow
@@ -242,7 +265,7 @@ export async function buildConversationSummary(conversation: Conversation | Conv
     ...normalized,
     name: otherProfile?.display_name ?? 'Deleted User',
     listing: listingSummary.title,
-    preview: lastMessage?.body || (lastMessage?.message_type === 'image' ? 'Photo message' : normalized.preview),
+    preview: previewForMessage(lastMessage, normalized.preview),
     unread: unreadCount > 0,
     time: formatConversationTime(lastMessage?.created_at ?? normalized.lastMessageAt),
     otherUser: otherProfile ? toPublicProfile(otherProfile) : deletedPublicProfile(otherUserId),

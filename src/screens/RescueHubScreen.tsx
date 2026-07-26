@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
 import { AlertCircle, HeartHandshake, MapPin, ShieldCheck } from 'lucide-react-native';
-import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { Badge, Card, DistanceFilter, EmptyState, ErrorState, HeaderBar, LoadingSpinner, Metric, SearchBar } from '../components';
-import { colors, radius, sizes, spacing, typography } from '../constants/theme';
+import { colors, radius, sizes, spacing, typography, createThemedStyles } from '../constants/theme';
 import {
   useMarketplaceSearchAreas,
   useMarketplaceSearchPreference,
@@ -14,9 +14,10 @@ import { handleAppError } from '../utils/errorHandler';
 
 type RescueHubScreenProps = {
   onBack: () => void;
+  onOpenRescueProfile?: (rescue: RescueOrganization) => void;
 };
 
-export function RescueHubScreen({ onBack }: RescueHubScreenProps) {
+export function RescueHubScreen({ onBack, onOpenRescueProfile }: RescueHubScreenProps) {
   const [search, setSearch] = useState('');
   const searchAreas = useMarketplaceSearchAreas();
   const searchPreference = useMarketplaceSearchPreference();
@@ -108,7 +109,7 @@ export function RescueHubScreen({ onBack }: RescueHubScreenProps) {
       ) : (
         <View style={styles.rescueList}>
           {filteredRescues.map((rescue) => (
-            <RescueCard key={rescue.id} rescue={rescue} />
+            <RescueCard key={rescue.id} rescue={rescue} onPress={onOpenRescueProfile} />
           ))}
         </View>
       )}
@@ -156,9 +157,22 @@ function isAllowedRadius(radiusMiles: number): radiusMiles is 10 | 25 | 50 | 100
   return radiusMiles === 10 || radiusMiles === 25 || radiusMiles === 50 || radiusMiles === 100;
 }
 
-function RescueCard({ rescue }: { rescue: RescueOrganization }) {
+function RescueCard({
+  rescue,
+  onPress,
+}: {
+  rescue: RescueOrganization;
+  onPress?: (rescue: RescueOrganization) => void;
+}) {
   return (
-    <Card>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Open ${rescue.name} rescue profile`}
+      onPress={() => onPress?.(rescue)}
+      disabled={!onPress}
+      style={({ pressed }) => [pressed && styles.pressedCard]}
+    >
+      <Card>
       <View style={styles.rescueHeader}>
         <View style={styles.rescueTitleBlock}>
           <Text style={styles.rescueName}>{rescue.name}</Text>
@@ -226,7 +240,8 @@ function RescueCard({ rescue }: { rescue: RescueOrganization }) {
         <Text style={styles.contactLabel}>Donation instructions</Text>
         <Text style={styles.contactText}>{rescue.contactHint}</Text>
       </View>
-    </Card>
+      </Card>
+    </Pressable>
   );
 }
 
@@ -254,7 +269,7 @@ function publicRescueAddress(rescue: RescueOrganization): string {
   ].filter(Boolean).join(', ');
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((colors) => ({
   screen: {
     flex: 1,
   },
@@ -271,7 +286,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceWarm,
     borderRadius: radius.large,
     borderWidth: 1,
-    borderColor: colors.primarySoft,
+    borderColor: colors.rescueAccent,
   },
   heroIcon: {
     width: sizes.iconFrame,
@@ -304,7 +319,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   sectionTitle: {
-    color: colors.textPrimary,
+    color: colors.rescueAccent,
     ...typography.sectionTitle,
   },
   sectionHint: {
@@ -313,6 +328,9 @@ const styles = StyleSheet.create({
   },
   rescueList: {
     gap: spacing.md,
+  },
+  pressedCard: {
+    opacity: 0.84,
   },
   rescueHeader: {
     flexDirection: 'row',
@@ -373,7 +391,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
   },
   needsTitle: {
-    color: colors.textPrimary,
+    color: colors.rescueAccent,
     ...typography.button,
   },
   needList: {
@@ -405,15 +423,17 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     padding: spacing.md,
     borderRadius: radius.medium,
-    backgroundColor: colors.accentSoft,
+    backgroundColor: colors.surfaceWarm,
+    borderWidth: 1,
+    borderColor: colors.rescueAccent,
     gap: spacing.xs,
   },
   contactLabel: {
-    color: colors.textPrimary,
+    color: colors.rescueAccent,
     ...typography.button,
   },
   contactText: {
     color: colors.textPrimary,
     ...typography.small,
   },
-});
+}));

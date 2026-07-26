@@ -1,6 +1,6 @@
 import { Star } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, sizes, spacing, typography } from '../../constants/theme';
+import { colors, sizes, spacing, typography, createThemedStyles } from '../../constants/theme';
 
 type StarRatingInputProps = {
   value: number;
@@ -34,7 +34,7 @@ export function StarRatingInput({ value, onChange }: StarRatingInputProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((colors) => ({
   wrap: {
     gap: spacing.sm,
   },
@@ -57,4 +57,4 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     ...typography.caption,
   },
-});
+}));

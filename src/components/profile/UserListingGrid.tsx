@@ -1,6 +1,6 @@
 import { PackageOpen } from 'lucide-react-native';
 import { StyleSheet, Text, View } from 'react-native';
-import { colors, spacing, typography } from '../../constants/theme';
+import { colors, spacing, typography, createThemedStyles } from '../../constants/theme';
 import type { Listing } from '../../types';
 import { ListingCard } from '../marketplace/ListingCard';
 import { EmptyState } from '../ui/EmptyState';
@@ -73,7 +73,7 @@ export function UserListingGrid({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((colors) => ({
   section: {
     gap: spacing.md,
   },
@@ -102,4 +102,4 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: spacing.sm,
   },
-});
+}));

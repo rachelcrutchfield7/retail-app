@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { ChevronLeft } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, sizes, spacing, typography } from '../../constants/theme';
+import { colors, sizes, spacing, typography, createThemedStyles } from '../../constants/theme';
 
 type HeaderBarProps = {
   title: string;
@@ -23,7 +23,7 @@ export function HeaderBar({ title, onBack, action }: HeaderBarProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((colors) => ({
   headerBar: {
     minHeight: 56,
     flexDirection: 'row',
@@ -45,4 +45,4 @@ const styles = StyleSheet.create({
     minWidth: sizes.iconButton,
     alignItems: 'flex-end',
   },
-});
+}));

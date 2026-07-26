@@ -1,7 +1,7 @@
 import type { GestureResponderEvent } from 'react-native';
 import { MapPin } from 'lucide-react-native';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, radius, sizes, spacing, typography } from '../../constants/theme';
+import { colors, radius, sizes, spacing, typography, createThemedStyles } from '../../constants/theme';
 import type { Listing } from '../../types.ts';
 import { listingLocationLabel } from '../../utils/format';
 import { ConditionBadge } from './ConditionBadge';
@@ -53,7 +53,7 @@ export function ListingCard({ listing, isFavorite, onOpen, onFavorite, variant =
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((colors) => ({
   listingCard: {
     overflow: 'hidden',
     backgroundColor: colors.surface,
@@ -135,4 +135,4 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     ...typography.caption,
   },
-});
+}));

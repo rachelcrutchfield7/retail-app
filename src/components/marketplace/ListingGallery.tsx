@@ -1,5 +1,5 @@
 import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { colors, radius, sizes, spacing, typography } from '../../constants/theme';
+import { colors, radius, sizes, spacing, typography, createThemedStyles } from '../../constants/theme';
 import type { ListingImage } from '../../services/types';
 
 type ListingGalleryProps = {
@@ -32,7 +32,7 @@ export function ListingGallery({ images, fallbackImage, title }: ListingGalleryP
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((colors) => ({
   gallery: {
     height: sizes.detailImage,
     overflow: 'hidden',
@@ -58,4 +58,4 @@ const styles = StyleSheet.create({
     color: colors.white,
     ...typography.caption,
   },
-});
+}));

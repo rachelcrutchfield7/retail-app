@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Building2, Mail, UserRound, X } from 'lucide-react-native';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, radius, sizes, spacing, typography } from '../../constants/theme';
+import { colors, radius, sizes, spacing, typography, createThemedStyles } from '../../constants/theme';
 import type { AccountType, IconComponent } from '../../types.ts';
 import { TextInput } from '../forms/TextInput';
 
@@ -188,7 +188,7 @@ function AuthButton({ icon: Icon, label, onPress }: { icon: IconComponent; label
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((colors) => ({
   modalBackdrop: {
     ...StyleSheet.absoluteFill,
     flex: 1,
@@ -324,4 +324,4 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     textAlign: 'center',
   },
-});
+}));

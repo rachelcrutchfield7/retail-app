@@ -1,14 +1,24 @@
 import { ChevronRight, HeartHandshake } from 'lucide-react-native';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, radius, sizes, spacing, typography } from '../../constants/theme';
+import { Pressable, Text, View } from 'react-native';
+import { colors, radius, sizes, spacing, typography, createThemedStyles } from '../../constants/theme';
 
 type RescueHubBannerProps = {
   rescueCount: number;
   urgentNeedCount: number;
+  wishlistCount?: number;
+  loading?: boolean;
+  errorMessage?: string | null;
   onPress: () => void;
 };
 
-export function RescueHubBanner({ rescueCount, urgentNeedCount, onPress }: RescueHubBannerProps) {
+export function RescueHubBanner({
+  rescueCount,
+  urgentNeedCount,
+  wishlistCount = 0,
+  loading = false,
+  errorMessage,
+  onPress,
+}: RescueHubBannerProps) {
   return (
     <Pressable
       accessibilityRole="button"
@@ -24,10 +34,17 @@ export function RescueHubBanner({ rescueCount, urgentNeedCount, onPress }: Rescu
         <Text style={styles.eyebrow}>Rescue Hub</Text>
         <Text style={styles.title}>See what local rescues need in your area.</Text>
         <Text style={styles.body}>Browse nearby rescues, sorted by distance, and view their current supply needs.</Text>
-        <View style={styles.statRow}>
-          <Text style={styles.stat}>{rescueCount} rescues</Text>
-          <Text style={styles.stat}>{urgentNeedCount} urgent needs</Text>
-        </View>
+        {loading ? (
+          <Text style={styles.stat}>Loading local rescue counts...</Text>
+        ) : errorMessage ? (
+          <Text style={styles.stat}>Rescue counts unavailable</Text>
+        ) : (
+          <View style={styles.statRow}>
+            <Text style={styles.stat}>{rescueCount} rescues</Text>
+            <Text style={styles.stat}>{urgentNeedCount} urgent needs</Text>
+            <Text style={styles.stat}>{wishlistCount} wishlist items</Text>
+          </View>
+        )}
       </View>
 
       <ChevronRight size={22} color={colors.primary} />
@@ -35,7 +52,7 @@ export function RescueHubBanner({ rescueCount, urgentNeedCount, onPress }: Rescu
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((colors) => ({
   banner: {
     minHeight: 132,
     flexDirection: 'row',
@@ -85,4 +102,4 @@ const styles = StyleSheet.create({
     color: colors.primary,
     ...typography.caption,
   },
-});
+}));

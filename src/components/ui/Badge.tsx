@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
-import { colors, radius, spacing, typography } from '../../constants/theme';
+import { colors, radius, spacing, typography, createThemedStyles } from '../../constants/theme';
 
 export type BadgeTone = 'success' | 'warning' | 'error' | 'info' | 'neutral';
 
@@ -28,18 +28,18 @@ const styles = StyleSheet.create({
   },
 });
 
-const badgeToneStyles = StyleSheet.create<Record<BadgeTone, object>>({
+const badgeToneStyles = createThemedStyles((colors) => ({
   success: { backgroundColor: colors.primarySoft },
   warning: { backgroundColor: colors.secondary },
   error: { backgroundColor: colors.errorSoft },
   info: { backgroundColor: colors.accentSoft },
   neutral: { backgroundColor: colors.secondary },
-});
+}));
 
-const textToneStyles = StyleSheet.create<Record<BadgeTone, { color: string }>>({
+const textToneStyles = createThemedStyles((colors) => ({
   success: { color: colors.primary },
   warning: { color: colors.warning },
   error: { color: colors.error },
   info: { color: colors.info },
   neutral: { color: colors.textSecondary },
-});
+}));

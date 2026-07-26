@@ -1,6 +1,6 @@
 import { LogIn } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, radius, sizes, spacing, typography } from '../../constants/theme';
+import { colors, radius, sizes, spacing, typography, createThemedStyles } from '../../constants/theme';
 import type { IconComponent } from '../../types.ts';
 
 type LockedScreenProps = {
@@ -27,7 +27,7 @@ export function LockedScreen({ icon: Icon, title, body, action, onPress }: Locke
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((colors) => ({
   lockedScreen: {
     flex: 1,
     alignItems: 'center',
@@ -71,4 +71,4 @@ const styles = StyleSheet.create({
     color: colors.white,
     ...typography.button,
   },
-});
+}));

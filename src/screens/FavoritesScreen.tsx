@@ -1,6 +1,6 @@
 import { Heart } from 'lucide-react-native';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { colors, sizes, spacing, typography } from '../constants/theme';
+import { colors, sizes, spacing, typography, createThemedStyles } from '../constants/theme';
 import { EmptyState, ErrorState, ListingCard, LoadingSpinner, LockedScreen } from '../components';
 import type { Listing } from '../types.ts';
 
@@ -66,7 +66,7 @@ export function FavoritesScreen({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((colors) => ({
   screen: {
     flex: 1,
   },
@@ -94,4 +94,4 @@ const styles = StyleSheet.create({
     width: '50%',
     paddingHorizontal: spacing.xs,
   },
-});
+}));

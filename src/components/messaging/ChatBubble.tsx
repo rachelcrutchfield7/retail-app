@@ -1,5 +1,6 @@
 import { Image, StyleSheet, Text, View } from 'react-native';
-import { colors, radius, spacing, typography } from '../../constants/theme';
+import { colors, radius, spacing, typography, createThemedStyles } from '../../constants/theme';
+import { formatOfferBodyPreview } from '../../services/offerMessageFormat';
 import type { Message } from '../../services/types';
 
 type ChatBubbleProps = {
@@ -11,11 +12,12 @@ type ChatBubbleProps = {
 export function ChatBubble({ message, currentUserId, showStatus = false }: ChatBubbleProps) {
   const outgoing = message.sender_id === currentUserId;
   const system = message.message_type === 'system';
+  const displayBody = formatOfferBodyPreview(message.body) ?? message.body;
 
   if (system) {
     return (
       <View style={styles.systemWrap}>
-        <Text style={styles.systemText}>{message.body}</Text>
+        <Text style={styles.systemText}>{displayBody}</Text>
       </View>
     );
   }
@@ -24,14 +26,14 @@ export function ChatBubble({ message, currentUserId, showStatus = false }: ChatB
     <View style={[styles.row, outgoing ? styles.outgoingRow : styles.incomingRow]}>
       <View style={[styles.bubble, outgoing ? styles.outgoingBubble : styles.incomingBubble]}>
         {message.image_url ? <Image source={{ uri: message.image_url }} style={styles.image} /> : null}
-        {message.body ? <Text style={[styles.body, outgoing ? styles.outgoingText : styles.incomingText]}>{message.body}</Text> : null}
+        {displayBody ? <Text style={[styles.body, outgoing ? styles.outgoingText : styles.incomingText]}>{displayBody}</Text> : null}
       </View>
       {showStatus && outgoing ? <Text style={styles.status}>{message.is_read ? 'Seen' : 'Delivered'}</Text> : null}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((colors) => ({
   row: {
     gap: spacing.xs,
     marginVertical: spacing.xs,
@@ -88,4 +90,4 @@ const styles = StyleSheet.create({
     ...typography.caption,
     textAlign: 'center',
   },
-});
+}));

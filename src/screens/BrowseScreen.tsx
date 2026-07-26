@@ -1,7 +1,7 @@
 import { Bell, Search, ShieldCheck } from 'lucide-react-native';
-import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, ScrollView, Text, View } from 'react-native';
 import { CATEGORY_FILTERS } from '../constants/categories';
-import { colors, sizes, spacing, typography } from '../constants/theme';
+import { colors, sizes, spacing, typography, createThemedStyles } from '../constants/theme';
 import {
   CategoryChip,
   EmptyState,
@@ -12,8 +12,9 @@ import {
   RescueHubBanner,
   SearchBar,
 } from '../components';
-import { rescueOrganizations } from '../data/mockData';
+import { useRescueHub } from '../hooks/useRescueHub';
 import type { CategoryFilter, Listing } from '../types.ts';
+import { handleAppError } from '../utils/errorHandler';
 
 type BrowseScreenProps = {
   listings: Listing[];
@@ -44,10 +45,13 @@ export function BrowseScreen({
   onFavorite,
   onOpenRescueHub,
 }: BrowseScreenProps) {
-  const urgentNeedCount = rescueOrganizations.reduce(
+  const rescueHub = useRescueHub();
+  const rescueHubItems = rescueHub.data ?? [];
+  const urgentNeedCount = rescueHubItems.reduce(
     (total, rescue) => total + rescue.urgentNeeds.filter((need) => need.urgency === 'High').length,
     0
   );
+  const wishlistCount = rescueHubItems.reduce((total, rescue) => total + rescue.wishlistItems.length, 0);
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.screenContent}>
@@ -68,8 +72,11 @@ export function BrowseScreen({
       </View>
 
       <RescueHubBanner
-        rescueCount={rescueOrganizations.length}
+        rescueCount={rescueHubItems.length}
         urgentNeedCount={urgentNeedCount}
+        wishlistCount={wishlistCount}
+        loading={rescueHub.isLoading}
+        errorMessage={rescueHub.isError ? handleAppError(rescueHub.error).userMessage : null}
         onPress={onOpenRescueHub}
       />
 
@@ -115,7 +122,7 @@ export function BrowseScreen({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((colors) => ({
   screen: {
     flex: 1,
   },
@@ -174,4 +181,4 @@ const styles = StyleSheet.create({
     width: '50%',
     paddingHorizontal: spacing.xs,
   },
-});
+}));

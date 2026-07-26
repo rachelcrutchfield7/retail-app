@@ -1,6 +1,6 @@
 import { Camera, Trash2 } from 'lucide-react-native';
 import { Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, radius, sizes, spacing, typography } from '../../constants/theme';
+import { colors, radius, sizes, spacing, typography, createThemedStyles } from '../../constants/theme';
 
 type ImageUploaderProps = {
   images: string[];
@@ -88,7 +88,7 @@ export function ImageUploader({ images, onChange, error, uploading = false, prog
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((colors) => ({
   field: {
     gap: spacing.sm,
   },
@@ -175,4 +175,4 @@ const styles = StyleSheet.create({
     color: colors.error,
     ...typography.caption,
   },
-});
+}));

@@ -1,6 +1,6 @@
 import { ImagePlus } from 'lucide-react-native';
 import { Pressable, StyleSheet } from 'react-native';
-import { colors, radius, sizes } from '../../constants/theme';
+import { colors, radius, sizes, createThemedStyles } from '../../constants/theme';
 
 type AttachmentButtonProps = {
   onPress: () => void;
@@ -21,7 +21,7 @@ export function AttachmentButton({ onPress, disabled = false }: AttachmentButton
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((colors) => ({
   button: {
     width: sizes.touchTarget,
     height: sizes.touchTarget,
@@ -35,4 +35,4 @@ const styles = StyleSheet.create({
   disabled: {
     opacity: 0.5,
   },
-});
+}));

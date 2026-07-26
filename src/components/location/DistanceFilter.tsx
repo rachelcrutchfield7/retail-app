@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { MapPin, Search } from 'lucide-react-native';
-import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { colors, radius, spacing, typography } from '../../constants/theme';
+import { ScrollView, Text, TextInput, View } from 'react-native';
+import { colors, radius, spacing, typography, createThemedStyles } from '../../constants/theme';
 import { searchRadiusOptions } from '../../constants/location';
 import type { MarketplaceSearchArea } from '../../types.ts';
 import { Card } from '../ui/Card';
@@ -130,7 +130,7 @@ function normalizeLocationSearch(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((colors) => ({
   stack: {
     gap: spacing.md,
   },
@@ -201,4 +201,4 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     ...typography.caption,
   },
-});
+}));

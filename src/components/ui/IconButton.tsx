@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet } from 'react-native';
-import { colors, radius, sizes } from '../../constants/theme';
+import { colors, radius, sizes, createThemedStyles } from '../../constants/theme';
 import type { IconComponent } from '../../types.ts';
 
 type IconButtonProps = {
@@ -15,7 +15,7 @@ export function IconButton({ icon: Icon, label }: IconButtonProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((colors) => ({
   iconButton: {
     width: sizes.iconButton,
     height: sizes.iconButton,
@@ -26,4 +26,4 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-});
+}));

@@ -21,6 +21,26 @@ export function getPaymentReadiness(): PaymentReadiness {
   };
 }
 
+export function listingPriceToCents(price: string): number | null {
+  const normalized = price.replace(/[^0-9.]/g, '');
+  const amount = Number(normalized);
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return null;
+  }
+
+  return Math.round(amount * 100);
+}
+
+export function calculatePlatformFeeCents(amountCents: number): number {
+  if (!Number.isFinite(amountCents) || amountCents <= 0) {
+    return 0;
+  }
+
+  const percentFee = Math.round(amountCents * (config.stripePlatformFeePercent / 100));
+  return Math.max(percentFee, config.stripePlatformMinFeeCents);
+}
+
 export async function startProtectedCheckout(context: PaymentOptionContext): Promise<void> {
   const readiness = getPaymentReadiness();
 
@@ -34,6 +54,16 @@ export async function startProtectedCheckout(context: PaymentOptionContext): Pro
     );
   }
 
+  const amountCents = listingPriceToCents(context.agreedAmount ?? context.listing.price);
+
+  if (!amountCents) {
+    throw createServiceError(
+      'PAYMENT_AMOUNT_INVALID',
+      `Listing ${context.listing.id} has an invalid checkout amount.`,
+      'We could not confirm a valid checkout amount for this listing.'
+    );
+  }
+
   if (!readiness.protectedCheckoutEnabled) {
     throw createServiceError(
       'STRIPE_NOT_READY',
@@ -44,7 +74,7 @@ export async function startProtectedCheckout(context: PaymentOptionContext): Pro
 
   throw createServiceError(
     'STRIPE_BACKEND_REQUIRED',
-    'Stripe PaymentSheet requires a server-created PaymentIntent before launch.',
+    `Stripe PaymentSheet requires a server-created PaymentIntent before launch. Planned platform fee cents: ${calculatePlatformFeeCents(amountCents)}.`,
     'Stripe checkout is not connected to the payment backend yet.'
   );
 }

@@ -1,7 +1,7 @@
 import type { GestureResponderEvent } from 'react-native';
 import { Heart } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, radius, spacing, typography } from '../../constants/theme';
+import { colors, radius, spacing, typography, createThemedStyles } from '../../constants/theme';
 
 type FavoriteButtonProps = {
   selected: boolean;
@@ -32,7 +32,7 @@ export function FavoriteButton({ selected, onPress, label, count, disabled = fal
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((colors) => ({
   wrap: {
     alignItems: 'center',
     gap: spacing.xs,
@@ -59,4 +59,4 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     ...typography.caption,
   },
-});
+}));

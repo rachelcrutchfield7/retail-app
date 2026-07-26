@@ -1,7 +1,7 @@
 import type { ComponentType } from 'react';
 import { Pressable, StyleSheet, Text } from 'react-native';
 import type { GestureResponderEvent } from 'react-native';
-import { colors, radius, sizes, spacing, typography } from '../../constants/theme';
+import { colors, radius, sizes, spacing, typography, createThemedStyles } from '../../constants/theme';
 
 type ProfileActionButtonProps = {
   title: string;
@@ -32,7 +32,7 @@ export function ProfileActionButton({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((colors) => ({
   button: {
     minHeight: sizes.touchTarget,
     flexDirection: 'row',
@@ -53,9 +53,9 @@ const styles = StyleSheet.create({
   disabled: {
     opacity: 0.55,
   },
-});
+}));
 
-const toneStyles = StyleSheet.create({
+const toneStyles = createThemedStyles((colors) => ({
   primary: {
     backgroundColor: colors.primary,
     borderColor: colors.primary,
@@ -68,9 +68,9 @@ const toneStyles = StyleSheet.create({
     backgroundColor: colors.errorSoft,
     borderColor: colors.error,
   },
-});
+}));
 
-const toneTextStyles = StyleSheet.create({
+const toneTextStyles = createThemedStyles((colors) => ({
   primary: {
     color: colors.white,
   },
@@ -80,7 +80,7 @@ const toneTextStyles = StyleSheet.create({
   danger: {
     color: colors.error,
   },
-});
+}));
 
 const toneColor = {
   primary: colors.white,

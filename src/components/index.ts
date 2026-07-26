@@ -58,3 +58,4 @@ export { Divider } from './ui/Divider';
 export { IconButton } from './ui/IconButton';
 export { InfoTile } from './ui/InfoTile';
 export { LoadingSpinner } from './ui/LoadingSpinner';
+export { ThemedStatusBar } from './ui/ThemedStatusBar';

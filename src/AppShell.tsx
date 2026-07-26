@@ -3,7 +3,7 @@ import { Alert, SafeAreaView, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { AuthModal, ReportListingModal, TabBar } from './components';
 import type { AuthModalSubmission, AuthPrompt } from './components';
-import { colors } from './constants/theme';
+import { colors , createThemedStyles } from './constants/theme';
 import { emptyListingForm, listingImages } from './data/mockData';
 import { AuthProvider, useAuth } from './auth';
 import { QueryClientProvider } from './lib/queryClient';
@@ -499,7 +499,7 @@ function listingFormFromListing(listing: Listing): ListingForm {
   };
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((colors) => ({
   safeArea: {
     flex: 1,
     backgroundColor: colors.secondary,
@@ -511,4 +511,4 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     backgroundColor: colors.secondary,
   },
-});
+}));

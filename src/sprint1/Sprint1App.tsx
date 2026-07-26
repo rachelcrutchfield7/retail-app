@@ -5,7 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Heart, Home, Plus, Search, User } from 'lucide-react-native';
 import { AuthProvider, useAuth } from '../auth';
 import { Button, Card, LoadingSpinner, TextInput } from '../components';
-import { colors, radius, sizes, spacing, typography } from '../constants/theme';
+import { colors, radius, sizes, spacing, typography, createThemedStyles } from '../constants/theme';
 import { QueryClientProvider } from '../lib/queryClient';
 import { useSupabaseStatus } from '../hooks/useSupabaseStatus';
 import { handleAppError } from '../utils/errorHandler';
@@ -491,7 +491,7 @@ function BadgeText({ label }: { label: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((colors) => ({
   app: {
     flex: 1,
     backgroundColor: colors.background,
@@ -587,4 +587,4 @@ const styles = StyleSheet.create({
   tabLabelActive: {
     color: colors.primary,
   },
-});
+}));

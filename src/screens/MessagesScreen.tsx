@@ -1,7 +1,7 @@
 import { MessageCircle, Send } from 'lucide-react-native';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { conversations } from '../data/mockData';
-import { colors, radius, sizes, spacing, typography } from '../constants/theme';
+import { colors, radius, sizes, spacing, typography, createThemedStyles } from '../constants/theme';
 import { ConversationCard, LockedScreen } from '../components';
 import { initials } from '../utils/format';
 
@@ -67,7 +67,7 @@ export function MessagesScreen({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((colors) => ({
   flex: {
     flex: 1,
   },
@@ -120,4 +120,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: colors.primary,
   },
-});
+}));

@@ -1,7 +1,7 @@
 import type { ErrorInfo, ReactNode } from 'react';
 import { Component } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, radius, spacing, typography } from '../../constants/theme';
+import { colors, radius, spacing, typography, createThemedStyles } from '../../constants/theme';
 import { captureError } from '../../lib/sentry';
 
 type AppErrorBoundaryProps = {
@@ -59,7 +59,7 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
   }
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((colors) => ({
   screen: {
     flex: 1,
     justifyContent: 'center',
@@ -107,4 +107,4 @@ const styles = StyleSheet.create({
     color: colors.primary,
     ...typography.button,
   },
-});
+}));

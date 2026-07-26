@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { trackEvent } from '../lib/analytics';
 import { emitMessagingUpdate } from './realtimeService';
+import { formatOfferMessagePreview } from './offerMessageFormat';
 import type { DevicePlatform, Message, Notification, NotificationPreferences, NotificationType } from './types';
 import { ensureCurrentProfile, throwSupabaseError } from './supabaseData';
 
@@ -234,11 +235,13 @@ export async function createMessageNotification(
   listingId: string,
   message: Message
 ): Promise<Notification | null> {
+  const offerPreview = formatOfferMessagePreview(message);
+
   return createNotification({
     userId,
     type: 'message',
     title: 'New message',
-    body: message.message_type === 'image' ? 'You received a photo.' : message.body ?? 'You received a message.',
+    body: offerPreview ?? (message.message_type === 'image' ? 'You received a photo.' : message.body ?? 'You received a message.'),
     data: {
       conversationId,
       listingId,

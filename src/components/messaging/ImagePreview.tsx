@@ -1,6 +1,6 @@
 import { X } from 'lucide-react-native';
 import { Image, Pressable, StyleSheet, View } from 'react-native';
-import { colors, radius, sizes, spacing } from '../../constants/theme';
+import { colors, radius, sizes, spacing, createThemedStyles } from '../../constants/theme';
 
 type ImagePreviewProps = {
   imageUri?: string | null;
@@ -22,7 +22,7 @@ export function ImagePreview({ imageUri, onRemove }: ImagePreviewProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles((colors) => ({
   wrap: {
     alignSelf: 'flex-start',
     width: 96,
@@ -47,4 +47,4 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     backgroundColor: colors.modalOverlay,
   },
-});
+}));
