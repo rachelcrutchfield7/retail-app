@@ -1,6 +1,6 @@
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { CATEGORIES } from '../../constants/categories';
-import { colors, spacing, typography, createThemedStyles } from '../../constants/theme';
+import { colors, spacing, typography } from '../../constants/theme';
 import type { Category } from '../../types';
 import { CategoryChip } from '../marketplace/CategoryChip';
 import { formStyles } from './Field';
@@ -30,7 +30,7 @@ export function CategorySelector({ value, onChange, error }: CategorySelectorPro
   );
 }
 
-const styles = createThemedStyles((colors) => ({
+const styles = StyleSheet.create({
   field: {
     gap: spacing.sm,
   },
@@ -42,4 +42,4 @@ const styles = createThemedStyles((colors) => ({
     color: colors.error,
     ...typography.caption,
   },
-}));
+});

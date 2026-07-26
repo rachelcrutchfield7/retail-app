@@ -1,6 +1,6 @@
 import { Image, StyleSheet, Text, View } from 'react-native';
-import { colors, radius, spacing, typography, createThemedStyles } from '../../constants/theme';
-import { formatOfferBodyPreview } from '../../services/offerMessageFormat';
+import { colors, radius, spacing, typography } from '../../constants/theme';
+import { formatOfferBodyPreview } from '../../services/offerService';
 import type { Message } from '../../services/types';
 
 type ChatBubbleProps = {
@@ -33,7 +33,7 @@ export function ChatBubble({ message, currentUserId, showStatus = false }: ChatB
   );
 }
 
-const styles = createThemedStyles((colors) => ({
+const styles = StyleSheet.create({
   row: {
     gap: spacing.xs,
     marginVertical: spacing.xs,
@@ -90,4 +90,4 @@ const styles = createThemedStyles((colors) => ({
     ...typography.caption,
     textAlign: 'center',
   },
-}));
+});

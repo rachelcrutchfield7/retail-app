@@ -1,13 +1,13 @@
 import { AppErrorBoundary } from './src/components';
 import { Sprint4App } from './src/sprint4/Sprint4App';
-import { ThemeProvider } from './src/theme/ThemeProvider';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 export default function App() {
   return (
-    <ThemeProvider>
-      <AppErrorBoundary>
+    <AppErrorBoundary>
+      <SafeAreaProvider>
         <Sprint4App />
-      </AppErrorBoundary>
-    </ThemeProvider>
+      </SafeAreaProvider>
+    </AppErrorBoundary>
   );
 }

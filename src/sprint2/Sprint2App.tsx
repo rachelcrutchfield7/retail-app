@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Alert, FlatList, Image, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, FlatList, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronLeft, Flag, Heart, Home, MapPin, MessageCircle, Plus, Search, User } from 'lucide-react-native';
 import { AuthProvider, useAuth } from '../auth';
 import {
@@ -27,7 +28,7 @@ import {
   ToggleSwitch,
 } from '../components';
 import { CATEGORIES, CONDITIONS } from '../constants/categories';
-import { colors, sizes, spacing, typography, createThemedStyles } from '../constants/theme';
+import { colors, sizes, spacing, typography } from '../constants/theme';
 import { useAuth as useAuthHook } from '../hooks/useAuth';
 import { useCreateListing } from '../hooks/useCreateListing';
 import { useListing } from '../hooks/useListing';
@@ -696,7 +697,7 @@ function ScreenFrame({ children }: { children: ReactNode }) {
   );
 }
 
-const styles = createThemedStyles((colors) => ({
+const styles = StyleSheet.create({
   app: {
     flex: 1,
     backgroundColor: colors.background,
@@ -868,4 +869,4 @@ const styles = createThemedStyles((colors) => ({
     color: colors.error,
     ...typography.small,
   },
-}));
+});

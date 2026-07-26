@@ -1,6 +1,6 @@
 import { ChevronLeft, Flag, Heart, MapPin, MessageCircle, Pencil, Star } from 'lucide-react-native';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { colors, radius, sizes, spacing, typography, createThemedStyles } from '../constants/theme';
+import { colors, radius, sizes, spacing, typography } from '../constants/theme';
 import { InfoTile, StatusPill } from '../components';
 import type { Listing } from '../types.ts';
 import { initials, listingLocationLabel } from '../utils/format';
@@ -108,7 +108,7 @@ export function ListingDetailScreen({
   );
 }
 
-const styles = createThemedStyles((colors) => ({
+const styles = StyleSheet.create({
   screen: {
     flex: 1,
   },
@@ -286,4 +286,4 @@ const styles = createThemedStyles((colors) => ({
     borderWidth: 1,
     borderColor: colors.border,
   },
-}));
+});

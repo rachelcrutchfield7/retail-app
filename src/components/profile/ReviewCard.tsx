@@ -1,6 +1,6 @@
 import { Star } from 'lucide-react-native';
 import { StyleSheet, Text, View } from 'react-native';
-import { colors, radius, spacing, typography, createThemedStyles } from '../../constants/theme';
+import { colors, radius, spacing, typography } from '../../constants/theme';
 
 type ReviewCardProps = {
   reviewer: string;
@@ -31,7 +31,7 @@ export function ReviewCard({ reviewer, rating, comment, date }: ReviewCardProps)
   );
 }
 
-const styles = createThemedStyles((colors) => ({
+const styles = StyleSheet.create({
   reviewCard: {
     gap: spacing.sm,
     padding: spacing.md,
@@ -62,4 +62,4 @@ const styles = createThemedStyles((colors) => ({
     ...typography.body,
     lineHeight: 23,
   },
-}));
+});

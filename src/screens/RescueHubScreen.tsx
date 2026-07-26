@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 import { AlertCircle, HeartHandshake, MapPin, ShieldCheck } from 'lucide-react-native';
-import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Badge, Card, DistanceFilter, EmptyState, ErrorState, HeaderBar, LoadingSpinner, Metric, SearchBar } from '../components';
-import { colors, radius, sizes, spacing, typography, createThemedStyles } from '../constants/theme';
+import { colors, radius, sizes, spacing, typography } from '../constants/theme';
 import {
   useMarketplaceSearchAreas,
   useMarketplaceSearchPreference,
@@ -11,6 +12,7 @@ import {
 import { useRescueHub } from '../hooks/useRescueHub';
 import type { MarketplaceSearchArea, RescueNeedUrgency, RescueOrganization } from '../types.ts';
 import { handleAppError } from '../utils/errorHandler';
+import { scrollContentBottomClearance, topSafeAreaPadding } from '../utils/safeAreaLayout';
 
 type RescueHubScreenProps = {
   onBack: () => void;
@@ -18,6 +20,7 @@ type RescueHubScreenProps = {
 };
 
 export function RescueHubScreen({ onBack, onOpenRescueProfile }: RescueHubScreenProps) {
+  const insets = useSafeAreaInsets();
   const [search, setSearch] = useState('');
   const searchAreas = useMarketplaceSearchAreas();
   const searchPreference = useMarketplaceSearchPreference();
@@ -40,13 +43,22 @@ export function RescueHubScreen({ onBack, onOpenRescueProfile }: RescueHubScreen
   const rescues = useRescueHub(rescueParams);
   const filteredRescues = rescues.data ?? [];
   const urgentNeedCount = filteredRescues.reduce(
-    (total, rescue) => total + rescue.urgentNeeds.filter((need) => need.urgency === 'High').length,
+    (total, rescue) => total + rescue.urgentNeeds.length,
     0
   );
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.screenContent}>
-      <HeaderBar title="Rescue Hub" onBack={onBack} />
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={[
+        styles.screenContent,
+        {
+          paddingTop: topSafeAreaPadding(insets.top) + sizes.screenTopGap,
+          paddingBottom: scrollContentBottomClearance(insets.bottom),
+        },
+      ]}
+    >
+      <HeaderBar title="Rescue Hub" onBack={onBack} backLabel="Back" backVariant="prominent" />
 
       <View style={styles.hero}>
         <View style={styles.heroIcon}>
@@ -62,7 +74,7 @@ export function RescueHubScreen({ onBack, onOpenRescueProfile }: RescueHubScreen
 
       <View style={styles.metricRow}>
         <Metric label="Nearby rescues" value={`${filteredRescues.length}`} />
-        <Metric label="High priority" value={`${urgentNeedCount}`} tone="coral" />
+        <Metric label="Urgent needs" value={`${urgentNeedCount}`} tone="coral" />
       </View>
 
       <SearchBar
@@ -173,73 +185,73 @@ function RescueCard({
       style={({ pressed }) => [pressed && styles.pressedCard]}
     >
       <Card>
-      <View style={styles.rescueHeader}>
-        <View style={styles.rescueTitleBlock}>
-          <Text style={styles.rescueName}>{rescue.name}</Text>
-          <View style={styles.locationRow}>
-            <MapPin size={16} color={colors.textSecondary} />
-            <Text style={styles.locationText}>
-              {rescue.location} - {rescue.distance}
-            </Text>
+        <View style={styles.rescueHeader}>
+          <View style={styles.rescueTitleBlock}>
+            <Text style={styles.rescueName}>{rescue.name}</Text>
+            <View style={styles.locationRow}>
+              <MapPin size={16} color={colors.textSecondary} />
+              <Text style={styles.locationText}>
+                {rescue.location} - {rescue.distance}
+              </Text>
+            </View>
           </View>
+
+          {rescue.verified ? (
+            <View style={styles.verifiedPill}>
+              <ShieldCheck size={14} color={colors.primary} />
+              <Text style={styles.verifiedText}>Verified</Text>
+            </View>
+          ) : null}
         </View>
 
-        {rescue.verified ? (
-          <View style={styles.verifiedPill}>
-            <ShieldCheck size={14} color={colors.primary} />
-            <Text style={styles.verifiedText}>Verified</Text>
-          </View>
-        ) : null}
-      </View>
+        <Text style={styles.summary}>{rescue.summary}</Text>
+        <Text style={styles.rescueMeta}>
+          {rescue.organizationType} - {rescue.has501c3 ? '501(c)(3)' : 'Verification pending'}
+        </Text>
+        {rescue.websiteUrl ? <Text style={styles.publicInfo}>Website: {rescue.websiteUrl}</Text> : null}
+        {publicRescueAddress(rescue) ? <Text style={styles.publicInfo}>Address: {publicRescueAddress(rescue)}</Text> : null}
 
-      <Text style={styles.summary}>{rescue.summary}</Text>
-      <Text style={styles.rescueMeta}>
-        {rescue.organizationType} - {rescue.has501c3 ? '501(c)(3)' : 'Verification pending'}
-      </Text>
-      {rescue.websiteUrl ? <Text style={styles.publicInfo}>Website: {rescue.websiteUrl}</Text> : null}
-      {publicRescueAddress(rescue) ? <Text style={styles.publicInfo}>Address: {publicRescueAddress(rescue)}</Text> : null}
+        <View style={styles.needsHeader}>
+          <AlertCircle size={18} color={colors.warning} />
+          <Text style={styles.needsTitle}>Urgent needs</Text>
+        </View>
 
-      <View style={styles.needsHeader}>
-        <AlertCircle size={18} color={colors.warning} />
-        <Text style={styles.needsTitle}>Urgent needs</Text>
-      </View>
-
-      <View style={styles.needList}>
-        {rescue.urgentNeeds.map((need) => (
-          <View key={need.id} style={styles.needRow}>
-            <View style={styles.needCopy}>
-              <Text style={styles.needItem}>{need.item}</Text>
-              <Text style={styles.needQuantity}>{need.quantity}</Text>
-            </View>
-            <Badge label={need.urgency} tone={getUrgencyTone(need.urgency)} />
-          </View>
-        ))}
-      </View>
-
-      {rescue.wishlistItems.length > 0 ? (
-        <>
-          <View style={styles.needsHeader}>
-            <HeartHandshake size={18} color={colors.primary} />
-            <Text style={styles.needsTitle}>Wishlist</Text>
-          </View>
-          <View style={styles.needList}>
-            {rescue.wishlistItems.map((item) => (
-              <View key={item.id} style={styles.needRow}>
-                <View style={styles.needCopy}>
-                  <Text style={styles.needItem}>{item.item}</Text>
-                  <Text style={styles.needQuantity}>{item.quantity}</Text>
-                </View>
-                <Badge label={item.priority} tone={getUrgencyTone(item.priority)} />
+        <View style={styles.needList}>
+          {rescue.urgentNeeds.map((need) => (
+            <View key={need.id} style={styles.needRow}>
+              <View style={styles.needCopy}>
+                <Text style={styles.needItem}>{need.item}</Text>
+                <Text style={styles.needQuantity}>{need.quantity}</Text>
               </View>
-            ))}
-          </View>
-        </>
-      ) : null}
+              <Badge label={need.urgency} tone={getUrgencyTone(need.urgency)} />
+            </View>
+          ))}
+        </View>
 
-      <View style={styles.contactNote}>
-        <Text style={styles.contactLabel}>Donation instructions</Text>
-        <Text style={styles.contactText}>{rescue.contactHint}</Text>
-      </View>
+        {rescue.wishlistItems.length > 0 ? (
+          <>
+            <View style={styles.needsHeader}>
+              <HeartHandshake size={18} color={colors.primary} />
+              <Text style={styles.needsTitle}>Wishlist</Text>
+            </View>
+            <View style={styles.needList}>
+              {rescue.wishlistItems.map((item) => (
+                <View key={item.id} style={styles.needRow}>
+                  <View style={styles.needCopy}>
+                    <Text style={styles.needItem}>{item.item}</Text>
+                    <Text style={styles.needQuantity}>{item.quantity}</Text>
+                  </View>
+                  <Badge label={item.priority} tone={getUrgencyTone(item.priority)} />
+                </View>
+              ))}
+            </View>
+          </>
+        ) : null}
+
+        <View style={styles.contactNote}>
+          <Text style={styles.contactLabel}>Donation instructions</Text>
+          <Text style={styles.contactText}>{rescue.contactHint}</Text>
+        </View>
       </Card>
     </Pressable>
   );
@@ -269,13 +281,14 @@ function publicRescueAddress(rescue: RescueOrganization): string {
   ].filter(Boolean).join(', ');
 }
 
-const styles = createThemedStyles((colors) => ({
+const styles = StyleSheet.create({
   screen: {
     flex: 1,
   },
   screenContent: {
-    padding: spacing.md,
-    paddingBottom: sizes.tabBarHeight + spacing.xl,
+    paddingHorizontal: spacing.lg,
+    paddingTop: sizes.screenTopGap,
+    paddingBottom: spacing.xxl,
     gap: spacing.lg,
   },
   hero: {
@@ -286,7 +299,7 @@ const styles = createThemedStyles((colors) => ({
     backgroundColor: colors.surfaceWarm,
     borderRadius: radius.large,
     borderWidth: 1,
-    borderColor: colors.rescueAccent,
+    borderColor: colors.primarySoft,
   },
   heroIcon: {
     width: sizes.iconFrame,
@@ -319,7 +332,7 @@ const styles = createThemedStyles((colors) => ({
     gap: spacing.md,
   },
   sectionTitle: {
-    color: colors.rescueAccent,
+    color: colors.textPrimary,
     ...typography.sectionTitle,
   },
   sectionHint: {
@@ -330,7 +343,7 @@ const styles = createThemedStyles((colors) => ({
     gap: spacing.md,
   },
   pressedCard: {
-    opacity: 0.84,
+    opacity: 0.72,
   },
   rescueHeader: {
     flexDirection: 'row',
@@ -391,7 +404,7 @@ const styles = createThemedStyles((colors) => ({
     marginTop: spacing.lg,
   },
   needsTitle: {
-    color: colors.rescueAccent,
+    color: colors.textPrimary,
     ...typography.button,
   },
   needList: {
@@ -423,17 +436,15 @@ const styles = createThemedStyles((colors) => ({
     marginTop: spacing.md,
     padding: spacing.md,
     borderRadius: radius.medium,
-    backgroundColor: colors.surfaceWarm,
-    borderWidth: 1,
-    borderColor: colors.rescueAccent,
+    backgroundColor: colors.accentSoft,
     gap: spacing.xs,
   },
   contactLabel: {
-    color: colors.rescueAccent,
+    color: colors.textPrimary,
     ...typography.button,
   },
   contactText: {
     color: colors.textPrimary,
     ...typography.small,
   },
-}));
+});

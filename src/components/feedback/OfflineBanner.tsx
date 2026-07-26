@@ -1,6 +1,6 @@
 import { WifiOff } from 'lucide-react-native';
 import { StyleSheet, Text, View } from 'react-native';
-import { colors, radius, spacing, typography, createThemedStyles } from '../../constants/theme';
+import { colors, radius, spacing, typography } from '../../constants/theme';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 
 export function OfflineBanner() {
@@ -18,7 +18,7 @@ export function OfflineBanner() {
   );
 }
 
-const styles = createThemedStyles((colors) => ({
+const styles = StyleSheet.create({
   banner: {
     position: 'absolute',
     top: spacing.md,
@@ -42,4 +42,4 @@ const styles = createThemedStyles((colors) => ({
     ...typography.small,
     lineHeight: 20,
   },
-}));
+});

@@ -1,7 +1,9 @@
 import { Heart, Home, MessageCircle, Plus, UserRound } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, radius, sizes, spacing, typography, createThemedStyles } from '../../constants/theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { colors, radius, sizes, spacing, typography } from '../../constants/theme';
 import type { IconComponent, TabKey } from '../../types.ts';
+import { bottomTabBarGap } from '../../utils/safeAreaLayout';
 
 type TabBarProps = {
   activeTab: TabKey;
@@ -17,6 +19,7 @@ type TabItem = {
 };
 
 export function TabBar({ activeTab, onChange, favoritesCount }: TabBarProps) {
+  const insets = useSafeAreaInsets();
   const tabs: TabItem[] = [
     { key: 'browse', label: 'Browse', icon: Home },
     { key: 'favorites', label: 'Saved', icon: Heart, badge: favoritesCount },
@@ -26,7 +29,7 @@ export function TabBar({ activeTab, onChange, favoritesCount }: TabBarProps) {
   ];
 
   return (
-    <View style={styles.tabBar}>
+    <View style={[styles.tabBar, { bottom: bottomTabBarGap(insets.bottom) }]}>
       {tabs.map((tab) => {
         const Icon = tab.icon;
         const active = activeTab === tab.key;
@@ -51,20 +54,26 @@ export function TabBar({ activeTab, onChange, favoritesCount }: TabBarProps) {
   );
 }
 
-const styles = createThemedStyles((colors) => ({
+const styles = StyleSheet.create({
   tabBar: {
     position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
+    left: spacing.md,
+    right: spacing.md,
+    bottom: sizes.tabBarMinimumBottomGap,
     minHeight: sizes.tabBarHeight,
     flexDirection: 'row',
     justifyContent: 'space-around',
     paddingTop: spacing.sm,
-    paddingBottom: spacing.sm,
+    paddingBottom: spacing.md,
     backgroundColor: colors.surface,
-    borderTopWidth: 1,
+    borderRadius: radius.large,
+    borderWidth: 1,
     borderColor: colors.border,
+    shadowColor: colors.textPrimary,
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 8,
   },
   tabItem: {
     flex: 1,
@@ -103,4 +112,4 @@ const styles = createThemedStyles((colors) => ({
   tabLabelActive: {
     color: colors.primary,
   },
-}));
+});

@@ -1,7 +1,7 @@
 import { Bell, Search, ShieldCheck } from 'lucide-react-native';
-import { Image, ScrollView, Text, View } from 'react-native';
+import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { CATEGORY_FILTERS } from '../constants/categories';
-import { colors, sizes, spacing, typography, createThemedStyles } from '../constants/theme';
+import { colors, sizes, spacing, typography } from '../constants/theme';
 import {
   CategoryChip,
   EmptyState,
@@ -12,9 +12,7 @@ import {
   RescueHubBanner,
   SearchBar,
 } from '../components';
-import { useRescueHub } from '../hooks/useRescueHub';
 import type { CategoryFilter, Listing } from '../types.ts';
-import { handleAppError } from '../utils/errorHandler';
 
 type BrowseScreenProps = {
   listings: Listing[];
@@ -29,6 +27,8 @@ type BrowseScreenProps = {
   onOpenListing: (listing: Listing) => void;
   onFavorite: (listingId: string) => void;
   onOpenRescueHub: () => void;
+  rescueCount: number;
+  urgentNeedCount: number;
 };
 
 export function BrowseScreen({
@@ -44,15 +44,9 @@ export function BrowseScreen({
   onRetry,
   onFavorite,
   onOpenRescueHub,
+  rescueCount,
+  urgentNeedCount,
 }: BrowseScreenProps) {
-  const rescueHub = useRescueHub();
-  const rescueHubItems = rescueHub.data ?? [];
-  const urgentNeedCount = rescueHubItems.reduce(
-    (total, rescue) => total + rescue.urgentNeeds.filter((need) => need.urgency === 'High').length,
-    0
-  );
-  const wishlistCount = rescueHubItems.reduce((total, rescue) => total + rescue.wishlistItems.length, 0);
-
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.screenContent}>
       <View style={styles.topBar}>
@@ -72,11 +66,8 @@ export function BrowseScreen({
       </View>
 
       <RescueHubBanner
-        rescueCount={rescueHubItems.length}
+        rescueCount={rescueCount}
         urgentNeedCount={urgentNeedCount}
-        wishlistCount={wishlistCount}
-        loading={rescueHub.isLoading}
-        errorMessage={rescueHub.isError ? handleAppError(rescueHub.error).userMessage : null}
         onPress={onOpenRescueHub}
       />
 
@@ -122,13 +113,14 @@ export function BrowseScreen({
   );
 }
 
-const styles = createThemedStyles((colors) => ({
+const styles = StyleSheet.create({
   screen: {
     flex: 1,
   },
   screenContent: {
-    padding: spacing.md,
-    paddingBottom: sizes.tabBarHeight + spacing.xl,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: sizes.tabBarHeight + sizes.tabBarBottomOffset + spacing.xxl,
     gap: spacing.lg,
   },
   topBar: {
@@ -181,4 +173,4 @@ const styles = createThemedStyles((colors) => ({
     width: '50%',
     paddingHorizontal: spacing.xs,
   },
-}));
+});

@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Alert, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Heart, Home, Plus, Search, User } from 'lucide-react-native';
 import { AuthProvider, useAuth } from '../auth';
 import { Button, Card, LoadingSpinner, TextInput } from '../components';
-import { colors, radius, sizes, spacing, typography, createThemedStyles } from '../constants/theme';
+import { colors, radius, sizes, spacing, typography } from '../constants/theme';
 import { QueryClientProvider } from '../lib/queryClient';
 import { useSupabaseStatus } from '../hooks/useSupabaseStatus';
 import { handleAppError } from '../utils/errorHandler';
@@ -491,7 +492,7 @@ function BadgeText({ label }: { label: string }) {
   );
 }
 
-const styles = createThemedStyles((colors) => ({
+const styles = StyleSheet.create({
   app: {
     flex: 1,
     backgroundColor: colors.background,
@@ -587,4 +588,4 @@ const styles = createThemedStyles((colors) => ({
   tabLabelActive: {
     color: colors.primary,
   },
-}));
+});

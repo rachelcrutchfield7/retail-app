@@ -1,6 +1,26 @@
 type RuntimeEnv = Record<string, string | undefined>;
+export type AppEnvironment = 'development' | 'beta' | 'production' | 'test';
 
-const runtimeEnv: RuntimeEnv = {
+const unsafePublicSupabasePatterns = [
+  'service_role',
+  ['sb_', 'secret_'].join(''),
+  'supabase_admin',
+  'postgresql://',
+  'postgres://',
+  'jwt_secret',
+  'database_password',
+  'database_url',
+];
+
+const supportedAppEnvironments = new Set<AppEnvironment>(['development', 'beta', 'production', 'test']);
+const releaseLikeAppEnvironments = new Set<AppEnvironment>(['beta', 'production']);
+const approvedSupabaseProjectRef = 'ycwgsdigvpmprqreoqiz';
+const approvedSupabaseUrl = `https://${approvedSupabaseProjectRef}.supabase.co`;
+const publicWebsiteHost = 'retailpetapp.com';
+const localUrlPattern = /(^|\.)localhost$|^127\.|^0\.0\.0\.0$|^10\.0\.2\.2$/;
+const placeholderUrlPattern = /example\.supabase\.co/i;
+
+const bundledRuntimeEnv: RuntimeEnv = {
   EXPO_PUBLIC_APP_ENV: process.env.EXPO_PUBLIC_APP_ENV,
   EXPO_PUBLIC_SUPABASE_URL: process.env.EXPO_PUBLIC_SUPABASE_URL,
   EXPO_PUBLIC_SUPABASE_ANON_KEY: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
@@ -14,18 +34,7 @@ const runtimeEnv: RuntimeEnv = {
   RETAIL_PLATFORM_MIN_FEE_CENTS: process.env.RETAIL_PLATFORM_MIN_FEE_CENTS,
 };
 
-const unsafePublicSupabasePatterns = [
-  'service_role',
-  ['sb_', 'secret_'].join(''),
-  'supabase_admin',
-  'postgresql://',
-  'postgres://',
-  'jwt_secret',
-  'database_password',
-  'database_url',
-];
-
-export function readConfigFromEnv(env: RuntimeEnv = process.env) {
+export function readConfigFromEnv(env: RuntimeEnv) {
   return {
     appEnv: env.EXPO_PUBLIC_APP_ENV ?? 'development',
     supabaseUrl: env.EXPO_PUBLIC_SUPABASE_URL ?? '',
@@ -42,7 +51,7 @@ export function readConfigFromEnv(env: RuntimeEnv = process.env) {
   } as const;
 }
 
-export const config = readConfigFromEnv(runtimeEnv);
+export const config = readConfigFromEnv(bundledRuntimeEnv);
 
 export function hasSupabaseConfig(): boolean {
   return Boolean(config.supabaseUrl && config.supabaseAnonKey && isClientSafeSupabaseKey(config.supabaseAnonKey));
@@ -71,6 +80,62 @@ export function getMissingRequiredConfig(): string[] {
   return missing;
 }
 
+export function isSupportedAppEnvironment(value: string): value is AppEnvironment {
+  return supportedAppEnvironments.has(value as AppEnvironment);
+}
+
+export function isReleaseLikeEnvironment(value: string = config.appEnv): boolean {
+  return isSupportedAppEnvironment(value) && releaseLikeAppEnvironments.has(value);
+}
+
+export function getAppEnvironmentLabel(value: string = config.appEnv): string {
+  if (value === 'beta') {
+    return 'Private Beta';
+  }
+
+  if (value === 'production') {
+    return 'Production';
+  }
+
+  if (value === 'test') {
+    return 'Test';
+  }
+
+  if (value === 'development') {
+    return 'Development';
+  }
+
+  return 'Unsupported Environment';
+}
+
+export function getEnvironmentValidationError(env: RuntimeEnv = bundledRuntimeEnv): string | null {
+  const runtimeConfig = readConfigFromEnv(env);
+
+  if (!isSupportedAppEnvironment(runtimeConfig.appEnv)) {
+    return `Unsupported app environment: ${runtimeConfig.appEnv}`;
+  }
+
+  if (isReleaseLikeEnvironment(runtimeConfig.appEnv)) {
+    if (isLocalOrPlaceholderUrl(runtimeConfig.supabaseUrl)) {
+      return 'Release builds cannot use local or placeholder Supabase URLs.';
+    }
+
+    if (isPublicWebsiteUrl(runtimeConfig.supabaseUrl)) {
+      return 'Release builds cannot use the public ReTail website domain as the Supabase API URL.';
+    }
+
+    if (runtimeConfig.supabaseUrl.trim().toLowerCase() !== approvedSupabaseUrl) {
+      return 'Release builds must use the approved ReTail Supabase project URL.';
+    }
+
+    if (runtimeConfig.supabaseAnonKey.includes('ci-placeholder')) {
+      return 'Release builds cannot use CI placeholder Supabase credentials.';
+    }
+  }
+
+  return null;
+}
+
 export function isClientSafeSupabaseKey(value: string): boolean {
   return getUnsafePublicSupabaseCredentialReason(value) === null;
 }
@@ -87,4 +152,35 @@ export function getUnsafePublicSupabaseCredentialReason(value: string): string |
   }
 
   return null;
+}
+
+function isLocalOrPlaceholderUrl(value: string): boolean {
+  if (!value.trim()) {
+    return false;
+  }
+
+  if (placeholderUrlPattern.test(value)) {
+    return true;
+  }
+
+  try {
+    const parsed = new URL(value);
+    return localUrlPattern.test(parsed.hostname);
+  } catch {
+    return true;
+  }
+}
+
+function isPublicWebsiteUrl(value: string): boolean {
+  if (!value.trim()) {
+    return false;
+  }
+
+  try {
+    const parsed = new URL(value);
+    const host = parsed.hostname.toLowerCase();
+    return host === publicWebsiteHost || host === `www.${publicWebsiteHost}`;
+  } catch {
+    return false;
+  }
 }

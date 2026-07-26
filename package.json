@@ -19,6 +19,9 @@
     "security:audit": "node scripts/dependency-audit.mjs",
     "security:secrets": "node scripts/secret-scan.mjs",
     "security:secrets:history": "node scripts/secret-scan.mjs --git-history",
+    "validate:beta-build-config": "node scripts/validate-beta-build-config.mjs --profile-preview",
+    "validate:preview-bundle-config": "node scripts/verify-preview-bundle-config.mjs",
+    "eas-build-pre-install": "node scripts/validate-beta-build-config.mjs",
     "build:preview:ios": "eas build --profile preview --platform ios",
     "build:preview:android": "eas build --profile preview --platform android",
     "build:production:ios": "eas build --profile production --platform ios",
@@ -41,6 +44,7 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.0",
+    "react-native-safe-area-context": "~5.7.0",
     "react-native-svg": "15.15.4",
     "react-native-web": "0.21.2"
   },

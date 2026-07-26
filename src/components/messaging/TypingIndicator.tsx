@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
-import { colors, radius, spacing, typography, createThemedStyles } from '../../constants/theme';
+import { colors, radius, spacing, typography } from '../../constants/theme';
 
 type TypingIndicatorProps = {
   visible?: boolean;
@@ -18,7 +18,7 @@ export function TypingIndicator({ visible = false, name = 'Seller' }: TypingIndi
   );
 }
 
-const styles = createThemedStyles((colors) => ({
+const styles = StyleSheet.create({
   wrap: {
     alignSelf: 'flex-start',
     paddingHorizontal: spacing.md,
@@ -30,4 +30,4 @@ const styles = createThemedStyles((colors) => ({
     color: colors.textSecondary,
     ...typography.small,
   },
-}));
+});

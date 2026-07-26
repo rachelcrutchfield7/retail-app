@@ -1,6 +1,6 @@
 import { StyleSheet, Text, TextInput } from 'react-native';
 import type { KeyboardTypeOptions } from 'react-native';
-import { colors, radius, sizes, spacing, typography, createThemedStyles } from '../../constants/theme';
+import { colors, radius, sizes, spacing, typography } from '../../constants/theme';
 import { Field } from './Field';
 
 type TextFieldProps = {
@@ -42,7 +42,7 @@ export function TextField({
   );
 }
 
-const styles = createThemedStyles((colors) => ({
+const styles = StyleSheet.create({
   input: {
     minHeight: sizes.buttonHeight,
     borderRadius: radius.medium,
@@ -64,4 +64,4 @@ const styles = createThemedStyles((colors) => ({
     color: colors.error,
     ...typography.caption,
   },
-}));
+});

@@ -7,12 +7,13 @@ import {
   Image,
   Platform,
   Pressable,
-  SafeAreaView,
   ScrollView,
+  StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Archive,
   AlertCircle,
@@ -71,7 +72,7 @@ import {
 } from '../components';
 import { CONDITIONS } from '../constants/categories';
 import { findManualLocationByZipCode } from '../constants/location';
-import { colors, radius, sizes, spacing, typography, createThemedStyles } from '../constants/theme';
+import { colors, radius, sizes, spacing, typography } from '../constants/theme';
 import { useAuth } from '../hooks/useAuth';
 import { useCategories, useTopLevelCategories } from '../hooks/useCategories';
 import { useCompleteTransaction, useEligibleTransactionParticipants } from '../hooks/useCompleteTransaction';
@@ -94,7 +95,6 @@ import { useUnreadMessages } from '../hooks/useUnreadMessages';
 import { useUpdateListing } from '../hooks/useUpdateListing';
 import { useUpdateProfile } from '../hooks/useUpdateProfile';
 import { QueryClientProvider } from '../lib/queryClient';
-import { getPaymentReadiness, isPaidListing } from '../services/paymentService';
 import type {
   CreateListingInput,
   CreateSavedSearchInput,
@@ -112,6 +112,12 @@ import type {
 import type { Category, IconComponent, Listing, ListingCondition, ListingStatus, RescueNeedUrgency, RescueOrganizationType } from '../types';
 import { handleAppError } from '../utils/errorHandler';
 import { listingLocationLabel } from '../utils/format';
+import {
+  bottomTabBarContentClearance,
+  bottomTabBarGap,
+  scrollContentBottomClearance,
+  topSafeAreaPadding,
+} from '../utils/safeAreaLayout';
 import { validateCreateListingInput } from '../validation/createListing';
 
 type SprintTab = 'home' | 'search' | 'sell' | 'favorites' | 'profile';
@@ -273,11 +279,14 @@ function TabsShell({
   onChangeTab: (tab: SprintTab) => void;
   children: ReactNode;
 }) {
+  const insets = useSafeAreaInsets();
+  const tabBarGap = bottomTabBarGap(insets.bottom);
+
   return (
-    <SafeAreaView style={styles.app}>
+    <SafeAreaView edges={['left', 'right']} style={[styles.app, { paddingTop: topSafeAreaPadding(insets.top) }]}>
       <StatusBar style="dark" />
-      <View style={styles.tabContent}>{children}</View>
-      <View style={styles.tabBar}>
+      <View style={[styles.tabContent, { paddingBottom: bottomTabBarContentClearance(insets.bottom) }]}>{children}</View>
+      <View style={[styles.tabBar, { bottom: tabBarGap }]}>
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const selected = tab.key === activeTab;
@@ -329,23 +338,22 @@ export function HomeScreen({
   const params = useMemo<ListingQueryParams>(
     () => ({
       search,
-      categoryId,
       radiusMiles: location.radiusMiles,
-      limit: 20,
+      limit: 50,
     }),
-    [categoryId, location.radiusMiles, search]
+    [location.radiusMiles, search]
   );
+  const rescueSummary = useRescueHub(useMemo(
+    () => ({
+      radiusMiles: location.radiusMiles,
+    }),
+    [location.radiusMiles]
+  ));
   const listings = useListings(params);
   const recentListings = useListings(useMemo(
     () => ({
       radiusMiles: location.radiusMiles,
       limit: 5,
-    }),
-    [location.radiusMiles]
-  ));
-  const rescueHub = useRescueHub(useMemo(
-    () => ({
-      radiusMiles: location.radiusMiles,
     }),
     [location.radiusMiles]
   ));
@@ -358,18 +366,26 @@ export function HomeScreen({
       categorySlug: categoryId,
     })
   );
-  const items = mergeFeedListings(ownFilteredListings, listings.data?.items ?? []);
+  const filteredMarketplaceListings = (listings.data?.items ?? []).filter((listing) =>
+    listingMatchesFeedFilters(listing, {
+      search,
+      categorySlug: categoryId,
+    })
+  );
+  const items = mergeFeedListings(ownFilteredListings, filteredMarketplaceListings);
   const recentItems = mergeFeedListings(ownActiveListings, recentListings.data?.items ?? []);
   const favoriteIds = (favorites.data ?? []).map((listing) => listing.id);
   const unreadTotal = unreadMessages.data?.total ?? 0;
   const unreadNotificationTotal = notifications.unreadCount ?? 0;
   const locationLabel = [location.city, location.state].filter(Boolean).join(', ');
-  const rescueHubItems = rescueHub.data ?? [];
-  const urgentNeedCount = rescueHubItems.reduce(
-    (total, rescue) => total + rescue.urgentNeeds.filter((need) => need.urgency === 'High').length,
-    0
-  );
-  const wishlistCount = rescueHubItems.reduce((total, rescue) => total + rescue.wishlistItems.length, 0);
+  const rescueHubStats = useMemo(() => {
+    const rescues = rescueSummary.data ?? [];
+
+    return {
+      rescueCount: rescues.length,
+      urgentNeedCount: rescues.reduce((total, rescue) => total + rescue.urgentNeeds.length, 0),
+    };
+  }, [rescueSummary.data]);
 
   const handleFavorite = async (listing: Listing) => {
     if (auth.isGuest) {
@@ -437,11 +453,8 @@ export function HomeScreen({
 
           {onOpenRescueHub ? (
             <RescueHubBanner
-              rescueCount={rescueHubItems.length}
-              urgentNeedCount={urgentNeedCount}
-              wishlistCount={wishlistCount}
-              loading={rescueHub.isLoading}
-              errorMessage={rescueHub.isError ? handleAppError(rescueHub.error).userMessage : null}
+              rescueCount={rescueHubStats.rescueCount}
+              urgentNeedCount={rescueHubStats.urgentNeedCount}
               onPress={onOpenRescueHub}
             />
           ) : null}
@@ -490,7 +503,8 @@ export function HomeScreen({
           {listings.isError ? <ErrorState message={handleAppError(listings.error).userMessage} onRetry={listings.refetch} /> : null}
         </View>
       }
-      numColumns={1}
+      numColumns={2}
+      columnWrapperStyle={styles.marketplaceGridRow}
       renderItem={({ item, index }) => (
         <View style={[styles.marketplaceGridItem, index % 2 === 0 ? styles.marketplaceGridItemLeft : styles.marketplaceGridItemRight]}>
           <ListingCard
@@ -547,17 +561,22 @@ export function SearchScreen({
   const params = useMemo<ListingQueryParams>(
     () => ({
       search,
-      categoryId,
       condition,
       listingType,
       radiusMiles: location.radiusMiles,
       minPrice: parsedMinPrice,
       maxPrice: parsedMaxPrice,
-      limit: 20,
+      limit: 50,
     }),
-    [categoryId, condition, listingType, location.radiusMiles, parsedMaxPrice, parsedMinPrice, search]
+    [condition, listingType, location.radiusMiles, parsedMaxPrice, parsedMinPrice, search]
   );
   const listings = useListings(params);
+  const filteredItems = (listings.data?.items ?? []).filter((listing) =>
+    listingMatchesFeedFilters(listing, {
+      search,
+      categorySlug: categoryId,
+    })
+  );
   const favoriteIds = (favorites.data ?? []).map((listing) => listing.id);
 
   const buildSavedSearchInput = (): CreateSavedSearchInput => ({
@@ -658,7 +677,7 @@ export function SearchScreen({
     <FlatList
       style={styles.listScreen}
       contentContainerStyle={styles.listContent}
-      data={listings.data?.items ?? []}
+      data={filteredItems}
       keyExtractor={(item) => item.id}
       ListHeaderComponent={
         <View style={styles.stackLarge}>
@@ -734,12 +753,13 @@ export function SearchScreen({
               ))}
             </View>
           ) : null}
-          <SectionTitle title="Results" hint={`${listings.data?.total ?? 0} within ${location.radiusMiles} mi`} />
+          <SectionTitle title="Results" hint={`${filteredItems.length} within ${location.radiusMiles} mi`} />
           {listings.isLoading ? <LoadingCards /> : null}
           {listings.isError ? <ErrorState message={handleAppError(listings.error).userMessage} onRetry={listings.refetch} /> : null}
         </View>
       }
-      numColumns={1}
+      numColumns={2}
+      columnWrapperStyle={styles.marketplaceGridRow}
       renderItem={({ item, index }) => (
         <View style={[styles.marketplaceGridItem, index % 2 === 0 ? styles.marketplaceGridItemLeft : styles.marketplaceGridItemRight]}>
           <ListingCard
@@ -962,7 +982,8 @@ export function FavoritesScreen({
           {favorites.isError ? <ErrorState message={handleAppError(favorites.error).userMessage} onRetry={favorites.refetch} /> : null}
         </View>
       }
-      numColumns={1}
+      numColumns={2}
+      columnWrapperStyle={styles.marketplaceGridRow}
       renderItem={({ item, index }) => (
         <View style={[styles.marketplaceGridItem, index % 2 === 0 ? styles.marketplaceGridItemLeft : styles.marketplaceGridItemRight]}>
           <ListingCard
@@ -1027,7 +1048,7 @@ export function CreateListingScreen({
   };
 
   return (
-    <SafeAreaView style={styles.app}>
+    <ScreenContainer>
       <StatusBar style="dark" />
       <ScrollView style={styles.listScreen} contentContainerStyle={styles.listContent} keyboardShouldPersistTaps="handled">
         <BackButton onPress={onBack} />
@@ -1046,7 +1067,7 @@ export function CreateListingScreen({
         {mutation.error ? <Text style={styles.errorText}>{mutation.error}</Text> : null}
         <Button title="Publish Listing" onPress={submit} loading={mutation.loading || uploading} fullWidth />
       </ScrollView>
-    </SafeAreaView>
+    </ScreenContainer>
   );
 }
 
@@ -1151,15 +1172,6 @@ function ListingDetailContent({
   const completionDisabled = ['Sold', 'Donated', 'Archived', 'Removed'].includes(item.status);
   const archiveDisabled = ['Sold', 'Donated', 'Archived', 'Removed'].includes(item.status);
   const deleteDisabled = item.status === 'Removed';
-  const listingType = listingTypeFor(item.price);
-  const paidListing = isPaidListing(item);
-  const paymentReadiness = getPaymentReadiness();
-  const unavailable = ['Sold', 'Donated', 'Archived', 'Removed'].includes(item.status);
-  const messageLabel = listingType === 'donation' ? 'Message Donor' : 'Message Seller';
-  const requestLabel = listingType === 'donation' ? 'Request Donation' : listingType === 'free' ? 'Request Item' : 'Make Offer';
-  const paymentNote = paidListing && !paymentReadiness.protectedCheckoutEnabled
-    ? 'Protected checkout is not available yet. Message the seller and agree on pickup or payment details before exchanging items.'
-    : null;
 
   const toggleFavorite = async () => {
     if (isGuest) {
@@ -1220,7 +1232,7 @@ function ListingDetailContent({
   };
 
   return (
-    <SafeAreaView style={styles.app}>
+    <ScreenContainer>
       <StatusBar style="dark" />
       <ScrollView style={styles.listScreen} contentContainerStyle={styles.detailContent}>
         <View>
@@ -1419,64 +1431,36 @@ function ListingDetailContent({
               </Card>
             </>
           ) : (
-            <Card>
-              <View style={styles.stack}>
-                <Text style={styles.cardTitle}>{unavailable ? 'Listing unavailable' : 'Listing actions'}</Text>
-                {unavailable ? (
-                  <Text style={styles.body}>This listing is marked {item.status}. You can still report it if something looks unsafe.</Text>
-                ) : paymentNote ? (
-                  <Text style={styles.body}>{paymentNote}</Text>
-                ) : null}
-                <View style={styles.actionGrid}>
-                  <Button
-                    title={messageLabel}
-                    icon={MessageCircle}
-                    disabled={unavailable}
-                    onPress={() => {
-                      if (onMessageSeller) {
-                        void Promise.resolve(onMessageSeller(item.id, detail.seller.id)).catch((error) => {
-                          setNotice({ title: 'Messaging is unavailable', body: handleAppError(error).userMessage });
-                        });
-                        return;
-                      }
+            <>
+              <Button
+                title="Message Seller"
+                icon={MessageCircle}
+                onPress={() => {
+                  if (onMessageSeller) {
+                    void Promise.resolve(onMessageSeller(item.id, detail.seller.id)).catch((error) => {
+                      setNotice({ title: 'Messaging is unavailable', body: handleAppError(error).userMessage });
+                    });
+                    return;
+                  }
 
-                      setNotice({ title: 'Messaging unavailable', body: 'Log in and open a marketplace listing to contact the seller.' });
-                    }}
-                    fullWidth
-                  />
-                  <Button
-                    title={requestLabel}
-                    icon={listingType === 'sale' ? Heart : HeartHandshake}
-                    variant="secondary"
-                    disabled={unavailable}
-                    onPress={() => {
-                      if (onMessageSeller) {
-                        void Promise.resolve(onMessageSeller(item.id, detail.seller.id)).catch((error) => {
-                          setNotice({ title: 'Request not sent', body: handleAppError(error).userMessage });
-                        });
-                        return;
-                      }
-
-                      setNotice({ title: 'Messaging unavailable', body: 'Log in and open this listing to coordinate with the seller.' });
-                    }}
-                    fullWidth
-                  />
-                  <Button
-                    title="Report Listing"
-                    icon={Flag}
-                    variant="ghost"
-                    onPress={() => {
-                      if (onReportListing) {
-                        onReportListing(item.id);
-                        return;
-                      }
-                      setNotice({ title: 'Report listing', body: 'Log in to report spam, fraud, harassment, or inappropriate content.' });
-                    }}
-                    fullWidth
-                  />
-                </View>
-              </View>
-            </Card>
+                  setNotice({ title: 'Messaging unavailable', body: 'Log in and open a marketplace listing to contact the seller.' });
+                }}
+                fullWidth
+              />
+              <Button
+                title="Report"
+                icon={Flag}
+                variant="ghost"
+                onPress={() => {
+                  if (onReportListing) {
+                    onReportListing(item.id);
+                    return;
+                  }
+                  setNotice({ title: 'Report listing', body: 'Log in to report spam, fraud, harassment, or inappropriate content.' });
+                }}
+                fullWidth
+              />
+            </>
           )}
           {!owner && ['Sold', 'Donated'].includes(item.status) && onReviewListing ? (
             <Button
@@ -1489,7 +1473,7 @@ function ListingDetailContent({
           ) : null}
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </ScreenContainer>
   );
 }
 
@@ -2516,7 +2500,7 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
   };
 
   return (
-    <SafeAreaView style={styles.app}>
+    <ScreenContainer>
       <StatusBar style="dark" />
       <ScrollView style={styles.listScreen} contentContainerStyle={styles.listContent} keyboardShouldPersistTaps="handled">
         <BackButton onPress={onBack} />
@@ -2590,7 +2574,7 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
         {notice ? <NoticeCard notice={notice} /> : null}
         <Button title="Save Changes" onPress={save} loading={mutation.loading || rescueActions.loading} fullWidth />
       </ScrollView>
-    </SafeAreaView>
+    </ScreenContainer>
   );
 }
 
@@ -2653,7 +2637,7 @@ export function PublicProfileScreen({
   };
 
   return (
-    <SafeAreaView style={styles.app}>
+    <ScreenContainer>
       <StatusBar style="dark" />
       <ScrollView style={styles.listScreen} contentContainerStyle={styles.listContent}>
         <BackButton onPress={onBack} />
@@ -2727,7 +2711,7 @@ export function PublicProfileScreen({
           emptyBody="This seller does not have active listings right now."
         />
       </ScrollView>
-    </SafeAreaView>
+    </ScreenContainer>
   );
 }
 
@@ -2808,7 +2792,7 @@ export function MyListingsScreen({
   const allListings = listings.data ?? [];
 
   return (
-    <SafeAreaView style={styles.app}>
+    <ScreenContainer>
       <StatusBar style="dark" />
       <ScrollView style={styles.listScreen} contentContainerStyle={styles.listContent}>
         <BackButton onPress={onBack} />
@@ -2927,7 +2911,7 @@ export function MyListingsScreen({
           );
         })}
       </ScrollView>
-    </SafeAreaView>
+    </ScreenContainer>
   );
 }
 
@@ -3034,7 +3018,7 @@ function EditListingForm({
   };
 
   return (
-    <SafeAreaView style={styles.app}>
+    <ScreenContainer>
       <StatusBar style="dark" />
       <ScrollView style={styles.listScreen} contentContainerStyle={styles.listContent} keyboardShouldPersistTaps="handled">
         <BackButton onPress={onBack} />
@@ -3056,7 +3040,7 @@ function EditListingForm({
         {mutation.error ? <Text style={styles.errorText}>{mutation.error}</Text> : null}
         <Button title="Save Listing" onPress={save} loading={mutation.loading} disabled={!editable} fullWidth />
       </ScrollView>
-    </SafeAreaView>
+    </ScreenContainer>
   );
 }
 
@@ -3272,12 +3256,27 @@ function NoticeCard({
 }
 
 function ScreenFrame({ children }: { children: ReactNode }) {
+  const insets = useSafeAreaInsets();
+
   return (
-    <SafeAreaView style={styles.app}>
+    <SafeAreaView edges={['left', 'right']} style={[styles.app, { paddingTop: topSafeAreaPadding(insets.top) }]}>
       <StatusBar style="dark" />
-      <ScrollView style={styles.listScreen} contentContainerStyle={styles.listContent}>
+      <ScrollView
+        style={styles.listScreen}
+        contentContainerStyle={[styles.listContent, { paddingBottom: scrollContentBottomClearance(insets.bottom) }]}
+      >
         {children}
       </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+function ScreenContainer({ children }: { children: ReactNode }) {
+  const insets = useSafeAreaInsets();
+
+  return (
+    <SafeAreaView edges={['left', 'right']} style={[styles.app, { paddingTop: topSafeAreaPadding(insets.top) }]}>
+      {children}
     </SafeAreaView>
   );
 }
@@ -3509,7 +3508,7 @@ function zipCodeFor(location: string) {
   return location.match(/\b\d{5}\b/)?.[0] ?? '';
 }
 
-const styles = createThemedStyles((colors) => ({
+const styles = StyleSheet.create({
   app: {
     flex: 1,
     backgroundColor: colors.background,
@@ -3518,13 +3517,23 @@ const styles = createThemedStyles((colors) => ({
     flex: 1,
   },
   tabBar: {
+    position: 'absolute',
+    left: spacing.md,
+    right: spacing.md,
     minHeight: sizes.tabBarHeight,
     flexDirection: 'row',
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.large,
     backgroundColor: colors.surface,
-    paddingHorizontal: spacing.sm,
+    paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
+    paddingBottom: spacing.sm,
+    shadowColor: colors.textPrimary,
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 8,
   },
   tabButton: {
     flex: 1,
@@ -3545,11 +3554,13 @@ const styles = createThemedStyles((colors) => ({
     backgroundColor: colors.background,
   },
   listContent: {
-    padding: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingTop: sizes.screenTopGap,
     paddingBottom: spacing.xxl,
     gap: spacing.lg,
   },
   detailContent: {
+    paddingTop: sizes.screenTopGap,
     paddingBottom: spacing.xxl,
     gap: spacing.lg,
   },
@@ -3650,24 +3661,27 @@ const styles = createThemedStyles((colors) => ({
     minWidth: 0,
   },
   marketplaceGrid: {
-    gap: spacing.md,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginHorizontal: -spacing.xs,
     rowGap: spacing.md,
   },
   marketplaceGridTile: {
-    width: '100%',
+    width: '50%',
+    paddingHorizontal: spacing.xs,
   },
   marketplaceGridRow: {
     alignItems: 'stretch',
   },
   marketplaceGridItem: {
-    width: '100%',
+    width: '50%',
     minWidth: 0,
   },
   marketplaceGridItemLeft: {
-    paddingRight: 0,
+    paddingRight: spacing.xs,
   },
   marketplaceGridItemRight: {
-    paddingLeft: 0,
+    paddingLeft: spacing.xs,
   },
   gridSeparator: {
     height: spacing.md,
@@ -3831,4 +3845,4 @@ const styles = createThemedStyles((colors) => ({
     height: 76,
     borderRadius: radius.medium,
   },
-}));
+});

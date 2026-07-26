@@ -1,7 +1,7 @@
 import { CreditCard, ShieldCheck, Wallet } from 'lucide-react-native';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { colors, radius, spacing, typography, createThemedStyles } from '../../constants/theme';
+import { colors, radius, spacing, typography } from '../../constants/theme';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 
@@ -50,7 +50,13 @@ export function PaymentChoiceCard({
           {!protectedCheckoutReady ? (
             <Text style={styles.helper}>Stripe checkout is prepared in the app flow, but needs Stripe Connect and backend setup before charging cards.</Text>
           ) : null}
-          <Button title="ReTail Protected Checkout" icon={CreditCard} onPress={onPayWithStripe} disabled={disabled} fullWidth />
+          <Button
+            title="ReTail Protected Checkout"
+            icon={CreditCard}
+            onPress={onPayWithStripe}
+            disabled={disabled || !protectedCheckoutReady}
+            fullWidth
+          />
         </View>
 
         <View style={[styles.optionBox, styles.warningBox]}>
@@ -68,7 +74,7 @@ export function PaymentChoiceCard({
   );
 }
 
-const styles = createThemedStyles((colors) => ({
+const styles = StyleSheet.create({
   stack: {
     gap: spacing.md,
   },
@@ -130,4 +136,4 @@ const styles = createThemedStyles((colors) => ({
     ...typography.small,
     lineHeight: 19,
   },
-}));
+});

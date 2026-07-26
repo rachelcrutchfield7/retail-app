@@ -1,4 +1,5 @@
-import { config } from '../constants/config';
+import { config, isReleaseLikeEnvironment } from '../constants/config';
+import { sanitizeDiagnosticText } from '../utils/betaDiagnostics';
 
 type LogLevel = 'debug' | 'info' | 'warning' | 'error';
 type LogContext = Record<string, unknown>;
@@ -53,7 +54,7 @@ function write(level: LogLevel, message: string, context?: LogContext): void {
 
   entries.push(entry);
 
-  if (config.appEnv !== 'production' && level !== 'debug') {
+  if (!isReleaseLikeEnvironment(config.appEnv) && level !== 'debug') {
     const method = level === 'error' ? console.error : level === 'warning' ? console.warn : console.info;
     method(`[ReTail ${level}] ${message}`, entry.context ?? {});
   }
@@ -64,6 +65,19 @@ export const logger = {
   info: (message: string, context?: LogContext) => write('info', message, context),
   warning: (message: string, context?: LogContext) => write('warning', message, context),
   error: (message: string, context?: LogContext) => write('error', message, context),
+  diagnosticError: (message: string, context?: LogContext) => {
+    write('error', message, context);
+
+    if (config.appEnv !== 'beta') {
+      return;
+    }
+
+    try {
+      console.error(`[ReTail diagnostic] ${sanitizeDiagnosticText(message)}`, redactContext(context) ?? {});
+    } catch {
+      // Diagnostics must never become the cause of a startup failure.
+    }
+  },
 };
 
 export function getLogEntries(): LogEntry[] {

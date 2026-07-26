@@ -1,5 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
-import { colors, radius, spacing, typography, createThemedStyles } from '../../constants/theme';
+import { colors, radius, spacing, typography } from '../../constants/theme';
+import { metricLabelStyle } from '../profile/Metric';
 
 type InfoTileProps = {
   label: string;
@@ -15,7 +16,7 @@ export function InfoTile({ label, value }: InfoTileProps) {
   );
 }
 
-const styles = createThemedStyles((colors) => ({
+const styles = StyleSheet.create({
   infoTile: {
     flex: 1,
     minHeight: 74,
@@ -26,15 +27,10 @@ const styles = createThemedStyles((colors) => ({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  metricLabel: {
-    color: colors.textSecondary,
-    ...typography.caption,
-    marginTop: spacing.xs,
-    textTransform: 'uppercase',
-  },
+  metricLabel: metricLabelStyle,
   infoValue: {
     color: colors.textPrimary,
     ...typography.button,
     marginTop: spacing.xs,
   },
-}));
+});

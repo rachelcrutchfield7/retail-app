@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Flag, X } from 'lucide-react-native';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { colors, radius, sizes, spacing, typography, createThemedStyles } from '../../constants/theme';
+import { colors, radius, sizes, spacing, typography } from '../../constants/theme';
 import type { ListingReportReason } from '../../types.ts';
 import { Button } from '../ui/Button';
 
@@ -137,7 +137,7 @@ export function ReportListingModal({ visible, listingTitle, onClose, onSubmit }:
   );
 }
 
-const styles = createThemedStyles((colors) => ({
+const styles = StyleSheet.create({
   modalBackdrop: {
     ...StyleSheet.absoluteFill,
     flex: 1,
@@ -248,4 +248,4 @@ const styles = createThemedStyles((colors) => ({
     color: colors.textPrimary,
     ...typography.body,
   },
-}));
+});

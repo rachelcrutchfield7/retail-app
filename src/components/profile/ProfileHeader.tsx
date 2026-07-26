@@ -1,6 +1,6 @@
 import { MapPin, Star } from 'lucide-react-native';
 import { StyleSheet, Text, View } from 'react-native';
-import { colors, spacing, typography, createThemedStyles } from '../../constants/theme';
+import { colors, spacing, typography } from '../../constants/theme';
 import { Avatar } from '../ui/Avatar';
 
 type ProfileHeaderProps = {
@@ -48,7 +48,7 @@ export function ProfileHeader({
   );
 }
 
-const styles = createThemedStyles((colors) => ({
+const styles = StyleSheet.create({
   profileHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -83,4 +83,4 @@ const styles = createThemedStyles((colors) => ({
     ...typography.body,
     lineHeight: 23,
   },
-}));
+});

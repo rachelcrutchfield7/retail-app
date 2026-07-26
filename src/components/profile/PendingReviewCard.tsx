@@ -1,6 +1,6 @@
 import { Star } from 'lucide-react-native';
 import { StyleSheet, Text, View } from 'react-native';
-import { colors, radius, spacing, typography, createThemedStyles } from '../../constants/theme';
+import { colors, radius, spacing, typography } from '../../constants/theme';
 import type { PendingReview } from '../../services/types';
 import { Button } from '../ui/Button';
 
@@ -22,7 +22,7 @@ export function PendingReviewCard({ pendingReview, onReview }: PendingReviewCard
   );
 }
 
-const styles = createThemedStyles((colors) => ({
+const styles = StyleSheet.create({
   card: {
     gap: spacing.md,
     padding: spacing.md,
@@ -47,4 +47,4 @@ const styles = createThemedStyles((colors) => ({
     color: colors.textSecondary,
     ...typography.caption,
   },
-}));
+});

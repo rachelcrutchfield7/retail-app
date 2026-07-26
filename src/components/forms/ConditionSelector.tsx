@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { CONDITIONS } from '../../constants/categories';
-import { colors, spacing, typography, createThemedStyles } from '../../constants/theme';
+import { colors, spacing, typography } from '../../constants/theme';
 import type { ListingCondition } from '../../types';
 import { FilterChip } from '../marketplace/FilterChip';
 import { formStyles } from './Field';
@@ -30,7 +30,7 @@ export function ConditionSelector({ value, onChange, error }: ConditionSelectorP
   );
 }
 
-const styles = createThemedStyles((colors) => ({
+const styles = StyleSheet.create({
   field: {
     gap: spacing.sm,
   },
@@ -43,4 +43,4 @@ const styles = createThemedStyles((colors) => ({
     color: colors.error,
     ...typography.caption,
   },
-}));
+});

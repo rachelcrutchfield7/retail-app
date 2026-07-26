@@ -1,6 +1,6 @@
 import type { PropsWithChildren } from 'react';
 import { Pressable, StyleSheet, Text } from 'react-native';
-import { colors, radius, sizes, spacing, typography, createThemedStyles } from '../../constants/theme';
+import { colors, radius, sizes, spacing, typography } from '../../constants/theme';
 
 type ChipProps = PropsWithChildren<{
   label: string;
@@ -16,7 +16,7 @@ export function Chip({ label, selected, onPress }: ChipProps) {
   );
 }
 
-const styles = createThemedStyles((colors) => ({
+const styles = StyleSheet.create({
   chip: {
     minHeight: sizes.touchTarget,
     justifyContent: 'center',
@@ -37,4 +37,4 @@ const styles = createThemedStyles((colors) => ({
   chipTextSelected: {
     color: colors.surface,
   },
-}));
+});

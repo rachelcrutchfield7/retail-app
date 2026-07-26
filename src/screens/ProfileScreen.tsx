@@ -1,6 +1,6 @@
 import { CheckCircle2, Star, UserRound } from 'lucide-react-native';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { colors, radius, sizes, spacing, typography, createThemedStyles } from '../constants/theme';
+import { colors, radius, sizes, spacing, typography } from '../constants/theme';
 import { ErrorState, LoadingSpinner, LockedScreen, Metric } from '../components';
 import type { AccountType } from '../types.ts';
 import type { Profile } from '../types/profile';
@@ -130,13 +130,14 @@ function ChecklistItem({ label }: { label: string }) {
   );
 }
 
-const styles = createThemedStyles((colors) => ({
+const styles = StyleSheet.create({
   screen: {
     flex: 1,
   },
   screenContent: {
-    padding: spacing.md,
-    paddingBottom: sizes.tabBarHeight + spacing.xl,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: sizes.tabBarHeight + sizes.tabBarBottomOffset + spacing.xxl,
     gap: spacing.lg,
   },
   profileHeader: {
@@ -229,4 +230,4 @@ const styles = createThemedStyles((colors) => ({
     color: colors.textPrimary,
     ...typography.button,
   },
-}));
+});

@@ -1,5 +1,5 @@
 import { StyleSheet, Text, TextInput } from 'react-native';
-import { colors, radius, spacing, typography, createThemedStyles } from '../../constants/theme';
+import { colors, radius, spacing, typography } from '../../constants/theme';
 import { Field } from './Field';
 
 type TextAreaProps = {
@@ -26,7 +26,7 @@ export function TextArea({ label, value, onChangeText, placeholder, error }: Tex
   );
 }
 
-const styles = createThemedStyles((colors) => ({
+const styles = StyleSheet.create({
   textArea: {
     minHeight: 112,
     borderRadius: radius.medium,
@@ -46,4 +46,4 @@ const styles = createThemedStyles((colors) => ({
     color: colors.error,
     ...typography.caption,
   },
-}));
+});

@@ -1,5 +1,5 @@
 import { StyleSheet, Switch, Text, View } from 'react-native';
-import { colors, radius, spacing, createThemedStyles } from '../../constants/theme';
+import { colors, radius, spacing } from '../../constants/theme';
 import { formStyles } from './Field';
 
 type ToggleSwitchProps = {
@@ -26,7 +26,7 @@ export function ToggleSwitch({ label, helperText, value, onValueChange }: Toggle
   );
 }
 
-const styles = createThemedStyles((colors) => ({
+const styles = StyleSheet.create({
   switchRow: {
     minHeight: 68,
     flexDirection: 'row',
@@ -39,4 +39,4 @@ const styles = createThemedStyles((colors) => ({
     borderWidth: 1,
     borderColor: colors.border,
   },
-}));
+});

@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Alert, BackHandler, FlatList, Image, Platform, Pressable, SafeAreaView, ScrollView, Text, View } from 'react-native';
+import { Alert, BackHandler, FlatList, Image, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   AlertCircle,
   Bell,
@@ -8,8 +10,8 @@ import {
   ChevronLeft,
   CreditCard,
   Flag,
-  HeartHandshake,
   Heart,
+  HeartHandshake,
   Home,
   MapPin,
   MessageCircle,
@@ -41,12 +43,13 @@ import {
   StarRatingInput,
   TextArea,
   TextInput,
-  ThemedStatusBar,
   TypingIndicator,
   ToggleSwitch,
   UnreadBadge,
 } from '../components';
-import { colors, radius, sizes, spacing, typography, createThemedStyles } from '../constants/theme';
+import { config, getAppEnvironmentLabel } from '../constants/config';
+import { appLinks } from '../constants/links';
+import { colors, radius, sizes, spacing, typography } from '../constants/theme';
 import { useAdminListingReports } from '../hooks/useAdminListingReports';
 import { useAdminRescueApprovals } from '../hooks/useAdminRescueApprovals';
 import { useAuth } from '../hooks/useAuth';
@@ -92,8 +95,13 @@ import { reportReasons } from '../services/reportService';
 import { useListing } from '../hooks/useListing';
 import type { AdminListingReport, Message, Notification, ReportReason, RescueProfile, ReportStatus } from '../services/types';
 import type { RescueOrganization } from '../types';
-import { useThemePreference } from '../theme/ThemeProvider';
 import { handleAppError } from '../utils/errorHandler';
+import {
+  bottomTabBarContentClearance,
+  bottomTabBarGap,
+  scrollContentBottomClearance,
+  topSafeAreaPadding,
+} from '../utils/safeAreaLayout';
 
 type SprintTab = 'home' | 'search' | 'sell' | 'favorites' | 'profile';
 type SprintRoute =
@@ -123,6 +131,14 @@ const tabs: Array<{ key: SprintTab; label: string; icon: typeof Home }> = [
   { key: 'profile', label: 'Profile', icon: User },
 ];
 
+async function openAppLink(url: string): Promise<void> {
+  try {
+    await Linking.openURL(url);
+  } catch {
+    Alert.alert('Link unavailable', 'We could not open that link right now.');
+  }
+}
+
 export function Sprint4App() {
   return (
     <QueryClientProvider>
@@ -139,62 +155,59 @@ export function Sprint4App() {
 function Sprint4Experience() {
   const auth = useAuth();
   const starter = useStartConversation();
-  const [routeStack, setRouteStack] = useState<SprintRoute[]>([{ name: 'tabs', tab: 'home' }]);
-  const route = routeStack[routeStack.length - 1] ?? { name: 'tabs', tab: 'home' };
+  const [route, setRoute] = useState<SprintRoute>({ name: 'tabs', tab: 'home' });
 
-  const navigate = useCallback((nextRoute: SprintRoute) => {
-    setRouteStack((current) => [...current, nextRoute]);
-  }, []);
-  const replaceRoot = useCallback((nextRoute: SprintRoute) => {
-    setRouteStack([nextRoute]);
-  }, []);
-  const goBack = useCallback((fallback?: SprintRoute) => {
-    setRouteStack((current) => {
-      if (current.length > 1) {
-        return current.slice(0, -1);
-      }
-
-      const currentRoute = current[0] ?? { name: 'tabs', tab: 'home' };
-      const nextFallback = fallback ?? parentRouteFor(currentRoute);
-      return nextFallback ? [nextFallback] : current;
-    });
-  }, []);
+  const openTab = (tab: SprintTab) => setRoute({ name: 'tabs', tab });
+  const openListing = (listingId: string) => setRoute({ name: 'listing-detail', listingId });
+  const openCreateListing = () => setRoute({ name: 'create-listing' });
+  const openEditListing = (listingId: string) => setRoute({ name: 'edit-listing', listingId });
+  const openPublicProfile = (userId: string) => setRoute({ name: 'public-profile', userId });
+  const openMessages = () => setRoute({ name: 'messages' });
+  const openConversation = (conversationId: string) => setRoute({ name: 'conversation', conversationId });
+  const openPaymentOptions = (listingId: string, conversationId?: string, agreedAmount?: string) =>
+    setRoute({ name: 'payment-options', listingId, conversationId, agreedAmount });
+  const openNotifications = () => setRoute({ name: 'notifications' });
+  const openRescueHub = () => setRoute({ name: 'rescue-hub' });
+  const openRescueProfile = (rescue: RescueOrganization) => setRoute({ name: 'rescue-profile', rescue });
+  const openSettings = () => setRoute({ name: 'settings' });
+  const openAdmin = () => setRoute({ name: 'admin' });
+  const openReport = (targetType: 'listing' | 'user' | 'message', targetId: string, title: string) =>
+    setRoute({ name: 'report', targetType, targetId, title });
+  const openReview = (listingId: string, revieweeId: string, transactionId?: string) =>
+    setRoute({ name: 'review', listingId, revieweeId, transactionId });
 
   useEffect(() => {
-    if (Platform.OS !== 'android') {
-      return undefined;
-    }
-
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (routeStack.length > 1 || route.name !== 'tabs') {
-        goBack();
+      if (route.name === 'tabs') {
+        if (route.tab !== 'home') {
+          setRoute({ name: 'tabs', tab: 'home' });
+          return true;
+        }
+
+        return false;
+      }
+
+      if (route.name === 'conversation') {
+        setRoute({ name: 'messages' });
         return true;
       }
 
-      return false;
+      if (route.name === 'messages' || route.name === 'settings' || route.name === 'my-listings') {
+        setRoute({ name: 'tabs', tab: 'profile' });
+        return true;
+      }
+
+      if (route.name === 'rescue-profile') {
+        setRoute({ name: 'rescue-hub' });
+        return true;
+      }
+
+      setRoute({ name: 'tabs', tab: 'home' });
+      return true;
     });
 
     return () => subscription.remove();
-  }, [goBack, route.name, routeStack.length]);
-
-  const openTab = (tab: SprintTab) => replaceRoot({ name: 'tabs', tab });
-  const openListing = (listingId: string) => navigate({ name: 'listing-detail', listingId });
-  const openCreateListing = () => navigate({ name: 'create-listing' });
-  const openEditListing = (listingId: string) => navigate({ name: 'edit-listing', listingId });
-  const openPublicProfile = (userId: string) => navigate({ name: 'public-profile', userId });
-  const openMessages = () => navigate({ name: 'messages' });
-  const openConversation = (conversationId: string) => navigate({ name: 'conversation', conversationId });
-  const openPaymentOptions = (listingId: string, conversationId?: string, agreedAmount?: string) =>
-    navigate({ name: 'payment-options', listingId, conversationId, agreedAmount });
-  const openNotifications = () => navigate({ name: 'notifications' });
-  const openRescueHub = () => navigate({ name: 'rescue-hub' });
-  const openRescueProfile = (rescue: RescueOrganization) => navigate({ name: 'rescue-profile', rescue });
-  const openSettings = () => navigate({ name: 'settings' });
-  const openAdmin = () => navigate({ name: 'admin' });
-  const openReport = (targetType: 'listing' | 'user' | 'message', targetId: string, title: string) =>
-    navigate({ name: 'report', targetType, targetId, title });
-  const openReview = (listingId: string, revieweeId: string, transactionId?: string) =>
-    navigate({ name: 'review', listingId, revieweeId, transactionId });
+  }, [route]);
 
   const startConversation = async (listingId: string, sellerId: string) => {
     if (auth.isGuest) {
@@ -210,7 +223,7 @@ function Sprint4Experience() {
     return (
       <ListingDetailScreen
         listingId={route.listingId}
-        onBack={() => goBack({ name: 'tabs', tab: 'home' })}
+        onBack={() => openTab('home')}
         onOpenSeller={openPublicProfile}
         onMessageSeller={startConversation}
         onReportListing={(listingId) => openReport('listing', listingId, 'Report listing')}
@@ -221,28 +234,28 @@ function Sprint4Experience() {
   }
 
   if (route.name === 'create-listing') {
-    return <CreateListingScreen onBack={() => goBack({ name: 'tabs', tab: 'sell' })} onCreated={openListing} />;
+    return <CreateListingScreen onBack={() => openTab('sell')} onCreated={openListing} />;
   }
 
   if (route.name === 'edit-listing') {
     return (
       <EditListingScreen
         listingId={route.listingId}
-        onBack={() => goBack({ name: 'my-listings' })}
+        onBack={() => setRoute({ name: 'my-listings' })}
         onSaved={openListing}
       />
     );
   }
 
   if (route.name === 'edit-profile') {
-    return <EditProfileScreen onBack={() => goBack({ name: 'tabs', tab: 'profile' })} />;
+    return <EditProfileScreen onBack={() => openTab('profile')} />;
   }
 
   if (route.name === 'public-profile') {
     return (
       <PublicProfileScreen
         userId={route.userId}
-        onBack={() => goBack({ name: 'tabs', tab: 'profile' })}
+        onBack={() => openTab('profile')}
         onOpenListing={openListing}
         onReportUser={(userId) => openReport('user', userId, 'Report user')}
       />
@@ -250,13 +263,13 @@ function Sprint4Experience() {
   }
 
   if (route.name === 'my-listings') {
-    return <MyListingsScreen onBack={() => goBack({ name: 'tabs', tab: 'profile' })} onOpenListing={openListing} onEditListing={openEditListing} />;
+    return <MyListingsScreen onBack={() => openTab('profile')} onOpenListing={openListing} onEditListing={openEditListing} />;
   }
 
   if (route.name === 'messages') {
     return (
       <MessagesScreen
-        onBack={() => goBack({ name: 'tabs', tab: 'profile' })}
+        onBack={() => openTab('profile')}
         onOpenConversation={openConversation}
         onOpenProfile={() => openTab('profile')}
       />
@@ -267,7 +280,7 @@ function Sprint4Experience() {
     return (
       <ConversationScreen
         conversationId={route.conversationId}
-        onBack={() => goBack({ name: 'messages' })}
+        onBack={openMessages}
         onOpenListing={openListing}
         onPaymentOptions={(listingId, agreedAmount) => openPaymentOptions(listingId, route.conversationId, agreedAmount)}
         onReportMessage={(messageId) => openReport('message', messageId, 'Report message')}
@@ -281,7 +294,7 @@ function Sprint4Experience() {
       <PaymentOptionsScreen
         listingId={route.listingId}
         agreedAmount={route.agreedAmount}
-        onBack={() => goBack(route.conversationId ? { name: 'conversation', conversationId: route.conversationId } : { name: 'listing-detail', listingId: route.listingId })}
+        onBack={() => route.conversationId ? openConversation(route.conversationId) : openListing(route.listingId)}
       />
     );
   }
@@ -289,7 +302,7 @@ function Sprint4Experience() {
   if (route.name === 'notifications') {
     return (
       <NotificationsScreen
-        onBack={() => goBack({ name: 'tabs', tab: 'home' })}
+        onBack={() => openTab('home')}
         onOpenListing={openListing}
         onOpenConversation={openConversation}
         onOpenProfile={openPublicProfile}
@@ -298,25 +311,25 @@ function Sprint4Experience() {
   }
 
   if (route.name === 'rescue-hub') {
-    return <RescueHubScreen onBack={() => goBack({ name: 'tabs', tab: 'home' })} onOpenRescueProfile={openRescueProfile} />;
+    return <RescueHubScreen onBack={() => openTab('home')} onOpenRescueProfile={openRescueProfile} />;
   }
 
   if (route.name === 'rescue-profile') {
     return (
       <PublicRescueProfileScreen
         rescue={route.rescue}
-        onBack={() => goBack({ name: 'rescue-hub' })}
+        onBack={() => setRoute({ name: 'rescue-hub' })}
         onSignIn={() => openTab('profile')}
       />
     );
   }
 
   if (route.name === 'settings') {
-    return <SettingsScreen onBack={() => goBack({ name: 'tabs', tab: 'profile' })} />;
+    return <SettingsScreen onBack={() => openTab('profile')} />;
   }
 
   if (route.name === 'admin') {
-    return <AdminReviewScreen onBack={() => goBack({ name: 'tabs', tab: 'profile' })} onOpenListing={openListing} />;
+    return <AdminReviewScreen onBack={() => openTab('profile')} onOpenListing={openListing} />;
   }
 
   if (route.name === 'report') {
@@ -325,13 +338,13 @@ function Sprint4Experience() {
         targetType={route.targetType}
         targetId={route.targetId}
         title={route.title}
-        onBack={() => goBack({ name: 'tabs', tab: 'home' })}
+        onBack={() => openTab('home')}
       />
     );
   }
 
   if (route.name === 'review') {
-    return <ReviewScreen listingId={route.listingId} revieweeId={route.revieweeId} transactionId={route.transactionId} onBack={() => goBack({ name: 'tabs', tab: 'home' })} />;
+    return <ReviewScreen listingId={route.listingId} revieweeId={route.revieweeId} transactionId={route.transactionId} onBack={() => openTab('home')} />;
   }
 
   return (
@@ -350,8 +363,8 @@ function Sprint4Experience() {
       {route.tab === 'favorites' ? <FavoritesScreen onOpenListing={openListing} onOpenProfile={() => openTab('profile')} /> : null}
       {route.tab === 'profile' ? (
         <ProfileScreen
-          onEditProfile={() => navigate({ name: 'edit-profile' })}
-          onMyListings={() => navigate({ name: 'my-listings' })}
+          onEditProfile={() => setRoute({ name: 'edit-profile' })}
+          onMyListings={() => setRoute({ name: 'my-listings' })}
           onOpenListing={openListing}
           onMessages={openMessages}
           onNotifications={openNotifications}
@@ -362,30 +375,6 @@ function Sprint4Experience() {
       ) : null}
     </TabsShell>
   );
-}
-
-function parentRouteFor(route: SprintRoute): SprintRoute | null {
-  if (route.name === 'tabs') {
-    return null;
-  }
-
-  if (route.name === 'rescue-profile') {
-    return { name: 'rescue-hub' };
-  }
-
-  if (route.name === 'conversation') {
-    return { name: 'messages' };
-  }
-
-  if (route.name === 'create-listing') {
-    return { name: 'tabs', tab: 'sell' };
-  }
-
-  if (route.name === 'edit-listing' || route.name === 'my-listings' || route.name === 'edit-profile' || route.name === 'settings' || route.name === 'admin') {
-    return { name: 'tabs', tab: 'profile' };
-  }
-
-  return { name: 'tabs', tab: 'home' };
 }
 
 function PublicRescueProfileScreen({
@@ -519,12 +508,14 @@ function TabsShell({
   children: ReactNode;
 }) {
   const unread = useUnreadMessages();
+  const insets = useSafeAreaInsets();
+  const tabBarGap = bottomTabBarGap(insets.bottom);
 
   return (
-    <SafeAreaView style={styles.app}>
-      <ThemedStatusBar />
-      <View style={styles.tabContent}>{children}</View>
-      <View style={styles.tabBar}>
+    <SafeAreaView edges={['left', 'right']} style={[styles.app, { paddingTop: topSafeAreaPadding(insets.top) }]}>
+      <StatusBar style="dark" />
+      <View style={[styles.tabContent, { paddingBottom: bottomTabBarContentClearance(insets.bottom) }]}>{children}</View>
+      <View style={[styles.tabBar, { bottom: tabBarGap }]}>
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const selected = tab.key === activeTab;
@@ -583,8 +574,8 @@ export function MessagesScreen({
   }
 
   return (
-    <SafeAreaView style={styles.app}>
-      <ThemedStatusBar />
+    <ScreenContainer>
+      <StatusBar style="dark" />
       <View style={styles.screenHeader}>
         <BackButton onPress={onBack} />
         <Text style={styles.title}>Messages</Text>
@@ -602,7 +593,7 @@ export function MessagesScreen({
       ) : (
         <ConversationList conversations={conversations.data ?? []} onOpenConversation={onOpenConversation} />
       )}
-    </SafeAreaView>
+    </ScreenContainer>
   );
 }
 
@@ -694,6 +685,7 @@ export function ConversationScreen({
 
     try {
       await makeOffer(conversationId, offerAmount);
+      setOfferAmount('');
       setOfferOpen(false);
       setNotice(null);
       await messages.refetch();
@@ -701,16 +693,6 @@ export function ConversationScreen({
       setNotice(handleAppError(error).userMessage);
     }
   };
-
-  useEffect(() => {
-    if (!offerOpen || !conversation.data?.listingSummary) {
-      return;
-    }
-
-    if (!offerAmount.trim()) {
-      setOfferAmount(defaultOfferAmount(conversation.data.listingSummary.price));
-    }
-  }, [conversation.data?.listingSummary, offerAmount, offerOpen]);
 
   useEffect(() => {
     if (conversation.isLoading || messages.isLoading || messageItems.length === 0) {
@@ -761,77 +743,6 @@ export function ConversationScreen({
 
     setNotice('Outside payments are not covered by ReTail. If you use cash, Venmo, Cash App, PayPal, or another method, ReTail cannot help with payment disputes.');
   };
-  const openOfferForm = () => {
-    setOfferAmount((current) => current.trim() || defaultOfferAmount(conversationDetail.listingSummary.price));
-    setOfferOpen((current) => !current);
-  };
-  const dealPanel = paidListing ? (
-    <View style={styles.dealPanel}>
-      <Card>
-        <View style={styles.stack}>
-          <Text style={styles.cardTitle}>{acceptedAmount ? 'Offer accepted' : 'Deal options'}</Text>
-          {acceptedAmount ? (
-            <Text style={styles.body}>
-              Accepted price: {acceptedAmount}. Use ReTail Protected Checkout for a payment record and receipt, or arrange payment outside ReTail if both sides prefer.
-            </Text>
-          ) : (
-            <Text style={styles.body}>
-              Message first, agree on the details, then make or respond to an offer. Checkout options appear after an offer is accepted.
-            </Text>
-          )}
-          {acceptedAmount ? (
-            <View style={styles.dealActions}>
-              {onPaymentOptions ? (
-                <Button
-                  title="ReTail Protected Checkout"
-                  icon={CreditCard}
-                  onPress={() => onPaymentOptions(conversationDetail.listingId, acceptedAmount)}
-                  fullWidth
-                />
-              ) : null}
-              <Button
-                title="Arrange Outside ReTail"
-                variant="outline"
-                icon={Wallet}
-                onPress={arrangeOutsideReTail}
-                fullWidth
-              />
-              <Text style={styles.metaText}>
-                Outside payments are not covered by ReTail payment dispute support.
-              </Text>
-            </View>
-          ) : (
-            <View style={styles.dealActions}>
-              {canMakeOffer ? (
-                <Button
-                  title={offerOpen ? 'Hide Offer Form' : 'Make Offer'}
-                  variant="secondary"
-                  onPress={openOfferForm}
-                  fullWidth
-                />
-              ) : (
-                <Text style={styles.metaText}>
-                  {isSeller ? 'Review offers in the conversation and choose accept, decline, or counter.' : 'Checkout will unlock after the seller accepts an offer.'}
-                </Text>
-              )}
-            </View>
-          )}
-          {offerOpen && canMakeOffer ? (
-            <View style={styles.offerForm}>
-              <TextInput
-                label="Offer Amount"
-                value={offerAmount}
-                onChangeText={setOfferAmount}
-                placeholder={defaultOfferAmount(conversationDetail.listingSummary.price)}
-                keyboardType="decimal-pad"
-              />
-              <Button title="Send Offer" onPress={() => void submitOffer()} fullWidth />
-            </View>
-          ) : null}
-        </View>
-      </Card>
-    </View>
-  ) : null;
   const messageListHeader = (
     <View style={styles.messageListHeader}>
       {messages.isError ? <ErrorState message={handleAppError(messages.error).userMessage} onRetry={messages.refetch} /> : null}
@@ -839,6 +750,71 @@ export function ConversationScreen({
       {messagingBlocked ? (
         <Card>
           <Text style={styles.body}>Messaging is unavailable because one of the participants has blocked the other.</Text>
+        </Card>
+      ) : null}
+      {paidListing ? (
+        <Card>
+          <View style={styles.stack}>
+            <Text style={styles.cardTitle}>{acceptedAmount ? 'Offer accepted' : 'Deal options'}</Text>
+            {acceptedAmount ? (
+              <Text style={styles.body}>
+                Accepted price: {acceptedAmount}. Use ReTail Protected Checkout for a payment record and receipt, or arrange payment outside ReTail if both sides prefer.
+              </Text>
+            ) : (
+              <Text style={styles.body}>
+                Message first, agree on the details, then make or respond to an offer. Checkout options appear after an offer is accepted.
+              </Text>
+            )}
+            {acceptedAmount ? (
+              <View style={styles.conversationOptionGrid}>
+                {onPaymentOptions ? (
+                  <Button
+                    title="ReTail Protected Checkout"
+                    icon={CreditCard}
+                    onPress={() => onPaymentOptions(conversationDetail.listingId, acceptedAmount)}
+                    fullWidth
+                  />
+                ) : null}
+                <Button
+                  title="Arrange Outside ReTail"
+                  variant="outline"
+                  icon={Wallet}
+                  onPress={arrangeOutsideReTail}
+                  fullWidth
+                />
+                <Text style={styles.metaText}>
+                  Outside payments are not covered by ReTail payment dispute support.
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.conversationOptionGrid}>
+                {canMakeOffer ? (
+                <Button
+                  title={offerOpen ? 'Hide Offer Form' : 'Make Offer'}
+                  variant="secondary"
+                  onPress={() => setOfferOpen((current) => !current)}
+                  fullWidth
+                />
+                ) : (
+                  <Text style={styles.metaText}>
+                    {isSeller ? 'Review offers in the conversation and choose accept, decline, or counter.' : 'Checkout will unlock after the seller accepts an offer.'}
+                  </Text>
+                )}
+              </View>
+            )}
+            {offerOpen && canMakeOffer ? (
+              <View style={styles.offerForm}>
+                <TextInput
+                  label="Offer Amount"
+                  value={offerAmount}
+                  onChangeText={setOfferAmount}
+                  placeholder="$25"
+                  keyboardType="decimal-pad"
+                />
+                <Button title="Send Offer" onPress={() => void submitOffer()} fullWidth />
+              </View>
+            ) : null}
+          </View>
         </Card>
       ) : null}
       {messages.hasNextPage ? (
@@ -875,8 +851,8 @@ export function ConversationScreen({
   };
 
   return (
-    <SafeAreaView style={styles.app}>
-      <ThemedStatusBar />
+    <ScreenContainer>
+      <StatusBar style="dark" />
       <View style={styles.conversationHeader}>
         <BackButton onPress={onBack} />
         <View style={styles.conversationListingRow}>
@@ -885,24 +861,23 @@ export function ConversationScreen({
             <Text style={styles.cardTitle}>{conversationDetail.otherUser.display_name}</Text>
             <Text numberOfLines={1} style={styles.body}>{conversationDetail.listingSummary.title}</Text>
           </View>
-        </View>
-        <View style={styles.conversationActions}>
-          <Button title="View Listing" variant="outline" onPress={() => onOpenListing(conversationDetail.listingId)} />
-          {acceptedAmount && onPaymentOptions ? (
-            <Button title="Checkout" variant="outline" icon={CreditCard} onPress={() => onPaymentOptions(conversationDetail.listingId, acceptedAmount)} />
-          ) : null}
-          {canReview && onReview ? (
-            <Button title="Review" variant="outline" icon={Star} onPress={() => onReview(conversationDetail.listingId, conversationDetail.otherUser.id)} />
-          ) : null}
-          {latestReportableMessage && onReportMessage ? (
-            <Button title="Report" variant="ghost" icon={Flag} onPress={() => onReportMessage(latestReportableMessage.id)} />
-          ) : null}
-          {!messagingBlocked ? (
-            <Button title="Block" variant="ghost" icon={ShieldCheck} onPress={confirmBlockUser} />
-          ) : null}
+          <View style={styles.conversationActions}>
+            <Button title="View Listing" variant="outline" onPress={() => onOpenListing(conversationDetail.listingId)} />
+            {acceptedAmount && onPaymentOptions ? (
+              <Button title="Checkout" variant="outline" icon={CreditCard} onPress={() => onPaymentOptions(conversationDetail.listingId, acceptedAmount)} />
+            ) : null}
+            {canReview && onReview ? (
+              <Button title="Review" variant="outline" icon={Star} onPress={() => onReview(conversationDetail.listingId, conversationDetail.otherUser.id)} />
+            ) : null}
+            {latestReportableMessage && onReportMessage ? (
+              <Button title="Report" variant="ghost" icon={Flag} onPress={() => onReportMessage(latestReportableMessage.id)} />
+            ) : null}
+            {!messagingBlocked ? (
+              <Button title="Block" variant="ghost" icon={ShieldCheck} onPress={confirmBlockUser} />
+            ) : null}
+          </View>
         </View>
       </View>
-      {dealPanel}
 
       <FlatList
         ref={messageListRef}
@@ -995,7 +970,7 @@ export function ConversationScreen({
         sending={sender.loading}
         error={sender.error}
       />
-    </SafeAreaView>
+    </ScreenContainer>
   );
 }
 
@@ -1174,8 +1149,8 @@ export function NotificationsScreen({
   }
 
   return (
-    <SafeAreaView style={styles.app}>
-      <ThemedStatusBar />
+    <ScreenContainer>
+      <StatusBar style="dark" />
       <View style={styles.screenHeader}>
         <BackButton onPress={onBack} />
         <Text style={styles.title}>Notifications</Text>
@@ -1231,7 +1206,7 @@ export function NotificationsScreen({
           }
         />
       )}
-    </SafeAreaView>
+    </ScreenContainer>
   );
 }
 
@@ -1356,7 +1331,6 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
   const auth = useAuth();
   const settings = useSettings(Boolean(auth.user));
   const blockedAccounts = useBlockUser();
-  const theme = useThemePreference();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState('');
   const [email, setEmail] = useState('');
@@ -1421,7 +1395,7 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
     return (
       <ScreenFrame>
         <BackButton onPress={onBack} />
-        <ErrorState message={handleAppError(settings.error).userMessage} onRetry={settings.refresh} />
+        <ErrorState message={handleAppError(settings.error).userMessage} onRetry={settings.refetch} />
       </ScreenFrame>
     );
   }
@@ -1443,22 +1417,6 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
         <Text style={styles.body}>Manage notifications, privacy, account safety, and app information.</Text>
       </View>
       {settingsNotice ? <NoticeCard title={settingsNotice.title} body={settingsNotice.body} /> : null}
-
-      <SectionCard title="Appearance">
-        <Text style={styles.body}>
-          Current appearance: {theme.resolvedScheme === 'dark' ? 'Dark' : 'Light'}
-        </Text>
-        <ToggleSwitch
-          label="Use device appearance"
-          value={theme.preference === 'system'}
-          onValueChange={(useSystem) => void theme.setPreference(useSystem ? 'system' : theme.resolvedScheme)}
-        />
-        <ToggleSwitch
-          label="Dark mode"
-          value={theme.resolvedScheme === 'dark'}
-          onValueChange={(useDarkMode) => void theme.setPreference(useDarkMode ? 'dark' : 'light')}
-        />
-      </SectionCard>
 
       <SectionCard title="Notification Settings">
         <ToggleSwitch label="New messages" value={settings.data.notifications.messages} onValueChange={(messages) => void settings.updateNotifications({ messages })} />
@@ -1569,21 +1527,32 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
           Use honest listing details, communicate respectfully, arrange safe local exchanges, and follow applicable laws.
           ReTail may remove listings, restrict accounts, and preserve moderation records when needed for safety.
         </Text>
+        <Button title="Open Terms" variant="outline" onPress={() => void openAppLink(appLinks.termsUrl)} fullWidth />
         <Text style={styles.bodyStrong}>Privacy Policy</Text>
         <Text style={styles.body}>
           ReTail shows city/state and approximate distance, never exact home addresses, private email addresses,
           authentication identifiers, or street-level GPS coordinates in public marketplace views.
         </Text>
+        <Button title="Open Privacy Policy" variant="outline" onPress={() => void openAppLink(appLinks.privacyUrl)} fullWidth />
         <Text style={styles.bodyStrong}>Community Guidelines</Text>
         <Text style={styles.body}>
           Be honest, avoid spam, report unsafe content, inspect items before completing a transaction, and meet in public
           places when possible.
         </Text>
+        <Button title="Open Community Guidelines" variant="outline" onPress={() => void openAppLink(appLinks.communityGuidelinesUrl)} fullWidth />
       </SectionCard>
 
       <SectionCard title="About ReTail">
         <Text style={styles.body}>Version {version}</Text>
+        <Text style={styles.body}>Environment: {getAppEnvironmentLabel(config.appEnv)}</Text>
         <Text style={styles.body}>Secondhand Pet Marketplace for buying, selling, donating, and supporting local rescues.</Text>
+        <Text style={styles.body}>Website: {appLinks.baseUrl}</Text>
+        <Text style={styles.body}>General contact: {appLinks.contactEmail}</Text>
+        <Text style={styles.body}>Support, payments, user issues, and reports: {appLinks.supportEmail}</Text>
+        <Button title="Open ReTail Website" variant="outline" onPress={() => void openAppLink(appLinks.baseUrl)} fullWidth />
+        <Button title="Private Beta Page" variant="outline" onPress={() => void openAppLink(appLinks.betaUrl)} fullWidth />
+        <Button title="Email General Contact" variant="outline" onPress={() => void openAppLink(appLinks.contactMailto)} fullWidth />
+        <Button title="Email Support" variant="outline" onPress={() => void openAppLink(appLinks.supportMailto)} fullWidth />
       </SectionCard>
     </ScreenFrame>
   );
@@ -1651,7 +1620,7 @@ export function AdminReviewScreen({ onBack, onOpenListing }: { onBack: () => voi
 
       <SectionCard title="Listing Reports">
         <Text style={styles.bodyStrong}>{pendingReportCount} open</Text>
-        <Text style={styles.body}>Reported listings, messages, and users appear here so you can review spam, fraud, harassment, or inappropriate content.</Text>
+        <Text style={styles.body}>Reported listings appear here so you can review spam, fraud, harassment, or inappropriate content.</Text>
       </SectionCard>
 
       {listingReports.actionError ? <NoticeCard title="Report action failed" body={listingReports.actionError} /> : null}
@@ -1659,7 +1628,7 @@ export function AdminReviewScreen({ onBack, onOpenListing }: { onBack: () => voi
       {listingReports.isError ? <ErrorState message={handleAppError(listingReports.error).userMessage} onRetry={listingReports.refetch} /> : null}
 
       {!listingReports.isLoading && !listingReports.isError && (listingReports.data ?? []).length === 0 ? (
-        <EmptyState title="No reports waiting" body="Listings, messages, and users reported by the community will appear here for review." icon={Flag} />
+        <EmptyState title="No listing reports waiting" body="Listings reported by users will appear here for review." icon={Flag} />
       ) : null}
 
       {(listingReports.data ?? []).map((report) => (
@@ -1722,8 +1691,8 @@ function AdminListingReportCard({
       <View style={styles.stack}>
         <View style={styles.notificationRow}>
           <View style={styles.notificationText}>
-            <Text style={styles.cardTitle}>{report.target_title ?? report.listing_title ?? 'Reported content'}</Text>
-            <Text style={styles.body}>{report.target_subtitle || report.listing_location || 'Context unavailable'}</Text>
+            <Text style={styles.cardTitle}>{report.listing_title ?? 'Reported listing'}</Text>
+            <Text style={styles.body}>{report.listing_location || 'Location unavailable'}</Text>
           </View>
           <Text style={styles.metaText}>{adminReportStatusLabel(report.status)}</Text>
         </View>
@@ -1731,9 +1700,6 @@ function AdminListingReportCard({
         <Text style={styles.bodyStrong}>Reason: {report.reason}</Text>
         {report.details ? <Text style={styles.body}>Details: {report.details}</Text> : null}
         <Text style={styles.body}>Reporter: {report.reporter_name ?? 'ReTail user'}</Text>
-        <Text style={styles.body}>Report type: {adminReportTypeLabel(report.report_type)}</Text>
-        {report.reported_user_name ? <Text style={styles.body}>Reported user: {report.reported_user_name}</Text> : null}
-        {report.message_preview ? <Text style={styles.body}>Message: {report.message_preview}</Text> : null}
         {report.listing_price ? <Text style={styles.body}>Listing price: {report.listing_price}</Text> : null}
         {report.listing_status ? <Text style={styles.body}>Listing status: {report.listing_status}</Text> : null}
         <Text style={styles.metaText}>Reported {formatAdminDate(report.created_at)}</Text>
@@ -1843,16 +1809,6 @@ function findLatestAcceptedOffer(messages: Message[]) {
     .find((offer) => offer?.kind === 'offer_response' && offer.status === 'accepted') ?? null;
 }
 
-function defaultOfferAmount(price: string): string {
-  const amount = Number(price.replace(/[^0-9.]/g, ''));
-
-  if (!Number.isFinite(amount) || amount <= 0) {
-    return '';
-  }
-
-  return amount % 1 === 0 ? `$${amount.toFixed(0)}` : `$${amount.toFixed(2)}`;
-}
-
 function adminStatusLabel(rescue: RescueProfile): string {
   if (rescue.verification_status === 'verified') {
     return 'Verified';
@@ -1885,18 +1841,6 @@ function adminReportStatusLabel(status: ReportStatus): string {
   return 'Open';
 }
 
-function adminReportTypeLabel(type: AdminListingReport['report_type']): string {
-  if (type === 'message') {
-    return 'Message';
-  }
-
-  if (type === 'user') {
-    return 'User';
-  }
-
-  return 'Listing';
-}
-
 function formatAdminDate(date: string): string {
   return new Date(date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
@@ -1926,12 +1870,27 @@ function adminRescueAddress(rescue: RescueProfile): string {
 }
 
 function ScreenFrame({ children }: { children: ReactNode }) {
+  const insets = useSafeAreaInsets();
+
   return (
-    <SafeAreaView style={styles.app}>
-      <ThemedStatusBar />
-      <ScrollView style={styles.listScreen} contentContainerStyle={styles.listContent}>
+    <SafeAreaView edges={['left', 'right']} style={[styles.app, { paddingTop: topSafeAreaPadding(insets.top) }]}>
+      <StatusBar style="dark" />
+      <ScrollView
+        style={styles.listScreen}
+        contentContainerStyle={[styles.listContent, { paddingBottom: scrollContentBottomClearance(insets.bottom) }]}
+      >
         {children}
       </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+function ScreenContainer({ children }: { children: ReactNode }) {
+  const insets = useSafeAreaInsets();
+
+  return (
+    <SafeAreaView edges={['left', 'right']} style={[styles.app, { paddingTop: topSafeAreaPadding(insets.top) }]}>
+      {children}
     </SafeAreaView>
   );
 }
@@ -1971,7 +1930,7 @@ function formatNotificationDate(date: string) {
   return new Date(date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-const styles = createThemedStyles((colors) => ({
+const styles = StyleSheet.create({
   app: {
     flex: 1,
     backgroundColor: colors.background,
@@ -1980,14 +1939,23 @@ const styles = createThemedStyles((colors) => ({
     flex: 1,
   },
   tabBar: {
+    position: 'absolute',
+    left: spacing.md,
+    right: spacing.md,
     minHeight: sizes.tabBarHeight,
     flexDirection: 'row',
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.large,
     backgroundColor: colors.surface,
-    paddingHorizontal: spacing.xs,
-    paddingTop: spacing.xs,
-    paddingBottom: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.sm,
+    shadowColor: colors.textPrimary,
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 8,
   },
   tabButton: {
     flex: 1,
@@ -2012,7 +1980,9 @@ const styles = createThemedStyles((colors) => ({
     flex: 1,
   },
   listContent: {
-    padding: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingTop: sizes.screenTopGap,
+    paddingBottom: spacing.xxl,
     gap: spacing.lg,
   },
   headerBlock: {
@@ -2026,7 +1996,6 @@ const styles = createThemedStyles((colors) => ({
     backgroundColor: colors.background,
   },
   title: {
-    flexShrink: 1,
     color: colors.textPrimary,
     ...typography.display,
     lineHeight: 38,
@@ -2058,23 +2027,19 @@ const styles = createThemedStyles((colors) => ({
   locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.sm,
     flexWrap: 'wrap',
-    gap: spacing.xs,
   },
   metricRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: spacing.sm,
+    flexWrap: 'wrap',
   },
   needRow: {
-    minHeight: sizes.touchTarget,
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'center',
     gap: spacing.md,
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
   backInline: {
     minHeight: sizes.touchTarget,
@@ -2104,18 +2069,8 @@ const styles = createThemedStyles((colors) => ({
     gap: spacing.xs,
   },
   conversationActions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: spacing.sm,
-    alignItems: 'center',
-  },
-  dealPanel: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
-    backgroundColor: colors.background,
-  },
-  dealActions: {
-    gap: spacing.sm,
+    alignItems: 'stretch',
   },
   conversationOptionGrid: {
     gap: spacing.sm,
@@ -2135,8 +2090,9 @@ const styles = createThemedStyles((colors) => ({
   },
   messageList: {
     flexGrow: 1,
-    padding: spacing.md,
-    paddingBottom: spacing.xl,
+    paddingHorizontal: spacing.lg,
+    paddingTop: sizes.screenTopGap,
+    paddingBottom: spacing.xxl,
   },
   messageListHeader: {
     gap: spacing.md,
@@ -2146,7 +2102,8 @@ const styles = createThemedStyles((colors) => ({
     justifyContent: 'center',
   },
   notificationList: {
-    padding: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingTop: sizes.screenTopGap,
     paddingBottom: spacing.xxl,
   },
   separator: {
@@ -2191,4 +2148,4 @@ const styles = createThemedStyles((colors) => ({
     color: colors.error,
     ...typography.small,
   },
-}));
+});

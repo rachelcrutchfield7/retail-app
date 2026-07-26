@@ -1,7 +1,7 @@
 import { MessageCircle, Send } from 'lucide-react-native';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { conversations } from '../data/mockData';
-import { colors, radius, sizes, spacing, typography, createThemedStyles } from '../constants/theme';
+import { colors, radius, sizes, spacing, typography } from '../constants/theme';
 import { ConversationCard, LockedScreen } from '../components';
 import { initials } from '../utils/format';
 
@@ -67,7 +67,7 @@ export function MessagesScreen({
   );
 }
 
-const styles = createThemedStyles((colors) => ({
+const styles = StyleSheet.create({
   flex: {
     flex: 1,
   },
@@ -75,8 +75,9 @@ const styles = createThemedStyles((colors) => ({
     flex: 1,
   },
   screenContent: {
-    padding: spacing.md,
-    paddingBottom: sizes.tabBarHeight + spacing.xl,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: sizes.tabBarHeight + sizes.tabBarBottomOffset + spacing.xxl,
     gap: spacing.lg,
   },
   title: {
@@ -90,9 +91,9 @@ const styles = createThemedStyles((colors) => ({
   },
   messageComposer: {
     position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: sizes.tabBarHeight,
+    left: spacing.lg,
+    right: spacing.lg,
+    bottom: sizes.tabBarHeight + sizes.tabBarBottomOffset + spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
@@ -120,4 +121,4 @@ const styles = createThemedStyles((colors) => ({
     justifyContent: 'center',
     backgroundColor: colors.primary,
   },
-}));
+});

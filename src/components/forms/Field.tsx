@@ -1,6 +1,6 @@
 import type { PropsWithChildren } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { colors, spacing, typography, createThemedStyles } from '../../constants/theme';
+import { colors, spacing, typography } from '../../constants/theme';
 
 type FieldProps = PropsWithChildren<{
   label: string;
@@ -15,7 +15,7 @@ export function Field({ label, children }: FieldProps) {
   );
 }
 
-export const formStyles = createThemedStyles((colors) => ({
+export const formStyles = StyleSheet.create({
   fieldLabel: {
     color: colors.textPrimary,
     ...typography.small,
@@ -25,7 +25,7 @@ export const formStyles = createThemedStyles((colors) => ({
     ...typography.caption,
     marginTop: spacing.xs,
   },
-}));
+});
 
 const styles = StyleSheet.create({
   field: {

@@ -1,5 +1,5 @@
 import { StyleSheet, Text } from 'react-native';
-import { colors, typography, createThemedStyles } from '../../constants/theme';
+import { colors, typography } from '../../constants/theme';
 
 type PriceTagProps = {
   value: string | number;
@@ -28,7 +28,7 @@ export function formatPrice(value: string | number): string {
   return value;
 }
 
-const styles = createThemedStyles((colors) => ({
+const styles = StyleSheet.create({
   price: {
     color: colors.primary,
     ...typography.title,
@@ -37,4 +37,4 @@ const styles = createThemedStyles((colors) => ({
     ...typography.sectionTitle,
     lineHeight: 23,
   },
-}));
+});

@@ -4,15 +4,25 @@ import test from 'node:test';
 
 const sprint3 = readFileSync(new URL('../src/sprint3/Sprint3App.tsx', import.meta.url), 'utf8');
 const sprint4 = readFileSync(new URL('../src/sprint4/Sprint4App.tsx', import.meta.url), 'utf8');
+const app = readFileSync(new URL('../App.tsx', import.meta.url), 'utf8');
 const rescueHub = readFileSync(new URL('../src/screens/RescueHubScreen.tsx', import.meta.url), 'utf8');
-const button = readFileSync(new URL('../src/components/ui/Button.tsx', import.meta.url), 'utf8');
-const checklist = readFileSync(new URL('../docs/private-beta/BETA_REGRESSION_CHECKLIST.md', import.meta.url), 'utf8');
+const founderChecklist = readFileSync(new URL('../docs/private-beta/FOUNDER_PREVIEW_REGRESSION_CHECKLIST.md', import.meta.url), 'utf8');
+
+test('app shell uses the restored safe-area mobile layout', () => {
+  assert.match(app, /SafeAreaProvider/);
+  assert.doesNotMatch(app, /ThemeProvider/);
+  assert.match(sprint4, /useSafeAreaInsets/);
+  assert.match(sprint4, /bottomTabBarContentClearance/);
+  assert.match(sprint4, /scrollContentBottomClearance/);
+  assert.match(sprint4, /BackHandler\.addEventListener\('hardwareBackPress'/);
+});
 
 test('home rescue banner uses live rescue hub data instead of mock counts', () => {
   assert.match(sprint3, /useRescueHub/);
   assert.doesNotMatch(sprint3, /from '..\/data\/mockData'/);
-  assert.match(sprint3, /rescueCount=\{rescueHubItems\.length\}/);
-  assert.match(sprint3, /wishlistCount=\{wishlistCount\}/);
+  assert.match(sprint3, /rescueSummary\.data/);
+  assert.match(sprint3, /rescueCount: rescues\.length/);
+  assert.match(sprint3, /urgentNeedCount: rescues\.reduce/);
 });
 
 test('rescue hub cards navigate to public rescue profiles', () => {
@@ -25,30 +35,47 @@ test('rescue hub cards navigate to public rescue profiles', () => {
 
 test('android hardware back uses route history before default exit behavior', () => {
   assert.match(sprint4, /BackHandler\.addEventListener\('hardwareBackPress'/);
-  assert.match(sprint4, /routeStack\.length > 1 \|\| route\.name !== 'tabs'/);
-  assert.match(sprint4, /parentRouteFor/);
+  assert.match(sprint4, /route\.name === 'conversation'/);
+  assert.match(sprint4, /route\.name === 'messages' \|\| route\.name === 'settings' \|\| route\.name === 'my-listings'/);
+  assert.match(sprint4, /setRoute\(\{ name: 'tabs', tab: 'home' \}\)/);
 });
 
 test('settings renders request errors instead of an endless loading state', () => {
-  assert.match(sprint4, /if \(settings\.isError\)/);
+  const errorBranchIndex = sprint4.indexOf('if (settings.isError)');
+  const loadingBranchIndex = sprint4.indexOf('if (settings.isLoading || !settings.data)');
+
+  assert.notEqual(errorBranchIndex, -1);
+  assert.notEqual(loadingBranchIndex, -1);
+  assert.ok(errorBranchIndex < loadingBranchIndex);
   assert.match(sprint4, /ErrorState message=\{handleAppError\(settings\.error\)\.userMessage\}/);
+  assert.match(sprint4, /onRetry=\{settings\.refetch\}/);
 });
 
-test('mobile button labels are guarded against horizontal overflow', () => {
-  assert.match(button, /flexShrink: 1/);
-  assert.match(button, /textAlign: 'center'/);
-  assert.match(sprint3, /numColumns=\{1\}/);
+test('listing detail retains mobile-safe buyer and owner actions', () => {
+  assert.match(sprint3, /onMessageSeller/);
+  assert.match(sprint3, /onReportListing/);
+  assert.match(sprint3, /owner \?/);
+  assert.match(sprint3, /Listing tools/);
+  assert.match(sprint3, /Message Seller/);
+  assert.match(sprint3, /title="Report"/);
+  assert.match(sprint4, /Make Offer/);
+  assert.match(sprint4, /PaymentOptionsScreen/);
 });
 
-test('private beta checklist covers regression areas', () => {
+test('founder preview checklist covers required recovery checks', () => {
   for (const phrase of [
-    'Mobile Layout',
-    'Home Rescue Hub counts come from the live Rescue Hub data source',
-    'Rescue cards open public rescue profile pages',
-    'Message rescue',
-    'Android Back Button',
+    'Home fits mobile screen',
+    'Bottom navigation is compact',
+    'Listing detail buttons are formatted correctly',
     'Settings opens',
+    'Rescue Hub opens',
+    'Home Rescue Hub counts are live or show a safe fallback',
+    'Messages open',
+    'Conversation input does not cover messages',
+    'Android back button works on detail screens if implemented',
+    'No screen horizontally scrolls',
+    'No screen uses desktop layout on phone',
   ]) {
-    assert.match(checklist, new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    assert.match(founderChecklist, new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   }
 });

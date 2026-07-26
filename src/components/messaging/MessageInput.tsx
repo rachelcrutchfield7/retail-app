@@ -1,6 +1,8 @@
 import { Send } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { colors, radius, sizes, spacing, typography, createThemedStyles } from '../../constants/theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { colors, radius, sizes, spacing, typography } from '../../constants/theme';
+import { scrollContentBottomClearance } from '../../utils/safeAreaLayout';
 import { AttachmentButton } from './AttachmentButton';
 import { ImagePreview } from './ImagePreview';
 
@@ -29,10 +31,11 @@ export function MessageInput({
   sending = false,
   error,
 }: MessageInputProps) {
+  const insets = useSafeAreaInsets();
   const canSend = !disabled && !sending && (value.trim().length > 0 || Boolean(imageUri));
 
   return (
-    <View style={styles.wrap}>
+    <View style={[styles.wrap, { paddingBottom: scrollContentBottomClearance(insets.bottom) }]}>
       <ImagePreview imageUri={imageUri} onRemove={onRemoveImage} />
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {disabled ? <Text style={styles.offline}>{disabledMessage}</Text> : null}
@@ -63,7 +66,7 @@ export function MessageInput({
   );
 }
 
-const styles = createThemedStyles((colors) => ({
+const styles = StyleSheet.create({
   wrap: {
     padding: spacing.md,
     borderTopWidth: 1,
@@ -109,4 +112,4 @@ const styles = createThemedStyles((colors) => ({
     color: colors.textSecondary,
     ...typography.caption,
   },
-}));
+});

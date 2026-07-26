@@ -1,0 +1,16 @@
+export const appLinks = {
+  domain: 'retailpetapp.com',
+  baseUrl: 'https://retailpetapp.com',
+  betaUrl: 'https://retailpetapp.com/beta',
+  privacyUrl: 'https://retailpetapp.com/privacy',
+  termsUrl: 'https://retailpetapp.com/terms',
+  communityGuidelinesUrl: 'https://retailpetapp.com/community-guidelines',
+  contactEmail: 'contact@retailpetapp.com',
+  contactMailto: 'mailto:contact@retailpetapp.com',
+  supportEmail: 'support@retailpetapp.com',
+  supportMailto: 'mailto:support@retailpetapp.com',
+  paymentSupportMailto: 'mailto:support@retailpetapp.com?subject=ReTail%20payment%20support',
+  reportingSupportMailto: 'mailto:support@retailpetapp.com?subject=ReTail%20safety%20or%20reporting%20issue',
+  listingUrl: (listingId: string) => `https://retailpetapp.com/listing/${encodeURIComponent(listingId)}`,
+  profileUrl: (userId: string) => `https://retailpetapp.com/profile/${encodeURIComponent(userId)}`,
+};

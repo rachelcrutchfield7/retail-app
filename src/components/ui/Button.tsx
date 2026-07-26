@@ -1,5 +1,5 @@
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
-import { colors, radius, sizes, spacing, typography, createThemedStyles } from '../../constants/theme';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { colors, radius, sizes, spacing, typography } from '../../constants/theme';
 import type { IconComponent } from '../../types.ts';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
@@ -46,7 +46,7 @@ export function Button({
   );
 }
 
-const styles = createThemedStyles((colors) => ({
+const styles = StyleSheet.create({
   button: {
     minHeight: sizes.buttonHeight,
     borderRadius: radius.medium,
@@ -65,13 +65,9 @@ const styles = createThemedStyles((colors) => ({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    flexShrink: 1,
-    maxWidth: '100%',
     gap: spacing.sm,
   },
   buttonText: {
-    flexShrink: 1,
-    textAlign: 'center',
     ...typography.button,
   },
   buttonTextLight: {
@@ -80,9 +76,9 @@ const styles = createThemedStyles((colors) => ({
   buttonTextDark: {
     color: colors.primary,
   },
-}));
+});
 
-const variantStyles = createThemedStyles((colors) => ({
+const variantStyles = StyleSheet.create<Record<ButtonVariant, object>>({
   primary: {
     backgroundColor: colors.primary,
     borderColor: colors.primary,
@@ -103,4 +99,4 @@ const variantStyles = createThemedStyles((colors) => ({
     backgroundColor: colors.error,
     borderColor: colors.error,
   },
-}));
+});
