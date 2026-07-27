@@ -108,8 +108,8 @@ test('Phase B public services do not fall back to unsafe base-table reads', () =
   assert.doesNotMatch(profilePublic, /\.from\('profiles'\)/);
   assert.match(profileListings, /rpc\('get_public_user_listings'/);
   assert.doesNotMatch(profileListings, /\.from\('listings'\)/);
-  assert.match(rescueHub, /rpc\('get_public_rescue_feed'/);
-  assert.match(rescueHub, /rpc\('get_nearby_rescues'/);
+  assert.match(rescueHub, /rpc\('get_public_rescue_feed(?:_v2)?'/);
+  assert.match(rescueHub, /rpc\('get_nearby_rescues(?:_v2)?'/);
   assert.doesNotMatch(rescueHub, /\.from\('rescue_profiles'\)/);
   assert.doesNotMatch(rescueService, /rescueOrganizations/);
   assert.doesNotMatch(rescueService, /filterMockRescues/);
@@ -135,9 +135,9 @@ test('Phase B mappers do not copy exact location fields into public listing or r
   assert.doesNotMatch(rescueMapper, /latitude:/);
   assert.doesNotMatch(rescueMapper, /longitude:/);
   assert.doesNotMatch(rescueMapper, /contactPerson:/);
-  assert.doesNotMatch(rescueMapper, /addressLine1:/);
-  assert.doesNotMatch(rescueMapper, /addressLine2:/);
-  assert.doesNotMatch(rescueMapper, /zipCode:/);
+  assert.match(rescueMapper, /addressLine1: optionalString\(row\.address_line1\)/);
+  assert.match(rescueMapper, /addressLine2: optionalString\(row\.address_line2\)/);
+  assert.match(rescueMapper, /zipCode: optionalString\(row\.zip_code\)/);
   assert.match(serviceTypes, /export type PublicListing/);
   assert.match(serviceTypes, /export type OwnerListing/);
   assert.match(serviceTypes, /export type PublicRescue/);

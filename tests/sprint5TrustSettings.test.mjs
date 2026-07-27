@@ -58,5 +58,15 @@ test('settings exposes account safety, blocked accounts, and confirmed deletion'
   assert.match(settingsScreen, /Type DELETE to confirm/);
   assert.match(settingsScreen, /Update Email/);
   assert.match(settingsScreen, /Change Password/);
-  assert.match(settingsScreen, /Push alerts for messages/);
+  assert.match(settingsScreen, /Phone push alerts coming soon/);
+  assert.doesNotMatch(settingsScreen, /Push alerts for messages/);
+});
+
+test('about section shows contact options without website action buttons', () => {
+  assert.match(settingsScreen, /Website: \{appLinks\.baseUrl\}/);
+  assert.match(settingsScreen, /Email General Contact/);
+  assert.match(settingsScreen, /Email Support/);
+  assert.doesNotMatch(settingsScreen, /Open ReTail Website/);
+  assert.doesNotMatch(settingsScreen, /Private Beta Page/);
+  assert.doesNotMatch(settingsScreen, /appLinks\.betaUrl/);
 });

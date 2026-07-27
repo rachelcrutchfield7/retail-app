@@ -10,6 +10,8 @@ const listingDetail = readFileSync(join(root, 'src/screens/ListingDetailScreen.t
 const sprint3 = readFileSync(join(root, 'src/sprint3/Sprint3App.tsx'), 'utf8');
 const sprint4 = readFileSync(join(root, 'src/sprint4/Sprint4App.tsx'), 'utf8');
 const adminService = readFileSync(join(root, 'src/services/adminService.ts'), 'utf8');
+const adminHook = readFileSync(join(root, 'src/hooks/useAdminListingReports.ts'), 'utf8');
+const adminModerationMigration = readFileSync(join(root, 'supabase/migrations/20260727194012_admin_report_moderation_actions.sql'), 'utf8');
 
 test('listing reports include the required reasons', () => {
   for (const reason of [
@@ -46,7 +48,7 @@ test('listing details expose an owner edit action', () => {
 });
 
 test('admin review panel surfaces listing, message, and user reports', () => {
-  assert.match(sprint4, /Listing Reports/);
+  assert.match(sprint4, /Reports/);
   assert.match(sprint4, /AdminListingReportCard/);
   assert.match(sprint4, /useAdminListingReports/);
   assert.match(adminService, /\.from\('reports'\)/);
@@ -54,4 +56,24 @@ test('admin review panel surfaces listing, message, and user reports', () => {
   assert.match(adminService, /Reported message/);
   assert.match(adminService, /Reported user/);
   assert.match(adminService, /updateListingReportStatus/);
+});
+
+test('admin report actions can resolve, dismiss, remove listings, delete users, and notify both sides', () => {
+  assert.match(adminService, /rpc\('admin_moderate_report'/);
+  assert.match(adminService, /moderateListingReport/);
+  assert.match(adminHook, /moderateReport/);
+  assert.match(sprint4, /Remove Listing/);
+  assert.match(sprint4, /Delete User/);
+  assert.match(sprint4, /window\.confirm/);
+  assert.match(sprint4, /Alert\.alert/);
+  assert.match(sprint4, /Reported user:/);
+  assert.match(sprint4, /Message:/);
+  assert.match(adminModerationMigration, /create or replace function public\.admin_moderate_report/);
+  assert.match(adminModerationMigration, /safe_action not in \('none', 'remove_listing', 'delete_user', 'remove_message'\)/);
+  assert.match(adminModerationMigration, /status = 'removed'::public\.listing_status/);
+  assert.match(adminModerationMigration, /is_banned = true/);
+  assert.match(adminModerationMigration, /insert into public\.notifications/);
+  assert.match(adminModerationMigration, /report_row\.reporter_id/);
+  assert.match(adminModerationMigration, /target_user_id/);
+  assert.match(adminModerationMigration, /grant execute on function public\.admin_moderate_report/);
 });

@@ -18,6 +18,8 @@ import type {
 
 type Row = Record<string, unknown>;
 
+const DEFAULT_DONATION_INSTRUCTIONS = 'Message this rescue through ReTail to coordinate donations.';
+
 export async function getCurrentRescueDashboard(): Promise<RescueDashboard> {
   const profile = await ensureCurrentProfile();
 
@@ -68,7 +70,7 @@ export async function getCurrentRescueProfile(): Promise<RescueProfile | null> {
 }
 
 export async function getPublicRescueProfileByOwner(ownerId: string): Promise<RescueProfile | null> {
-  const { data, error } = await supabase.rpc('get_public_rescue_by_owner', {
+  const { data, error } = await supabase.rpc('get_public_rescue_by_owner_v2', {
     target_owner_id: ownerId,
   });
 
@@ -115,7 +117,7 @@ export async function createOrUpdateRescueProfile(input: RescueSignupInput): Pro
   }
 
   const donationInstructions = input.donationInstructions?.trim()
-    || 'Send this rescue a message through ReTail to coordinate supply drop-offs.';
+    || DEFAULT_DONATION_INSTRUCTIONS;
 
   const { data, error } = await supabase.rpc('update_my_rescue_profile', {
     requested_name: input.organizationName.trim(),
@@ -296,7 +298,7 @@ export async function getNearbyRescues(params: RescueHubQueryParams = {}): Promi
   }
 
   if (sessionResult.data.session) {
-    const nearbyResult = await supabase.rpc('get_nearby_rescues', {
+    const nearbyResult = await supabase.rpc('get_nearby_rescues_v2', {
       search_query: params.search?.trim() || null,
     });
 
@@ -313,7 +315,7 @@ export async function getNearbyRescues(params: RescueHubQueryParams = {}): Promi
     }
   }
 
-  const publicResult = await supabase.rpc('get_public_rescue_feed', {
+  const publicResult = await supabase.rpc('get_public_rescue_feed_v2', {
     page_number: 1,
     page_size: 50,
     search_query: params.search?.trim() || null,
@@ -368,13 +370,30 @@ async function mergeCurrentRescueContactHint(rescues: RescueOrganization[]): Pro
     }
 
     return rescues.map((rescue) =>
-      rescue.id === currentRescueProfile.id
+      rescueMatchesCurrentProfile(rescue, currentRescueProfile)
         ? { ...rescue, contactHint }
         : rescue
     );
   } catch {
     return rescues;
   }
+}
+
+function rescueMatchesCurrentProfile(rescue: RescueOrganization, currentRescueProfile: RescueProfile): boolean {
+  if (rescue.id === currentRescueProfile.id) {
+    return true;
+  }
+
+  const rescueLocation = normalizedRescueLookupValue(rescue.location);
+  const profileLocation = normalizedRescueLookupValue(
+    [currentRescueProfile.city, currentRescueProfile.state].filter(Boolean).join(', ')
+  );
+
+  return (
+    normalizedRescueLookupValue(rescue.name) === normalizedRescueLookupValue(currentRescueProfile.name) &&
+    rescueLocation.length > 0 &&
+    rescueLocation === profileLocation
+  );
 }
 
 async function getRescueNeeds(rescueId: string): Promise<RescueNeed[]> {
@@ -448,7 +467,10 @@ function hubRescueFromRow(row: Row): RescueOrganization {
     summary: stringValue(row.summary),
     animalsRescued: arrayValue(row.animals_rescued).map(String),
     organizationType: organizationTypeFromDb(row.organization_type),
-    has501c3: false,
+    has501c3: Boolean(row.has_501c3),
+    addressLine1: optionalString(row.address_line1),
+    addressLine2: optionalString(row.address_line2),
+    zipCode: optionalString(row.zip_code),
     urgentNeeds: arrayValue(row.needs).map((need) => {
       const needRow = need as Row;
       return {
@@ -469,7 +491,7 @@ function hubRescueFromRow(row: Row): RescueOrganization {
         notes: optionalString(itemRow.notes),
       };
     }),
-    contactHint: optionalString(row.contact_hint) ?? 'Message this rescue through ReTail to coordinate donations.',
+    contactHint: optionalString(row.contact_hint) ?? DEFAULT_DONATION_INSTRUCTIONS,
     websiteUrl: optionalString(row.website_url),
   };
 }
@@ -592,6 +614,10 @@ function stringValue(value: unknown, fallback = ''): string {
 
 function optionalString(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+function normalizedRescueLookupValue(value: string): string {
+  return value.trim().replace(/\s+/g, ' ').toLowerCase();
 }
 
 function numberValue(value: unknown): number {

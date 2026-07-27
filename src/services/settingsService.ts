@@ -52,7 +52,7 @@ export async function getPrivacySettings(): Promise<PrivacySettings> {
     throwSupabaseError(error, 'We could not load privacy settings.');
   }
 
-  return data ? privacySettingsFromRow(data as Record<string, unknown>) : defaultPrivacySettings;
+  return data ? privacySettingsFromRow(data as Record<string, unknown>) : defaultPrivacySettingsForAccount(profile.account_type);
 }
 
 export async function updatePrivacySettings(input: Partial<PrivacySettings>): Promise<PrivacySettings> {
@@ -107,7 +107,7 @@ export async function getSettings(): Promise<{
       : defaultNotificationPreferences,
     privacy: privacyResult.status === 'fulfilled'
       ? privacyResult.value
-      : defaultPrivacySettings,
+      : defaultPrivacySettingsForAccount(account.accountType),
     loadWarning: loadWarnings.length ? loadWarnings.join(' ') : undefined,
   };
 }
@@ -121,5 +121,12 @@ function privacySettingsFromRow(row: Record<string, unknown>): PrivacySettings {
     allowProfileInSearch: row.profile_discoverable !== false,
     allowApproximateDistance: row.allow_approximate_distance !== false,
     rescuePublicContactEnabled: row.rescue_public_contact_enabled === true,
+  };
+}
+
+function defaultPrivacySettingsForAccount(accountType: string): PrivacySettings {
+  return {
+    ...defaultPrivacySettings,
+    rescuePublicContactEnabled: accountType === 'rescue',
   };
 }

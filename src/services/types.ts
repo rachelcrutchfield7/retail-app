@@ -18,6 +18,7 @@ export type ListingType = 'sale' | 'free' | 'donation';
 export type MessageType = 'text' | 'image' | 'system';
 export type ReportType = 'listing' | 'user' | 'message';
 export type ReportStatus = 'open' | 'reviewing' | 'resolved' | 'dismissed';
+export type AdminReportModerationAction = 'none' | 'remove_listing' | 'delete_user' | 'remove_message';
 export type ReportReason =
   | 'Spam'
   | 'Fraud'

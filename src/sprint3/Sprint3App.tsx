@@ -13,6 +13,7 @@ import {
   View,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Archive,
@@ -1644,10 +1645,6 @@ export function ProfileScreen({
           <View style={styles.stack}>
             <Text style={styles.cardTitle}>{authMode === 'register' ? 'Create your ReTail account.' : 'Log in to ReTail.'}</Text>
             <Text style={styles.body}>Create listings, save favorites, and manage your profile from here.</Text>
-            <View style={styles.actionGrid}>
-              {onFAQ ? <Button title="FAQ" icon={HelpCircle} variant="outline" onPress={onFAQ} fullWidth /> : null}
-              {onSafetyCenter ? <Button title="Safety Center" icon={ShieldCheck} variant="outline" onPress={onSafetyCenter} fullWidth /> : null}
-            </View>
             <View style={styles.wrapRow}>
               <FilterChip label="Log In" selected={authMode === 'login'} onPress={() => setAuthMode('login')} />
               <FilterChip label="Create Account" selected={authMode === 'register'} onPress={() => setAuthMode('register')} />
@@ -2512,7 +2509,21 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
     setRescueForm((current) => ({ ...current, [field]: value }));
   };
 
-  const chooseAvatar = () => {
+  const uploadSelectedAvatar = async (selectedUri: string) => {
+    const previousAvatarUrl = form.avatar_url;
+    update('avatar_url', selectedUri);
+
+    try {
+      const avatarUrl = await mutation.uploadAvatar(selectedUri);
+      update('avatar_url', avatarUrl);
+      setNotice({ title: 'Profile photo updated', body: 'Your new profile picture has been saved.' });
+    } catch (error) {
+      update('avatar_url', previousAvatarUrl);
+      setNotice({ title: 'Photo was not uploaded', body: handleAppError(error).userMessage });
+    }
+  };
+
+  const chooseAvatar = async () => {
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
       const input = document.createElement('input');
       input.type = 'file';
@@ -2523,27 +2534,41 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
           return;
         }
         const uri = URL.createObjectURL(file);
-        update('avatar_url', uri);
-        try {
-          const avatarUrl = await mutation.uploadAvatar(uri);
-          update('avatar_url', avatarUrl);
-          setNotice({ title: 'Profile photo updated', body: 'Your new profile picture has been saved.' });
-        } catch (error) {
-          setNotice({ title: 'Photo was not uploaded', body: handleAppError(error).userMessage });
-        }
+        await uploadSelectedAvatar(uri);
       };
       input.click();
       return;
     }
 
-    const fallbackAvatar = 'https://images.unsplash.com/photo-1601758174114-e711c0cbaa69?auto=format&fit=crop&w=600&q=80';
-    update('avatar_url', fallbackAvatar);
-    void mutation.uploadAvatar(fallbackAvatar).then((avatarUrl) => {
-      update('avatar_url', avatarUrl);
-      setNotice({ title: 'Profile photo updated', body: 'Your new profile picture has been saved.' });
-    }).catch((error) => {
-      setNotice({ title: 'Photo was not uploaded', body: handleAppError(error).userMessage });
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (!permission.granted) {
+      setNotice({
+        title: 'Photo access needed',
+        body: 'Allow ReTail to access your photos so you can upload a profile picture.',
+      });
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.85,
     });
+
+    if (result.canceled) {
+      return;
+    }
+
+    const selectedUri = result.assets[0]?.uri;
+
+    if (!selectedUri) {
+      setNotice({ title: 'Photo was not selected', body: 'Choose another image and try again.' });
+      return;
+    }
+
+    await uploadSelectedAvatar(selectedUri);
   };
 
   const save = async () => {
@@ -2588,7 +2613,7 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
         </View>
         <View style={styles.avatarEditRow}>
           <Avatar image={form.avatar_url} initials={initialsFor(form.display_name || 'User')} verified={auth.profile?.is_verified} size="lg" />
-          <Button title="Upload Avatar" variant="outline" onPress={chooseAvatar} loading={mutation.loading} />
+          <Button title="Upload Profile Picture" variant="outline" onPress={() => void chooseAvatar()} loading={mutation.loading} />
         </View>
         <TextInput label="Display Name" value={form.display_name} onChangeText={(value) => update('display_name', value)} error={errors.display_name} />
         <TextInput label="Username" value={form.username} onChangeText={(value) => update('username', value)} error={errors.username} autoCapitalize="none" />

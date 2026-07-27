@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
-import { getListingReportQueue, updateListingReportStatus } from '../services/adminService';
-import type { AdminListingReport, ReportStatus } from '../services/types';
+import { getListingReportQueue, moderateListingReport, updateListingReportStatus } from '../services/adminService';
+import type { AdminListingReport, AdminReportModerationAction, ReportStatus } from '../services/types';
 import { handleAppError } from '../utils/errorHandler';
 import { useAsyncResource } from './useAsyncResource';
 
@@ -35,5 +35,11 @@ export function useAdminListingReports(enabled: boolean) {
     actionError,
     updateStatus: (reportId: string, status: ReportStatus, adminNotes?: string) =>
       runAction(() => updateListingReportStatus(reportId, status, adminNotes)),
+    moderateReport: (
+      reportId: string,
+      status: ReportStatus,
+      action: AdminReportModerationAction,
+      adminNotes?: string
+    ) => runAction(() => moderateListingReport(reportId, status, action, adminNotes)),
   };
 }

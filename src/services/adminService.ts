@@ -1,7 +1,15 @@
 import { supabase } from '../lib/supabase';
 import { createServiceError } from './errors';
 import { ensureCurrentProfile, throwSupabaseError } from './supabaseData';
-import type { AdminListingReport, ReportReason, ReportStatus, RescueOrgTypeDb, RescueProfile, RescueVerificationStatus } from './types';
+import type {
+  AdminListingReport,
+  AdminReportModerationAction,
+  ReportReason,
+  ReportStatus,
+  RescueOrgTypeDb,
+  RescueProfile,
+  RescueVerificationStatus,
+} from './types';
 
 type Row = Record<string, unknown>;
 
@@ -85,27 +93,23 @@ export async function getListingReportQueue(): Promise<AdminListingReport[]> {
 }
 
 export async function updateListingReportStatus(reportId: string, status: ReportStatus, adminNotes?: string): Promise<AdminListingReport> {
+  return moderateListingReport(reportId, status, 'none', adminNotes);
+}
+
+export async function moderateListingReport(
+  reportId: string,
+  status: ReportStatus,
+  action: AdminReportModerationAction = 'none',
+  adminNotes?: string
+): Promise<AdminListingReport> {
   await requireAdminProfile();
 
-  const payload: Record<string, unknown> = {
-    status,
-    updated_at: new Date().toISOString(),
-  };
-
-  if (adminNotes !== undefined) {
-    payload.admin_notes = adminNotes.trim() || null;
-  }
-
-  if (status === 'resolved' || status === 'dismissed') {
-    payload.resolved_at = new Date().toISOString();
-  }
-
-  const { data, error } = await supabase
-    .from('reports')
-    .update(payload)
-    .eq('id', reportId)
-    .select('*')
-    .single();
+  const { data, error } = await supabase.rpc('admin_moderate_report', {
+    target_report_id: reportId,
+    requested_status: status,
+    requested_action: action,
+    requested_admin_note: adminNotes?.trim() || null,
+  });
 
   if (error) {
     throwSupabaseError(error, 'We could not update that report.');
@@ -139,7 +143,7 @@ async function hydrateListingReports(reports: AdminListingReport[]): Promise<Adm
     listingIds.length
       ? supabase
           .from('listings')
-          .select('id,title,price,listing_type,status,city,state,zip_code')
+          .select('id,seller_id,title,price,listing_type,status,city,state,zip_code')
           .in('id', listingIds)
       : Promise.resolve({ data: [], error: null }),
     messageIds.length
@@ -183,7 +187,7 @@ async function hydrateListingReports(reports: AdminListingReport[]): Promise<Adm
   let listingsById = new Map(((listingsResult.data ?? []) as Row[]).map((listing) => [stringValue(listing.id), listing]));
   const messagesById = new Map(messages.map((message) => [stringValue(message.id), message]));
   const reportersById = new Map(((reportersResult.data ?? []) as Row[]).map((reporter) => [stringValue(reporter.id), reporter]));
-  const reportedUsersById = new Map(((reportedUsersResult.data ?? []) as Row[]).map((profile) => [stringValue(profile.id), profile]));
+  let reportedUsersById = new Map(((reportedUsersResult.data ?? []) as Row[]).map((profile) => [stringValue(profile.id), profile]));
   const conversationsResult = conversationIds.length
     ? await supabase
         .from('conversations')
@@ -207,7 +211,7 @@ async function hydrateListingReports(reports: AdminListingReport[]): Promise<Adm
   if (conversationListingIds.length) {
     const conversationListingsResult = await supabase
       .from('listings')
-      .select('id,title,price,listing_type,status,city,state,zip_code')
+      .select('id,seller_id,title,price,listing_type,status,city,state,zip_code')
       .in('id', conversationListingIds);
 
     if (conversationListingsResult.error) {
@@ -220,13 +224,45 @@ async function hydrateListingReports(reports: AdminListingReport[]): Promise<Adm
     ]);
   }
 
+  const inferredReportedUserIds = Array.from(
+    new Set(
+      reports
+        .map((report) => {
+          if (report.reported_user_id) {
+            return report.reported_user_id;
+          }
+
+          const listing = report.listing_id ? listingsById.get(report.listing_id) : undefined;
+          return listing ? optionalString(listing.seller_id) : undefined;
+        })
+        .filter((id): id is string => typeof id === 'string' && !reportedUsersById.has(id))
+    )
+  );
+
+  if (inferredReportedUserIds.length) {
+    const inferredUsersResult = await supabase
+      .from('profiles')
+      .select('id,display_name,username')
+      .in('id', inferredReportedUserIds);
+
+    if (inferredUsersResult.error) {
+      throwSupabaseError(inferredUsersResult.error, 'We could not load reported user details.');
+    }
+
+    reportedUsersById = new Map([
+      ...reportedUsersById,
+      ...((inferredUsersResult.data ?? []) as Row[]).map((profile) => [stringValue(profile.id), profile] as const),
+    ]);
+  }
+
   return reports.map((report) => {
     const message = report.message_id ? messagesById.get(report.message_id) : undefined;
     const messageConversation = message ? conversationsById.get(stringValue(message.conversation_id)) : undefined;
     const messageListingId = messageConversation ? optionalString(messageConversation.listing_id) : undefined;
     const listing = report.listing_id ? listingsById.get(report.listing_id) : messageListingId ? listingsById.get(messageListingId) : undefined;
     const reporter = report.reporter_id ? reportersById.get(report.reporter_id) : undefined;
-    const reportedUser = report.reported_user_id ? reportedUsersById.get(report.reported_user_id) : undefined;
+    const reportedUserId = report.reported_user_id ?? (listing ? optionalString(listing.seller_id) : undefined);
+    const reportedUser = reportedUserId ? reportedUsersById.get(reportedUserId) : undefined;
     const listingTitle = listing ? stringValue(listing.title, 'Reported listing') : undefined;
     const reportedUserName = reportedUser
       ? stringValue(reportedUser.display_name, optionalString(reportedUser.username) ?? 'Reported user')

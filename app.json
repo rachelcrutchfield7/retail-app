@@ -59,6 +59,13 @@
       "expo-status-bar",
       "expo-notifications",
       [
+        "expo-image-picker",
+        {
+          "photosPermission": "ReTail uses your photo library so you can upload profile pictures, listing photos, and message images.",
+          "microphonePermission": false
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "image": "./assets/splash.png",

@@ -120,8 +120,8 @@ export function RescueHubScreen({ onBack, onOpenRescueProfile }: RescueHubScreen
         />
       ) : (
         <View style={styles.rescueList}>
-          {filteredRescues.map((rescue) => (
-            <RescueCard key={rescue.id} rescue={rescue} onPress={onOpenRescueProfile} />
+          {filteredRescues.map((rescue, index) => (
+            <RescueCard key={rescue.id} rescue={rescue} index={index} onPress={onOpenRescueProfile} />
           ))}
         </View>
       )}
@@ -171,11 +171,15 @@ function isAllowedRadius(radiusMiles: number): radiusMiles is 10 | 25 | 50 | 100
 
 function RescueCard({
   rescue,
+  index,
   onPress,
 }: {
   rescue: RescueOrganization;
+  index: number;
   onPress?: (rescue: RescueOrganization) => void;
 }) {
+  const toneStyle = rescueCardToneStyles[index % rescueCardToneStyles.length];
+
   return (
     <Pressable
       accessibilityRole="button"
@@ -184,7 +188,7 @@ function RescueCard({
       disabled={!onPress}
       style={({ pressed }) => [pressed && styles.pressedCard]}
     >
-      <Card>
+      <Card style={[styles.rescueCard, toneStyle]}>
         <View style={styles.rescueHeader}>
           <View style={styles.rescueTitleBlock}>
             <Text style={styles.rescueName}>{rescue.name}</Text>
@@ -257,6 +261,13 @@ function RescueCard({
   );
 }
 
+const rescueCardToneStyles = [
+  { backgroundColor: colors.primarySoft, borderColor: '#9CCFBA' },
+  { backgroundColor: colors.logoOrangeSoft, borderColor: colors.logoOrange },
+  { backgroundColor: colors.accentSoft, borderColor: colors.accent },
+  { backgroundColor: colors.secondary, borderColor: colors.warning },
+];
+
 function getUrgencyTone(urgency: RescueNeedUrgency): 'error' | 'warning' | 'info' {
   if (urgency === 'High') {
     return 'error';
@@ -284,6 +295,7 @@ function publicRescueAddress(rescue: RescueOrganization): string {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
+    backgroundColor: colors.background,
   },
   screenContent: {
     paddingHorizontal: spacing.lg,
@@ -345,6 +357,9 @@ const styles = StyleSheet.create({
   pressedCard: {
     opacity: 0.72,
   },
+  rescueCard: {
+    borderWidth: 1.5,
+  },
   rescueHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -365,7 +380,7 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   locationText: {
-    color: colors.textSecondary,
+    color: colors.textPrimary,
     ...typography.small,
   },
   verifiedPill: {
@@ -375,7 +390,9 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     paddingHorizontal: spacing.sm,
     borderRadius: radius.pill,
-    backgroundColor: colors.primarySoft,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: colors.surface,
   },
   verifiedText: {
     color: colors.primary,
@@ -383,7 +400,8 @@ const styles = StyleSheet.create({
   },
   summary: {
     marginTop: spacing.md,
-    color: colors.textSecondary,
+    color: colors.textPrimary,
+    lineHeight: 22,
     ...typography.body,
   },
   rescueMeta: {
@@ -419,7 +437,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     paddingVertical: spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: 'rgba(31, 41, 51, 0.18)',
   },
   needCopy: {
     flex: 1,
@@ -436,15 +454,18 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     padding: spacing.md,
     borderRadius: radius.medium,
-    backgroundColor: colors.accentSoft,
+    borderWidth: 1,
+    borderColor: 'rgba(31, 41, 51, 0.18)',
+    backgroundColor: colors.surface,
     gap: spacing.xs,
   },
   contactLabel: {
-    color: colors.textPrimary,
+    color: colors.logoOrange,
     ...typography.button,
   },
   contactText: {
     color: colors.textPrimary,
+    lineHeight: 20,
     ...typography.small,
   },
 });

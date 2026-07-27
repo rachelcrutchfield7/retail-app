@@ -96,7 +96,15 @@ import {
 } from '../services/offerService';
 import { reportReasons } from '../services/reportService';
 import { useListing } from '../hooks/useListing';
-import type { AdminListingReport, Message, Notification, ReportReason, RescueProfile, ReportStatus } from '../services/types';
+import type {
+  AdminListingReport,
+  AdminReportModerationAction,
+  Message,
+  Notification,
+  ReportReason,
+  RescueProfile,
+  ReportStatus,
+} from '../services/types';
 import type { RescueOrganization } from '../types';
 import { handleAppError } from '../utils/errorHandler';
 import {
@@ -137,10 +145,28 @@ const tabs: Array<{ key: SprintTab; label: string; icon: typeof Home }> = [
 ];
 
 async function openAppLink(url: string): Promise<void> {
+  const fallbackUrl = url.startsWith('https://retailpetapp.com')
+    ? url.replace('https://retailpetapp.com', 'https://www.retailpetapp.com')
+    : null;
+
   try {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.open(url, '_blank', 'noopener,noreferrer');
+      return;
+    }
+
     await Linking.openURL(url);
-  } catch {
-    Alert.alert('Link unavailable', 'We could not open that link right now.');
+  } catch (error) {
+    if (fallbackUrl && fallbackUrl !== url) {
+      try {
+        await Linking.openURL(fallbackUrl);
+        return;
+      } catch {
+        // Show the friendly alert below if both website forms fail.
+      }
+    }
+
+    Alert.alert('Link unavailable', 'We could not open that link right now. You can visit retailpetapp.com from your browser.');
   }
 }
 
@@ -565,7 +591,7 @@ function TabsShell({
               style={[styles.tabButton, selected && styles.tabButtonActive]}
             >
               <View>
-                <Icon size={22} color={selected ? colors.primary : colors.textSecondary} />
+                <Icon size={22} color={selected ? colors.primary : colors.navInactive} />
                 {tab.key === 'profile' && (unread.data?.total ?? 0) > 0 ? (
                   <View style={styles.tabBadge}>
                     <UnreadBadge count={unread.data?.total ?? 0} />
@@ -1519,18 +1545,15 @@ export function SettingsScreen({
         <ToggleSwitch label="Reviews" value={settings.data.notifications.reviews} onValueChange={(reviews) => void settings.updateNotifications({ reviews })} />
         <ToggleSwitch label="Listing updates" value={settings.data.notifications.listingUpdates} onValueChange={(listingUpdates) => void settings.updateNotifications({ listingUpdates })} />
         <ToggleSwitch label="System notices" value={settings.data.notifications.system} onValueChange={(system) => void settings.updateNotifications({ system })} />
-        <ToggleSwitch
-          label="Push alerts for messages"
-          helperText="Get notified on your phone when message alerts are enabled for beta."
-          value={Boolean(settings.data.notifications.pushMessages)}
-          onValueChange={(pushMessages) => void settings.updateNotifications({ pushMessages })}
-        />
-        <ToggleSwitch
-          label="Push alerts for reviews"
-          helperText="Get notified when review alerts are enabled for beta."
-          value={Boolean(settings.data.notifications.pushReviews)}
-          onValueChange={(pushReviews) => void settings.updateNotifications({ pushReviews })}
-        />
+        <View style={styles.comingSoonPanel}>
+          <View style={styles.comingSoonIcon}>
+            <Bell size={18} color={colors.primary} />
+          </View>
+          <View style={styles.notificationText}>
+            <Text style={styles.bodyStrong}>Phone push alerts coming soon</Text>
+            <Text style={styles.body}>These switches control in-app notifications for now. Phone alerts will be added after the Android notification setup is complete.</Text>
+          </View>
+        </View>
       </SectionCard>
 
       <SectionCard title="Privacy Settings">
@@ -1667,8 +1690,6 @@ export function SettingsScreen({
         <Text style={styles.body}>Website: {appLinks.baseUrl}</Text>
         <Text style={styles.body}>General contact: {appLinks.contactEmail}</Text>
         <Text style={styles.body}>Support, payments, user issues, and reports: {appLinks.supportEmail}</Text>
-        <Button title="Open ReTail Website" variant="outline" onPress={() => void openAppLink(appLinks.baseUrl)} fullWidth />
-        <Button title="Private Beta Page" variant="outline" onPress={() => void openAppLink(appLinks.betaUrl)} fullWidth />
         <Button title="FAQ" icon={HelpCircle} variant="outline" onPress={onFAQ} fullWidth />
         <Button title="Email General Contact" variant="outline" onPress={() => void openAppLink(appLinks.contactMailto)} fullWidth />
         <Button title="Email Support" variant="outline" onPress={() => void openAppLink(appLinks.supportMailto)} fullWidth />
@@ -1830,11 +1851,42 @@ export function AdminReviewScreen({ onBack, onOpenListing }: { onBack: () => voi
       await listingReports.updateStatus(report.id, status);
       setNotice({
         title: 'Report updated',
-        body: `${report.listing_title ?? 'The listing report'} was marked ${adminReportStatusLabel(status).toLowerCase()}.`,
+        body: `${report.target_title ?? 'The report'} was marked ${adminReportStatusLabel(status).toLowerCase()}. Notifications were sent when needed.`,
       });
     } catch (error) {
       setNotice({ title: 'Report update failed', body: handleAppError(error).userMessage });
     }
+  };
+
+  const moderateReport = async (
+    report: AdminListingReport,
+    action: AdminReportModerationAction,
+    title: string,
+    body: string
+  ) => {
+    const runModeration = async () => {
+      try {
+        await listingReports.moderateReport(report.id, 'resolved', action);
+        setNotice({
+          title: 'Moderation action complete',
+          body: `${report.target_title ?? 'The report'} was resolved. The reporter and reported user were notified.`,
+        });
+      } catch (error) {
+        setNotice({ title: 'Moderation action failed', body: handleAppError(error).userMessage });
+      }
+    };
+
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      if (window.confirm(`${title}\n\n${body}`)) {
+        await runModeration();
+      }
+      return;
+    }
+
+    Alert.alert(title, body, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: title, style: 'destructive', onPress: () => void runModeration() },
+    ]);
   };
 
   if (auth.isGuest || !auth.profile?.is_admin) {
@@ -1859,9 +1911,9 @@ export function AdminReviewScreen({ onBack, onOpenListing }: { onBack: () => voi
         <Text style={styles.body}>Review listing reports and rescue verification requests from your admin account.</Text>
       </View>
 
-      <SectionCard title="Listing Reports">
+      <SectionCard title="Reports">
         <Text style={styles.bodyStrong}>{pendingReportCount} open</Text>
-        <Text style={styles.body}>Reported listings appear here so you can review spam, fraud, harassment, or inappropriate content.</Text>
+        <Text style={styles.body}>Reported listings, users, and messages appear here so you can review spam, fraud, harassment, or inappropriate content.</Text>
       </SectionCard>
 
       {listingReports.actionError ? <NoticeCard title="Report action failed" body={listingReports.actionError} /> : null}
@@ -1881,6 +1933,18 @@ export function AdminReviewScreen({ onBack, onOpenListing }: { onBack: () => voi
           onReviewing={() => void updateReport(report, 'reviewing')}
           onResolve={() => void updateReport(report, 'resolved')}
           onDismiss={() => void updateReport(report, 'dismissed')}
+          onRemoveListing={() => void moderateReport(
+            report,
+            'remove_listing',
+            'Remove Listing',
+            'This removes the reported listing from public view and notifies both the reporter and the listing owner.'
+          )}
+          onDeleteUser={() => void moderateReport(
+            report,
+            'delete_user',
+            'Delete User',
+            'This removes the reported account from ReTail, removes their active listings, and notifies both the reporter and reported user.'
+          )}
         />
       ))}
 
@@ -1919,6 +1983,8 @@ function AdminListingReportCard({
   onReviewing,
   onResolve,
   onDismiss,
+  onRemoveListing,
+  onDeleteUser,
 }: {
   report: AdminListingReport;
   loading: boolean;
@@ -1926,21 +1992,29 @@ function AdminListingReportCard({
   onReviewing: () => void;
   onResolve: () => void;
   onDismiss: () => void;
+  onRemoveListing: () => void;
+  onDeleteUser: () => void;
 }) {
+  const canRemoveListing = Boolean(report.listing_id);
+  const canDeleteUser = report.report_type === 'user' || report.report_type === 'message' || Boolean(report.listing_id);
+
   return (
     <Card>
       <View style={styles.stack}>
         <View style={styles.notificationRow}>
           <View style={styles.notificationText}>
-            <Text style={styles.cardTitle}>{report.listing_title ?? 'Reported listing'}</Text>
-            <Text style={styles.body}>{report.listing_location || 'Location unavailable'}</Text>
+            <Text style={styles.cardTitle}>{report.target_title ?? report.listing_title ?? 'Reported item'}</Text>
+            <Text style={styles.body}>{report.target_subtitle ?? report.listing_location ?? 'Target details unavailable'}</Text>
           </View>
           <Text style={styles.metaText}>{adminReportStatusLabel(report.status)}</Text>
         </View>
 
+        <Badge label={adminReportTypeLabel(report.report_type)} tone="info" />
         <Text style={styles.bodyStrong}>Reason: {report.reason}</Text>
         {report.details ? <Text style={styles.body}>Details: {report.details}</Text> : null}
         <Text style={styles.body}>Reporter: {report.reporter_name ?? 'ReTail user'}</Text>
+        {report.reported_user_name ? <Text style={styles.body}>Reported user: {report.reported_user_name}</Text> : null}
+        {report.message_preview ? <Text style={styles.body}>Message: {report.message_preview}</Text> : null}
         {report.listing_price ? <Text style={styles.body}>Listing price: {report.listing_price}</Text> : null}
         {report.listing_status ? <Text style={styles.body}>Listing status: {report.listing_status}</Text> : null}
         <Text style={styles.metaText}>Reported {formatAdminDate(report.created_at)}</Text>
@@ -1950,6 +2024,8 @@ function AdminListingReportCard({
           <Button title="Reviewing" variant="outline" onPress={onReviewing} loading={loading} fullWidth />
           <Button title="Resolve" icon={CheckCheck} onPress={onResolve} loading={loading} fullWidth />
           <Button title="Dismiss" icon={Flag} variant="danger" onPress={onDismiss} loading={loading} fullWidth />
+          <Button title="Remove Listing" icon={Trash2} variant="danger" onPress={onRemoveListing} disabled={!canRemoveListing} loading={loading} fullWidth />
+          <Button title="Delete User" icon={Trash2} variant="danger" onPress={onDeleteUser} disabled={!canDeleteUser} loading={loading} fullWidth />
         </View>
       </View>
     </Card>
@@ -2082,6 +2158,18 @@ function adminReportStatusLabel(status: ReportStatus): string {
   return 'Open';
 }
 
+function adminReportTypeLabel(type: AdminListingReport['report_type']): string {
+  if (type === 'message') {
+    return 'Message report';
+  }
+
+  if (type === 'user') {
+    return 'User report';
+  }
+
+  return 'Listing report';
+}
+
 function formatAdminDate(date: string): string {
   return new Date(date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
@@ -2187,9 +2275,9 @@ const styles = StyleSheet.create({
     minHeight: sizes.tabBarHeight,
     flexDirection: 'row',
     borderWidth: 1,
-    borderColor: colors.primary,
+    borderColor: colors.navBorder,
     borderRadius: 0,
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.navBase,
     paddingHorizontal: spacing.sm,
     paddingTop: 0,
     paddingBottom: 2,
@@ -2223,7 +2311,7 @@ const styles = StyleSheet.create({
     right: -18,
   },
   tabLabel: {
-    color: colors.textSecondary,
+    color: colors.navInactive,
     ...typography.caption,
     fontWeight: '600',
   },
@@ -2397,6 +2485,25 @@ const styles = StyleSheet.create({
   notificationText: {
     flex: 1,
     gap: spacing.xs,
+  },
+  comingSoonPanel: {
+    minHeight: 68,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.medium,
+    backgroundColor: colors.primarySoft,
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  comingSoonIcon: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
   },
   deleteIconButton: {
     width: sizes.touchTarget,
