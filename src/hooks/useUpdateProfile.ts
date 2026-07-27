@@ -32,12 +32,12 @@ export function useUpdateProfile() {
   );
 
   const uploadProfileAvatar = useCallback(
-    async (fileUri: string) => {
+    async (fileUri: string, options?: { base64?: string; mimeType?: string }) => {
       setLoading(true);
       setError(null);
 
       try {
-        const avatarUrl = await uploadAvatar(fileUri);
+        const avatarUrl = await uploadAvatar(fileUri, options);
         clearQueryData();
         await auth.refreshProfile();
         return avatarUrl;

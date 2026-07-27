@@ -2509,12 +2509,12 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
     setRescueForm((current) => ({ ...current, [field]: value }));
   };
 
-  const uploadSelectedAvatar = async (selectedUri: string) => {
+  const uploadSelectedAvatar = async (selectedUri: string, options?: { base64?: string; mimeType?: string }) => {
     const previousAvatarUrl = form.avatar_url;
     update('avatar_url', selectedUri);
 
     try {
-      const avatarUrl = await mutation.uploadAvatar(selectedUri);
+      const avatarUrl = await mutation.uploadAvatar(selectedUri, options);
       update('avatar_url', avatarUrl);
       setNotice({ title: 'Profile photo updated', body: 'Your new profile picture has been saved.' });
     } catch (error) {
@@ -2555,20 +2555,25 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.85,
+      base64: true,
     });
 
     if (result.canceled) {
       return;
     }
 
-    const selectedUri = result.assets[0]?.uri;
+    const selectedAsset = result.assets[0];
+    const selectedUri = selectedAsset?.uri;
 
     if (!selectedUri) {
       setNotice({ title: 'Photo was not selected', body: 'Choose another image and try again.' });
       return;
     }
 
-    await uploadSelectedAvatar(selectedUri);
+    await uploadSelectedAvatar(selectedUri, {
+      base64: selectedAsset.base64 ?? undefined,
+      mimeType: selectedAsset.mimeType ?? undefined,
+    });
   };
 
   const save = async () => {

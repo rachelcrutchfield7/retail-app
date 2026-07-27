@@ -17,7 +17,8 @@
         "EXPO_PUBLIC_APP_ENV": "beta"
       },
       "android": {
-        "buildType": "apk"
+        "buildType": "apk",
+        "autoIncrement": true
       },
       "ios": {
         "simulator": false

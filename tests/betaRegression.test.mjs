@@ -9,6 +9,7 @@ const rescueHub = readFileSync(new URL('../src/screens/RescueHubScreen.tsx', imp
 const card = readFileSync(new URL('../src/components/ui/Card.tsx', import.meta.url), 'utf8');
 const rescueService = readFileSync(new URL('../src/services/rescueService.ts', import.meta.url), 'utf8');
 const settingsService = readFileSync(new URL('../src/services/settingsService.ts', import.meta.url), 'utf8');
+const profileService = readFileSync(new URL('../src/services/profileService.ts', import.meta.url), 'utf8');
 const useSettings = readFileSync(new URL('../src/hooks/useSettings.ts', import.meta.url), 'utf8');
 const founderChecklist = readFileSync(new URL('../docs/private-beta/FOUNDER_PREVIEW_REGRESSION_CHECKLIST.md', import.meta.url), 'utf8');
 const publicRescueOrgDetailsMigration = readFileSync(new URL('../supabase/migrations/20260727132143_public_rescue_org_details_v2.sql', import.meta.url), 'utf8');
@@ -115,6 +116,10 @@ test('profile picture upload uses the native photo picker', () => {
   assert.match(editProfile, /uploadSelectedAvatar/);
   assert.match(editProfile, /previousAvatarUrl/);
   assert.match(editProfile, /mediaTypes: \['images'\]/);
+  assert.match(editProfile, /base64: true/);
+  assert.match(editProfile, /mimeType: selectedAsset\.mimeType \?\? undefined/);
+  assert.match(profileService, /base64ToArrayBuffer/);
+  assert.match(profileService, /options\.base64/);
   assert.doesNotMatch(editProfile, /images\.unsplash\.com/);
 });
 

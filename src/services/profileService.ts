@@ -10,6 +10,11 @@ import {
   toPublicProfile,
 } from './supabaseData';
 
+type UploadAvatarOptions = {
+  base64?: string;
+  mimeType?: string;
+};
+
 export async function getCurrentProfile(): Promise<Profile> {
   return ensureCurrentProfile();
 }
@@ -77,7 +82,7 @@ export async function getUserListings(userId: string): Promise<Listing[]> {
   return ((data ?? []) as Array<Record<string, unknown>>).map((listing) => toListing(listing));
 }
 
-export async function uploadAvatar(fileUri: string): Promise<string> {
+export async function uploadAvatar(fileUri: string, options: UploadAvatarOptions = {}): Promise<string> {
   const profile = await ensureCurrentProfile();
 
   if (!fileUri.trim()) {
@@ -89,17 +94,14 @@ export async function uploadAvatar(fileUri: string): Promise<string> {
     return fileUri;
   }
 
-  const response = await fetch(fileUri);
-
-  if (!response.ok) {
-    throw createServiceError('AVATAR_UPLOAD_FAILED', `Could not read avatar ${fileUri}`, 'We could not upload that photo.');
-  }
-
-  const blob = await response.blob();
-  const extension = blob.type.includes('png') ? 'png' : blob.type.includes('webp') ? 'webp' : 'jpg';
+  const uploadBody = options.base64
+    ? base64ToArrayBuffer(options.base64)
+    : await readFileUriAsBlob(fileUri);
+  const contentType = options.mimeType || (isBlob(uploadBody) ? uploadBody.type : '') || 'image/jpeg';
+  const extension = imageExtension(contentType, fileUri);
   const path = `${profile.id}/${Date.now()}.${extension}`;
-  const { error: uploadError } = await supabase.storage.from('avatars').upload(path, blob, {
-    contentType: blob.type || 'image/jpeg',
+  const { error: uploadError } = await supabase.storage.from('avatars').upload(path, uploadBody, {
+    contentType,
     upsert: true,
   });
 
@@ -110,4 +112,66 @@ export async function uploadAvatar(fileUri: string): Promise<string> {
   const { data } = supabase.storage.from('avatars').getPublicUrl(path);
   await updateProfile({ avatar_url: data.publicUrl });
   return data.publicUrl;
+}
+
+async function readFileUriAsBlob(fileUri: string): Promise<Blob> {
+  const response = await fetch(fileUri);
+
+  if (!response.ok) {
+    throw createServiceError('AVATAR_UPLOAD_FAILED', `Could not read avatar ${fileUri}`, 'We could not upload that photo.');
+  }
+
+  return response.blob();
+}
+
+function imageExtension(contentType: string, fileUri: string): string {
+  const normalizedType = contentType.toLowerCase();
+
+  if (normalizedType.includes('png') || /\.png($|\?)/i.test(fileUri)) {
+    return 'png';
+  }
+
+  if (normalizedType.includes('webp') || /\.webp($|\?)/i.test(fileUri)) {
+    return 'webp';
+  }
+
+  return 'jpg';
+}
+
+function isBlob(value: Blob | ArrayBuffer): value is Blob {
+  return typeof Blob !== 'undefined' && value instanceof Blob;
+}
+
+function base64ToArrayBuffer(value: string): ArrayBuffer {
+  const base64 = value.replace(/^data:[^;]+;base64,/, '').replace(/\s/g, '');
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  let byteLength = Math.floor((base64.length * 3) / 4);
+
+  if (base64.endsWith('==')) {
+    byteLength -= 2;
+  } else if (base64.endsWith('=')) {
+    byteLength -= 1;
+  }
+
+  const bytes = new Uint8Array(Math.max(byteLength, 0));
+  let byteIndex = 0;
+
+  for (let index = 0; index < base64.length; index += 4) {
+    const first = alphabet.indexOf(base64[index]);
+    const second = alphabet.indexOf(base64[index + 1]);
+    const third = base64[index + 2] === '=' ? 0 : alphabet.indexOf(base64[index + 2]);
+    const fourth = base64[index + 3] === '=' ? 0 : alphabet.indexOf(base64[index + 3]);
+
+    if (first < 0 || second < 0 || third < 0 || fourth < 0) {
+      throw createServiceError('AVATAR_UPLOAD_FAILED', 'Avatar base64 data was invalid', 'We could not upload that photo.');
+    }
+
+    const chunk = (first << 18) | (second << 12) | (third << 6) | fourth;
+
+    if (byteIndex < bytes.length) bytes[byteIndex++] = (chunk >> 16) & 255;
+    if (byteIndex < bytes.length) bytes[byteIndex++] = (chunk >> 8) & 255;
+    if (byteIndex < bytes.length) bytes[byteIndex++] = chunk & 255;
+  }
+
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
 }
