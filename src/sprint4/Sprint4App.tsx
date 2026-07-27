@@ -1916,6 +1916,7 @@ export function AdminReviewScreen({ onBack, onOpenListing }: { onBack: () => voi
         <Text style={styles.body}>Reported listings, users, and messages appear here so you can review spam, fraud, harassment, or inappropriate content.</Text>
       </SectionCard>
 
+      {notice ? <NoticeCard title={notice.title} body={notice.body} /> : null}
       {listingReports.actionError ? <NoticeCard title="Report action failed" body={listingReports.actionError} /> : null}
       {listingReports.isLoading ? <LoadingSpinner /> : null}
       {listingReports.isError ? <ErrorState message={handleAppError(listingReports.error).userMessage} onRetry={listingReports.refetch} /> : null}
@@ -1933,6 +1934,12 @@ export function AdminReviewScreen({ onBack, onOpenListing }: { onBack: () => voi
           onReviewing={() => void updateReport(report, 'reviewing')}
           onResolve={() => void updateReport(report, 'resolved')}
           onDismiss={() => void updateReport(report, 'dismissed')}
+          onRemoveMessage={() => void moderateReport(
+            report,
+            'remove_message',
+            'Remove Message',
+            'This removes the reported message from the conversation and notifies both people involved.'
+          )}
           onRemoveListing={() => void moderateReport(
             report,
             'remove_listing',
@@ -1953,7 +1960,6 @@ export function AdminReviewScreen({ onBack, onOpenListing }: { onBack: () => voi
         <Text style={styles.body}>Review the organization details before approving. Approved rescues become visible to nearby users.</Text>
       </SectionCard>
 
-      {notice ? <NoticeCard title={notice.title} body={notice.body} /> : null}
       {approvals.actionError ? <NoticeCard title="Admin action failed" body={approvals.actionError} /> : null}
 
       {approvals.isLoading ? <LoadingSpinner /> : null}
@@ -1983,6 +1989,7 @@ function AdminListingReportCard({
   onReviewing,
   onResolve,
   onDismiss,
+  onRemoveMessage,
   onRemoveListing,
   onDeleteUser,
 }: {
@@ -1992,10 +1999,12 @@ function AdminListingReportCard({
   onReviewing: () => void;
   onResolve: () => void;
   onDismiss: () => void;
+  onRemoveMessage: () => void;
   onRemoveListing: () => void;
   onDeleteUser: () => void;
 }) {
   const canRemoveListing = Boolean(report.listing_id);
+  const canRemoveMessage = Boolean(report.message_id);
   const canDeleteUser = report.report_type === 'user' || report.report_type === 'message' || Boolean(report.listing_id);
 
   return (
@@ -2020,12 +2029,13 @@ function AdminListingReportCard({
         <Text style={styles.metaText}>Reported {formatAdminDate(report.created_at)}</Text>
 
         <View style={styles.conversationOptionGrid}>
-          <Button title="Open Listing" variant="outline" onPress={onOpenListing} disabled={!report.listing_id} fullWidth />
-          <Button title="Reviewing" variant="outline" onPress={onReviewing} loading={loading} fullWidth />
+          {report.listing_id ? <Button title="Open Listing" variant="outline" onPress={onOpenListing} fullWidth /> : null}
+          <Button title="Reviewing" variant="outline" onPress={onReviewing} disabled={report.status === 'reviewing'} loading={loading} fullWidth />
           <Button title="Resolve" icon={CheckCheck} onPress={onResolve} loading={loading} fullWidth />
-          <Button title="Dismiss" icon={Flag} variant="danger" onPress={onDismiss} loading={loading} fullWidth />
-          <Button title="Remove Listing" icon={Trash2} variant="danger" onPress={onRemoveListing} disabled={!canRemoveListing} loading={loading} fullWidth />
-          <Button title="Delete User" icon={Trash2} variant="danger" onPress={onDeleteUser} disabled={!canDeleteUser} loading={loading} fullWidth />
+          <Button title="Dismiss" icon={Flag} variant="outline" onPress={onDismiss} loading={loading} fullWidth />
+          {canRemoveMessage ? <Button title="Remove Message" icon={Trash2} variant="danger" onPress={onRemoveMessage} loading={loading} fullWidth /> : null}
+          {canRemoveListing ? <Button title="Remove Listing" icon={Trash2} variant="danger" onPress={onRemoveListing} loading={loading} fullWidth /> : null}
+          {canDeleteUser ? <Button title="Delete User" icon={Trash2} variant="danger" onPress={onDeleteUser} loading={loading} fullWidth /> : null}
         </View>
       </View>
     </Card>

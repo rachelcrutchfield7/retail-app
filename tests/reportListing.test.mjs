@@ -58,12 +58,17 @@ test('admin review panel surfaces listing, message, and user reports', () => {
   assert.match(adminService, /updateListingReportStatus/);
 });
 
-test('admin report actions can resolve, dismiss, remove listings, delete users, and notify both sides', () => {
+test('admin report actions can resolve, dismiss, remove listings, remove messages, delete users, and notify both sides', () => {
   assert.match(adminService, /rpc\('admin_moderate_report'/);
   assert.match(adminService, /moderateListingReport/);
   assert.match(adminHook, /moderateReport/);
+  assert.match(sprint4, /Remove Message/);
   assert.match(sprint4, /Remove Listing/);
   assert.match(sprint4, /Delete User/);
+  assert.match(sprint4, /canRemoveMessage/);
+  assert.match(sprint4, /\{report\.listing_id \? <Button title="Open Listing"/);
+  assert.match(sprint4, /\{canRemoveListing \? <Button title="Remove Listing"/);
+  assert.match(sprint4, /\{canDeleteUser \? <Button title="Delete User"/);
   assert.match(sprint4, /window\.confirm/);
   assert.match(sprint4, /Alert\.alert/);
   assert.match(sprint4, /Reported user:/);
