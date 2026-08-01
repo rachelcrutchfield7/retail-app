@@ -11,6 +11,7 @@ import {
 import { CATEGORIES, CONDITIONS } from '../constants/categories';
 import { colors, radius, sizes, spacing, typography } from '../constants/theme';
 import { Chip, formStyles, LockedScreen, PriceInput, TextArea, TextField, ToggleSwitch } from '../components';
+import { useThemeColors } from '../lib/themePreference';
 import type { Category, ListingCondition, ListingForm } from '../types.ts';
 
 type CreateListingScreenProps = {
@@ -30,6 +31,8 @@ export function CreateListingScreen({
   onSignIn,
   mode = 'create',
 }: CreateListingScreenProps) {
+  const themeColors = useThemeColors();
+
   if (!isSignedIn) {
     return (
       <LockedScreen
@@ -49,16 +52,16 @@ export function CreateListingScreen({
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
       <ScrollView style={styles.screen} contentContainerStyle={styles.screenContent}>
-        <Text style={styles.title}>{mode === 'edit' ? 'Edit listing' : 'Create listing'}</Text>
-        <Text style={styles.subhead}>
+        <Text style={[styles.title, { color: themeColors.textPrimary }]}>{mode === 'edit' ? 'Edit listing' : 'Create listing'}</Text>
+        <Text style={[styles.subhead, { color: themeColors.textSecondary }]}>
           {mode === 'edit' ? 'Update your listing details for nearby pet owners.' : 'Sell or donate supplies to nearby pet owners.'}
         </Text>
 
-        <Pressable style={styles.photoPicker}>
-          <Camera size={24} color={colors.primary} />
+        <Pressable style={[styles.photoPicker, { backgroundColor: themeColors.surface, borderColor: themeColors.primary }]}>
+          <Camera size={24} color={themeColors.primary} />
           <View>
-            <Text style={styles.photoTitle}>Add photos</Text>
-            <Text style={styles.photoHint}>At least 1 required, up to 15 supported</Text>
+            <Text style={[styles.photoTitle, { color: themeColors.textPrimary }]}>Add photos</Text>
+            <Text style={[styles.photoHint, { color: themeColors.textSecondary }]}>At least 1 required, up to 15 supported</Text>
           </View>
         </Pressable>
 
@@ -87,7 +90,7 @@ export function CreateListingScreen({
           <PriceInput value={form.price} onChangeText={(value) => update('price', value)} />
         )}
 
-        <Text style={formStyles.fieldLabel}>Category</Text>
+        <Text style={[formStyles.fieldLabel, { color: themeColors.textPrimary }]}>Category</Text>
         <View style={styles.wrapRow}>
           {CATEGORIES.map((item) => (
             <Chip
@@ -99,7 +102,7 @@ export function CreateListingScreen({
           ))}
         </View>
 
-        <Text style={formStyles.fieldLabel}>Condition</Text>
+        <Text style={[formStyles.fieldLabel, { color: themeColors.textPrimary }]}>Condition</Text>
         <View style={styles.wrapRow}>
           {CONDITIONS.map((item) => (
             <Chip
@@ -118,9 +121,9 @@ export function CreateListingScreen({
           onValueChange={(value) => update('pickup', value)}
         />
 
-        <Pressable style={styles.primaryButtonWide} onPress={onPublish}>
-          <CheckCircle2 size={20} color={colors.white} />
-          <Text style={styles.primaryButtonText}>{mode === 'edit' ? 'Save changes' : 'Publish listing'}</Text>
+        <Pressable style={[styles.primaryButtonWide, { backgroundColor: themeColors.primary }]} onPress={onPublish}>
+          <CheckCircle2 size={20} color={themeColors.white} />
+          <Text style={[styles.primaryButtonText, { color: themeColors.white }]}>{mode === 'edit' ? 'Save changes' : 'Publish listing'}</Text>
         </Pressable>
       </ScrollView>
     </KeyboardAvoidingView>

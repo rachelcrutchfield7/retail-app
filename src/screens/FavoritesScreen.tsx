@@ -2,6 +2,7 @@ import { Heart } from 'lucide-react-native';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { colors, sizes, spacing, typography } from '../constants/theme';
 import { EmptyState, ErrorState, ListingCard, LoadingSpinner, LockedScreen } from '../components';
+import { useThemeColors } from '../lib/themePreference';
 import type { Listing } from '../types.ts';
 
 type FavoritesScreenProps = {
@@ -25,6 +26,8 @@ export function FavoritesScreen({
   onFavorite,
   onSignIn,
 }: FavoritesScreenProps) {
+  const themeColors = useThemeColors();
+
   if (!isSignedIn) {
     return (
       <LockedScreen
@@ -39,8 +42,8 @@ export function FavoritesScreen({
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.screenContent}>
-      <Text style={styles.title}>Favorites</Text>
-      <Text style={styles.subhead}>Listings you have saved for later.</Text>
+      <Text style={[styles.title, { color: themeColors.textPrimary }]}>Favorites</Text>
+      <Text style={[styles.subhead, { color: themeColors.textSecondary }]}>Listings you have saved for later.</Text>
       {isLoading ? (
         <LoadingSpinner />
       ) : errorMessage ? (

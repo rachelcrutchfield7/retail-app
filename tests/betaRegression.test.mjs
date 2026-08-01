@@ -5,14 +5,29 @@ import test from 'node:test';
 const sprint3 = readFileSync(new URL('../src/sprint3/Sprint3App.tsx', import.meta.url), 'utf8');
 const sprint4 = readFileSync(new URL('../src/sprint4/Sprint4App.tsx', import.meta.url), 'utf8');
 const app = readFileSync(new URL('../App.tsx', import.meta.url), 'utf8');
+const theme = readFileSync(new URL('../src/constants/theme.ts', import.meta.url), 'utf8');
 const rescueHub = readFileSync(new URL('../src/screens/RescueHubScreen.tsx', import.meta.url), 'utf8');
 const card = readFileSync(new URL('../src/components/ui/Card.tsx', import.meta.url), 'utf8');
+const emptyState = readFileSync(new URL('../src/components/feedback/EmptyState.tsx', import.meta.url), 'utf8');
+const paymentChoiceCard = readFileSync(new URL('../src/components/payments/PaymentChoiceCard.tsx', import.meta.url), 'utf8');
+const conversationList = readFileSync(new URL('../src/components/messaging/ConversationList.tsx', import.meta.url), 'utf8');
+const distanceFilter = readFileSync(new URL('../src/components/location/DistanceFilter.tsx', import.meta.url), 'utf8');
+const listingCard = readFileSync(new URL('../src/components/marketplace/ListingCard.tsx', import.meta.url), 'utf8');
+const favoriteButton = readFileSync(new URL('../src/components/marketplace/FavoriteButton.tsx', import.meta.url), 'utf8');
+const chip = readFileSync(new URL('../src/components/ui/Chip.tsx', import.meta.url), 'utf8');
+const profileHeader = readFileSync(new URL('../src/components/profile/ProfileHeader.tsx', import.meta.url), 'utf8');
 const rescueService = readFileSync(new URL('../src/services/rescueService.ts', import.meta.url), 'utf8');
 const settingsService = readFileSync(new URL('../src/services/settingsService.ts', import.meta.url), 'utf8');
 const profileService = readFileSync(new URL('../src/services/profileService.ts', import.meta.url), 'utf8');
+const authService = readFileSync(new URL('../src/services/authService.ts', import.meta.url), 'utf8');
+const conversationService = readFileSync(new URL('../src/services/conversationService.ts', import.meta.url), 'utf8');
+const messageService = readFileSync(new URL('../src/services/messageService.ts', import.meta.url), 'utf8');
+const imageUploader = readFileSync(new URL('../src/components/forms/ImageUploader.tsx', import.meta.url), 'utf8');
 const useSettings = readFileSync(new URL('../src/hooks/useSettings.ts', import.meta.url), 'utf8');
+const useMessages = readFileSync(new URL('../src/hooks/useMessages.ts', import.meta.url), 'utf8');
 const founderChecklist = readFileSync(new URL('../docs/private-beta/FOUNDER_PREVIEW_REGRESSION_CHECKLIST.md', import.meta.url), 'utf8');
 const publicRescueOrgDetailsMigration = readFileSync(new URL('../supabase/migrations/20260727132143_public_rescue_org_details_v2.sql', import.meta.url), 'utf8');
+const rescueMessagingMigration = readFileSync(new URL('../supabase/migrations/20260730184000_rescue_public_messaging.sql', import.meta.url), 'utf8');
 
 function extractBetween(source, start, end) {
   const startIndex = source.indexOf(start);
@@ -24,11 +39,39 @@ function extractBetween(source, start, end) {
 
 test('app shell uses the restored safe-area mobile layout', () => {
   assert.match(app, /SafeAreaProvider/);
-  assert.doesNotMatch(app, /ThemeProvider/);
+  assert.match(app, /ThemePreferenceProvider/);
   assert.match(sprint4, /useSafeAreaInsets/);
   assert.match(sprint4, /bottomTabBarContentClearance/);
   assert.match(sprint4, /scrollContentBottomClearance/);
   assert.match(sprint4, /BackHandler\.addEventListener\('hardwareBackPress'/);
+});
+
+test('dark mode uses theme colors without changing mobile layout measurements', () => {
+  assert.match(app, /ThemePreferenceProvider/);
+  assert.match(sprint4, /useThemePreference/);
+  assert.match(sprint4, /theme\.setDarkMode/);
+  assert.match(sprint4, /createSprint4Styles\(themeColors\)/);
+  assert.match(sprint4, /ThemedStatusBar/);
+  assert.match(sprint3, /setSprint3ThemeColors/);
+  assert.match(sprint3, /createSprint3Styles\(themeColors\)/);
+});
+
+test('dark mode keeps listing and filter text readable', () => {
+  assert.match(distanceFilter, /useThemeColors/);
+  assert.match(distanceFilter, /themeColors\.textPrimary/);
+  assert.match(distanceFilter, /themeColors\.textSecondary/);
+  assert.match(listingCard, /grid && styles\.gridTitle, \{ color: themeColors\.textPrimary \}/);
+  assert.match(profileHeader, /themeColors\.textPrimary/);
+  assert.match(profileHeader, /themeColors\.textSecondary/);
+});
+
+test('dark mode palette stays soft charcoal instead of near black', () => {
+  assert.match(theme, /background: '#202933'/);
+  assert.match(theme, /surface: '#3A4650'/);
+  assert.match(theme, /secondary: '#455A64'/);
+  assert.match(theme, /navBase: '#356B86'/);
+  assert.doesNotMatch(theme, /background: '#111820'/);
+  assert.doesNotMatch(theme, /secondary: '#605A2D'/);
 });
 
 test('shared cards use subtle elevation to stand off the page', () => {
@@ -36,6 +79,19 @@ test('shared cards use subtle elevation to stand off the page', () => {
   assert.match(card, /shadowOpacity: 0\.10/);
   assert.match(card, /shadowRadius: 12/);
   assert.match(card, /elevation: 4/);
+});
+
+test('mobile marketplace controls keep readable full-width layouts and tap targets', () => {
+  assert.match(sprint3, /style=\{styles\.priceFilterStack\}/);
+  assert.match(sprint3, /style=\{styles\.priceFilterField\}/);
+  assert.match(sprint3, /priceFilterStack:[\s\S]*flexDirection: 'column'/);
+  assert.match(sprint3, /priceFilterField:[\s\S]*width: '100%'/);
+  assert.match(favoriteButton, /width: sizes\.touchTarget/);
+  assert.match(favoriteButton, /height: sizes\.touchTarget/);
+  assert.match(chip, /accessibilityRole="button"/);
+  assert.match(chip, /accessibilityState=\{\{ selected \}\}/);
+  assert.match(listingCard, /accessibilityRole="button"/);
+  assert.match(listingCard, /accessibilityLabel=\{`Open \$\{listing\.title\} listing`\}/);
 });
 
 test('home rescue banner uses live rescue hub data instead of mock counts', () => {
@@ -61,14 +117,31 @@ test('rescue hub cards navigate to public rescue profiles', () => {
   assert.match(rescueHub, /onOpenRescueProfile/);
   assert.match(rescueHub, /accessibilityLabel=\{`Open \$\{rescue\.name\} rescue profile`\}/);
   assert.match(rescueHub, /backgroundColor: colors\.background/);
+  assert.match(rescueHub, /createRescueHubStyles\(themeColors\)/);
   assert.match(rescueHub, /rescueCardToneStyles/);
   assert.match(rescueHub, /colors\.logoOrangeSoft/);
   assert.match(rescueHub, /colors\.accentSoft/);
-  assert.match(rescueHub, /borderBottomColor: 'rgba\(31, 41, 51, 0\.18\)'/);
+  assert.match(rescueHub, /borderBottomColor: colors\.border/);
   assert.match(rescueHub, /contactLabel:[\s\S]*color: colors\.logoOrange/);
   assert.match(sprint4, /\| \{ name: 'rescue-profile'; rescue: RescueOrganization \}/);
   assert.match(sprint4, /<PublicRescueProfileScreen/);
   assert.match(sprint4, /title="Message rescue"/);
+});
+
+test('public rescue profile messaging starts a real rescue conversation', () => {
+  assert.match(sprint4, /starter\.startRescueConversation\(rescue\.id, rescue\.ownerId\)/);
+  assert.match(sprint4, /onOpenConversation\(conversation\.id\)/);
+  assert.doesNotMatch(sprint4, /Messaging is not available yet/);
+  assert.match(useMessages, /getOrCreateRescueConversation/);
+  assert.match(useMessages, /startRescueConversation/);
+  assert.match(conversationService, /rescue_id/);
+  assert.match(conversationService, /rescueConversationListing/);
+  assert.match(conversationService, /getOrCreateRescueConversation/);
+  assert.match(rescueService, /ownerId: optionalString\(row\.owner_id\)/);
+  assert.match(rescueMessagingMigration, /add column if not exists rescue_id/);
+  assert.match(rescueMessagingMigration, /conversations_rescue_buyer_seller_unique/);
+  assert.match(rescueMessagingMigration, /owner_id uuid/);
+  assert.match(rescueMessagingMigration, /rescue_profiles\.owner_id = conversations\.seller_id/);
 });
 
 test('android hardware back uses route history before default exit behavior', () => {
@@ -92,8 +165,41 @@ test('beta feature additions are discoverable in the app shell', () => {
   assert.match(sprint4, /function SafetyCenterScreen/);
   assert.match(sprint4, /function FAQScreen/);
   assert.match(sprint4, /Why does ReTail charge a fee for payments through the app\?/);
+  assert.match(sprint4, /How does ReTail work\?/);
+  assert.match(sprint4, /Will ReTail have dark mode\?/);
+  assert.match(sprint4, /Dark mode/);
+  assert.match(sprint4, /same mobile spacing and navigation layout/);
   assert.match(sprint4, /Rachel Crutchfield is an animal lover/);
   assert.doesNotMatch(sprint4, /function MeetCreatorScreen/);
+});
+
+test('launch polish keeps guided empty states and profile completion prompts', () => {
+  assert.match(emptyState, /actionTitle/);
+  assert.match(emptyState, /onAction/);
+  assert.match(emptyState, /<Button title=\{actionTitle\}/);
+  assert.match(sprint3, /Expand Distance/);
+  assert.match(sprint3, /Clear Filters/);
+  assert.match(sprint3, /Browse Listings/);
+  assert.match(sprint3, /Create Listing/);
+  assert.match(sprint3, /profileCompletionItems/);
+  assert.match(sprint3, /Finish your profile/);
+  assert.match(conversationList, /Browse Listings/);
+  assert.match(sprint4, /Refresh Reports/);
+  assert.match(sprint4, /Refresh Approvals/);
+});
+
+test('payment and moderation copy stays launch-ready', () => {
+  assert.match(paymentChoiceCard, /small platform fee to support hosting, moderation, and payment support/);
+  assert.match(paymentChoiceCard, /no ReTail receipt or protected checkout support/);
+  assert.match(sprint4, /seller is paid automatically through Stripe/);
+  assert.match(sprint4, /orders over \$5/);
+  assert.match(sprint4, /adminReportStatusNotice/);
+  assert.match(sprint4, /adminModerationActionNotice/);
+  assert.match(sprint4, /Resolve Report/);
+  assert.match(sprint4, /Dismiss Report/);
+  assert.match(sprint4, /Report Queue/);
+  assert.match(sprint4, /FilterChip label="Archived"/);
+  assert.match(sprint4, /Delete Account/);
 });
 
 test('login and signup screen stays focused on authentication', () => {
@@ -103,6 +209,29 @@ test('login and signup screen stays focused on authentication', () => {
   assert.doesNotMatch(loggedOutProfile, /Button title="Safety Center"/);
   assert.match(sprint3, /Button title="FAQ"/);
   assert.match(sprint3, /Button title="Safety Center"/);
+});
+
+test('animal rescue signup uses a full-width US state selector', () => {
+  const rescueSignup = extractBetween(sprint3, 'function RescueSignupFields', 'function RescueDashboardScreen');
+
+  assert.match(sprint3, /const usStateOptions = \[/);
+  assert.match(sprint3, /District of Columbia/);
+  assert.match(sprint3, /function StateSelect/);
+  assert.match(rescueSignup, /<TextInput label="City"/);
+  assert.match(rescueSignup, /<StateSelect value=\{state\} onChange=\{onState\}/);
+  assert.doesNotMatch(rescueSignup, /TextInput label="State"/);
+  assert.doesNotMatch(rescueSignup, /styles\.inputGrid/);
+});
+
+test('animal rescue signup requires a website or social link', () => {
+  const rescueSignup = extractBetween(sprint3, 'function RescueSignupFields', 'function RescueDashboardScreen');
+
+  assert.match(rescueSignup, /Website or Social Link/);
+  assert.match(rescueSignup, /Required public website or social page/);
+  assert.doesNotMatch(rescueSignup, /Website or Social Link"[\s\S]*placeholder="Optional"/);
+  assert.match(rescueService, /WEBSITE_REQUIRED/);
+  assert.match(rescueService, /Add a website or social link so ReTail can verify the rescue/);
+  assert.match(authService, /assertValidRescueProfileInput\(rescueProfile\)/);
 });
 
 test('profile picture upload uses the native photo picker', () => {
@@ -121,6 +250,29 @@ test('profile picture upload uses the native photo picker', () => {
   assert.match(profileService, /base64ToArrayBuffer/);
   assert.match(profileService, /options\.base64/);
   assert.doesNotMatch(editProfile, /images\.unsplash\.com/);
+});
+
+test('listing and message photo uploads use real native photo pickers', () => {
+  assert.match(imageUploader, /from 'expo-image-picker'/);
+  assert.match(imageUploader, /requestMediaLibraryPermissionsAsync/);
+  assert.match(imageUploader, /launchImageLibraryAsync/);
+  assert.match(imageUploader, /allowsMultipleSelection: true/);
+  assert.match(imageUploader, /base64: true/);
+  assert.doesNotMatch(imageUploader, /fallbackImage/);
+  assert.doesNotMatch(imageUploader, /images\.unsplash\.com/);
+  assert.match(sprint4, /from 'expo-image-picker'/);
+  assert.match(sprint4, /setImageUri\(selectedAsset\.base64/);
+  assert.doesNotMatch(sprint4, /conversation\.data\?\.listingSummary\.image \?\? null/);
+  assert.match(messageService, /readDataUriAsUploadBody/);
+});
+
+test('report submission errors are visible to the user', () => {
+  const reportScreen = extractBetween(sprint4, 'export function ReportScreen', 'export function ReviewScreen');
+
+  assert.match(reportScreen, /submitError/);
+  assert.match(reportScreen, /handleAppError\(error\)\.userMessage/);
+  assert.match(reportScreen, /Report not submitted:/);
+  assert.doesNotMatch(reportScreen, /catch \{\s*return;\s*\}/);
 });
 
 test('settings renders request errors instead of an endless loading state', () => {
@@ -145,6 +297,8 @@ test('settings uses safe preference defaults when optional settings fail', () =>
 });
 
 test('rescue donation instructions are visible in the rescue hub after profile updates', () => {
+  const rescueCard = extractBetween(rescueHub, 'function RescueCard', 'function getUrgencyTone');
+  assert.ok(rescueCard.indexOf('Donation instructions') < rescueCard.indexOf('Urgent needs'));
   assert.match(rescueService, /requested_contact_hint: donationInstructions/);
   assert.match(rescueService, /enablePublicRescueDonationInstructions\(profile\.id\)/);
   assert.match(rescueService, /rescue_public_contact_enabled: true/);

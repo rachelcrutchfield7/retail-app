@@ -7,6 +7,7 @@ import {
   getConversationById,
   getConversations,
   getOrCreateConversation,
+  getOrCreateRescueConversation,
 } from '../services/conversationService';
 import {
   getPaginatedMessages,
@@ -352,8 +353,10 @@ export function useStartConversation() {
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const mutation = useMutation({
-    mutationFn: ({ listingId, sellerId }: { listingId: string; sellerId?: string }) =>
-      getOrCreateConversation(listingId, sellerId),
+    mutationFn: (target: { listingId: string; sellerId?: string } | { rescueId: string; ownerId?: string }) =>
+      'rescueId' in target
+        ? getOrCreateRescueConversation(target.rescueId, target.ownerId)
+        : getOrCreateConversation(target.listingId, target.sellerId),
     onSuccess: (conversation) => {
       queryClient.setQueryData(queryKeys.conversation(conversation.id), conversation);
 
@@ -375,8 +378,17 @@ export function useStartConversation() {
     [mutation]
   );
 
+  const startRescueConversation = useCallback(
+    async (rescueId: string, ownerId?: string) => {
+      setError(null);
+      return mutation.mutateAsync({ rescueId, ownerId });
+    },
+    [mutation]
+  );
+
   return {
     startConversation,
+    startRescueConversation,
     loading: mutation.isPending,
     isLoading: mutation.isPending,
     error,

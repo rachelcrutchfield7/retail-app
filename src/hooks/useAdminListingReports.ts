@@ -1,13 +1,15 @@
 import { useCallback, useState } from 'react';
 import { getListingReportQueue, moderateListingReport, updateListingReportStatus } from '../services/adminService';
+import type { AdminReportQueueMode } from '../services/adminService';
 import type { AdminListingReport, AdminReportModerationAction, ReportStatus } from '../services/types';
 import { handleAppError } from '../utils/errorHandler';
 import { useAsyncResource } from './useAsyncResource';
 
-export function useAdminListingReports(enabled: boolean) {
+export function useAdminListingReports(enabled: boolean, mode: AdminReportQueueMode = 'active') {
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
-  const reports = useAsyncResource<AdminListingReport[]>(getListingReportQueue, enabled);
+  const loadReports = useCallback(() => getListingReportQueue(mode), [mode]);
+  const reports = useAsyncResource<AdminListingReport[]>(loadReports, enabled);
 
   const runAction = useCallback(
     async (action: () => Promise<AdminListingReport>) => {

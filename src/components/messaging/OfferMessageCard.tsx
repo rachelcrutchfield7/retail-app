@@ -2,6 +2,7 @@ import { Check, RefreshCw, X } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { colors, radius, sizes, spacing, typography } from '../../constants/theme';
+import { useThemeColors } from '../../lib/themePreference';
 import type { OfferEvent } from '../../services/offerService';
 import { Button } from '../ui/Button';
 
@@ -32,6 +33,7 @@ export function OfferMessageCard({
   onCounterChange,
   onSubmitCounter,
 }: OfferMessageCardProps) {
+  const themeColors = useThemeColors();
   const title = offer.kind === 'counter_offer'
     ? 'Counter offer'
     : offer.kind === 'offer_response'
@@ -50,13 +52,21 @@ export function OfferMessageCard({
 
   return (
     <View style={[styles.row, outgoing ? styles.outgoingRow : styles.incomingRow]}>
-      <View style={[styles.card, outgoing ? styles.outgoingCard : styles.incomingCard]}>
+      <View
+        style={[
+          styles.card,
+          {
+            backgroundColor: outgoing ? themeColors.primarySoft : themeColors.secondary,
+            borderColor: outgoing ? themeColors.primary : themeColors.border,
+          },
+        ]}
+      >
         <View style={styles.headerRow}>
-          <Text style={styles.title}>{title}</Text>
-          <Text style={styles.amount}>{offer.amount}</Text>
+          <Text style={[styles.title, { color: themeColors.textPrimary }]}>{title}</Text>
+          <Text style={[styles.amount, { color: themeColors.primary }]}>{offer.amount}</Text>
         </View>
-        <Text style={styles.body}>{body}</Text>
-        {responded ? <Text style={styles.status}>Seller responded</Text> : null}
+        <Text style={[styles.body, { color: themeColors.textSecondary }]}>{body}</Text>
+        {responded ? <Text style={[styles.status, { color: themeColors.textSecondary }]}>Seller responded</Text> : null}
 
         {canRespond ? (
           <View style={styles.actions}>
@@ -68,8 +78,8 @@ export function OfferMessageCard({
               onPress={onToggleCounter}
               style={styles.counterToggle}
             >
-              <RefreshCw size={18} color={colors.primary} />
-              <Text style={styles.counterToggleText}>Counter offer</Text>
+              <RefreshCw size={18} color={themeColors.primary} />
+              <Text style={[styles.counterToggleText, { color: themeColors.primary }]}>Counter offer</Text>
             </Pressable>
             {showCounterInput ? (
               <View style={styles.counterBox}>
@@ -77,10 +87,10 @@ export function OfferMessageCard({
                   value={counterValue}
                   onChangeText={onCounterChange}
                   placeholder="$30"
-                  placeholderTextColor={colors.textSecondary}
+                  placeholderTextColor={themeColors.textSecondary}
                   keyboardType="decimal-pad"
                   accessibilityLabel="Counter offer amount"
-                  style={styles.input}
+                  style={[styles.input, { backgroundColor: themeColors.surface, borderColor: themeColors.border, color: themeColors.textPrimary }]}
                 />
                 <Button title="Send Counter" variant="secondary" onPress={onSubmitCounter} fullWidth />
               </View>
@@ -108,14 +118,6 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     borderRadius: radius.large,
     borderWidth: 1,
-  },
-  outgoingCard: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primarySoft,
-  },
-  incomingCard: {
-    borderColor: colors.border,
-    backgroundColor: colors.secondary,
   },
   headerRow: {
     minHeight: 28,

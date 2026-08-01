@@ -11,6 +11,11 @@ export const defaultNotificationPreferences: NotificationPreferences = {
   reviews: true,
   listingUpdates: true,
   system: true,
+  emailMessages: true,
+  emailFavorites: false,
+  emailReviews: true,
+  emailMarketplaceUpdates: true,
+  emailSystem: true,
   pushMessages: false,
   pushFavorites: false,
   pushReviews: false,
@@ -51,22 +56,30 @@ export async function createNotification(input: {
   data?: Record<string, unknown>;
 }): Promise<Notification | null> {
   const preferences = preferenceOverrides.get(input.userId) ?? defaultNotificationPreferences;
+  const activeProfile = await ensureCurrentProfile().catch(() => null);
 
   if (!typeEnabled(preferences, input.type)) {
     return null;
   }
+
+  const notificationData = {
+    ...(input.data ?? {}),
+    ...(activeProfile?.id ? { actorUserId: activeProfile.id } : {}),
+  };
 
   const { data: notificationId, error: rpcError } = await supabase.rpc('create_user_notification', {
     target_user_id: input.userId,
     notification_type_value: input.type,
     notification_title: input.title,
     notification_body: input.body,
-    notification_data: input.data ?? {},
+    notification_data: notificationData,
   });
 
   if (rpcError || !notificationId) {
     return null;
   }
+
+  queueNotificationEmail(String(notificationId));
 
   const { data, error } = await supabase
     .from('notifications')
@@ -85,6 +98,12 @@ export async function createNotification(input: {
   const notification = toNotification(data as Record<string, unknown>);
   emitMessagingUpdate({ type: 'notification_created', notificationId: notification.id });
   return notification;
+}
+
+function queueNotificationEmail(notificationId: string): void {
+  void supabase.functions.invoke('send-notification', {
+    body: { notificationId },
+  }).catch(() => null);
 }
 
 export async function getNotifications(): Promise<Notification[]> {
@@ -338,6 +357,11 @@ export async function getNotificationPreferences(): Promise<NotificationPreferen
     reviews: data.in_app_reviews !== false,
     listingUpdates: data.in_app_marketplace_updates !== false,
     system: data.in_app_system !== false,
+    emailMessages: data.email_messages !== false,
+    emailFavorites: data.email_favorites === true,
+    emailReviews: data.email_reviews !== false,
+    emailMarketplaceUpdates: data.email_marketplace_updates !== false,
+    emailSystem: data.email_system !== false,
     pushMessages: Boolean(data.push_messages),
     pushFavorites: Boolean(data.push_favorites),
     pushReviews: Boolean(data.push_reviews),
@@ -359,6 +383,11 @@ export async function updateNotificationPreferences(input: Partial<NotificationP
       in_app_reviews: next.reviews,
       in_app_marketplace_updates: next.listingUpdates,
       in_app_system: next.system,
+      email_messages: next.emailMessages ?? true,
+      email_favorites: next.emailFavorites ?? false,
+      email_reviews: next.emailReviews ?? true,
+      email_marketplace_updates: next.emailMarketplaceUpdates ?? true,
+      email_system: next.emailSystem ?? true,
       push_messages: next.pushMessages ?? false,
       push_favorites: next.pushFavorites ?? false,
       push_reviews: next.pushReviews ?? false,

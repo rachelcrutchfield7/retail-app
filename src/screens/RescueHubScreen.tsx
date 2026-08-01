@@ -4,12 +4,14 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Badge, Card, DistanceFilter, EmptyState, ErrorState, HeaderBar, LoadingSpinner, Metric, SearchBar } from '../components';
 import { colors, radius, sizes, spacing, typography } from '../constants/theme';
+import type { ThemeColors } from '../constants/theme';
 import {
   useMarketplaceSearchAreas,
   useMarketplaceSearchPreference,
   useSetMarketplaceSearchArea,
 } from '../hooks/useMarketplaceSearchArea';
 import { useRescueHub } from '../hooks/useRescueHub';
+import { useThemeColors } from '../lib/themePreference';
 import type { MarketplaceSearchArea, RescueNeedUrgency, RescueOrganization } from '../types.ts';
 import { handleAppError } from '../utils/errorHandler';
 import { scrollContentBottomClearance, topSafeAreaPadding } from '../utils/safeAreaLayout';
@@ -21,6 +23,7 @@ type RescueHubScreenProps = {
 
 export function RescueHubScreen({ onBack, onOpenRescueProfile }: RescueHubScreenProps) {
   const insets = useSafeAreaInsets();
+  const themeColors = useThemeColors();
   const [search, setSearch] = useState('');
   const searchAreas = useMarketplaceSearchAreas();
   const searchPreference = useMarketplaceSearchPreference();
@@ -47,6 +50,8 @@ export function RescueHubScreen({ onBack, onOpenRescueProfile }: RescueHubScreen
     0
   );
 
+  styles = createRescueHubStyles(themeColors);
+
   return (
     <ScrollView
       style={styles.screen}
@@ -62,7 +67,7 @@ export function RescueHubScreen({ onBack, onOpenRescueProfile }: RescueHubScreen
 
       <View style={styles.hero}>
         <View style={styles.heroIcon}>
-          <HeartHandshake size={28} color={colors.primary} />
+          <HeartHandshake size={28} color={themeColors.primary} />
         </View>
         <View style={styles.heroCopy}>
           <Text style={styles.heroTitle}>Nearby rescues and urgent needs</Text>
@@ -117,6 +122,8 @@ export function RescueHubScreen({ onBack, onOpenRescueProfile }: RescueHubScreen
               : 'Rescue profiles will appear here once local organizations join ReTail.'
           }
           icon={HeartHandshake}
+          actionTitle={search ? 'Clear Search' : undefined}
+          onAction={search ? () => setSearch('') : undefined}
         />
       ) : (
         <View style={styles.rescueList}>
@@ -178,7 +185,9 @@ function RescueCard({
   index: number;
   onPress?: (rescue: RescueOrganization) => void;
 }) {
-  const toneStyle = rescueCardToneStyles[index % rescueCardToneStyles.length];
+  const themeColors = useThemeColors();
+  const toneStyles = rescueCardToneStyles(themeColors);
+  const toneStyle = toneStyles[index % toneStyles.length];
 
   return (
     <Pressable
@@ -193,7 +202,7 @@ function RescueCard({
           <View style={styles.rescueTitleBlock}>
             <Text style={styles.rescueName}>{rescue.name}</Text>
             <View style={styles.locationRow}>
-              <MapPin size={16} color={colors.textSecondary} />
+              <MapPin size={16} color={themeColors.textSecondary} />
               <Text style={styles.locationText}>
                 {rescue.location} - {rescue.distance}
               </Text>
@@ -202,7 +211,7 @@ function RescueCard({
 
           {rescue.verified ? (
             <View style={styles.verifiedPill}>
-              <ShieldCheck size={14} color={colors.primary} />
+              <ShieldCheck size={14} color={themeColors.primary} />
               <Text style={styles.verifiedText}>Verified</Text>
             </View>
           ) : null}
@@ -215,8 +224,13 @@ function RescueCard({
         {rescue.websiteUrl ? <Text style={styles.publicInfo}>Website: {rescue.websiteUrl}</Text> : null}
         {publicRescueAddress(rescue) ? <Text style={styles.publicInfo}>Address: {publicRescueAddress(rescue)}</Text> : null}
 
+        <View style={styles.contactNote}>
+          <Text style={styles.contactLabel}>Donation instructions</Text>
+          <Text style={styles.contactText}>{rescue.contactHint}</Text>
+        </View>
+
         <View style={styles.needsHeader}>
-          <AlertCircle size={18} color={colors.warning} />
+          <AlertCircle size={18} color={themeColors.warning} />
           <Text style={styles.needsTitle}>Urgent needs</Text>
         </View>
 
@@ -235,7 +249,7 @@ function RescueCard({
         {rescue.wishlistItems.length > 0 ? (
           <>
             <View style={styles.needsHeader}>
-              <HeartHandshake size={18} color={colors.primary} />
+              <HeartHandshake size={18} color={themeColors.primary} />
               <Text style={styles.needsTitle}>Wishlist</Text>
             </View>
             <View style={styles.needList}>
@@ -252,21 +266,21 @@ function RescueCard({
           </>
         ) : null}
 
-        <View style={styles.contactNote}>
-          <Text style={styles.contactLabel}>Donation instructions</Text>
-          <Text style={styles.contactText}>{rescue.contactHint}</Text>
-        </View>
       </Card>
     </Pressable>
   );
 }
 
-const rescueCardToneStyles = [
-  { backgroundColor: colors.primarySoft, borderColor: '#9CCFBA' },
-  { backgroundColor: colors.logoOrangeSoft, borderColor: colors.logoOrange },
-  { backgroundColor: colors.accentSoft, borderColor: colors.accent },
-  { backgroundColor: colors.secondary, borderColor: colors.warning },
-];
+function rescueCardToneStyles(themeColors: ThemeColors) {
+  const colors = themeColors;
+
+  return [
+    { backgroundColor: colors.primarySoft, borderColor: colors.primary },
+    { backgroundColor: colors.logoOrangeSoft, borderColor: colors.logoOrange },
+    { backgroundColor: colors.accentSoft, borderColor: colors.accent },
+    { backgroundColor: colors.secondary, borderColor: colors.warning },
+  ];
+}
 
 function getUrgencyTone(urgency: RescueNeedUrgency): 'error' | 'warning' | 'info' {
   if (urgency === 'High') {
@@ -292,7 +306,12 @@ function publicRescueAddress(rescue: RescueOrganization): string {
   ].filter(Boolean).join(', ');
 }
 
-const styles = StyleSheet.create({
+let styles = createRescueHubStyles(colors);
+
+function createRescueHubStyles(themeColors: ThemeColors) {
+  const colors = themeColors;
+
+  return StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: colors.background,
@@ -437,7 +456,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     paddingVertical: spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(31, 41, 51, 0.18)',
+    borderBottomColor: colors.border,
   },
   needCopy: {
     flex: 1,
@@ -455,7 +474,7 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     borderRadius: radius.medium,
     borderWidth: 1,
-    borderColor: 'rgba(31, 41, 51, 0.18)',
+    borderColor: colors.border,
     backgroundColor: colors.surface,
     gap: spacing.xs,
   },
@@ -469,3 +488,4 @@ const styles = StyleSheet.create({
     ...typography.small,
   },
 });
+}

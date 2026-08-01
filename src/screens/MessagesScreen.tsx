@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 import { conversations } from '../data/mockData';
 import { colors, radius, sizes, spacing, typography } from '../constants/theme';
 import { ConversationCard, LockedScreen } from '../components';
+import { useThemeColors } from '../lib/themePreference';
 import { initials } from '../utils/format';
 
 type MessagesScreenProps = {
@@ -20,6 +21,8 @@ export function MessagesScreen({
   onSend,
   onSignIn,
 }: MessagesScreenProps) {
+  const themeColors = useThemeColors();
+
   if (!isSignedIn) {
     return (
       <LockedScreen
@@ -35,8 +38,8 @@ export function MessagesScreen({
   return (
     <View style={styles.flex}>
       <ScrollView style={styles.screen} contentContainerStyle={styles.screenContent}>
-        <Text style={styles.title}>Messages</Text>
-        <Text style={styles.subhead}>Private conversations for buying, selling, and donating.</Text>
+        <Text style={[styles.title, { color: themeColors.textPrimary }]}>Messages</Text>
+        <Text style={[styles.subhead, { color: themeColors.textSecondary }]}>Private conversations for buying, selling, and donating.</Text>
 
         {conversations.map((conversation) => (
           <ConversationCard
@@ -51,16 +54,16 @@ export function MessagesScreen({
         ))}
       </ScrollView>
 
-      <View style={styles.messageComposer}>
+      <View style={[styles.messageComposer, { backgroundColor: themeColors.secondary, borderColor: themeColors.border }]}>
         <TextInput
           value={messageText}
           onChangeText={onMessageTextChange}
           placeholder="Type a message..."
-          placeholderTextColor={colors.textSecondary}
-          style={styles.composerInput}
+          placeholderTextColor={themeColors.textSecondary}
+          style={[styles.composerInput, { backgroundColor: themeColors.surface, borderColor: themeColors.border, color: themeColors.textPrimary }]}
         />
-        <Pressable style={styles.sendButton} onPress={onSend} accessibilityLabel="Send message">
-          <Send size={19} color={colors.white} />
+        <Pressable style={[styles.sendButton, { backgroundColor: themeColors.primary }]} onPress={onSend} accessibilityLabel="Send message">
+          <Send size={19} color={themeColors.white} />
         </Pressable>
       </View>
     </View>

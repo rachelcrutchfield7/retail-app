@@ -7,7 +7,16 @@ import { liveSupabaseTest as test } from './liveSupabaseTest.mjs';
 const uniqueEmail = () => `service-test-${Date.now()}-${Math.random().toString(36).slice(2)}@retailtest.dev`;
 
 test('signUpWithEmail creates a user with the selected account type', async () => {
-  const user = await signUpWithEmail(uniqueEmail(), 'Secure123!', 'Service Tester', 'rescue', 'service_tester');
+  const user = await signUpWithEmail(uniqueEmail(), 'Secure123!', 'Service Tester', 'rescue', 'service_tester', {
+    organizationName: 'Service Test Rescue',
+    animalsRescued: 'Dogs, cats',
+    city: 'Austin',
+    state: 'TX',
+    contactPerson: 'Service Tester',
+    websiteUrl: 'https://example.com/service-test-rescue',
+    organizationType: 'Foster-based',
+    has501c3: false,
+  });
 
   assert.equal(user.accountType, 'rescue');
   assert.equal(user.emailVerified, false);

@@ -191,12 +191,32 @@ create policy "Buyers create conversations for themselves"
     auth.uid() = buyer_id
     and buyer_id <> seller_id
     and is_account_active()
-    and exists (
-      select 1 from listings
-      where listings.id = conversations.listing_id
-        and listings.seller_id = conversations.seller_id
-        and listings.status = 'active'
-        and listings.deleted_at is null
+    and (
+      (
+        listing_id is not null
+        and rescue_id is null
+        and exists (
+          select 1 from listings
+          where listings.id = conversations.listing_id
+            and listings.seller_id = conversations.seller_id
+            and listings.status = 'active'
+            and listings.deleted_at is null
+        )
+      )
+      or
+      (
+        listing_id is null
+        and rescue_id is not null
+        and exists (
+          select 1 from rescue_profiles
+          where rescue_profiles.id = conversations.rescue_id
+            and rescue_profiles.owner_id = conversations.seller_id
+            and rescue_profiles.is_active = true
+            and rescue_profiles.is_verified = true
+            and rescue_profiles.verification_status = 'verified'
+            and rescue_profiles.deleted_at is null
+        )
+      )
     )
   );
 

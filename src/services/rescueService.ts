@@ -428,7 +428,7 @@ async function getRescueWishlistItems(rescueId: string): Promise<RescueWishlistI
   return (data ?? []).map((item) => toRescueWishlistItem(item as Row));
 }
 
-function assertValidRescueProfileInput(input: RescueSignupInput): void {
+export function assertValidRescueProfileInput(input: RescueSignupInput): void {
   if (!input.organizationName.trim()) {
     throw createServiceError('ORGANIZATION_REQUIRED', 'Organization name was blank', 'Add the rescue organization name.');
   }
@@ -443,6 +443,14 @@ function assertValidRescueProfileInput(input: RescueSignupInput): void {
 
   if (!input.contactPerson.trim()) {
     throw createServiceError('CONTACT_REQUIRED', 'Contact person was blank', 'Add a contact person for the rescue.');
+  }
+
+  if (!input.websiteUrl?.trim()) {
+    throw createServiceError(
+      'WEBSITE_REQUIRED',
+      'Website or social link was blank',
+      'Add a website or social link so ReTail can verify the rescue.'
+    );
   }
 }
 
@@ -459,6 +467,7 @@ function hubRescueFromRow(row: Row): RescueOrganization {
 
   return {
     id: stringValue(row.id),
+    ownerId: optionalString(row.owner_id),
     name: stringValue(row.name),
     location: [city, state].filter(Boolean).join(', '),
     distance: distanceBand ?? 'Distance unavailable',

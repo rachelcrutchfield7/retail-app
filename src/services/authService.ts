@@ -10,7 +10,7 @@ import {
   throwSupabaseError,
   userFromSupabase,
 } from './supabaseData';
-import { createOrUpdateRescueProfile } from './rescueService';
+import { assertValidRescueProfileInput, createOrUpdateRescueProfile } from './rescueService';
 import type { AccountType, RescueSignupInput, Session, User } from './types';
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -66,6 +66,19 @@ export async function signUpWithEmail(
   const normalizedEmail = email.trim().toLowerCase();
   const normalizedAccountType = normalizeAccountType(accountType);
   const normalizedUsername = normalizeUsername(username?.trim() || displayName);
+
+  if (normalizedAccountType === 'rescue') {
+    if (!rescueProfile) {
+      throw createServiceError(
+        'RESCUE_PROFILE_REQUIRED',
+        'Rescue signup details were missing',
+        'Add the rescue verification details to create an animal rescue account.'
+      );
+    }
+
+    assertValidRescueProfileInput(rescueProfile);
+  }
+
   const { data, error } = await supabase.auth.signUp({
     email: normalizedEmail,
     password,

@@ -1,6 +1,7 @@
 import { LogIn } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, radius, sizes, spacing, typography } from '../../constants/theme';
+import { useThemeColors } from '../../lib/themePreference';
 import type { IconComponent } from '../../types.ts';
 
 type LockedScreenProps = {
@@ -12,16 +13,18 @@ type LockedScreenProps = {
 };
 
 export function LockedScreen({ icon: Icon, title, body, action, onPress }: LockedScreenProps) {
+  const themeColors = useThemeColors();
+
   return (
     <View style={styles.lockedScreen}>
-      <View style={styles.lockedIcon}>
-        <Icon size={30} color={colors.primary} />
+      <View style={[styles.lockedIcon, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
+        <Icon size={30} color={themeColors.primary} />
       </View>
-      <Text style={styles.titleCentered}>{title}</Text>
-      <Text style={styles.lockedBody}>{body}</Text>
-      <Pressable style={styles.primaryButtonWide} onPress={onPress}>
-        <LogIn size={19} color={colors.white} />
-        <Text style={styles.primaryButtonText}>{action}</Text>
+      <Text style={[styles.titleCentered, { color: themeColors.textPrimary }]}>{title}</Text>
+      <Text style={[styles.lockedBody, { color: themeColors.textSecondary }]}>{body}</Text>
+      <Pressable style={[styles.primaryButtonWide, { backgroundColor: themeColors.primary }]} onPress={onPress}>
+        <LogIn size={19} color={themeColors.white} />
+        <Text style={[styles.primaryButtonText, { color: themeColors.white }]}>{action}</Text>
       </Pressable>
     </View>
   );

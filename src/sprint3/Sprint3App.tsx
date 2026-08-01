@@ -5,6 +5,7 @@ import {
   Alert,
   FlatList,
   Image,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -20,6 +21,8 @@ import {
   AlertCircle,
   Bell,
   Camera,
+  Check,
+  ChevronDown,
   ChevronLeft,
   ClipboardCheck,
   Edit3,
@@ -55,6 +58,7 @@ import {
   EmptyState,
   ErrorState,
   FavoriteButton,
+  Field,
   FilterChip,
   ImageUploader,
   ListingCard,
@@ -79,6 +83,7 @@ import {
 import { CONDITIONS } from '../constants/categories';
 import { findManualLocationByZipCode } from '../constants/location';
 import { colors, radius, sizes, spacing, typography } from '../constants/theme';
+import type { ThemeColors } from '../constants/theme';
 import { useAuth } from '../hooks/useAuth';
 import { useCategories, useTopLevelCategories } from '../hooks/useCategories';
 import { useCompleteTransaction, useEligibleTransactionParticipants } from '../hooks/useCompleteTransaction';
@@ -101,6 +106,7 @@ import { useUnreadMessages } from '../hooks/useUnreadMessages';
 import { useUpdateListing } from '../hooks/useUpdateListing';
 import { useUpdateProfile } from '../hooks/useUpdateProfile';
 import { QueryClientProvider } from '../lib/queryClient';
+import { useThemeColors } from '../lib/themePreference';
 import type {
   CreateListingInput,
   CreateSavedSearchInput,
@@ -162,6 +168,60 @@ const rescueDonationInstructionOptions = [
   'Send us a message through ReTail to coordinate drop-offs.',
   'Visit our website for current donation drop-off instructions.',
   'Please contact us before bringing supplies.',
+];
+
+const usStateOptions = [
+  { label: 'Alabama', value: 'AL' },
+  { label: 'Alaska', value: 'AK' },
+  { label: 'Arizona', value: 'AZ' },
+  { label: 'Arkansas', value: 'AR' },
+  { label: 'California', value: 'CA' },
+  { label: 'Colorado', value: 'CO' },
+  { label: 'Connecticut', value: 'CT' },
+  { label: 'Delaware', value: 'DE' },
+  { label: 'District of Columbia', value: 'DC' },
+  { label: 'Florida', value: 'FL' },
+  { label: 'Georgia', value: 'GA' },
+  { label: 'Hawaii', value: 'HI' },
+  { label: 'Idaho', value: 'ID' },
+  { label: 'Illinois', value: 'IL' },
+  { label: 'Indiana', value: 'IN' },
+  { label: 'Iowa', value: 'IA' },
+  { label: 'Kansas', value: 'KS' },
+  { label: 'Kentucky', value: 'KY' },
+  { label: 'Louisiana', value: 'LA' },
+  { label: 'Maine', value: 'ME' },
+  { label: 'Maryland', value: 'MD' },
+  { label: 'Massachusetts', value: 'MA' },
+  { label: 'Michigan', value: 'MI' },
+  { label: 'Minnesota', value: 'MN' },
+  { label: 'Mississippi', value: 'MS' },
+  { label: 'Missouri', value: 'MO' },
+  { label: 'Montana', value: 'MT' },
+  { label: 'Nebraska', value: 'NE' },
+  { label: 'Nevada', value: 'NV' },
+  { label: 'New Hampshire', value: 'NH' },
+  { label: 'New Jersey', value: 'NJ' },
+  { label: 'New Mexico', value: 'NM' },
+  { label: 'New York', value: 'NY' },
+  { label: 'North Carolina', value: 'NC' },
+  { label: 'North Dakota', value: 'ND' },
+  { label: 'Ohio', value: 'OH' },
+  { label: 'Oklahoma', value: 'OK' },
+  { label: 'Oregon', value: 'OR' },
+  { label: 'Pennsylvania', value: 'PA' },
+  { label: 'Rhode Island', value: 'RI' },
+  { label: 'South Carolina', value: 'SC' },
+  { label: 'South Dakota', value: 'SD' },
+  { label: 'Tennessee', value: 'TN' },
+  { label: 'Texas', value: 'TX' },
+  { label: 'Utah', value: 'UT' },
+  { label: 'Vermont', value: 'VT' },
+  { label: 'Virginia', value: 'VA' },
+  { label: 'Washington', value: 'WA' },
+  { label: 'West Virginia', value: 'WV' },
+  { label: 'Wisconsin', value: 'WI' },
+  { label: 'Wyoming', value: 'WY' },
 ];
 
 const emptyCreateListing: CreateListingInput = {
@@ -261,6 +321,7 @@ function Sprint3Experience() {
         onBack={() => openTab('profile')}
         onOpenListing={openListing}
         onEditListing={openEditListing}
+        onCreateListing={openCreateListing}
       />
     );
   }
@@ -271,7 +332,7 @@ function Sprint3Experience() {
       {route.tab === 'search' ? <SearchScreen onOpenListing={openListing} onOpenProfile={() => openTab('profile')} /> : null}
       {route.tab === 'sell' ? <SellScreen onCreateListing={openCreateListing} onOpenProfile={() => openTab('profile')} /> : null}
       {route.tab === 'favorites' ? (
-        <FavoritesScreen onOpenListing={openListing} onOpenProfile={() => openTab('profile')} />
+        <FavoritesScreen onOpenListing={openListing} onOpenProfile={() => openTab('profile')} onBrowse={() => openTab('home')} />
       ) : null}
       {route.tab === 'profile' ? (
         <ProfileScreen
@@ -297,7 +358,7 @@ function TabsShell({
 
   return (
     <SafeAreaView edges={['left', 'right']} style={[styles.app, { paddingTop: topSafeAreaPadding(insets.top) }]}>
-      <StatusBar style="dark" />
+      <StatusBar style={sprint3StatusBarStyle} />
       <View style={[styles.tabContent, { paddingBottom: bottomTabBarContentClearance(insets.bottom) }]}>{children}</View>
       <View style={[styles.tabBar, { paddingBottom: Math.max(insets.bottom, spacing.sm) }]}>
         {tabs.map((tab) => {
@@ -395,6 +456,9 @@ export function HomeScreen({
       urgentNeedCount: rescues.reduce((total, rescue) => total + rescue.urgentNeeds.length, 0),
     };
   }, [rescueSummary.data]);
+  const expandHomeDistance = () => {
+    setRadiusMiles(Math.min(location.radiusMiles === 100 ? 100 : location.radiusMiles + 25, 100));
+  };
 
   const handleFavorite = async (listing: Listing) => {
     if (auth.isGuest) {
@@ -541,7 +605,13 @@ export function HomeScreen({
       ItemSeparatorComponent={() => <View style={styles.gridSeparator} />}
       ListEmptyComponent={
         !listings.isLoading && !listings.isError ? (
-          <EmptyState title="No listings nearby yet" body="Try another nearby area, expand the distance, or check back soon." icon={Search} />
+          <EmptyState
+            title="No listings nearby yet"
+            body="Try another nearby area, expand the distance, or set a saved search alert so ReTail can help you watch for new matches."
+            icon={Search}
+            actionTitle={location.radiusMiles < 100 ? 'Expand Distance' : 'Create Search Alert'}
+            onAction={location.radiusMiles < 100 ? expandHomeDistance : onOpenSearch}
+          />
         ) : null
       }
     />
@@ -677,6 +747,16 @@ export function SearchScreen({
     }
   };
 
+  const clearSearchFilters = () => {
+    setSearch('');
+    setCategoryId(undefined);
+    setCondition(undefined);
+    setListingType(undefined);
+    setMinPrice('');
+    setMaxPrice('');
+    setRadiusMiles(50);
+  };
+
   const handleFavorite = async (listing: Listing) => {
     if (auth.isGuest) {
       setNotice({ title: 'Create an account to save listings.', body: 'Saved listings live in your Favorites tab.' });
@@ -728,9 +808,13 @@ export function SearchScreen({
               />
             ))}
           </ScrollView>
-          <View style={styles.inputGrid}>
-            <TextInput label="Min Price" value={minPrice} onChangeText={setMinPrice} placeholder="$0" keyboardType="numeric" />
-            <TextInput label="Max Price" value={maxPrice} onChangeText={setMaxPrice} placeholder="$100" keyboardType="numeric" />
+          <View style={styles.priceFilterStack}>
+            <View style={styles.priceFilterField}>
+              <TextInput label="Min Price" value={minPrice} onChangeText={setMinPrice} placeholder="$0" keyboardType="numeric" />
+            </View>
+            <View style={styles.priceFilterField}>
+              <TextInput label="Max Price" value={maxPrice} onChangeText={setMaxPrice} placeholder="$100" keyboardType="numeric" />
+            </View>
           </View>
           <Text style={styles.filterLabel}>Condition</Text>
           <View style={styles.wrapRow}>
@@ -796,7 +880,13 @@ export function SearchScreen({
       ItemSeparatorComponent={() => <View style={styles.gridSeparator} />}
       ListEmptyComponent={
         !listings.isLoading && !listings.isError ? (
-          <EmptyState title="No results found" body="Broaden your search, choose another nearby area, expand the distance, or remove filters." icon={Search} />
+          <EmptyState
+            title="No results found"
+            body="Broaden your search, choose another nearby area, expand the distance, or save an alert for later."
+            icon={Search}
+            actionTitle="Clear Filters"
+            onAction={clearSearchFilters}
+          />
         ) : null
       }
     />
@@ -982,9 +1072,11 @@ function SellStep({ icon: Icon, title, body }: { icon: IconComponent; title: str
 export function FavoritesScreen({
   onOpenListing,
   onOpenProfile,
+  onBrowse,
 }: {
   onOpenListing: (listingId: string) => void;
   onOpenProfile: () => void;
+  onBrowse?: () => void;
 }) {
   const auth = useAuth();
   const favorites = useFavorites(Boolean(auth.user));
@@ -1046,7 +1138,13 @@ export function FavoritesScreen({
       ItemSeparatorComponent={() => <View style={styles.gridSeparator} />}
       ListEmptyComponent={
         !favorites.isLoading && !favorites.isError ? (
-          <EmptyState title="No saved listings yet" body="Save items you love and find them here later." icon={Heart} />
+          <EmptyState
+            title="No saved listings yet"
+            body="Tap the heart on listings you want to compare, revisit, or message about later."
+            icon={Heart}
+            actionTitle={onBrowse ? 'Browse Listings' : undefined}
+            onAction={onBrowse}
+          />
         ) : null
       }
     />
@@ -1097,7 +1195,7 @@ export function CreateListingScreen({
 
   return (
     <ScreenContainer>
-      <StatusBar style="dark" />
+      <StatusBar style={sprint3StatusBarStyle} />
       <ScrollView style={styles.listScreen} contentContainerStyle={styles.listContent} keyboardShouldPersistTaps="handled">
         <BackButton onPress={onBack} />
         <View style={styles.headerBlock}>
@@ -1281,7 +1379,7 @@ function ListingDetailContent({
 
   return (
     <ScreenContainer>
-      <StatusBar style="dark" />
+      <StatusBar style={sprint3StatusBarStyle} />
       <ScrollView style={styles.listScreen} contentContainerStyle={styles.detailContent}>
         <View>
           <ListingGallery images={detail.images} fallbackImage={item.image} title={item.title} />
@@ -1732,6 +1830,7 @@ export function ProfileScreen({
   }
 
   const activeListings = (myListings.data ?? []).filter((listing) => listing.status === 'Active').slice(0, 3);
+  const missingProfileItems = profileCompletionItems(auth.profile);
 
   return (
     <ScrollView style={styles.listScreen} contentContainerStyle={styles.listContent}>
@@ -1752,6 +1851,16 @@ export function ProfileScreen({
           { label: 'Reviews', value: auth.profile.review_count },
         ]}
       />
+      {missingProfileItems.length > 0 ? (
+        <NoticeCard
+          notice={{
+            title: 'Finish your profile',
+            body: `Add ${missingProfileItems.join(', ')} so buyers and sellers feel more comfortable connecting with you.`,
+          }}
+          actionLabel="Complete Profile"
+          onAction={onEditProfile}
+        />
+      ) : null}
       <View style={styles.actionGrid}>
         <Button title="Edit Profile" icon={Edit3} onPress={onEditProfile} fullWidth />
         <Button title="My Listings" icon={PackageOpen} variant="outline" onPress={onMyListings} fullWidth />
@@ -1803,6 +1912,80 @@ export function ProfileScreen({
         emptyBody="Create your first listing from the Sell tab."
       />
     </ScrollView>
+  );
+}
+
+function StateSelect({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const themeColors = useThemeColors();
+  const normalizedValue = value.trim().toUpperCase();
+  const selectedState = usStateOptions.find((option) => option.value === normalizedValue);
+  const displayValue = selectedState ? `${selectedState.label} (${selectedState.value})` : '';
+
+  const close = () => setOpen(false);
+
+  const selectState = (nextValue: string) => {
+    onChange(nextValue);
+    close();
+  };
+
+  return (
+    <Field label="State">
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Select state"
+        onPress={() => setOpen(true)}
+        style={[styles.stateSelectButton, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}
+      >
+        <Text
+          numberOfLines={1}
+          style={[styles.stateSelectText, { color: selectedState ? themeColors.textPrimary : themeColors.textSecondary }]}
+        >
+          {displayValue || 'Select a state'}
+        </Text>
+        <ChevronDown size={20} color={themeColors.textSecondary} />
+      </Pressable>
+      <Modal transparent visible={open} animationType="fade" onRequestClose={close}>
+        <Pressable style={styles.stateSelectBackdrop} onPress={close}>
+          <Pressable
+            onPress={(event) => event.stopPropagation()}
+            style={[styles.stateSelectSheet, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}
+          >
+            <View style={styles.stateSelectHeader}>
+              <Text style={[styles.stateSelectTitle, { color: themeColors.textPrimary }]}>Select state</Text>
+              <Pressable accessibilityRole="button" accessibilityLabel="Close state selector" onPress={close} hitSlop={8}>
+                <Text style={[styles.stateSelectClose, { color: themeColors.primary }]}>Close</Text>
+              </Pressable>
+            </View>
+            <ScrollView contentContainerStyle={styles.stateOptionList} keyboardShouldPersistTaps="handled">
+              {usStateOptions.map((option) => {
+                const selected = option.value === normalizedValue;
+
+                return (
+                  <Pressable
+                    key={option.value}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Choose ${option.label}`}
+                    onPress={() => selectState(option.value)}
+                    style={[
+                      styles.stateOptionRow,
+                      { borderBottomColor: themeColors.border },
+                      selected && { backgroundColor: themeColors.primarySoft },
+                    ]}
+                  >
+                    <View style={styles.stateOptionCopy}>
+                      <Text style={[styles.stateOptionName, { color: themeColors.textPrimary }]}>{option.label}</Text>
+                      <Text style={[styles.stateOptionCode, { color: themeColors.textSecondary }]}>{option.value}</Text>
+                    </View>
+                    {selected ? <Check size={20} color={themeColors.primary} /> : null}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </Field>
   );
 }
 
@@ -1870,16 +2053,20 @@ function RescueSignupFields({
       <Text style={styles.filterLabel}>Rescue verification details</Text>
       <TextInput label="Organization Name" value={organizationName} onChangeText={onOrganizationName} placeholder="Green Paws Rescue" />
       <TextInput label="Animals Rescued" value={animalsRescued} onChangeText={onAnimalsRescued} placeholder="Dogs, cats, rabbits" />
-      <View style={styles.inputGrid}>
-        <TextInput label="City" value={city} onChangeText={onCity} placeholder="Austin" />
-        <TextInput label="State" value={state} onChangeText={onState} placeholder="TX" autoCapitalize="characters" />
-      </View>
+      <TextInput label="City" value={city} onChangeText={onCity} placeholder="Austin" />
+      <StateSelect value={state} onChange={onState} />
       <TextInput label="Zip Code" value={zipCode} onChangeText={onZipCode} placeholder="Optional public zip code" keyboardType="number-pad" />
       <TextInput label="Public Address" value={addressLine1} onChangeText={onAddressLine1} placeholder="Optional drop-off or facility address" />
       <TextInput label="Address Line 2" value={addressLine2} onChangeText={onAddressLine2} placeholder="Suite, unit, or notes" />
       <TextInput label="Contact Person" value={contactPerson} onChangeText={onContactPerson} placeholder="Avery M." />
       <TextInput label="Contact Phone" value={contactPhone} onChangeText={onContactPhone} placeholder="Optional" keyboardType="phone-pad" />
-      <TextInput label="Website or Social Link" value={websiteUrl} onChangeText={onWebsiteUrl} placeholder="Optional" autoCapitalize="none" />
+      <TextInput
+        label="Website or Social Link"
+        value={websiteUrl}
+        onChangeText={onWebsiteUrl}
+        placeholder="Required public website or social page"
+        autoCapitalize="none"
+      />
       <Text style={styles.filterLabel}>Donation drop-off options</Text>
       <View style={styles.wrapRow}>
         {rescueDonationInstructionOptions.map((option) => (
@@ -2609,7 +2796,7 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
 
   return (
     <ScreenContainer>
-      <StatusBar style="dark" />
+      <StatusBar style={sprint3StatusBarStyle} />
       <ScrollView style={styles.listScreen} contentContainerStyle={styles.listContent} keyboardShouldPersistTaps="handled">
         <BackButton onPress={onBack} />
         <View style={styles.headerBlock}>
@@ -2746,7 +2933,7 @@ export function PublicProfileScreen({
 
   return (
     <ScreenContainer>
-      <StatusBar style="dark" />
+      <StatusBar style={sprint3StatusBarStyle} />
       <ScrollView style={styles.listScreen} contentContainerStyle={styles.listContent}>
         <BackButton onPress={onBack} />
         <ProfileHeader
@@ -2827,10 +3014,12 @@ export function MyListingsScreen({
   onBack,
   onOpenListing,
   onEditListing,
+  onCreateListing,
 }: {
   onBack: () => void;
   onOpenListing: (listingId: string) => void;
   onEditListing: (listingId: string) => void;
+  onCreateListing?: () => void;
 }) {
   const listings = useMyListings();
   const transaction = useCompleteTransaction();
@@ -2901,7 +3090,7 @@ export function MyListingsScreen({
 
   return (
     <ScreenContainer>
-      <StatusBar style="dark" />
+      <StatusBar style={sprint3StatusBarStyle} />
       <ScrollView style={styles.listScreen} contentContainerStyle={styles.listContent}>
         <BackButton onPress={onBack} />
         <View style={styles.headerBlock}>
@@ -2966,7 +3155,13 @@ export function MyListingsScreen({
         {listings.isLoading ? <LoadingCards /> : null}
         {listings.isError ? <ErrorState message={handleAppError(listings.error).userMessage} onRetry={listings.refetch} /> : null}
         {!listings.isLoading && allListings.length === 0 ? (
-          <EmptyState title="You have not listed anything yet" body="Create your first listing from the Sell tab." icon={PackageOpen} />
+          <EmptyState
+            title="You have not listed anything yet"
+            body="Create your first listing so nearby pet owners can find supplies you are ready to sell, donate, or give away."
+            icon={PackageOpen}
+            actionTitle={onCreateListing ? 'Create Listing' : undefined}
+            onAction={onCreateListing}
+          />
         ) : null}
         {groups.map((group) => {
           const groupListings = allListings.filter((listing) => listing.status === group.status);
@@ -3127,7 +3322,7 @@ function EditListingForm({
 
   return (
     <ScreenContainer>
-      <StatusBar style="dark" />
+      <StatusBar style={sprint3StatusBarStyle} />
       <ScrollView style={styles.listScreen} contentContainerStyle={styles.listContent} keyboardShouldPersistTaps="handled">
         <BackButton onPress={onBack} />
         <View style={styles.headerBlock}>
@@ -3437,7 +3632,7 @@ function ScreenFrame({ children }: { children: ReactNode }) {
 
   return (
     <SafeAreaView edges={['left', 'right']} style={[styles.app, { paddingTop: topSafeAreaPadding(insets.top) }]}>
-      <StatusBar style="dark" />
+      <StatusBar style={sprint3StatusBarStyle} />
       <ScrollView
         style={styles.listScreen}
         contentContainerStyle={[styles.listContent, { paddingBottom: scrollContentBottomClearance(insets.bottom) }]}
@@ -3676,6 +3871,16 @@ function profileLocation(profile: Pick<Profile | PublicProfile, 'city' | 'state'
   return [profile.city, profile.state].filter(Boolean).join(', ') || 'Location not set';
 }
 
+function profileCompletionItems(profile: Profile): string[] {
+  const missing: string[] = [];
+
+  if (!profile.avatar_url) missing.push('a profile picture');
+  if (!profile.bio) missing.push('a short bio');
+  if (!profile.city || !profile.state) missing.push('city and state');
+
+  return missing;
+}
+
 function ratingLabel(profile: Pick<Profile | PublicProfile, 'buyer_rating' | 'seller_rating' | 'review_count'>) {
   if (!profile.review_count) {
     return 'No reviews yet';
@@ -3794,7 +3999,18 @@ function zipCodeFor(location: string) {
   return location.match(/\b\d{5}\b/)?.[0] ?? '';
 }
 
-const styles = StyleSheet.create({
+let styles = createSprint3Styles(colors);
+let sprint3StatusBarStyle: 'dark' | 'light' = 'dark';
+
+export function setSprint3ThemeColors(themeColors: ThemeColors) {
+  styles = createSprint3Styles(themeColors);
+  sprint3StatusBarStyle = themeColors.background === colors.background ? 'dark' : 'light';
+}
+
+function createSprint3Styles(themeColors: ThemeColors) {
+  const colors = themeColors;
+
+  return StyleSheet.create({
   app: {
     flex: 1,
     backgroundColor: colors.background,
@@ -4119,6 +4335,78 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.md,
   },
+  stateSelectButton: {
+    minHeight: sizes.buttonHeight,
+    borderRadius: radius.medium,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+  },
+  stateSelectText: {
+    flex: 1,
+    ...typography.body,
+  },
+  stateSelectBackdrop: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: colors.modalOverlay,
+    padding: spacing.md,
+  },
+  stateSelectSheet: {
+    maxHeight: '78%',
+    borderRadius: radius.large,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  stateSelectHeader: {
+    minHeight: 58,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  stateSelectTitle: {
+    ...typography.sectionTitle,
+  },
+  stateSelectClose: {
+    ...typography.small,
+  },
+  stateOptionList: {
+    paddingBottom: spacing.md,
+  },
+  stateOptionRow: {
+    minHeight: 54,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderBottomWidth: 1,
+  },
+  stateOptionCopy: {
+    flex: 1,
+  },
+  stateOptionName: {
+    ...typography.body,
+  },
+  stateOptionCode: {
+    ...typography.caption,
+  },
+  priceFilterStack: {
+    alignSelf: 'stretch',
+    flexDirection: 'column',
+    gap: spacing.md,
+  },
+  priceFilterField: {
+    alignSelf: 'stretch',
+    width: '100%',
+  },
   wrapRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -4268,3 +4556,4 @@ const styles = StyleSheet.create({
     borderRadius: radius.medium,
   },
 });
+}

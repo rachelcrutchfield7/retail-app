@@ -8,6 +8,16 @@ export type PaymentReadiness = {
   userMessage: string;
 };
 
+export type ProtectedCheckoutSetup = {
+  paymentIntentClientSecret: string;
+  paymentIntentId: string;
+  transactionId: string;
+  merchantDisplayName: string;
+  amountCents: number;
+  platformFeeCents: number;
+  sellerAmountCents: number;
+};
+
 export type PaymentOptionContext = {
   listing: Listing;
   sellerName: string;

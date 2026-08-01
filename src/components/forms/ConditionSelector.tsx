@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { CONDITIONS } from '../../constants/categories';
 import { colors, spacing, typography } from '../../constants/theme';
+import { useThemeColors } from '../../lib/themePreference';
 import type { ListingCondition } from '../../types';
 import { FilterChip } from '../marketplace/FilterChip';
 import { formStyles } from './Field';
@@ -12,9 +13,11 @@ type ConditionSelectorProps = {
 };
 
 export function ConditionSelector({ value, onChange, error }: ConditionSelectorProps) {
+  const themeColors = useThemeColors();
+
   return (
     <View style={styles.field}>
-      <Text style={formStyles.fieldLabel}>Condition</Text>
+      <Text style={[formStyles.fieldLabel, { color: themeColors.textPrimary }]}>Condition</Text>
       <View style={styles.row}>
         {CONDITIONS.map((condition) => (
           <FilterChip
@@ -25,7 +28,7 @@ export function ConditionSelector({ value, onChange, error }: ConditionSelectorP
           />
         ))}
       </View>
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {error ? <Text style={[styles.error, { color: themeColors.error }]}>{error}</Text> : null}
     </View>
   );
 }

@@ -1,5 +1,6 @@
 import { Image, StyleSheet, Text, View } from 'react-native';
 import { colors, radius, spacing, typography } from '../../constants/theme';
+import { useThemeColors } from '../../lib/themePreference';
 import { formatOfferBodyPreview } from '../../services/offerService';
 import type { Message } from '../../services/types';
 
@@ -10,25 +11,26 @@ type ChatBubbleProps = {
 };
 
 export function ChatBubble({ message, currentUserId, showStatus = false }: ChatBubbleProps) {
+  const themeColors = useThemeColors();
   const outgoing = message.sender_id === currentUserId;
   const system = message.message_type === 'system';
   const displayBody = formatOfferBodyPreview(message.body) ?? message.body;
 
   if (system) {
     return (
-      <View style={styles.systemWrap}>
-        <Text style={styles.systemText}>{displayBody}</Text>
+      <View style={[styles.systemWrap, { backgroundColor: themeColors.accentSoft }]}>
+        <Text style={[styles.systemText, { color: themeColors.textSecondary }]}>{displayBody}</Text>
       </View>
     );
   }
 
   return (
     <View style={[styles.row, outgoing ? styles.outgoingRow : styles.incomingRow]}>
-      <View style={[styles.bubble, outgoing ? styles.outgoingBubble : styles.incomingBubble]}>
-        {message.image_url ? <Image source={{ uri: message.image_url }} style={styles.image} /> : null}
-        {displayBody ? <Text style={[styles.body, outgoing ? styles.outgoingText : styles.incomingText]}>{displayBody}</Text> : null}
+      <View style={[styles.bubble, { backgroundColor: outgoing ? themeColors.primary : themeColors.secondary }]}>
+        {message.image_url ? <Image source={{ uri: message.image_url }} style={[styles.image, { backgroundColor: themeColors.primarySoft }]} /> : null}
+        {displayBody ? <Text style={[styles.body, { color: outgoing ? themeColors.white : themeColors.textPrimary }]}>{displayBody}</Text> : null}
       </View>
-      {showStatus && outgoing ? <Text style={styles.status}>{message.is_read ? 'Seen' : 'Delivered'}</Text> : null}
+      {showStatus && outgoing ? <Text style={[styles.status, { color: themeColors.textSecondary }]}>{message.is_read ? 'Seen' : 'Delivered'}</Text> : null}
     </View>
   );
 }
@@ -50,21 +52,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.large,
     padding: spacing.md,
   },
-  outgoingBubble: {
-    backgroundColor: colors.primary,
-  },
-  incomingBubble: {
-    backgroundColor: colors.secondary,
-  },
   body: {
     ...typography.body,
     lineHeight: 22,
-  },
-  outgoingText: {
-    color: colors.white,
-  },
-  incomingText: {
-    color: colors.textPrimary,
   },
   image: {
     width: 220,

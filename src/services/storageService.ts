@@ -23,17 +23,13 @@ async function uploadPublicFile(bucket: string, fileUri: string, folder: string)
     return fileUri;
   }
 
-  const response = await fetch(fileUri);
-
-  if (!response.ok) {
-    throw createServiceError('IMAGE_UPLOAD_FAILED', `Could not read image ${fileUri}`, 'We could not upload that photo.');
-  }
-
-  const blob = await response.blob();
-  const extension = blob.type.includes('png') ? 'png' : blob.type.includes('webp') ? 'webp' : 'jpg';
+  const uploadBody = fileUri.startsWith('data:')
+    ? readDataUriAsUploadBody(fileUri)
+    : await readFileUriAsUploadBody(fileUri);
+  const extension = imageExtension(uploadBody.contentType, fileUri);
   const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${extension}`;
-  const { error } = await supabase.storage.from(bucket).upload(path, blob, {
-    contentType: blob.type || 'image/jpeg',
+  const { error } = await supabase.storage.from(bucket).upload(path, uploadBody.body, {
+    contentType: uploadBody.contentType,
     upsert: false,
   });
 
@@ -43,6 +39,86 @@ async function uploadPublicFile(bucket: string, fileUri: string, folder: string)
 
   const { data } = supabase.storage.from(bucket).getPublicUrl(path);
   return data.publicUrl;
+}
+
+type UploadBody = {
+  body: Blob | ArrayBuffer;
+  contentType: string;
+};
+
+async function readFileUriAsUploadBody(fileUri: string): Promise<UploadBody> {
+  const response = await fetch(fileUri);
+
+  if (!response.ok) {
+    throw createServiceError('IMAGE_UPLOAD_FAILED', `Could not read image ${fileUri}`, 'We could not upload that photo.');
+  }
+
+  const blob = await response.blob();
+  return {
+    body: blob,
+    contentType: blob.type || 'image/jpeg',
+  };
+}
+
+function readDataUriAsUploadBody(fileUri: string): UploadBody {
+  const match = fileUri.match(/^data:([^;]+);base64,(.+)$/);
+
+  if (!match) {
+    throw createServiceError('IMAGE_UPLOAD_FAILED', 'Image data URI was invalid', 'We could not upload that photo.');
+  }
+
+  return {
+    body: base64ToArrayBuffer(match[2]),
+    contentType: match[1] || 'image/jpeg',
+  };
+}
+
+function imageExtension(contentType: string, fileUri: string): string {
+  const normalizedType = contentType.toLowerCase();
+
+  if (normalizedType.includes('png') || /\.png($|\?)/i.test(fileUri)) {
+    return 'png';
+  }
+
+  if (normalizedType.includes('webp') || /\.webp($|\?)/i.test(fileUri)) {
+    return 'webp';
+  }
+
+  return 'jpg';
+}
+
+function base64ToArrayBuffer(value: string): ArrayBuffer {
+  const base64 = value.replace(/^data:[^;]+;base64,/, '').replace(/\s/g, '');
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  let byteLength = Math.floor((base64.length * 3) / 4);
+
+  if (base64.endsWith('==')) {
+    byteLength -= 2;
+  } else if (base64.endsWith('=')) {
+    byteLength -= 1;
+  }
+
+  const bytes = new Uint8Array(Math.max(byteLength, 0));
+  let byteIndex = 0;
+
+  for (let index = 0; index < base64.length; index += 4) {
+    const first = alphabet.indexOf(base64[index]);
+    const second = alphabet.indexOf(base64[index + 1]);
+    const third = base64[index + 2] === '=' ? 0 : alphabet.indexOf(base64[index + 2]);
+    const fourth = base64[index + 3] === '=' ? 0 : alphabet.indexOf(base64[index + 3]);
+
+    if (first < 0 || second < 0 || third < 0 || fourth < 0) {
+      throw createServiceError('IMAGE_UPLOAD_FAILED', 'Image base64 data was invalid', 'We could not upload that photo.');
+    }
+
+    const chunk = (first << 18) | (second << 12) | (third << 6) | fourth;
+
+    if (byteIndex < bytes.length) bytes[byteIndex++] = (chunk >> 16) & 255;
+    if (byteIndex < bytes.length) bytes[byteIndex++] = (chunk >> 8) & 255;
+    if (byteIndex < bytes.length) bytes[byteIndex++] = chunk & 255;
+  }
+
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
 }
 
 export async function uploadListingImage(fileUri: string, listingId: string): Promise<ListingImage> {

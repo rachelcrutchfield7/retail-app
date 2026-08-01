@@ -2,18 +2,20 @@ import { WifiOff } from 'lucide-react-native';
 import { StyleSheet, Text, View } from 'react-native';
 import { colors, radius, spacing, typography } from '../../constants/theme';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
+import { useThemeColors } from '../../lib/themePreference';
 
 export function OfflineBanner() {
   const isOnline = useOnlineStatus();
+  const themeColors = useThemeColors();
 
   if (isOnline) {
     return null;
   }
 
   return (
-    <View style={styles.banner} accessibilityRole="alert">
-      <WifiOff size={18} color={colors.textPrimary} />
-      <Text style={styles.text}>You're offline. Cached listings may still appear, but actions will need a connection.</Text>
+    <View style={[styles.banner, { backgroundColor: themeColors.secondary, borderColor: themeColors.warning }]} accessibilityRole="alert">
+      <WifiOff size={18} color={themeColors.textPrimary} />
+      <Text style={[styles.text, { color: themeColors.textPrimary }]}>You're offline. Cached listings may still appear, but actions will need a connection.</Text>
     </View>
   );
 }

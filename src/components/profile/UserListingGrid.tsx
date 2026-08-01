@@ -1,6 +1,7 @@
 import { PackageOpen } from 'lucide-react-native';
 import { StyleSheet, Text, View } from 'react-native';
 import { colors, spacing, typography } from '../../constants/theme';
+import { useThemeColors } from '../../lib/themePreference';
 import type { Listing } from '../../types';
 import { ListingCard } from '../marketplace/ListingCard';
 import { EmptyState } from '../ui/EmptyState';
@@ -34,6 +35,7 @@ export function UserListingGrid({
   emptyTitle = 'No listings yet',
   emptyBody = 'Listings will appear here.',
 }: UserListingGridProps) {
+  const themeColors = useThemeColors();
   const compact = actions.length === 0;
 
   if (listings.length === 0) {
@@ -42,7 +44,7 @@ export function UserListingGrid({
 
   return (
     <View style={styles.section}>
-      {title ? <Text style={styles.title}>{title}</Text> : null}
+      {title ? <Text style={[styles.title, { color: themeColors.textPrimary }]}>{title}</Text> : null}
       <View style={compact ? styles.grid : styles.list}>
         {listings.map((listing) => (
           <View key={listing.id} style={compact ? styles.gridItem : styles.item}>

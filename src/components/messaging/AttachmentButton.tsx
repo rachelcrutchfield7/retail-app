@@ -1,6 +1,7 @@
 import { ImagePlus } from 'lucide-react-native';
 import { Pressable, StyleSheet } from 'react-native';
 import { colors, radius, sizes } from '../../constants/theme';
+import { useThemeColors } from '../../lib/themePreference';
 
 type AttachmentButtonProps = {
   onPress: () => void;
@@ -8,15 +9,17 @@ type AttachmentButtonProps = {
 };
 
 export function AttachmentButton({ onPress, disabled = false }: AttachmentButtonProps) {
+  const themeColors = useThemeColors();
+
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel="Attach photo"
       disabled={disabled}
       onPress={onPress}
-      style={[styles.button, disabled && styles.disabled]}
+      style={[styles.button, { backgroundColor: themeColors.surface, borderColor: themeColors.border }, disabled && styles.disabled]}
     >
-      <ImagePlus size={20} color={colors.primary} />
+      <ImagePlus size={20} color={themeColors.primary} />
     </Pressable>
   );
 }

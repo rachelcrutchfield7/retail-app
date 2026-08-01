@@ -2,6 +2,7 @@ import { Bell, Search, ShieldCheck } from 'lucide-react-native';
 import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { CATEGORY_FILTERS } from '../constants/categories';
 import { colors, sizes, spacing, typography } from '../constants/theme';
+import { useThemeColors } from '../lib/themePreference';
 import {
   CategoryChip,
   EmptyState,
@@ -47,11 +48,13 @@ export function BrowseScreen({
   rescueCount,
   urgentNeedCount,
 }: BrowseScreenProps) {
+  const themeColors = useThemeColors();
+
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.screenContent}>
       <View style={styles.topBar}>
         <View style={styles.brandBlock}>
-          <Text style={styles.eyebrow}>Secondhand Pet Marketplace</Text>
+          <Text style={[styles.eyebrow, { color: themeColors.primary }]}>Secondhand Pet Marketplace</Text>
           <Image
             source={require('../../assets/retail-logo-header.png')}
             style={styles.logo}
@@ -80,8 +83,8 @@ export function BrowseScreen({
       </ScrollView>
 
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Recently added</Text>
-        <Text style={styles.sectionHint}>{listings.length} results</Text>
+        <Text style={[styles.sectionTitle, { color: themeColors.textPrimary }]}>Recently added</Text>
+        <Text style={[styles.sectionHint, { color: themeColors.textSecondary }]}>{listings.length} results</Text>
       </View>
 
       {isLoading ? (

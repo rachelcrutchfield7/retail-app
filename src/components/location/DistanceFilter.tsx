@@ -3,6 +3,7 @@ import { MapPin, Search } from 'lucide-react-native';
 import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { colors, radius, spacing, typography } from '../../constants/theme';
 import { searchRadiusOptions } from '../../constants/location';
+import { useThemeColors } from '../../lib/themePreference';
 import type { MarketplaceSearchArea } from '../../types.ts';
 import { Card } from '../ui/Card';
 import { FilterChip } from '../marketplace/FilterChip';
@@ -30,6 +31,7 @@ export function DistanceFilter({
   selectedSearchAreaId,
   onSearchAreaSelect,
 }: DistanceFilterProps) {
+  const themeColors = useThemeColors();
   const [areaSearch, setAreaSearch] = useState('');
   const locationLabel = [city, state].filter(Boolean).join(', ') || 'your area';
   const normalizedAreaSearch = normalizeLocationSearch(areaSearch);
@@ -61,12 +63,12 @@ export function DistanceFilter({
     <Card>
       <View style={styles.stack}>
         <View style={styles.headerRow}>
-          <View style={styles.iconFrame}>
-            <MapPin size={20} color={colors.primary} />
+          <View style={[styles.iconFrame, { backgroundColor: themeColors.primarySoft }]}>
+            <MapPin size={20} color={themeColors.primary} />
           </View>
           <View style={styles.headerCopy}>
-            <Text style={styles.title}>Distance</Text>
-            <Text style={styles.body}>Showing results near {locationLabel}</Text>
+            <Text style={[styles.title, { color: themeColors.textPrimary }]}>Distance</Text>
+            <Text style={[styles.body, { color: themeColors.textSecondary }]}>Showing results near {locationLabel}</Text>
           </View>
         </View>
 
@@ -83,15 +85,15 @@ export function DistanceFilter({
 
         {onSearchAreaSelect ? (
           <View style={styles.manualBlock}>
-            <Text style={styles.label}>Search marketplace area</Text>
-            <View style={styles.searchRow}>
-              <Search size={18} color={colors.textSecondary} />
+            <Text style={[styles.label, { color: themeColors.textPrimary }]}>Search marketplace area</Text>
+            <View style={[styles.searchRow, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
+              <Search size={18} color={themeColors.textSecondary} />
               <TextInput
                 value={areaSearch}
                 onChangeText={setAreaSearch}
                 placeholder="City or area"
-                placeholderTextColor={colors.textSecondary}
-                style={styles.searchInput}
+                placeholderTextColor={themeColors.textSecondary}
+                style={[styles.searchInput, { color: themeColors.textPrimary }]}
                 returnKeyType="search"
                 autoCapitalize="words"
                 accessibilityLabel="Search marketplace area"
@@ -108,19 +110,19 @@ export function DistanceFilter({
               ))}
             </ScrollView>
             {areaMatches.length === 0 ? (
-              <Text style={styles.helpText}>No matching marketplace areas yet. Try a nearby city or region name.</Text>
+              <Text style={[styles.helpText, { color: themeColors.textSecondary }]}>No matching marketplace areas yet. Try a nearby city or region name.</Text>
             ) : null}
           </View>
         ) : null}
 
         {error ? (
-          <View style={styles.errorBox}>
-            <Text style={styles.error}>{error}</Text>
-            <Text style={styles.helpText}>Choose a marketplace area to keep nearby sorting private and consistent.</Text>
+          <View style={[styles.errorBox, { backgroundColor: themeColors.errorSoft }]}>
+            <Text style={[styles.error, { color: themeColors.error }]}>{error}</Text>
+            <Text style={[styles.helpText, { color: themeColors.textSecondary }]}>Choose a marketplace area to keep nearby sorting private and consistent.</Text>
           </View>
         ) : null}
 
-        {loading ? <Text style={styles.helpText}>Updating marketplace area...</Text> : null}
+        {loading ? <Text style={[styles.helpText, { color: themeColors.textSecondary }]}>Updating marketplace area...</Text> : null}
       </View>
     </Card>
   );

@@ -1,6 +1,7 @@
 import { Search, X } from 'lucide-react-native';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { colors, radius, sizes, spacing, typography } from '../../constants/theme';
+import { useThemeColors } from '../../lib/themePreference';
 
 type SearchBarProps = {
   value: string;
@@ -10,20 +11,22 @@ type SearchBarProps = {
 };
 
 export function SearchBar({ value, onChangeText, placeholder = 'Search pet supplies...', onClear }: SearchBarProps) {
+  const themeColors = useThemeColors();
+
   return (
-    <View style={styles.searchRow}>
-      <Search size={20} color={colors.textSecondary} />
+    <View style={[styles.searchRow, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
+      <Search size={20} color={themeColors.textSecondary} />
       <TextInput
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor={colors.textSecondary}
-        style={styles.searchInput}
+        placeholderTextColor={themeColors.textSecondary}
+        style={[styles.searchInput, { color: themeColors.textPrimary }]}
         returnKeyType="search"
       />
       {value ? (
         <Pressable accessibilityLabel="Clear search" onPress={onClear ?? (() => onChangeText(''))}>
-          <X size={20} color={colors.textSecondary} />
+          <X size={20} color={themeColors.textSecondary} />
         </Pressable>
       ) : null}
     </View>

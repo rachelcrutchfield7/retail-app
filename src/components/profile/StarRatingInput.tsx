@@ -1,6 +1,7 @@
 import { Star } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, sizes, spacing, typography } from '../../constants/theme';
+import { useThemeColors } from '../../lib/themePreference';
 
 type StarRatingInputProps = {
   value: number;
@@ -8,6 +9,8 @@ type StarRatingInputProps = {
 };
 
 export function StarRatingInput({ value, onChange }: StarRatingInputProps) {
+  const themeColors = useThemeColors();
+
   return (
     <View style={styles.wrap}>
       <View style={styles.row} accessibilityLabel={`${value} out of 5 stars selected`}>
@@ -23,13 +26,13 @@ export function StarRatingInput({ value, onChange }: StarRatingInputProps) {
               onPress={() => onChange(rating)}
               style={styles.starButton}
             >
-              <Star size={30} color={colors.warning} fill={selected ? colors.warning : 'transparent'} />
-              <Text style={styles.starLabel}>{rating}</Text>
+              <Star size={30} color={themeColors.warning} fill={selected ? themeColors.warning : 'transparent'} />
+              <Text style={[styles.starLabel, { color: themeColors.textSecondary }]}>{rating}</Text>
             </Pressable>
           );
         })}
       </View>
-      <Text style={styles.helper}>Selected rating: {value} out of 5</Text>
+      <Text style={[styles.helper, { color: themeColors.textSecondary }]}>Selected rating: {value} out of 5</Text>
     </View>
   );
 }

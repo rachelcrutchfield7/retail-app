@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Flag, X } from 'lucide-react-native';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { colors, radius, sizes, spacing, typography } from '../../constants/theme';
+import { useThemeColors } from '../../lib/themePreference';
 import type { ListingReportReason } from '../../types.ts';
 import { Button } from '../ui/Button';
 
@@ -47,6 +48,7 @@ export const reportReasonOptions: Array<{
 ];
 
 export function ReportListingModal({ visible, listingTitle, onClose, onSubmit }: ReportListingModalProps) {
+  const themeColors = useThemeColors();
   const [selectedReason, setSelectedReason] = useState<ListingReportReason | null>(null);
   const [details, setDetails] = useState('');
 
@@ -68,25 +70,25 @@ export function ReportListingModal({ visible, listingTitle, onClose, onSubmit }:
 
   return (
     <Modal visible={visible} animationType="slide" transparent>
-      <View style={styles.modalBackdrop}>
-        <View style={styles.modalPanel}>
+      <View style={[styles.modalBackdrop, { backgroundColor: themeColors.modalOverlay }]}>
+        <View style={[styles.modalPanel, { backgroundColor: themeColors.secondary }]}>
           <View style={styles.modalHeader}>
             <View style={styles.titleBlock}>
-              <Text style={styles.eyebrow}>Listing safety</Text>
-              <Text style={styles.modalTitle}>Report listing</Text>
+              <Text style={[styles.eyebrow, { color: themeColors.error }]}>Listing safety</Text>
+              <Text style={[styles.modalTitle, { color: themeColors.textPrimary }]}>Report listing</Text>
             </View>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Close report form"
-              style={styles.closeButton}
+              style={[styles.closeButton, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}
               onPress={closeModal}
             >
-              <X size={22} color={colors.textPrimary} />
+              <X size={22} color={themeColors.textPrimary} />
             </Pressable>
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalBody}>
-            <Text style={styles.bodyText}>
+            <Text style={[styles.bodyText, { color: themeColors.textPrimary }]}>
               Tell us what looks wrong with {listingTitle ? `"${listingTitle}"` : 'this listing'}.
             </Text>
 
@@ -99,15 +101,19 @@ export function ReportListingModal({ visible, listingTitle, onClose, onSubmit }:
                     key={option.reason}
                     accessibilityRole="button"
                     accessibilityLabel={`Report reason: ${option.reason}`}
-                    style={[styles.reasonCard, selected && styles.reasonCardSelected]}
+                    style={[
+                      styles.reasonCard,
+                      { backgroundColor: themeColors.surface, borderColor: themeColors.border },
+                      selected && { backgroundColor: themeColors.errorSoft, borderColor: themeColors.error },
+                    ]}
                     onPress={() => setSelectedReason(option.reason)}
                   >
-                    <View style={[styles.reasonIcon, selected && styles.reasonIconSelected]}>
-                      <Flag size={18} color={selected ? colors.white : colors.error} />
+                    <View style={[styles.reasonIcon, { backgroundColor: themeColors.errorSoft }, selected && { backgroundColor: themeColors.error }]}>
+                      <Flag size={18} color={selected ? themeColors.white : themeColors.error} />
                     </View>
                     <View style={styles.reasonCopy}>
-                      <Text style={styles.reasonTitle}>{option.reason}</Text>
-                      <Text style={styles.reasonDescription}>{option.description}</Text>
+                      <Text style={[styles.reasonTitle, { color: themeColors.textPrimary }]}>{option.reason}</Text>
+                      <Text style={[styles.reasonDescription, { color: themeColors.textSecondary }]}>{option.description}</Text>
                     </View>
                   </Pressable>
                 );
@@ -115,15 +121,15 @@ export function ReportListingModal({ visible, listingTitle, onClose, onSubmit }:
             </View>
 
             <View style={styles.detailsGroup}>
-              <Text style={styles.detailsLabel}>Details optional</Text>
+              <Text style={[styles.detailsLabel, { color: themeColors.textPrimary }]}>Details optional</Text>
               <TextInput
                 accessibilityLabel="Report details"
                 multiline
                 value={details}
                 onChangeText={setDetails}
                 placeholder="Add anything moderators should know..."
-                placeholderTextColor={colors.textSecondary}
-                style={styles.detailsInput}
+                placeholderTextColor={themeColors.textSecondary}
+                style={[styles.detailsInput, { backgroundColor: themeColors.surface, borderColor: themeColors.border, color: themeColors.textPrimary }]}
                 textAlignVertical="top"
               />
             </View>

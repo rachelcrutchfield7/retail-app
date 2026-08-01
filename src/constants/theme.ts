@@ -25,6 +25,35 @@ export const colors = {
   modalOverlay: 'rgba(31, 41, 51, 0.42)',
 } as const;
 
+export type ThemeColors = { [Key in keyof typeof colors]: string };
+
+export const darkColors: ThemeColors = {
+  primary: '#93D7BA',
+  secondary: '#455A64',
+  accent: '#A7CEE0',
+  textPrimary: '#FFFFFF',
+  textSecondary: '#E4EDF1',
+  textDisabled: '#B8C4CB',
+  success: '#93D7BA',
+  warning: '#F5D067',
+  logoOrange: '#FF9B7E',
+  navBase: '#356B86',
+  navBorder: '#28576F',
+  navInactive: '#EAF6FB',
+  error: '#FF9FA3',
+  info: '#A7CEE0',
+  white: '#FFFFFF',
+  background: '#202933',
+  border: '#71808A',
+  surface: '#3A4650',
+  surfaceWarm: '#46535D',
+  primarySoft: '#416F60',
+  accentSoft: '#3C6376',
+  logoOrangeSoft: '#8E554C',
+  errorSoft: '#5F3F53',
+  modalOverlay: 'rgba(10, 15, 20, 0.64)',
+} as const;
+
 export const spacing = {
   xs: 4,
   sm: 8,

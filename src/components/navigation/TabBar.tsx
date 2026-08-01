@@ -2,6 +2,7 @@ import { Heart, Home, MessageCircle, Plus, UserRound } from 'lucide-react-native
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radius, sizes, spacing, typography } from '../../constants/theme';
+import { useThemeColors } from '../../lib/themePreference';
 import type { IconComponent, TabKey } from '../../types.ts';
 
 type TabBarProps = {
@@ -19,6 +20,7 @@ type TabItem = {
 
 export function TabBar({ activeTab, onChange, favoritesCount }: TabBarProps) {
   const insets = useSafeAreaInsets();
+  const themeColors = useThemeColors();
   const tabs: TabItem[] = [
     { key: 'browse', label: 'Browse', icon: Home },
     { key: 'favorites', label: 'Saved', icon: Heart, badge: favoritesCount },
@@ -28,7 +30,17 @@ export function TabBar({ activeTab, onChange, favoritesCount }: TabBarProps) {
   ];
 
   return (
-    <View style={[styles.tabBar, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
+    <View
+      style={[
+        styles.tabBar,
+        {
+          paddingBottom: Math.max(insets.bottom, spacing.md),
+          backgroundColor: themeColors.navBase,
+          borderColor: themeColors.navBorder,
+          shadowColor: themeColors.textPrimary,
+        },
+      ]}
+    >
       {tabs.map((tab) => {
         const Icon = tab.icon;
         const active = activeTab === tab.key;
@@ -37,17 +49,17 @@ export function TabBar({ activeTab, onChange, favoritesCount }: TabBarProps) {
             key={tab.key}
             style={({ pressed }) => [
               styles.tabItem,
-              active && styles.tabItemActive,
+              active && [styles.tabItemActive, { backgroundColor: themeColors.surface, shadowColor: themeColors.textPrimary }],
               pressed && styles.tabItemPressed,
             ]}
             onPress={() => onChange(tab.key)}
             accessibilityLabel={tab.label}
           >
-            <View style={[styles.tabIconWrap, active && styles.tabIconWrapActive]}>
-              <Icon size={20} color={active ? colors.white : colors.textSecondary} />
-              {tab.badge ? <Text style={styles.tabBadge}>{tab.badge}</Text> : null}
+            <View style={[styles.tabIconWrap, active && { backgroundColor: themeColors.primary }]}>
+              <Icon size={20} color={active ? themeColors.white : themeColors.navInactive} />
+              {tab.badge ? <Text style={[styles.tabBadge, { backgroundColor: themeColors.error, color: themeColors.white }]}>{tab.badge}</Text> : null}
             </View>
-            <Text style={[styles.tabLabel, active && styles.tabLabelActive]} numberOfLines={1}>
+            <Text style={[styles.tabLabel, { color: active ? themeColors.textPrimary : themeColors.navInactive }]} numberOfLines={1}>
               {tab.label}
             </Text>
           </Pressable>
@@ -105,9 +117,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: radius.medium,
   },
-  tabIconWrapActive: {
-    backgroundColor: colors.primary,
-  },
   tabBadge: {
     position: 'absolute',
     top: -5,
@@ -126,8 +135,5 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     ...typography.caption,
     fontWeight: '600',
-  },
-  tabLabelActive: {
-    color: colors.textPrimary,
   },
 });

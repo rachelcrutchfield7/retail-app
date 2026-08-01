@@ -1,5 +1,6 @@
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, radius, sizes, spacing, typography } from '../../constants/theme';
+import { useThemeColors } from '../../lib/themePreference';
 import { formatOfferBodyPreview } from '../../services/offerService';
 import type { ConversationSummary } from '../../services/types';
 import { Avatar } from '../ui/Avatar';
@@ -30,6 +31,7 @@ export function ConversationCard({
   initials,
   listingThumbnail,
 }: ConversationCardProps) {
+  const themeColors = useThemeColors();
   const displayName = conversation?.otherUser.display_name ?? name ?? 'Seller';
   const displayListing = conversation?.listingSummary.title ?? listing ?? 'Listing';
   const rawPreview = conversation?.preview ?? preview;
@@ -44,18 +46,22 @@ export function ConversationCard({
       accessibilityRole="button"
       accessibilityLabel={`Open conversation with ${displayName}`}
       onPress={onPress}
-      style={[styles.conversationRow, selectedUnreadCount > 0 && styles.unreadRow]}
+      style={[
+        styles.conversationRow,
+        { backgroundColor: themeColors.surface, borderColor: themeColors.border },
+        selectedUnreadCount > 0 && { backgroundColor: themeColors.surfaceWarm, borderColor: themeColors.primary },
+      ]}
     >
       <Avatar image={conversation?.otherUser.avatar_url} initials={avatarInitials} verified={conversation?.otherUser.is_verified} />
       <View style={styles.conversationText}>
         <View style={styles.conversationHeader}>
-          <Text numberOfLines={1} style={styles.sellerName}>{displayName}</Text>
-          <Text style={styles.posted}>{displayTime}</Text>
+          <Text numberOfLines={1} style={[styles.sellerName, { color: themeColors.textPrimary }]}>{displayName}</Text>
+          <Text style={[styles.posted, { color: themeColors.textSecondary }]}>{displayTime}</Text>
         </View>
-        <Text numberOfLines={1} style={styles.messageListing}>{displayListing}</Text>
-        <Text numberOfLines={1} style={styles.metaText}>{displayPreview}</Text>
+        <Text numberOfLines={1} style={[styles.messageListing, { color: themeColors.accent }]}>{displayListing}</Text>
+        <Text numberOfLines={1} style={[styles.metaText, { color: themeColors.textSecondary }]}>{displayPreview}</Text>
       </View>
-      {thumbnail ? <Image source={{ uri: thumbnail }} style={styles.thumbnail} /> : null}
+      {thumbnail ? <Image source={{ uri: thumbnail }} style={[styles.thumbnail, { backgroundColor: themeColors.primarySoft }]} /> : null}
       {selectedUnreadCount > 0 ? <UnreadBadge count={selectedUnreadCount} /> : null}
     </Pressable>
   );
@@ -72,10 +78,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.medium,
     borderWidth: 1,
     borderColor: colors.border,
-  },
-  unreadRow: {
-    borderColor: colors.primary,
-    backgroundColor: colors.surfaceWarm,
   },
   conversationText: {
     flex: 1,

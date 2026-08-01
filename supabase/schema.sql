@@ -157,6 +157,12 @@ create table if not exists profiles (
   is_verified boolean not null default false,
   is_admin boolean not null default false,
   is_banned boolean not null default false,
+  stripe_connect_account_id text,
+  stripe_connect_charges_enabled boolean not null default false,
+  stripe_connect_payouts_enabled boolean not null default false,
+  stripe_connect_details_submitted boolean not null default false,
+  stripe_connect_onboarding_complete_at timestamptz,
+  stripe_connect_updated_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   deleted_at timestamptz
@@ -408,6 +414,31 @@ create table if not exists transactions (
   seller_id uuid not null references profiles(id) on delete restrict,
   status transaction_status not null default 'pending',
   outcome transaction_outcome,
+  payment_method text not null default 'outside_app' check (payment_method in ('outside_app', 'stripe')),
+  payment_status text not null default 'not_required' check (
+    payment_status in (
+      'not_required',
+      'requires_payment_method',
+      'requires_confirmation',
+      'requires_action',
+      'processing',
+      'succeeded',
+      'failed',
+      'canceled',
+      'refunded'
+    )
+  ),
+  amount_cents integer,
+  platform_fee_cents integer,
+  seller_amount_cents integer,
+  currency text not null default 'usd',
+  stripe_payment_intent_id text,
+  stripe_transfer_destination text,
+  stripe_latest_charge_id text,
+  stripe_receipt_url text,
+  paid_at timestamptz,
+  refunded_at timestamptz,
+  payment_error text,
   completed_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -477,6 +508,39 @@ create table if not exists notifications (
   is_read boolean not null default false,
   read_at timestamptz,
   created_at timestamptz not null default now()
+);
+
+create table if not exists notification_preferences (
+  user_id uuid primary key references profiles(id) on delete cascade,
+  in_app_messages boolean not null default true,
+  in_app_favorites boolean not null default true,
+  in_app_reviews boolean not null default true,
+  in_app_marketplace_updates boolean not null default true,
+  in_app_system boolean not null default true,
+  email_messages boolean not null default true,
+  email_favorites boolean not null default false,
+  email_reviews boolean not null default true,
+  email_marketplace_updates boolean not null default true,
+  email_system boolean not null default true,
+  push_messages boolean not null default false,
+  push_favorites boolean not null default false,
+  push_reviews boolean not null default false,
+  push_marketplace_updates boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists notification_email_deliveries (
+  notification_id uuid primary key references notifications(id) on delete cascade,
+  user_id uuid not null references profiles(id) on delete cascade,
+  notification_type notification_type not null,
+  recipient_email text not null check (position('@' in recipient_email) > 1),
+  resend_id text,
+  status text not null default 'pending' check (status in ('pending', 'sent', 'skipped', 'failed')),
+  error text,
+  sent_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
 create or replace function create_saved_search_notifications_for_listing()
@@ -883,6 +947,7 @@ create trigger listing_delete_count
 
 create index if not exists idx_profiles_username on profiles(username);
 create index if not exists idx_profiles_city_state on profiles(city, state);
+create index if not exists idx_profiles_stripe_connect_account on profiles(stripe_connect_account_id) where stripe_connect_account_id is not null;
 create index if not exists idx_categories_slug on categories(slug);
 create index if not exists idx_categories_parent on categories(parent_id);
 create index if not exists idx_listings_status on listings(status);
@@ -909,6 +974,8 @@ create index if not exists idx_messages_sender on messages(sender_id);
 create index if not exists idx_transactions_listing on transactions(listing_id);
 create index if not exists idx_transactions_buyer on transactions(buyer_id);
 create index if not exists idx_transactions_seller on transactions(seller_id);
+create unique index if not exists idx_transactions_stripe_payment_intent on transactions(stripe_payment_intent_id) where stripe_payment_intent_id is not null;
+create index if not exists idx_transactions_payment_status on transactions(payment_status, updated_at desc);
 create index if not exists idx_reviews_reviewee on reviews(reviewee_id, created_at desc);
 create index if not exists idx_reviews_reviewer on reviews(reviewer_id);
 create index if not exists idx_reviews_listing on reviews(listing_id);

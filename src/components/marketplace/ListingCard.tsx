@@ -2,6 +2,7 @@ import type { GestureResponderEvent } from 'react-native';
 import { MapPin } from 'lucide-react-native';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, radius, sizes, spacing, typography } from '../../constants/theme';
+import { useThemeColors } from '../../lib/themePreference';
 import type { Listing } from '../../types.ts';
 import { listingLocationLabel } from '../../utils/format';
 import { ConditionBadge } from './ConditionBadge';
@@ -18,6 +19,7 @@ type ListingCardProps = {
 };
 
 export function ListingCard({ listing, isFavorite, onOpen, onFavorite, variant = 'list' }: ListingCardProps) {
+  const themeColors = useThemeColors();
   const grid = variant === 'grid';
   const handleFavorite = (event: GestureResponderEvent) => {
     event.stopPropagation();
@@ -25,11 +27,26 @@ export function ListingCard({ listing, isFavorite, onOpen, onFavorite, variant =
   };
 
   return (
-    <Pressable style={[styles.listingCard, grid && styles.gridCard]} onPress={onOpen}>
-      <View style={styles.imageFrame}>
-        <Image source={{ uri: listing.image }} style={grid ? styles.gridImage : styles.listingImage} />
-        <View style={[styles.categoryTag, grid && styles.gridCategoryTag]}>
-          <Text style={styles.categoryText} numberOfLines={1}>{listing.category}</Text>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Open ${listing.title} listing`}
+      style={[
+        styles.listingCard,
+        { backgroundColor: themeColors.surface, borderColor: themeColors.border, shadowColor: themeColors.textPrimary },
+        grid && styles.gridCard,
+      ]}
+      onPress={onOpen}
+    >
+      <View style={[styles.imageFrame, { backgroundColor: themeColors.primarySoft }]}>
+        <Image source={{ uri: listing.image }} style={[grid ? styles.gridImage : styles.listingImage, { backgroundColor: themeColors.primarySoft }]} />
+        <View
+          style={[
+            styles.categoryTag,
+            { backgroundColor: themeColors.surface, shadowColor: themeColors.textPrimary },
+            grid && styles.gridCategoryTag,
+          ]}
+        >
+          <Text style={[styles.categoryText, { color: themeColors.textPrimary }]} numberOfLines={1}>{listing.category}</Text>
         </View>
         <View style={[styles.favoriteButton, grid && styles.gridFavoriteButton]}>
           <FavoriteButton selected={isFavorite} onPress={handleFavorite} />
@@ -42,18 +59,18 @@ export function ListingCard({ listing, isFavorite, onOpen, onFavorite, variant =
           </View>
           {!grid || listing.status !== 'Active' ? <StatusPill status={listing.status} /> : null}
         </View>
-        <Text numberOfLines={2} style={[styles.cardTitle, grid && styles.gridTitle]}>
+        <Text numberOfLines={2} style={[styles.cardTitle, grid && styles.gridTitle, { color: themeColors.textPrimary }]}>
           {listing.title}
         </Text>
         <View style={styles.metaRow}>
-          <MapPin size={grid ? 12 : 14} color={colors.textSecondary} />
-          <Text numberOfLines={1} style={[styles.metaText, grid && styles.gridMetaText]}>
+          <MapPin size={grid ? 12 : 14} color={themeColors.textSecondary} />
+          <Text numberOfLines={1} style={[styles.metaText, { color: themeColors.textSecondary }, grid && styles.gridMetaText]}>
             {listingLocationLabel(listing)}
           </Text>
         </View>
-        <View style={[styles.cardFooter, grid && styles.gridFooter]}>
+        <View style={[styles.cardFooter, { borderTopColor: themeColors.border }, grid && styles.gridFooter]}>
           <ConditionBadge condition={listing.condition} />
-          {!grid ? <Text style={styles.posted}>{listing.posted}</Text> : null}
+          {!grid ? <Text style={[styles.posted, { color: themeColors.textSecondary }]}>{listing.posted}</Text> : null}
         </View>
       </View>
     </Pressable>
@@ -146,13 +163,13 @@ const styles = StyleSheet.create({
   cardTitle: {
     color: colors.textPrimary,
     ...typography.sectionTitle,
-    lineHeight: 23,
+    fontWeight: '700',
+    lineHeight: 26,
   },
   gridTitle: {
-    ...typography.small,
-    color: colors.textPrimary,
-    fontWeight: '600',
-    lineHeight: 18,
+    fontSize: 16,
+    fontWeight: '700',
+    lineHeight: 21,
   },
   metaRow: {
     flexDirection: 'row',

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Building2, Mail, UserRound, X } from 'lucide-react-native';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, radius, sizes, spacing, typography } from '../../constants/theme';
+import { useThemeColors } from '../../lib/themePreference';
 import type { AccountType, IconComponent } from '../../types.ts';
 import { TextInput } from '../forms/TextInput';
 
@@ -47,6 +48,7 @@ const accountTypeOptions: Array<{
 ];
 
 export function AuthModal({ visible, prompt, onClose, onComplete }: AuthModalProps) {
+  const themeColors = useThemeColors();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [selectedAccountType, setSelectedAccountType] = useState<AccountType>('regular');
   const [email, setEmail] = useState('');
@@ -67,18 +69,23 @@ export function AuthModal({ visible, prompt, onClose, onComplete }: AuthModalPro
 
   return (
     <Modal visible={visible} animationType="slide" transparent>
-      <View style={styles.modalBackdrop}>
-        <View style={styles.modalPanel}>
+      <View style={[styles.modalBackdrop, { backgroundColor: themeColors.modalOverlay }]}>
+        <View style={[styles.modalPanel, { backgroundColor: themeColors.secondary }]}>
           <View style={styles.modalHeader}>
             <View>
-              <Text style={styles.eyebrow}>Welcome to ReTail</Text>
-              <Text style={styles.modalTitle}>{prompt?.title ?? 'Create an account'}</Text>
+              <Text style={[styles.eyebrow, { color: themeColors.primary }]}>Welcome to ReTail</Text>
+              <Text style={[styles.modalTitle, { color: themeColors.textPrimary }]}>{prompt?.title ?? 'Create an account'}</Text>
             </View>
-            <Pressable accessibilityRole="button" style={styles.closeButton} onPress={onClose} accessibilityLabel="Close">
-              <X size={22} color={colors.textPrimary} />
+            <Pressable
+              accessibilityRole="button"
+              style={[styles.closeButton, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}
+              onPress={onClose}
+              accessibilityLabel="Close"
+            >
+              <X size={22} color={themeColors.textPrimary} />
             </Pressable>
           </View>
-          <Text style={styles.bodyText}>
+          <Text style={[styles.bodyText, { color: themeColors.textPrimary }]}>
             {prompt?.body ??
               'Log in or create an account to save listings, message sellers, and list pet supplies.'}
           </Text>
@@ -97,16 +104,20 @@ export function AuthModal({ visible, prompt, onClose, onComplete }: AuthModalPro
                   <Pressable
                     key={option.type}
                     accessibilityRole="button"
-                    style={[styles.accountTypeCard, selected && styles.accountTypeCardSelected]}
+                    style={[
+                      styles.accountTypeCard,
+                      { backgroundColor: themeColors.surface, borderColor: themeColors.border },
+                      selected && { backgroundColor: themeColors.primarySoft, borderColor: themeColors.primary },
+                    ]}
                     onPress={() => setSelectedAccountType(option.type)}
                     accessibilityLabel={`Choose ${option.title}`}
                   >
-                    <View style={[styles.accountTypeIcon, selected && styles.accountTypeIconSelected]}>
-                      <Icon size={20} color={selected ? colors.white : colors.primary} />
+                    <View style={[styles.accountTypeIcon, { backgroundColor: themeColors.primarySoft }, selected && { backgroundColor: themeColors.primary }]}>
+                      <Icon size={20} color={selected ? themeColors.white : themeColors.primary} />
                     </View>
                     <View style={styles.accountTypeText}>
-                      <Text style={styles.accountTypeTitle}>{option.title}</Text>
-                      <Text style={styles.accountTypeDescription}>{option.description}</Text>
+                      <Text style={[styles.accountTypeTitle, { color: themeColors.textPrimary }]}>{option.title}</Text>
+                      <Text style={[styles.accountTypeDescription, { color: themeColors.textSecondary }]}>{option.description}</Text>
                     </View>
                   </Pressable>
                 );
@@ -116,7 +127,7 @@ export function AuthModal({ visible, prompt, onClose, onComplete }: AuthModalPro
 
           {mode === 'register' ? (
             <>
-              <Text style={styles.selectedPathText}>
+              <Text style={[styles.selectedPathText, { color: themeColors.primary }]}>
                 Signing up as {selectedAccountType === 'regular' ? 'a regular user' : 'an animal rescue'}.
               </Text>
               <TextInput
@@ -157,7 +168,7 @@ export function AuthModal({ visible, prompt, onClose, onComplete }: AuthModalPro
             label={mode === 'register' ? 'Create Account' : 'Log In'}
             onPress={submit}
           />
-          <Text style={styles.termsText}>
+          <Text style={[styles.termsText, { color: themeColors.textSecondary }]}>
             By continuing, you agree to keep ReTail safe, local, and free of prohibited items, including live animals.
           </Text>
         </View>
@@ -167,23 +178,36 @@ export function AuthModal({ visible, prompt, onClose, onComplete }: AuthModalPro
 }
 
 function ModeButton({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
+  const themeColors = useThemeColors();
+
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
-      style={[styles.modeButton, selected && styles.modeButtonSelected]}
+      style={[
+        styles.modeButton,
+        { backgroundColor: themeColors.surface, borderColor: themeColors.border },
+        selected && { backgroundColor: themeColors.primary, borderColor: themeColors.primary },
+      ]}
       onPress={onPress}
     >
-      <Text style={[styles.modeButtonText, selected && styles.modeButtonTextSelected]}>{label}</Text>
+      <Text style={[styles.modeButtonText, { color: selected ? themeColors.white : themeColors.textPrimary }]}>{label}</Text>
     </Pressable>
   );
 }
 
 function AuthButton({ icon: Icon, label, onPress }: { icon: IconComponent; label: string; onPress: () => void }) {
+  const themeColors = useThemeColors();
+
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={label} style={styles.authButton} onPress={onPress}>
-      <Icon size={20} color={colors.textPrimary} />
-      <Text style={styles.authButtonText}>{label}</Text>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={[styles.authButton, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}
+      onPress={onPress}
+    >
+      <Icon size={20} color={themeColors.textPrimary} />
+      <Text style={[styles.authButtonText, { color: themeColors.textPrimary }]}>{label}</Text>
     </Pressable>
   );
 }

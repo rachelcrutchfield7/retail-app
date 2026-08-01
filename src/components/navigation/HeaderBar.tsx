@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { ArrowLeft, ChevronLeft } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, radius, sizes, spacing, typography } from '../../constants/theme';
+import { useThemeColors } from '../../lib/themePreference';
 
 type HeaderBarProps = {
   title: string;
@@ -12,9 +13,10 @@ type HeaderBarProps = {
 };
 
 export function HeaderBar({ title, onBack, backLabel, backVariant = 'default', action }: HeaderBarProps) {
+  const themeColors = useThemeColors();
   const prominentBack = backVariant === 'prominent';
   const BackIcon = prominentBack ? ArrowLeft : ChevronLeft;
-  const iconColor = prominentBack ? colors.white : colors.textPrimary;
+  const iconColor = prominentBack ? themeColors.white : themeColors.textPrimary;
 
   return (
     <View style={styles.headerBar}>
@@ -24,20 +26,20 @@ export function HeaderBar({ title, onBack, backLabel, backVariant = 'default', a
           style={[
             styles.iconButton,
             backLabel ? styles.labeledBackButton : null,
-            prominentBack ? styles.prominentBackButton : null,
+            prominentBack ? [styles.prominentBackButton, { backgroundColor: themeColors.primary, shadowColor: themeColors.textPrimary }] : null,
           ]}
           onPress={onBack}
           accessibilityLabel="Go back"
         >
           <BackIcon size={prominentBack ? 20 : 24} color={iconColor} />
           {backLabel ? (
-            <Text style={[styles.backLabel, prominentBack ? styles.prominentBackLabel : null]} numberOfLines={1}>
+            <Text style={[styles.backLabel, { color: prominentBack ? themeColors.white : themeColors.textPrimary }]} numberOfLines={1}>
               {backLabel}
             </Text>
           ) : null}
         </Pressable>
       ) : null}
-      <Text style={styles.title}>{title}</Text>
+      <Text style={[styles.title, { color: themeColors.textPrimary }]}>{title}</Text>
       {action ? <View style={styles.action}>{action}</View> : null}
     </View>
   );

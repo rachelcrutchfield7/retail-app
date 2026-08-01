@@ -104,6 +104,7 @@ export type RescueOrganizationType = 'Foster-based' | 'Physical location' | 'Hyb
 
 export type RescueOrganization = {
   id: string;
+  ownerId?: string;
   name: string;
   location: string;
   distance: string;

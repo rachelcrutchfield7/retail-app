@@ -1,7 +1,8 @@
 import type { GestureResponderEvent } from 'react-native';
 import { Heart } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, radius, spacing, typography } from '../../constants/theme';
+import { colors, radius, sizes, spacing, typography } from '../../constants/theme';
+import { useThemeColors } from '../../lib/themePreference';
 
 type FavoriteButtonProps = {
   selected: boolean;
@@ -12,6 +13,8 @@ type FavoriteButtonProps = {
 };
 
 export function FavoriteButton({ selected, onPress, label, count, disabled = false }: FavoriteButtonProps) {
+  const themeColors = useThemeColors();
+
   return (
     <View style={styles.wrap}>
       <Pressable
@@ -19,15 +22,20 @@ export function FavoriteButton({ selected, onPress, label, count, disabled = fal
         accessibilityLabel={label ?? (selected ? 'Remove favorite' : 'Save favorite')}
         disabled={disabled}
         onPress={onPress}
-        style={[styles.favoriteButton, selected && styles.favoriteButtonActive, disabled && styles.favoriteButtonDisabled]}
+        style={[
+          styles.favoriteButton,
+          { backgroundColor: themeColors.surface, borderColor: themeColors.border },
+          selected && { backgroundColor: themeColors.error, borderColor: themeColors.error },
+          disabled && styles.favoriteButtonDisabled,
+        ]}
       >
         <Heart
           size={18}
-          color={selected ? colors.white : colors.textPrimary}
-          fill={selected ? colors.error : 'transparent'}
+          color={selected ? themeColors.white : themeColors.textPrimary}
+          fill={selected ? themeColors.error : 'transparent'}
         />
       </Pressable>
-      {count !== undefined ? <Text style={styles.count}>{count}</Text> : null}
+      {count !== undefined ? <Text style={[styles.count, { color: themeColors.textSecondary }]}>{count}</Text> : null}
     </View>
   );
 }
@@ -38,8 +46,8 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   favoriteButton: {
-    width: 38,
-    height: 38,
+    width: sizes.touchTarget,
+    height: sizes.touchTarget,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.medium,
