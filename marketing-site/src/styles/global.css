@@ -1,5 +1,5 @@
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
   --primary: #3f8f6b;
   --primary-deep: #2f7256;
   --cream: #f8f3ea;
@@ -14,21 +14,6 @@
   --shadow: 0 18px 48px rgba(31, 41, 51, 0.12);
   --radius: 18px;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --primary: #72b592;
-    --primary-deep: #3f8f6b;
-    --cream: #20252a;
-    --accent: #94bdcf;
-    --text: #f4f7f5;
-    --muted: #c2c9c4;
-    --border: #3a4148;
-    --surface: #23282e;
-    --surface-soft: #2b3138;
-    --shadow: 0 18px 48px rgba(0, 0, 0, 0.32);
-  }
 }
 
 * {
@@ -53,7 +38,10 @@ html {
 
 body {
   margin: 0;
-  background: linear-gradient(180deg, var(--cream) 0%, var(--surface) 36%, var(--surface-soft) 100%);
+  background:
+    radial-gradient(circle at top left, rgba(241, 183, 67, 0.18), transparent 30%),
+    radial-gradient(circle at 92% 12%, rgba(123, 167, 188, 0.22), transparent 28%),
+    linear-gradient(180deg, #fff8eb 0%, var(--surface) 42%, #f4fbf7 100%);
   color: var(--text);
   min-width: 320px;
 }
@@ -344,6 +332,12 @@ li {
   margin-bottom: 26px;
 }
 
+.section-header.centered {
+  max-width: 820px;
+  margin-inline: auto;
+  text-align: center;
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -399,21 +393,61 @@ li {
 }
 
 .download-hero {
-  padding: 48px 0 34px;
+  position: relative;
+  overflow: hidden;
+  padding: clamp(44px, 7vw, 78px) 0 44px;
   background:
-    radial-gradient(circle at 82% 14%, color-mix(in srgb, #f28b65 24%, transparent) 0 18%, transparent 34%),
-    radial-gradient(circle at 12% 22%, color-mix(in srgb, #f1b743 28%, transparent) 0 14%, transparent 31%);
+    linear-gradient(135deg, rgba(255, 248, 235, 0.98), rgba(255, 255, 255, 0.96) 46%, rgba(123, 167, 188, 0.2)),
+    radial-gradient(circle at 84% 18%, rgba(242, 139, 101, 0.34) 0 17%, transparent 34%),
+    radial-gradient(circle at 12% 18%, rgba(241, 183, 67, 0.34) 0 15%, transparent 31%);
+}
+
+.download-hero::after {
+  content: "";
+  position: absolute;
+  inset: auto -8% -68px -8%;
+  height: 138px;
+  background: linear-gradient(90deg, rgba(63, 143, 107, 0.16), rgba(241, 183, 67, 0.22), rgba(242, 139, 101, 0.16));
+  transform: rotate(-2deg);
+  pointer-events: none;
 }
 
 .download-hero-grid {
+  position: relative;
+  z-index: 1;
   display: grid;
   grid-template-columns: minmax(0, 1.05fr) minmax(300px, 0.95fr);
   gap: clamp(26px, 5vw, 58px);
   align-items: center;
 }
 
+.funnel-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 8px 14px;
+  border: 1px solid rgba(63, 143, 107, 0.24);
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--primary-deep);
+  font-size: 0.86rem;
+  font-weight: 900;
+  box-shadow: 0 10px 24px rgba(31, 41, 51, 0.08);
+}
+
 .download-copy h1 {
   max-width: 720px;
+  color: #15242d;
+  font-size: clamp(2.9rem, 7.2vw, 5.7rem);
+  line-height: 0.96;
+  letter-spacing: 0;
+  margin-top: 8px;
+}
+
+.download-copy .lead {
+  max-width: 690px;
+  font-size: clamp(1.12rem, 2.1vw, 1.36rem);
+  color: #3f4c55;
 }
 
 .download-actions {
@@ -424,18 +458,18 @@ li {
 }
 
 .store-badge {
-  min-height: 64px;
+  min-height: 68px;
   display: inline-flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 18px;
-  border-radius: 16px;
+  padding: 13px 20px;
+  border-radius: 18px;
   background: #1f2933;
   color: #ffffff;
-  font-size: 1.08rem;
+  font-size: 1.12rem;
   font-weight: 900;
   text-decoration: none;
-  box-shadow: 0 14px 28px rgba(31, 41, 51, 0.18);
+  box-shadow: 0 16px 30px rgba(31, 41, 51, 0.2);
 }
 
 .store-badge small {
@@ -447,8 +481,8 @@ li {
 
 .store-badge.placeholder {
   cursor: default;
-  background: color-mix(in srgb, var(--text) 88%, #ffffff);
-  opacity: 0.88;
+  background: linear-gradient(135deg, #1f2933, #2f7256);
+  opacity: 1;
 }
 
 .store-icon {
@@ -471,6 +505,43 @@ li {
   max-width: 640px;
   margin-top: 16px;
   font-size: 0.98rem;
+  color: #596470;
+}
+
+.funnel-stat-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  max-width: 700px;
+  margin-top: 24px;
+}
+
+.funnel-stat {
+  min-height: 92px;
+  border: 1px solid rgba(63, 143, 107, 0.18);
+  border-radius: 20px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 12px 30px rgba(31, 41, 51, 0.08);
+}
+
+.funnel-stat strong,
+.funnel-stat span {
+  display: block;
+}
+
+.funnel-stat strong {
+  color: #2f7256;
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.funnel-stat span {
+  margin-top: 8px;
+  color: #4d5862;
+  font-size: 0.92rem;
+  font-weight: 800;
+  line-height: 1.35;
 }
 
 .phone-card {
@@ -480,11 +551,35 @@ li {
 
 .phone-shell {
   width: min(100%, 380px);
-  border: 1px solid var(--border);
+  border: 8px solid #1f2933;
   border-radius: 36px;
-  padding: 20px;
-  background: linear-gradient(180deg, var(--surface) 0%, var(--surface-soft) 100%);
-  box-shadow: var(--shadow);
+  padding: 16px;
+  background: #fffdf8;
+  box-shadow: 0 28px 70px rgba(31, 41, 51, 0.22);
+  transform: rotate(1.5deg);
+}
+
+.phone-status {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 18px;
+  margin: 0 8px 8px;
+}
+
+.phone-status span:first-child {
+  width: 56px;
+  height: 6px;
+  border-radius: 999px;
+  background: #1f2933;
+  opacity: 0.2;
+}
+
+.phone-status span:last-child {
+  width: 34px;
+  height: 8px;
+  border-radius: 999px;
+  background: #3f8f6b;
 }
 
 .phone-top {
@@ -514,6 +609,17 @@ li {
 .phone-top span {
   color: var(--muted);
   font-weight: 700;
+}
+
+.mini-search {
+  margin: 0 4px 14px;
+  border: 1px solid rgba(123, 167, 188, 0.3);
+  border-radius: 999px;
+  padding: 12px 14px;
+  background: #ffffff;
+  color: #66717c;
+  font-size: 0.9rem;
+  font-weight: 800;
 }
 
 .preview-list {
@@ -555,6 +661,51 @@ li {
   background: #d99a2b;
 }
 
+.phone-bottom {
+  margin-top: 14px;
+  border-radius: 18px;
+  padding: 14px;
+  background: #eef6f1;
+  color: #2f7256;
+  font-weight: 900;
+  text-align: center;
+}
+
+.funnel-card {
+  position: relative;
+  overflow: hidden;
+  min-height: 238px;
+  border-top: 8px solid var(--primary);
+  background: linear-gradient(180deg, #ffffff 0%, #fffdf8 100%);
+}
+
+.funnel-card::after {
+  content: "";
+  position: absolute;
+  right: -42px;
+  bottom: -42px;
+  width: 118px;
+  height: 118px;
+  border-radius: 999px;
+  background: rgba(63, 143, 107, 0.1);
+}
+
+.funnel-card:nth-child(2) {
+  border-top-color: #f28b65;
+}
+
+.funnel-card:nth-child(2)::after {
+  background: rgba(242, 139, 101, 0.13);
+}
+
+.funnel-card:nth-child(3) {
+  border-top-color: #f1b743;
+}
+
+.funnel-card:nth-child(3)::after {
+  background: rgba(241, 183, 67, 0.16);
+}
+
 .eyebrow.light {
   color: #ffffff;
 }
@@ -567,20 +718,63 @@ li {
   min-height: 100%;
 }
 
+.funnel-band {
+  background:
+    linear-gradient(135deg, rgba(47, 114, 86, 0.96), rgba(123, 167, 188, 0.96) 54%, rgba(242, 139, 101, 0.95)),
+    var(--primary);
+  box-shadow: 0 22px 56px rgba(47, 114, 86, 0.24);
+}
+
+.funnel-band h2 {
+  max-width: 820px;
+}
+
+.funnel-band p {
+  max-width: 760px;
+}
+
+.trust-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 26px;
+}
+
+.trust-strip span {
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  border-radius: 16px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
 .download-cta {
   display: grid;
   grid-template-columns: 210px minmax(0, 1fr);
   gap: 26px;
   align-items: center;
-  border: 1px solid var(--border);
+  border: 1px solid rgba(63, 143, 107, 0.18);
   border-radius: 28px;
   padding: clamp(22px, 4vw, 38px);
-  background: var(--surface);
+  background:
+    linear-gradient(135deg, #ffffff 0%, #fff8eb 54%, #eef6f1 100%);
   box-shadow: var(--shadow);
 }
 
 .download-cta img {
   width: 210px;
+}
+
+.download-actions.compact {
+  margin-top: 20px;
+}
+
+.download-actions.compact .store-badge {
+  min-height: 58px;
+  padding: 10px 16px;
+  font-size: 1rem;
 }
 
 .eyebrow {
@@ -660,6 +854,15 @@ li {
 
   .grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .funnel-stat-row,
+  .trust-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .phone-shell {
+    transform: none;
   }
 }
 

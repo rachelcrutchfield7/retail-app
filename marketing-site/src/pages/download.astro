@@ -5,17 +5,22 @@ const title = 'Download ReTail | Secondhand Pet Supplies App';
 const description = 'Download ReTail for iOS and Android when public app links are available. ReTail helps pet owners buy, sell, give away, and donate secondhand pet supplies.';
 const highlights = [
   {
-    title: 'Find pet supplies for less',
-    body: 'Browse secondhand crates, carriers, toys, bowls, tanks, habitats, leashes, grooming supplies, and more from nearby pet owners.',
+    title: 'Shop secondhand first',
+    body: 'Find crates, carriers, toys, bowls, tanks, habitats, leashes, grooming supplies, and more from nearby pet owners.',
   },
   {
-    title: 'Sell or give away what you no longer use',
-    body: 'Turn extra pet supplies into a local sale, free pickup, or rescue donation instead of letting useful items sit in storage.',
+    title: 'List in minutes',
+    body: 'Post extra pet supplies with photos, condition details, pickup options, pricing, free pickup, or rescue donation.',
   },
   {
-    title: 'Support animal rescues',
+    title: 'Help rescues faster',
     body: 'Use Rescue Hub to see verified rescues, urgent needs, wishlist items, and donation opportunities in one focused place.',
   },
+];
+const funnelStats = [
+  { value: 'Buy', label: 'affordable pet supplies' },
+  { value: 'Sell', label: 'items you no longer use' },
+  { value: 'Donate', label: 'directly toward rescue needs' },
 ];
 const trustPoints = [
   'Built specifically for pet supplies, not general classifieds.',
@@ -28,10 +33,11 @@ const trustPoints = [
   <section class="download-hero">
     <div class="section download-hero-grid">
       <div class="download-copy">
+        <div class="funnel-pill">Private beta app links coming soon</div>
         <span class="eyebrow">Download ReTail</span>
-        <h1>Pet supplies deserve a second life.</h1>
+        <h1>Buy, sell, give away, and donate pet supplies in one app.</h1>
         <p class="lead">
-          ReTail is a focused marketplace where pet owners can buy, sell, give away, and donate secondhand pet supplies, with Rescue Hub built in for animal rescue support.
+          ReTail is the secondhand marketplace made just for pet supplies, with Rescue Hub built in so useful items can move from closets and garages to pets, families, and animal rescues that need them.
         </p>
         <div class="download-actions" aria-label="App download links">
           <span class="store-badge placeholder" aria-disabled="true">
@@ -49,21 +55,34 @@ const trustPoints = [
             </span>
           </span>
         </div>
-        <p class="download-note">Public download links are not live yet. This page is ready to update as soon as the iOS and Android store listings are approved.</p>
+        <p class="download-note">The public download links are placeholders for now. As soon as the app store listings are approved, these buttons will point directly to iOS and Android.</p>
+        <div class="funnel-stat-row" aria-label="What ReTail helps users do">
+          {funnelStats.map((stat) => (
+            <div class="funnel-stat">
+              <strong>{stat.value}</strong>
+              <span>{stat.label}</span>
+            </div>
+          ))}
+        </div>
       </div>
       <aside class="phone-card" aria-label="ReTail app preview">
         <div class="phone-shell">
+          <div class="phone-status">
+            <span></span>
+            <span></span>
+          </div>
           <div class="phone-top">
             <img src="/assets/app-icon.png" alt="ReTail app icon" width="1024" height="1024" />
             <div>
               <strong>ReTail</strong>
-              <span>Secondhand pet supplies</span>
+              <span>Secondhand pet supplies, sorted</span>
             </div>
           </div>
+          <div class="mini-search">Crates, cat trees, aquariums...</div>
           <div class="preview-list">
             <div class="preview-row teal">
               <strong>Large dog crate</strong>
-              <span>Nearby marketplace listing</span>
+              <span>$35 nearby marketplace listing</span>
             </div>
             <div class="preview-row orange">
               <strong>Rescue needs carriers</strong>
@@ -74,20 +93,21 @@ const trustPoints = [
               <span>Giveaway for local pickup</span>
             </div>
           </div>
+          <div class="phone-bottom">Ready when app links go live</div>
         </div>
       </aside>
     </div>
   </section>
 
   <section class="section">
-    <div class="section-header">
+    <div class="section-header centered">
       <span class="eyebrow">Why download</span>
-      <h2>A marketplace made for the things pets actually use.</h2>
+      <h2>Spend less. Waste less. Help more pets.</h2>
       <p>ReTail keeps pet-supply exchanges easier to browse, easier to list, and easier to connect with rescue needs.</p>
     </div>
     <div class="grid three">
       {highlights.map((item) => (
-        <article class="card">
+        <article class="card funnel-card">
           <h3>{item.title}</h3>
           <p>{item.body}</p>
         </article>
@@ -95,18 +115,14 @@ const trustPoints = [
     </div>
   </section>
 
-  <section class="section grid two download-band-grid">
-    <div class="band">
+  <section class="section download-band-grid">
+    <div class="band funnel-band">
       <span class="eyebrow light">For pet owners</span>
-      <h2>Save money, clear space, and keep useful supplies moving.</h2>
-      <p>Whether you need an affordable setup or have extras after your pet outgrew something, ReTail gives those items a pet-focused place to go.</p>
-    </div>
-    <div class="card">
-      <span class="eyebrow">Built-in guardrails</span>
-      <h2>Focused, not noisy.</h2>
-      <ul>
-        {trustPoints.map((point) => <li>{point}</li>)}
-      </ul>
+      <h2>The app for the pet stuff everyone keeps buying twice.</h2>
+      <p>Whether you need an affordable starter setup or have extras after your pet outgrew something, ReTail gives those items a pet-focused place to go.</p>
+      <div class="trust-strip">
+        {trustPoints.map((point) => <span>{point}</span>)}
+      </div>
     </div>
   </section>
 
@@ -114,9 +130,13 @@ const trustPoints = [
     <div class="download-cta">
       <img src="/assets/retail-logo-header.png" alt="ReTail" width="991" height="443" />
       <div>
-        <span class="eyebrow">Launch links coming soon</span>
-        <h2>Check back here for the official app links.</h2>
-        <p>When ReTail is ready in the app stores, this page will point directly to the iOS and Android downloads.</p>
+        <span class="eyebrow">Save this link</span>
+        <h2>Come back to download ReTail when the app links go live.</h2>
+        <p>This direct page will become the official app download funnel for iOS and Android once the store listings are ready.</p>
+        <div class="download-actions compact" aria-label="Placeholder app download links">
+          <span class="store-badge placeholder" aria-disabled="true"><span class="store-icon">A</span><span><small>Coming soon on</small>App Store</span></span>
+          <span class="store-badge placeholder" aria-disabled="true"><span class="store-icon play">G</span><span><small>Coming soon on</small>Google Play</span></span>
+        </div>
       </div>
     </div>
   </section>
