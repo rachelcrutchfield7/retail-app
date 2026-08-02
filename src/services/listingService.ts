@@ -3,7 +3,7 @@ import { trackEvent } from '../lib/analytics';
 import { supabase } from '../lib/supabase';
 import { createServiceError, isAppServiceError } from './errors';
 import { createListingStatusNotification } from './notificationService';
-import { uploadListingImage } from './storageService';
+import { deleteListingImage, uploadListingImage } from './storageService';
 import {
   conditionToDb,
   ensureCurrentProfile,
@@ -318,9 +318,20 @@ export async function createListing(input: CreateListingInput): Promise<Listing>
   }
 
   const listingId = String((data as Record<string, unknown>).id);
+  const uploadedImages = [];
 
-  for (const imageUri of input.images) {
-    await uploadListingImage(imageUri, listingId);
+  try {
+    for (const imageUri of input.images) {
+      const uploadedImage = await uploadListingImage(imageUri, listingId);
+      uploadedImages.push(uploadedImage);
+    }
+  } catch (imageError) {
+    for (const uploadedImage of uploadedImages) {
+      await deleteListingImage(uploadedImage.id).catch(() => null);
+    }
+
+    await supabase.rpc('delete_my_listing', { target_listing_id: listingId });
+    throw imageError;
   }
 
   const created = await getListingById(listingId);

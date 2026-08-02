@@ -12,6 +12,7 @@ export const emptyListingForm: ListingForm = {
   title: '',
   price: '',
   description: '',
+  images: [],
   category: 'Dogs',
   condition: 'Good',
   donation: false,

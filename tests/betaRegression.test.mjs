@@ -24,9 +24,11 @@ const profileService = readFileSync(new URL('../src/services/profileService.ts',
 const authService = readFileSync(new URL('../src/services/authService.ts', import.meta.url), 'utf8');
 const googleAuthService = readFileSync(new URL('../src/services/googleAuthService.ts', import.meta.url), 'utf8');
 const conversationService = readFileSync(new URL('../src/services/conversationService.ts', import.meta.url), 'utf8');
+const listingService = readFileSync(new URL('../src/services/listingService.ts', import.meta.url), 'utf8');
 const authContext = readFileSync(new URL('../src/auth/AuthContext.tsx', import.meta.url), 'utf8');
 const authModal = readFileSync(new URL('../src/components/feedback/AuthModal.tsx', import.meta.url), 'utf8');
 const messageService = readFileSync(new URL('../src/services/messageService.ts', import.meta.url), 'utf8');
+const storageService = readFileSync(new URL('../src/services/storageService.ts', import.meta.url), 'utf8');
 const imageUploader = readFileSync(new URL('../src/components/forms/ImageUploader.tsx', import.meta.url), 'utf8');
 const useSettings = readFileSync(new URL('../src/hooks/useSettings.ts', import.meta.url), 'utf8');
 const useMessages = readFileSync(new URL('../src/hooks/useMessages.ts', import.meta.url), 'utf8');
@@ -332,7 +334,12 @@ test('listing and message photo uploads use real native photo pickers', () => {
   assert.match(imageUploader, /requestMediaLibraryPermissionsAsync/);
   assert.match(imageUploader, /launchImageLibraryAsync/);
   assert.match(imageUploader, /allowsMultipleSelection: true/);
+  assert.match(imageUploader, /quality: 0\.65/);
   assert.match(imageUploader, /base64: true/);
+  assert.match(imageUploader, /normalizedPickerMimeType/);
+  assert.match(storageService, /normalizeImageContentType/);
+  assert.match(storageService, /IMAGE_TOO_LARGE/);
+  assert.match(listingService, /delete_my_listing/);
   assert.doesNotMatch(imageUploader, /fallbackImage/);
   assert.doesNotMatch(imageUploader, /images\.unsplash\.com/);
   assert.match(sprint4, /from 'expo-image-picker'/);

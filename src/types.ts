@@ -147,6 +147,7 @@ export type ListingForm = {
   title: string;
   price: string;
   description: string;
+  images: string[];
   category: Category;
   condition: ListingCondition;
   donation: boolean;

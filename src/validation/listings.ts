@@ -1,7 +1,7 @@
 import type { ListingForm } from '../types.ts';
 
 export type ListingValidationError = {
-  field: keyof Pick<ListingForm, 'title' | 'description'>;
+  field: keyof Pick<ListingForm, 'title' | 'description' | 'images'>;
   message: string;
 };
 
@@ -10,13 +10,17 @@ export type ListingValidationResult = {
   errors: ListingValidationError[];
 };
 
-export const REQUIRED_LISTING_DETAILS_MESSAGE = 'Listings need a title and description.';
+export const REQUIRED_LISTING_DETAILS_MESSAGE = 'Listings need at least one photo, a title, and a description.';
 
 export function validateListingForm(form: ListingForm): ListingValidationResult {
   const errors: ListingValidationError[] = [];
 
   if (!form.title.trim()) {
     errors.push({ field: 'title', message: 'Add a clear title for your item.' });
+  }
+
+  if (form.images.length === 0) {
+    errors.push({ field: 'images', message: 'Add at least one photo.' });
   }
 
   if (!form.description.trim()) {

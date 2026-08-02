@@ -7,6 +7,9 @@ import {
 } from './supabaseData';
 import type { ListingImage } from './types';
 
+const maxPublicImageBytes = 10 * 1024 * 1024;
+const supportedPublicImageTypes = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
+
 function publicObjectPath(bucket: string, publicUrl?: string): string | null {
   if (!publicUrl) {
     return null;
@@ -26,10 +29,11 @@ async function uploadPublicFile(bucket: string, fileUri: string, folder: string)
   const uploadBody = fileUri.startsWith('data:')
     ? readDataUriAsUploadBody(fileUri)
     : await readFileUriAsUploadBody(fileUri);
-  const extension = imageExtension(uploadBody.contentType, fileUri);
+  const contentType = normalizeImageContentType(uploadBody.contentType);
+  const extension = imageExtension(contentType, fileUri);
   const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${extension}`;
   const { error } = await supabase.storage.from(bucket).upload(path, uploadBody.body, {
-    contentType: uploadBody.contentType,
+    contentType,
     upsert: false,
   });
 
@@ -54,9 +58,10 @@ async function readFileUriAsUploadBody(fileUri: string): Promise<UploadBody> {
   }
 
   const blob = await response.blob();
+  assertImageSize(blob.size);
   return {
     body: blob,
-    contentType: blob.type || 'image/jpeg',
+    contentType: normalizeImageContentType(blob.type),
   };
 }
 
@@ -67,10 +72,28 @@ function readDataUriAsUploadBody(fileUri: string): UploadBody {
     throw createServiceError('IMAGE_UPLOAD_FAILED', 'Image data URI was invalid', 'We could not upload that photo.');
   }
 
+  const body = base64ToArrayBuffer(match[2]);
+  assertImageSize(body.byteLength);
+
   return {
-    body: base64ToArrayBuffer(match[2]),
-    contentType: match[1] || 'image/jpeg',
+    body,
+    contentType: normalizeImageContentType(match[1]),
   };
+}
+
+function assertImageSize(byteLength: number): void {
+  if (byteLength > maxPublicImageBytes) {
+    throw createServiceError(
+      'IMAGE_TOO_LARGE',
+      `Image was ${byteLength} bytes`,
+      'That photo is too large to upload. Choose a smaller photo or screenshot and try again.'
+    );
+  }
+}
+
+function normalizeImageContentType(contentType?: string): string {
+  const normalized = contentType?.toLowerCase().split(';')[0].trim();
+  return normalized && supportedPublicImageTypes.has(normalized) ? normalized.replace('image/jpg', 'image/jpeg') : 'image/jpeg';
 }
 
 function imageExtension(contentType: string, fileUri: string): string {

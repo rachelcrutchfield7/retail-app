@@ -13,6 +13,15 @@ type ImageUploaderProps = {
   progress?: number;
 };
 
+const pickerSupportedMimeTypes = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
+
+function normalizedPickerMimeType(mimeType?: string | null): string {
+  const normalized = mimeType?.toLowerCase();
+  return normalized && pickerSupportedMimeTypes.has(normalized)
+    ? normalized.replace('image/jpg', 'image/jpeg')
+    : 'image/jpeg';
+}
+
 export function ImageUploader({ images, onChange, error, uploading = false, progress = 0 }: ImageUploaderProps) {
   const themeColors = useThemeColors();
   const [pickerError, setPickerError] = useState<string | null>(null);
@@ -50,7 +59,7 @@ export function ImageUploader({ images, onChange, error, uploading = false, prog
       mediaTypes: ['images'],
       allowsMultipleSelection: true,
       selectionLimit: remainingSlots,
-      quality: 0.85,
+      quality: 0.65,
       base64: true,
     });
 
@@ -62,7 +71,7 @@ export function ImageUploader({ images, onChange, error, uploading = false, prog
       .slice(0, remainingSlots)
       .map((asset) => {
         if (asset.base64) {
-          return `data:${asset.mimeType ?? 'image/jpeg'};base64,${asset.base64}`;
+          return `data:${normalizedPickerMimeType(asset.mimeType)};base64,${asset.base64}`;
         }
 
         return asset.uri;

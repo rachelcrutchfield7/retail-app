@@ -1,4 +1,4 @@
-import { Camera, CheckCircle2, Plus } from 'lucide-react-native';
+import { CheckCircle2, Plus } from 'lucide-react-native';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { CATEGORIES, CONDITIONS } from '../constants/categories';
 import { colors, radius, sizes, spacing, typography } from '../constants/theme';
-import { Chip, formStyles, LockedScreen, PriceInput, TextArea, TextField, ToggleSwitch } from '../components';
+import { Chip, formStyles, ImageUploader, LockedScreen, PriceInput, TextArea, TextField, ToggleSwitch } from '../components';
 import { useThemeColors } from '../lib/themePreference';
 import type { Category, ListingCondition, ListingForm } from '../types.ts';
 
@@ -21,6 +21,8 @@ type CreateListingScreenProps = {
   onPublish: () => void;
   onSignIn: () => void;
   mode?: 'create' | 'edit';
+  imageError?: string;
+  publishing?: boolean;
 };
 
 export function CreateListingScreen({
@@ -30,6 +32,8 @@ export function CreateListingScreen({
   onPublish,
   onSignIn,
   mode = 'create',
+  imageError,
+  publishing = false,
 }: CreateListingScreenProps) {
   const themeColors = useThemeColors();
 
@@ -57,13 +61,13 @@ export function CreateListingScreen({
           {mode === 'edit' ? 'Update your listing details for nearby pet owners.' : 'Sell or donate supplies to nearby pet owners.'}
         </Text>
 
-        <Pressable style={[styles.photoPicker, { backgroundColor: themeColors.surface, borderColor: themeColors.primary }]}>
-          <Camera size={24} color={themeColors.primary} />
-          <View>
-            <Text style={[styles.photoTitle, { color: themeColors.textPrimary }]}>Add photos</Text>
-            <Text style={[styles.photoHint, { color: themeColors.textSecondary }]}>At least 1 required, up to 15 supported</Text>
-          </View>
-        </Pressable>
+        <ImageUploader
+          images={form.images}
+          onChange={(images) => update('images', images)}
+          error={imageError}
+          uploading={publishing}
+          progress={publishing ? 35 : 0}
+        />
 
         <TextField
           label="Title"
@@ -121,9 +125,15 @@ export function CreateListingScreen({
           onValueChange={(value) => update('pickup', value)}
         />
 
-        <Pressable style={[styles.primaryButtonWide, { backgroundColor: themeColors.primary }]} onPress={onPublish}>
+        <Pressable
+          style={[styles.primaryButtonWide, { backgroundColor: themeColors.primary }, publishing && styles.disabledButton]}
+          onPress={onPublish}
+          disabled={publishing}
+        >
           <CheckCircle2 size={20} color={themeColors.white} />
-          <Text style={[styles.primaryButtonText, { color: themeColors.white }]}>{mode === 'edit' ? 'Save changes' : 'Publish listing'}</Text>
+          <Text style={[styles.primaryButtonText, { color: themeColors.white }]}>
+            {publishing ? 'Uploading...' : mode === 'edit' ? 'Save changes' : 'Publish listing'}
+          </Text>
         </Pressable>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -152,27 +162,6 @@ const styles = StyleSheet.create({
     ...typography.body,
     lineHeight: 22,
   },
-  photoPicker: {
-    minHeight: 82,
-    borderRadius: radius.medium,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: colors.primary,
-    backgroundColor: colors.surface,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    padding: spacing.md,
-  },
-  photoTitle: {
-    color: colors.textPrimary,
-    ...typography.button,
-  },
-  photoHint: {
-    color: colors.textSecondary,
-    ...typography.small,
-    marginTop: spacing.xs,
-  },
   wrapRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -186,6 +175,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.sm,
     backgroundColor: colors.primary,
+  },
+  disabledButton: {
+    opacity: 0.7,
   },
   primaryButtonText: {
     color: colors.white,

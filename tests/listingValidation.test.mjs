@@ -3,13 +3,13 @@ import test from 'node:test';
 import { emptyListingForm } from '../src/data/mockData.ts';
 import { normalizeListingPrice, validateListingForm } from '../src/validation/listings.ts';
 
-test('validateListingForm requires a title and description', () => {
+test('validateListingForm requires a photo, title, and description', () => {
   const result = validateListingForm(emptyListingForm);
 
   assert.equal(result.isValid, false);
   assert.deepEqual(
     result.errors.map((error) => error.field),
-    ['title', 'description']
+    ['title', 'images', 'description']
   );
 });
 
@@ -17,6 +17,7 @@ test('validateListingForm accepts a complete listing draft', () => {
   const result = validateListingForm({
     ...emptyListingForm,
     title: 'Rabbit starter kit',
+    images: ['file:///rabbit-kit.jpg'],
     description: 'Water bottle, hay feeder, and ceramic bowls.',
   });
 
