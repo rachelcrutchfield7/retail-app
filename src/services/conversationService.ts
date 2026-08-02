@@ -20,6 +20,7 @@ type ConversationRow = {
   id: string;
   listing_id: string | null;
   rescue_id?: string | null;
+  report_id?: string | null;
   buyer_id: string;
   seller_id: string;
   last_message_at?: string | null;
@@ -40,6 +41,7 @@ function toConversation(row: ConversationRow, listingTitle = 'Listing'): Convers
     time: formatConversationTime(lastMessageAt),
     listingId: row.listing_id ?? '',
     rescueId: row.rescue_id ?? undefined,
+    reportId: row.report_id ?? undefined,
     buyerId: row.buyer_id,
     sellerId: row.seller_id,
     lastMessageAt,
@@ -212,6 +214,30 @@ function rescueConversationListing(rescue: RescueConversationRow | null, rescueI
   };
 }
 
+function reportConversationListing(reportId: string): Listing {
+  return {
+    id: reportId,
+    title: 'ReTail report update',
+    description: 'Messages with ReTail admin about a submitted report.',
+    price: '',
+    category: 'General',
+    condition: 'Good',
+    image: '',
+    location: 'ReTail Safety',
+    distance: 'Support',
+    status: 'Active',
+    seller: 'ReTail Admin',
+    sellerRating: 0,
+    sellerReviews: 0,
+    posted: 'Admin Review',
+    pickup: false,
+    porchPickup: false,
+    meetup: false,
+    shipping: false,
+    favoritedBy: 0,
+  };
+}
+
 async function loadRescueForConversation(rescueId?: string | null): Promise<RescueConversationRow | null> {
   if (!rescueId) {
     return null;
@@ -292,6 +318,7 @@ export async function buildConversationSummary(conversation: Conversation | Conv
         id: conversation.id,
         listing_id: conversation.listingId,
         rescue_id: conversation.rescueId,
+        report_id: conversation.reportId,
         buyer_id: conversation.buyerId,
         seller_id: conversation.sellerId,
         last_message_at: conversation.lastMessageAt,
@@ -319,7 +346,9 @@ export async function buildConversationSummary(conversation: Conversation | Conv
     ? toListing(listingData as Record<string, unknown>)
     : row.rescue_id
       ? rescueConversationListing(rescue, row.rescue_id)
-      : unavailableListing(row.listing_id ?? '');
+      : row.report_id
+        ? reportConversationListing(row.report_id)
+        : unavailableListing(row.listing_id ?? '');
   const images = listingData ? imagesFromListingRow(listingData as Record<string, unknown>) : [];
   const lastMessage = await lastMessageFor(row.id);
   const unreadCount = await unreadCountFor(row.id, currentProfile.id);

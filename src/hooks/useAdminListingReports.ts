@@ -35,13 +35,14 @@ export function useAdminListingReports(enabled: boolean, mode: AdminReportQueueM
     ...reports,
     actionLoading,
     actionError,
-    updateStatus: (reportId: string, status: ReportStatus, adminNotes?: string) =>
-      runAction(() => updateListingReportStatus(reportId, status, adminNotes)),
+    updateStatus: (reportId: string, status: ReportStatus, adminNotes?: string, adminMessage?: string) =>
+      runAction(() => updateListingReportStatus(reportId, status, adminNotes, adminMessage)),
     moderateReport: (
       reportId: string,
       status: ReportStatus,
       action: AdminReportModerationAction,
-      adminNotes?: string
-    ) => runAction(() => moderateListingReport(reportId, status, action, adminNotes)),
+      adminNotes?: string,
+      adminMessage?: string
+    ) => runAction(() => moderateListingReport(reportId, status, action, adminNotes, adminMessage)),
   };
 }

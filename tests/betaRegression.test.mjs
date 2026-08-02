@@ -34,7 +34,7 @@ const founderChecklist = readFileSync(new URL('../docs/private-beta/FOUNDER_PREV
 const publicRescueOrgDetailsMigration = readFileSync(new URL('../supabase/migrations/20260727132143_public_rescue_org_details_v2.sql', import.meta.url), 'utf8');
 const rescueMessagingMigration = readFileSync(new URL('../supabase/migrations/20260730184000_rescue_public_messaging.sql', import.meta.url), 'utf8');
 const adminService = readFileSync(new URL('../src/services/adminService.ts', import.meta.url), 'utf8');
-const adminModerationMigration = readFileSync(new URL('../supabase/migrations/20260802012858_repair_admin_report_actions.sql', import.meta.url), 'utf8');
+const adminModerationMigration = readFileSync(new URL('../supabase/migrations/20260802132552_admin_report_messaging.sql', import.meta.url), 'utf8');
 
 function extractBetween(source, start, end) {
   const startIndex = source.indexOf(start);
@@ -229,6 +229,9 @@ test('payment and moderation copy stays launch-ready', () => {
   assert.match(adminModerationMigration, /create or replace function public\.admin_moderate_report/);
   assert.match(adminModerationMigration, /requested_status not in \('open', 'reviewing', 'resolved', 'dismissed'\)/);
   assert.match(adminModerationMigration, /'remove_listing', 'delete_user', 'remove_message'/);
+  assert.match(adminModerationMigration, /report_id uuid references public\.reports/);
+  assert.match(adminModerationMigration, /create or replace function private\.create_admin_report_message/);
+  assert.match(adminModerationMigration, /insert into public\.messages/);
   assert.match(adminModerationMigration, /insert into public\.notifications/);
   assert.match(adminModerationMigration, /insert into public\.audit_logs/);
 });

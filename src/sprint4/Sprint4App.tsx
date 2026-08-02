@@ -2068,14 +2068,20 @@ export function AdminReviewScreen({ onBack, onOpenListing }: { onBack: () => voi
   const listingReports = useAdminListingReports(Boolean(auth.profile?.is_admin), reportTab);
   const [notice, setNotice] = useState<{ title: string; body: string } | null>(null);
   const [reportNotes, setReportNotes] = useState<Record<string, string>>({});
+  const [reportMessages, setReportMessages] = useState<Record<string, string>>({});
   const pendingCount = approvals.data?.filter((rescue) => rescue.verification_status === 'pending').length ?? 0;
   const reportCount = listingReports.data?.length ?? 0;
   const activeReportsSelected = reportTab === 'active';
 
   const noteForReport = (report: AdminListingReport) => reportNotes[report.id] ?? report.admin_notes ?? '';
+  const messageForReport = (report: AdminListingReport) => reportMessages[report.id] ?? '';
 
   const updateReportNote = (reportId: string, note: string) => {
     setReportNotes((current) => ({ ...current, [reportId]: note }));
+  };
+
+  const updateReportMessage = (reportId: string, message: string) => {
+    setReportMessages((current) => ({ ...current, [reportId]: message }));
   };
 
   const approve = async (rescue: RescueProfile) => {
@@ -2098,7 +2104,8 @@ export function AdminReviewScreen({ onBack, onOpenListing }: { onBack: () => voi
 
   const updateReport = async (report: AdminListingReport, status: ReportStatus) => {
     try {
-      await listingReports.updateStatus(report.id, status, noteForReport(report));
+      await listingReports.updateStatus(report.id, status, noteForReport(report), messageForReport(report));
+      setReportMessages((current) => ({ ...current, [report.id]: '' }));
       setNotice({
         title: 'Report updated',
         body: adminReportStatusNotice(report, status),
@@ -2116,7 +2123,8 @@ export function AdminReviewScreen({ onBack, onOpenListing }: { onBack: () => voi
   ) => {
     const runModeration = async () => {
       try {
-        await listingReports.moderateReport(report.id, 'resolved', action, noteForReport(report));
+        await listingReports.moderateReport(report.id, 'resolved', action, noteForReport(report), messageForReport(report));
+        setReportMessages((current) => ({ ...current, [report.id]: '' }));
         const noticeCopy = adminModerationActionNotice(report, action);
         setNotice({
           title: noticeCopy.title,
@@ -2198,7 +2206,9 @@ export function AdminReviewScreen({ onBack, onOpenListing }: { onBack: () => voi
           report={report}
           loading={listingReports.actionLoading}
           adminNote={noteForReport(report)}
+          publicMessage={messageForReport(report)}
           onAdminNote={(note) => updateReportNote(report.id, note)}
+          onPublicMessage={(message) => updateReportMessage(report.id, message)}
           onOpenListing={() => report.listing_id ? onOpenListing(report.listing_id) : undefined}
           onReviewing={() => void updateReport(report, report.status === 'resolved' || report.status === 'dismissed' ? 'open' : 'reviewing')}
           onResolve={() => void updateReport(report, 'resolved')}
@@ -2261,7 +2271,9 @@ function AdminListingReportCard({
   report,
   loading,
   adminNote,
+  publicMessage,
   onAdminNote,
+  onPublicMessage,
   onOpenListing,
   onReviewing,
   onResolve,
@@ -2273,7 +2285,9 @@ function AdminListingReportCard({
   report: AdminListingReport;
   loading: boolean;
   adminNote: string;
+  publicMessage: string;
   onAdminNote: (note: string) => void;
+  onPublicMessage: (message: string) => void;
   onOpenListing: () => void;
   onReviewing: () => void;
   onResolve: () => void;
@@ -2320,6 +2334,12 @@ function AdminListingReportCard({
           value={adminNote}
           onChangeText={onAdminNote}
           placeholder="Optional private note about what was reviewed or what action was taken."
+        />
+        <TextArea
+          label="Public message"
+          value={publicMessage}
+          onChangeText={onPublicMessage}
+          placeholder="Optional message sent from your admin account into the user's Messages tab."
         />
 
         <View style={styles.conversationOptionGrid}>

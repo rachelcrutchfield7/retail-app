@@ -244,6 +244,7 @@ export type ListingSummary = Listing;
 export type Conversation = PrototypeConversation & {
   listingId: string;
   rescueId?: string;
+  reportId?: string;
   buyerId: string;
   sellerId: string;
   lastMessageAt: string;

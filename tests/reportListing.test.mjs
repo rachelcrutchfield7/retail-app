@@ -11,7 +11,7 @@ const sprint3 = readFileSync(join(root, 'src/sprint3/Sprint3App.tsx'), 'utf8');
 const sprint4 = readFileSync(join(root, 'src/sprint4/Sprint4App.tsx'), 'utf8');
 const adminService = readFileSync(join(root, 'src/services/adminService.ts'), 'utf8');
 const adminHook = readFileSync(join(root, 'src/hooks/useAdminListingReports.ts'), 'utf8');
-const adminModerationMigration = readFileSync(join(root, 'supabase/migrations/20260727194012_admin_report_moderation_actions.sql'), 'utf8');
+const adminModerationMigration = readFileSync(join(root, 'supabase/migrations/20260802132552_admin_report_messaging.sql'), 'utf8');
 
 test('listing reports include the required reasons', () => {
   for (const reason of [
@@ -60,6 +60,7 @@ test('admin review panel surfaces listing, message, and user reports', () => {
 
 test('admin report actions can resolve, dismiss, remove listings, remove messages, delete users, and notify both sides', () => {
   assert.match(adminService, /rpc\('admin_moderate_report'/);
+  assert.match(adminService, /requested_admin_message/);
   assert.match(adminService, /moderateListingReport/);
   assert.match(adminService, /return toAdminListingReport\(data as Row\)/);
   assert.doesNotMatch(adminService, /const \[report\] = await hydrateListingReports\(\[toAdminListingReport\(data as Row\)\]\)/);
@@ -81,7 +82,12 @@ test('admin report actions can resolve, dismiss, remove listings, remove message
   assert.match(sprint4, /Alert\.alert/);
   assert.match(sprint4, /Reported user:/);
   assert.match(sprint4, /Message:/);
+  assert.match(sprint4, /Public message/);
+  assert.match(sprint4, /messageForReport\(report\)/);
   assert.match(adminModerationMigration, /create or replace function public\.admin_moderate_report/);
+  assert.match(adminModerationMigration, /report_id uuid references public\.reports/);
+  assert.match(adminModerationMigration, /private\.create_admin_report_message/);
+  assert.match(adminModerationMigration, /insert into public\.messages/);
   assert.match(adminModerationMigration, /safe_action not in \('none', 'remove_listing', 'delete_user', 'remove_message'\)/);
   assert.match(adminModerationMigration, /status = 'removed'::public\.listing_status/);
   assert.match(adminModerationMigration, /is_banned = true/);

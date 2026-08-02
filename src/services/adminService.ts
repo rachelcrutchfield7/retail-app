@@ -96,15 +96,21 @@ export async function getListingReportQueue(mode: AdminReportQueueMode = 'active
   return hydrateListingReports(reports);
 }
 
-export async function updateListingReportStatus(reportId: string, status: ReportStatus, adminNotes?: string): Promise<AdminListingReport> {
-  return moderateListingReport(reportId, status, 'none', adminNotes);
+export async function updateListingReportStatus(
+  reportId: string,
+  status: ReportStatus,
+  adminNotes?: string,
+  adminMessage?: string
+): Promise<AdminListingReport> {
+  return moderateListingReport(reportId, status, 'none', adminNotes, adminMessage);
 }
 
 export async function moderateListingReport(
   reportId: string,
   status: ReportStatus,
   action: AdminReportModerationAction = 'none',
-  adminNotes?: string
+  adminNotes?: string,
+  adminMessage?: string
 ): Promise<AdminListingReport> {
   await requireAdminProfile();
 
@@ -113,6 +119,7 @@ export async function moderateListingReport(
     requested_status: status,
     requested_action: action,
     requested_admin_note: adminNotes?.trim() || null,
+    requested_admin_message: adminMessage?.trim() || null,
   });
 
   if (error) {

@@ -11,7 +11,7 @@ const seed = readFileSync(join(root, 'supabase/seed.sql'), 'utf8');
 const storage = readFileSync(join(root, 'supabase/storage.sql'), 'utf8');
 const distance = readFileSync(join(root, 'supabase/distance.sql'), 'utf8');
 const rescueAccounts = readFileSync(join(root, 'supabase/rescue_accounts.sql'), 'utf8');
-const adminReportActions = readFileSync(join(root, 'supabase/migrations/20260802012858_repair_admin_report_actions.sql'), 'utf8');
+const adminReportActions = readFileSync(join(root, 'supabase/migrations/20260802132552_admin_report_messaging.sql'), 'utf8');
 const backendSpecPaths = [
   join(root, 'docs/blueprint/16-Backend-Implementation-Specification.md'),
   join(
@@ -254,6 +254,9 @@ test('admin report action migration provides functional moderation RPC', () => {
     "status = 'removed'::public.listing_status",
     'is_banned = true',
     'deleted_at = coalesce(deleted_at, now())',
+    'report_id uuid references public.reports',
+    'create or replace function private.create_admin_report_message',
+    'insert into public.messages',
     'insert into public.notifications',
     'insert into public.audit_logs',
     'grant execute on function public.admin_moderate_report',
