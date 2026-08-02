@@ -5,21 +5,26 @@ const title = 'ReTail | Secondhand Pet Supplies Marketplace';
 const description = 'ReTail is a secondhand pet-supply marketplace for buying, selling, giving away, and donating pet supplies to verified animal rescues.';
 const features = [
   {
-    title: 'Find affordable pet supplies',
-    body: 'Discover nearby crates, carriers, beds, toys, tanks, grooming supplies, and other pet items that still have plenty of life left.',
+    title: 'Shop pet supplies for less',
+    body: 'Discover crates, carriers, beds, toys, tanks, grooming supplies, and other pet items nearby while giving useful supplies another life.',
   },
   {
-    title: 'Sell or give items away',
-    body: 'List pet supplies your family no longer needs. Choose to sell the item or offer it free to another nearby user.',
+    title: 'Clear out what you no longer use',
+    body: 'List extra supplies with photos, condition details, pickup options, pricing, or a free giveaway setting in just a few steps.',
   },
   {
-    title: 'Donate directly to a rescue',
-    body: 'Offer eligible supplies specifically to verified animal rescue organizations through ReTail.',
+    title: 'Send supplies toward rescues',
+    body: 'Offer eligible items specifically to verified animal rescue organizations when you want them to support rescue work.',
   },
   {
-    title: 'Support rescues through Rescue Hub',
+    title: 'Check Rescue Hub first',
     body: 'See verified rescues, urgent supply needs, wishlists, and available rescue donations in your area.',
   },
+];
+const funnelStats = [
+  { value: 'Buy', label: 'affordable secondhand supplies' },
+  { value: 'Sell', label: 'pet gear your family outgrew' },
+  { value: 'Give', label: 'items directly to rescues or neighbors' },
 ];
 const safetyPoints = [
   'ReTail is for pet supplies only.',
@@ -33,35 +38,55 @@ const safetyPoints = [
 <BaseLayout title={title} description={description} path="/">
   <section class="hero">
     <div class="section hero-grid">
-      <div>
-        <div class="notice">
-          <strong>Currently in private beta</strong>
-          <span>ReTail is being tested with a limited group of users before its public launch. Public marketplace access and payment services are not yet available.</span>
-        </div>
+      <div class="hero-copy">
+        <div class="funnel-pill">Currently in private beta</div>
         <span class="eyebrow">Secondhand pet supplies</span>
-        <h1>Give pet supplies a second life.</h1>
-        <p class="lead">ReTail is a secondhand pet-supply marketplace where people can buy, sell, give away, and donate supplies to verified animal rescues.</p>
+        <h1>Pet supplies deserve a second life.</h1>
+        <p class="lead">ReTail is a pet-focused marketplace where people can buy, sell, give away, and donate supplies, with Rescue Hub built in for animal rescues and community support.</p>
         <div class="actions">
           <a class="button" href="/how-it-works">See how ReTail works</a>
-          <a class="button secondary" href="/contact">Contact ReTail</a>
+          <a class="button secondary" href="/private-beta">Private beta details</a>
+        </div>
+        <p class="download-note">Public app access and payment services are not live yet. ReTail is being tested with a limited group before launch.</p>
+        <div class="funnel-stat-row" aria-label="What ReTail helps users do">
+          {funnelStats.map((stat) => (
+            <div class="funnel-stat">
+              <strong>{stat.value}</strong>
+              <span>{stat.label}</span>
+            </div>
+          ))}
         </div>
       </div>
-      <aside class="logo-card" aria-label="ReTail private beta preview">
+      <aside class="brand-showcase" aria-label="ReTail private beta overview">
         <img src="/assets/retail-logo-header.png" alt="ReTail logo" width="991" height="443" />
-        <p>Preview of the ReTail private beta</p>
+        <div class="showcase-panel">
+          <span>Private beta focus</span>
+          <strong>Pet supplies only</strong>
+          <p>No live animals, no unrelated classifieds, and clearer paths for rescue donations.</p>
+        </div>
+        <div class="showcase-grid">
+          <div>
+            <strong>Marketplace</strong>
+            <span>Buy, sell, or give away useful supplies.</span>
+          </div>
+          <div>
+            <strong>Rescue Hub</strong>
+            <span>See rescue needs and donation options.</span>
+          </div>
+        </div>
       </aside>
     </div>
   </section>
 
   <section class="section">
-    <div class="section-header">
+    <div class="section-header centered">
       <span class="eyebrow">What ReTail Helps With</span>
-      <h2>A pet-focused marketplace for useful supplies.</h2>
-      <p>ReTail keeps the first public website focused on what the business does now and what it is preparing to offer after private beta.</p>
+      <h2>A marketplace made for the supplies pets actually use.</h2>
+      <p>ReTail keeps secondhand pet-supply shopping focused, organized, and connected to rescue needs instead of buried inside general classifieds.</p>
     </div>
     <div class="grid">
       {features.map((feature) => (
-        <article class="card">
+        <article class="card homepage-feature-card">
           <h3>{feature.title}</h3>
           <p>{feature.body}</p>
         </article>
@@ -70,32 +95,30 @@ const safetyPoints = [
   </section>
 
   <section class="section">
-    <div class="band">
+    <div class="band homepage-band">
+      <span class="eyebrow light">Built-in guardrails</span>
       <h2>Built for pet supplies and community safety</h2>
-      <div class="grid two">
-        <div>
-          <p>ReTail is designed around pet-supply exchanges rather than a general classifieds feed. The marketplace rules, reporting paths, and Rescue Hub experience are built for that narrower purpose.</p>
-        </div>
-        <ul>
-          {safetyPoints.map((point) => <li>{point}</li>)}
-        </ul>
+      <p>ReTail is designed around pet-supply exchanges rather than a general classifieds feed. The marketplace rules, reporting paths, and Rescue Hub experience are built for that narrower purpose.</p>
+      <div class="trust-strip">
+        {safetyPoints.map((point) => <span>{point}</span>)}
       </div>
     </div>
   </section>
 
-  <section class="section grid two">
-    <div>
-      <span class="eyebrow">Company</span>
-      <h2>Built from firsthand animal-rescue experience</h2>
-    </div>
-    <div>
-      <p>ReTail was created to make useful pet supplies more affordable, keep usable items out of landfills, and help animal rescues connect with community members who want to support their work.</p>
-      <p>ReTail is owned and operated by Crutchfield Interactive LLC.</p>
+  <section class="section">
+    <div class="download-cta homepage-cta">
+      <img src="/assets/retail-logo-header.png" alt="ReTail" width="991" height="443" />
+      <div>
+        <span class="eyebrow">Company</span>
+        <h2>Built from firsthand animal-rescue experience.</h2>
+        <p>ReTail was created to make useful pet supplies more affordable, keep usable items out of landfills, and help animal rescues connect with community members who want to support their work.</p>
+        <p>ReTail is owned and operated by Crutchfield Interactive LLC.</p>
+      </div>
     </div>
   </section>
 
   <section class="section">
-    <div class="card">
+    <div class="card beta-card">
       <span class="eyebrow">Private Beta</span>
       <h2>Interested in ReTail?</h2>
       <p>ReTail is currently in private beta. Contact us to ask a question, learn about the upcoming public launch, or inquire about rescue participation.</p>
