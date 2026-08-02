@@ -127,8 +127,7 @@ export async function moderateListingReport(
     );
   }
 
-  const [report] = await hydrateListingReports([toAdminListingReport(data as Row)]);
-  return report;
+  return toAdminListingReport(data as Row);
 }
 
 async function requireAdminProfile() {
@@ -172,6 +171,38 @@ function throwAdminModerationError(error: unknown): never {
 
   if (message.includes('RETAIL_CANNOT_DELETE_ADMIN')) {
     throw createServiceError('ADMIN_DELETE_ADMIN_BLOCKED', message, 'Admin accounts cannot be deleted from the report queue.');
+  }
+
+  if (message.includes('RETAIL_REPORT_LISTING_REQUIRED')) {
+    throw createServiceError(
+      'ADMIN_REPORT_LISTING_REQUIRED',
+      message,
+      'This report is not linked to a listing, so there is no listing to remove.'
+    );
+  }
+
+  if (message.includes('RETAIL_REPORT_MESSAGE_REQUIRED')) {
+    throw createServiceError(
+      'ADMIN_REPORT_MESSAGE_REQUIRED',
+      message,
+      'This report is not linked to a message, so there is no message to remove.'
+    );
+  }
+
+  if (message.includes('RETAIL_REPORT_USER_REQUIRED')) {
+    throw createServiceError(
+      'ADMIN_REPORT_USER_REQUIRED',
+      message,
+      'This report is not linked to a user account, so there is no account to delete.'
+    );
+  }
+
+  if (message.includes('RETAIL_REPORT_STATUS_INVALID') || message.includes('RETAIL_REPORT_ACTION_INVALID')) {
+    throw createServiceError(
+      'ADMIN_REPORT_ACTION_INVALID',
+      message,
+      'That admin action is not available for this report. Refresh the admin panel and try again.'
+    );
   }
 
   throwSupabaseError(error, 'We could not update that report.');

@@ -61,6 +61,8 @@ test('admin review panel surfaces listing, message, and user reports', () => {
 test('admin report actions can resolve, dismiss, remove listings, remove messages, delete users, and notify both sides', () => {
   assert.match(adminService, /rpc\('admin_moderate_report'/);
   assert.match(adminService, /moderateListingReport/);
+  assert.match(adminService, /return toAdminListingReport\(data as Row\)/);
+  assert.doesNotMatch(adminService, /const \[report\] = await hydrateListingReports\(\[toAdminListingReport\(data as Row\)\]\)/);
   assert.match(adminHook, /moderateReport/);
   assert.match(sprint4, /Remove Message/);
   assert.match(sprint4, /Remove Listing/);
