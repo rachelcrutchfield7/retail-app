@@ -42,6 +42,18 @@ test('Phase A config uses one explicit public Supabase key variable', () => {
   assert.match(envExample, /Server-only secrets do not belong/);
 });
 
+test('public feature flags accept dashboard capitalization', () => {
+  const parsed = readConfigFromEnv({
+    EXPO_PUBLIC_ENABLE_GOOGLE_SIGN_IN: 'True',
+    EXPO_PUBLIC_ENABLE_GOOGLE_SIGN_IN_IOS: ' FALSE ',
+    EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED: 'TRUE',
+  });
+
+  assert.equal(parsed.googleSignInEnabled, true);
+  assert.equal(parsed.googleSignInIosEnabled, false);
+  assert.equal(parsed.stripePaymentsEnabled, true);
+});
+
 test('Phase A config rejects obvious server-only Supabase public credentials without exposing the key', () => {
   const unsafeCredential = ['sb_', 'secret_', 'this_value_should_never_be_public'].join('');
 

@@ -49,18 +49,22 @@ export function readConfigFromEnv(env: RuntimeEnv) {
     googleWebClientId: env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? '',
     googleAndroidClientId: env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID ?? '',
     googleIosClientId: env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ?? '',
-    googleSignInEnabled: env.EXPO_PUBLIC_ENABLE_GOOGLE_SIGN_IN === 'true',
-    googleSignInIosEnabled: env.EXPO_PUBLIC_ENABLE_GOOGLE_SIGN_IN_IOS === 'true',
+    googleSignInEnabled: isEnabledEnvFlag(env.EXPO_PUBLIC_ENABLE_GOOGLE_SIGN_IN),
+    googleSignInIosEnabled: isEnabledEnvFlag(env.EXPO_PUBLIC_ENABLE_GOOGLE_SIGN_IN_IOS),
     posthogKey: env.EXPO_PUBLIC_POSTHOG_KEY ?? '',
     sentryDsn: env.EXPO_PUBLIC_SENTRY_DSN ?? '',
     stripePublishableKey: env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? '',
     stripePaymentsEnabled:
-      env.EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED === 'true' ||
-      env.EXPO_PUBLIC_ENABLE_STRIPE_CHECKOUT === 'true',
+      isEnabledEnvFlag(env.EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED) ||
+      isEnabledEnvFlag(env.EXPO_PUBLIC_ENABLE_STRIPE_CHECKOUT),
     stripePlatformFeePercent: Number(env.RETAIL_PLATFORM_FEE_PERCENT ?? '10'),
     stripePlatformMinFeeCents: Number(env.RETAIL_PLATFORM_MIN_FEE_CENTS ?? '0'),
     stripePlatformFeeThresholdCents: Number(env.RETAIL_PLATFORM_FEE_THRESHOLD_CENTS ?? '500'),
   } as const;
+}
+
+function isEnabledEnvFlag(value: string | undefined): boolean {
+  return value?.trim().toLowerCase() === 'true';
 }
 
 export const config = readConfigFromEnv(bundledRuntimeEnv);
