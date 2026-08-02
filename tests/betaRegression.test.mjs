@@ -27,6 +27,7 @@ const conversationService = readFileSync(new URL('../src/services/conversationSe
 const listingService = readFileSync(new URL('../src/services/listingService.ts', import.meta.url), 'utf8');
 const authContext = readFileSync(new URL('../src/auth/AuthContext.tsx', import.meta.url), 'utf8');
 const authModal = readFileSync(new URL('../src/components/feedback/AuthModal.tsx', import.meta.url), 'utf8');
+const googleSignInButton = readFileSync(new URL('../src/components/feedback/GoogleSignInButton.tsx', import.meta.url), 'utf8');
 const messageService = readFileSync(new URL('../src/services/messageService.ts', import.meta.url), 'utf8');
 const storageService = readFileSync(new URL('../src/services/storageService.ts', import.meta.url), 'utf8');
 const imageUploader = readFileSync(new URL('../src/components/forms/ImageUploader.tsx', import.meta.url), 'utf8');
@@ -257,12 +258,23 @@ test('login and signup screen stays focused on authentication', () => {
   assert.match(authService, /emailRedirectTo: authEmailRedirectUrl/);
   assert.match(authService, /redirectTo: authEmailRedirectUrl/);
   assert.match(loggedOutProfile, /Continue with Google/);
-  assert.match(loggedOutProfile, /authMode === 'login' \|\| accountType === 'regular'/);
+  assert.match(loggedOutProfile, /Sign up with Google/);
+  assert.match(sprint3, /requiresProfileSetup/);
+  assert.match(sprint3, /Set up your ReTail profile/);
+  assert.match(sprint3, /Google email/);
+  assert.match(sprint3, /Save Profile/);
+  assert.match(loggedOutProfile, /authMode === 'login' && googleSignInAvailability\.available/);
+  assert.match(loggedOutProfile, /googleSignInAvailability\.available && accountType === 'regular'/);
+  assert.match(loggedOutProfile, /FilterChip label="Animal Rescue"/);
   assert.match(loggedOutProfile, /loading=\{googleBusy\}/);
   assert.match(authContext, /signInWithGoogle/);
   assert.match(authModal, /Continue with Google/);
+  assert.match(authModal, /Sign up with Google/);
   assert.match(authModal, /mode === 'login' \|\| selectedAccountType === 'regular'/);
   assert.match(authModal, /disabled=\{googleSignInLoading\}/);
+  assert.match(googleSignInButton, /GoogleMark/);
+  assert.match(googleSignInButton, /#f8fafd/);
+  assert.match(googleSignInButton, /#4285f4/);
 });
 
 test('native Google sign-in stays gated by safe mobile configuration', () => {

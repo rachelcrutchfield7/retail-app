@@ -59,6 +59,7 @@ export type Session = {
   user: User;
   accessToken: string;
   expiresAt: string;
+  requiresProfileSetup?: boolean;
 };
 
 export type Profile = {

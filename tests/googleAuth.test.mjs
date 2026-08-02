@@ -82,6 +82,7 @@ function createDependencies({
   googleResponse = { type: 'success', data: { idToken: 'google-id-token' } },
   supabaseError = null,
   profile = baseProfile,
+  profileCreated = false,
   runtimeConfig = configuredAndroid,
 } = {}) {
   const google = createGoogleClient(googleResponse);
@@ -114,7 +115,7 @@ function createDependencies({
       },
       async ensureProfile() {
         calls.ensureProfile += 1;
-        return profile;
+        return { profile, created: profileCreated };
       },
     },
     googleCalls: google.calls,
@@ -179,6 +180,7 @@ test('successful Google auth loads the existing ReTail profile', async () => {
 
   assert.equal(session?.user.accountType, 'regular');
   assert.equal(session?.user.email, 'google@example.com');
+  assert.equal(session?.requiresProfileSetup, false);
   assert.equal(calls.supabase, 1);
   assert.equal(calls.ensureProfile, 1);
   assert.equal(googleCalls.configure, 1);
@@ -206,9 +208,11 @@ test('new Google users remain regular users unless an existing profile says othe
       account_type: 'regular',
       is_verified: false,
     },
+    profileCreated: true,
   });
 
   const session = await signInWithGoogle(dependencies);
 
   assert.equal(session?.user.accountType, 'regular');
+  assert.equal(session?.requiresProfileSetup, true);
 });

@@ -3,8 +3,8 @@ import { identifyUser, trackEvent } from '../lib/analytics';
 import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
 import { createServiceError, isAppServiceError } from './errors';
-import { ensureCurrentProfile, sessionFromSupabase, throwSupabaseError } from './supabaseData';
-import type { Session } from './types';
+import { ensureCurrentProfileWithStatus, sessionFromSupabase, throwSupabaseError } from './supabaseData';
+import type { Profile, Session } from './types';
 
 export type GoogleSignInPlatform = 'android' | 'ios' | 'web' | 'windows' | 'macos' | 'test' | string;
 type GoogleSignInResponse = {
@@ -50,7 +50,7 @@ type GoogleAuthDependencies = {
   googleClient: GoogleSignInClient;
   statusCodes: GoogleSignInStatusCodes;
   supabaseAuth: SupabaseIdTokenClient;
-  ensureProfile: typeof ensureCurrentProfile;
+  ensureProfile: () => Promise<{ profile: Profile; created: boolean }>;
 };
 
 export type GoogleSignInAvailability = {
@@ -175,10 +175,14 @@ export async function signInWithGoogle(
       );
     }
 
-    const profile = await resolvedDependencies.ensureProfile();
+    const profileResult = await resolvedDependencies.ensureProfile();
+    const profile = profileResult.profile;
     identifyUser(profile.id, { accountType: profile.account_type });
     trackEvent('Google Sign In', { accountType: profile.account_type });
-    return sessionFromSupabase(data.session as Parameters<typeof sessionFromSupabase>[0], profile);
+    return {
+      ...sessionFromSupabase(data.session as Parameters<typeof sessionFromSupabase>[0], profile),
+      requiresProfileSetup: profileResult.created && profile.account_type === 'regular',
+    };
   } catch (error) {
     if (isGoogleNativeCancellation(error, resolvedDependencies.statusCodes)) {
       trackEvent('Google Sign In Cancelled', {});
@@ -249,7 +253,7 @@ async function resolveGoogleAuthDependencies(
     googleClient: dependencies.googleClient ?? googleModule.GoogleSignin,
     statusCodes: dependencies.statusCodes ?? googleModule.statusCodes,
     supabaseAuth: dependencies.supabaseAuth ?? supabase.auth,
-    ensureProfile: dependencies.ensureProfile ?? ensureCurrentProfile,
+    ensureProfile: dependencies.ensureProfile ?? ensureCurrentProfileWithStatus,
   };
 }
 

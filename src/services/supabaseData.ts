@@ -210,11 +210,16 @@ export async function getCurrentProfileRow(): Promise<Profile | null> {
 }
 
 export async function ensureCurrentProfile(): Promise<Profile> {
+  const result = await ensureCurrentProfileWithStatus();
+  return result.profile;
+}
+
+export async function ensureCurrentProfileWithStatus(): Promise<{ profile: Profile; created: boolean }> {
   const user = await requireSupabaseAuthUser();
   const existingProfile = await getCurrentProfileRow();
 
   if (existingProfile) {
-    return existingProfile;
+    return { profile: existingProfile, created: false };
   }
 
   const metadata = user.user_metadata ?? {};
@@ -237,7 +242,7 @@ export async function ensureCurrentProfile(): Promise<Profile> {
     });
 
     if (!error) {
-      return toProfile(data as SupabaseRow);
+      return { profile: toProfile(data as SupabaseRow), created: true };
     }
 
     if (error.code !== '23505' || attempt === 3) {

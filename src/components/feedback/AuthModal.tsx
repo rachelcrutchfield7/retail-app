@@ -5,6 +5,7 @@ import { colors, radius, sizes, spacing, typography } from '../../constants/them
 import { useThemeColors } from '../../lib/themePreference';
 import type { AccountType, IconComponent } from '../../types.ts';
 import { TextInput } from '../forms/TextInput';
+import { GoogleSignInButton } from './GoogleSignInButton';
 
 type AuthModalProps = {
   visible: boolean;
@@ -106,18 +107,6 @@ export function AuthModal({
             <ModeButton label="Create Account" selected={mode === 'register'} onPress={() => setMode('register')} />
           </View>
 
-          {googleSignInAvailable && (mode === 'login' || selectedAccountType === 'regular') && onGoogleSignIn ? (
-            <>
-              <AuthButton
-                label="Continue with Google"
-                onPress={() => void onGoogleSignIn()}
-                loading={googleSignInLoading}
-                disabled={googleSignInLoading}
-              />
-              <Text style={[styles.dividerText, { color: themeColors.textSecondary }]}>or continue with email</Text>
-            </>
-          ) : null}
-
           {mode === 'register' ? (
             <View style={styles.accountTypeGrid}>
               {accountTypeOptions.map((option) => {
@@ -146,6 +135,18 @@ export function AuthModal({
                 );
               })}
             </View>
+          ) : null}
+
+          {googleSignInAvailable && (mode === 'login' || selectedAccountType === 'regular') && onGoogleSignIn ? (
+            <>
+              <GoogleSignInButton
+                label={mode === 'register' ? 'Sign up with Google' : 'Continue with Google'}
+                onPress={() => void onGoogleSignIn()}
+                loading={googleSignInLoading}
+                disabled={googleSignInLoading}
+              />
+              <Text style={[styles.dividerText, { color: themeColors.textSecondary }]}>or continue with email</Text>
+            </>
           ) : null}
 
           {mode === 'register' ? (

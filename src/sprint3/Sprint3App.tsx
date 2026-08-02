@@ -60,6 +60,7 @@ import {
   FavoriteButton,
   Field,
   FilterChip,
+  GoogleSignInButton,
   ImageUploader,
   ListingCard,
   ListingGallery,
@@ -1680,6 +1681,11 @@ export function ProfileScreen({
   const [rescueOrganizationType, setRescueOrganizationType] = useState<RescueOrganizationType>('Foster-based');
   const [rescueHas501c3, setRescueHas501c3] = useState(false);
   const [rescueEin, setRescueEin] = useState('');
+  const [googleProfileSetup, setGoogleProfileSetup] = useState<{
+    email: string;
+    displayName: string;
+    username: string;
+  } | null>(null);
   const myListings = useMyListings();
   const reviews = useReviews(auth.profile?.id ?? '');
   const reviewSummary = useReviewSummary(auth.profile?.id ?? '', Boolean(auth.profile));
@@ -1775,6 +1781,14 @@ export function ProfileScreen({
       if (!googleSession) {
         return;
       }
+
+      if (googleSession.requiresProfileSetup) {
+        setGoogleProfileSetup({
+          email: googleSession.user.email,
+          displayName: googleSession.user.displayName,
+          username: googleSession.user.username,
+        });
+      }
     } catch (error) {
       if (isGoogleSignInCancellation(error)) {
         return;
@@ -1823,25 +1837,23 @@ export function ProfileScreen({
               <FilterChip label="Log In" selected={authMode === 'login'} onPress={() => setAuthMode('login')} />
               <FilterChip label="Create Account" selected={authMode === 'register'} onPress={() => setAuthMode('register')} />
             </View>
-            {googleSignInAvailability.available && (authMode === 'login' || accountType === 'regular') ? (
-              <>
-                <Button
-                  title="Continue with Google"
-                  variant="outline"
-                  onPress={() => void continueWithGoogle()}
-                  loading={googleBusy}
-                  disabled={busy || auth.loading}
-                  fullWidth
-                />
-                <Text style={styles.filterLabel}>or continue with email</Text>
-              </>
-            ) : null}
             {authMode === 'register' ? (
               <>
                 <View style={styles.wrapRow}>
                   <FilterChip label="Regular User" selected={accountType === 'regular'} onPress={() => setAccountType('regular')} />
                   <FilterChip label="Animal Rescue" selected={accountType === 'rescue'} onPress={() => setAccountType('rescue')} />
                 </View>
+                {googleSignInAvailability.available && accountType === 'regular' ? (
+                  <>
+                    <GoogleSignInButton
+                      label="Sign up with Google"
+                      onPress={() => void continueWithGoogle()}
+                      loading={googleBusy}
+                      disabled={busy || auth.loading}
+                    />
+                    <Text style={styles.filterLabel}>or continue with email</Text>
+                  </>
+                ) : null}
                 {accountType === 'rescue' ? (
                   <RescueSignupFields
                     organizationName={rescueOrganizationName}
@@ -1877,6 +1889,17 @@ export function ProfileScreen({
                   <TextInput label="Display Name" value={displayName} onChangeText={setDisplayName} placeholder="Rachel C." />
                 )}
                 <TextInput label="Username" value={username} onChangeText={setUsername} placeholder="retail_rachel" autoCapitalize="none" />
+              </>
+            ) : null}
+            {authMode === 'login' && googleSignInAvailability.available ? (
+              <>
+                <GoogleSignInButton
+                  label="Continue with Google"
+                  onPress={() => void continueWithGoogle()}
+                  loading={googleBusy}
+                  disabled={busy || auth.loading}
+                />
+                <Text style={styles.filterLabel}>or continue with email</Text>
               </>
             ) : null}
             <TextInput
@@ -1915,6 +1938,17 @@ export function ProfileScreen({
           </View>
         </Card>
       </ScreenFrame>
+    );
+  }
+
+  if (googleProfileSetup && auth.profile?.account_type === 'regular') {
+    return (
+      <GoogleProfileSetupScreen
+        email={googleProfileSetup.email}
+        profile={auth.profile}
+        onComplete={() => setGoogleProfileSetup(null)}
+        onSignOut={signOut}
+      />
     );
   }
 
@@ -2018,6 +2052,122 @@ export function ProfileScreen({
         emptyBody="Create your first listing from the Sell tab."
       />
     </ScrollView>
+  );
+}
+
+function GoogleProfileSetupScreen({
+  email,
+  profile,
+  onComplete,
+  onSignOut,
+}: {
+  email: string;
+  profile: Profile;
+  onComplete: () => void;
+  onSignOut: () => void | Promise<void>;
+}) {
+  const themeColors = useThemeColors();
+  const mutation = useUpdateProfile();
+  const [form, setForm] = useState({
+    display_name: profile.display_name,
+    username: profile.username,
+    bio: profile.bio ?? '',
+    city: profile.city ?? '',
+    state: profile.state ?? '',
+    zip_code: profile.zip_code ?? '',
+  });
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const update = (field: keyof typeof form, value: string) => {
+    setForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const save = async () => {
+    const nextErrors: Record<string, string> = {};
+
+    if (!form.display_name.trim()) {
+      nextErrors.display_name = 'Choose how your name should appear.';
+    }
+
+    if (!form.username.trim()) {
+      nextErrors.username = 'Choose a username.';
+    }
+
+    if (form.zip_code.trim() && !/^\d{5}$/.test(form.zip_code.trim())) {
+      nextErrors.zip_code = 'Use a 5-digit zip code.';
+    }
+
+    setErrors(nextErrors);
+
+    if (Object.keys(nextErrors).length > 0) {
+      return;
+    }
+
+    try {
+      await mutation.updateProfile(form);
+      onComplete();
+    } catch {
+      return;
+    }
+  };
+
+  return (
+    <ScreenContainer>
+      <StatusBar style={sprint3StatusBarStyle} />
+      <ScrollView style={styles.listScreen} contentContainerStyle={styles.listContent} keyboardShouldPersistTaps="handled">
+        <View style={styles.headerBlock}>
+          <Text style={styles.title}>Set up your ReTail profile</Text>
+          <Text style={styles.body}>Your Google account is connected. Choose the public details people will see in ReTail.</Text>
+        </View>
+        <Card>
+          <View style={styles.stack}>
+            <Field label="Google email">
+              <View style={[styles.lockedEmailFrame, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
+                <Text style={[styles.lockedEmailText, { color: themeColors.textSecondary }]}>{email}</Text>
+              </View>
+            </Field>
+            <TextInput
+              label="Display Name"
+              value={form.display_name}
+              onChangeText={(value) => update('display_name', value)}
+              placeholder="Rachel C."
+              error={errors.display_name}
+            />
+            <TextInput
+              label="Username"
+              value={form.username}
+              onChangeText={(value) => update('username', value)}
+              placeholder="retail_rachel"
+              helperText="Use the handle you want buyers and sellers to recognize."
+              error={errors.username}
+              autoCapitalize="none"
+            />
+            <TextArea
+              label="Bio"
+              value={form.bio}
+              onChangeText={(value) => update('bio', value)}
+              placeholder="Pet parent, foster, aquarium keeper..."
+            />
+            <LocationPicker
+              city={form.city}
+              state={form.state}
+              onCityChange={(value) => update('city', value)}
+              onStateChange={(value) => update('state', value)}
+            />
+            <TextInput
+              label="Zip Code"
+              value={form.zip_code}
+              onChangeText={(value) => update('zip_code', value)}
+              keyboardType="numeric"
+              error={errors.zip_code}
+            />
+            {mutation.error ? <Text style={styles.errorText}>{mutation.error}</Text> : null}
+            <Button title="Save Profile" onPress={() => void save()} loading={mutation.loading} fullWidth />
+            <Button title="Use a Different Google Account" variant="ghost" onPress={() => void onSignOut()} disabled={mutation.loading} fullWidth />
+          </View>
+        </Card>
+      </ScrollView>
+    </ScreenContainer>
   );
 }
 
@@ -4454,6 +4604,19 @@ function createSprint3Styles(themeColors: ThemeColors) {
   },
   stateSelectText: {
     flex: 1,
+    ...typography.body,
+  },
+  lockedEmailFrame: {
+    minHeight: sizes.buttonHeight,
+    borderRadius: radius.medium,
+    borderWidth: 1,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+  },
+  lockedEmailText: {
+    color: colors.textSecondary,
     ...typography.body,
   },
   stateSelectBackdrop: {
