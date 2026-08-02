@@ -21,7 +21,7 @@ export function createLocalListing({ form, listingCount }: CreateLocalListingPar
     priceAmount,
     category: form.category,
     condition: form.condition,
-    image: listingImages[listingCount % listingImages.length],
+    image: form.images[0] ?? listingImages[listingCount % listingImages.length],
     location: 'Austin, TX',
     distance: '0.4 mi',
     status: 'Active',

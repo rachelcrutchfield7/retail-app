@@ -1,4 +1,4 @@
-import { Camera, CheckCircle2, Plus } from 'lucide-react-native';
+import { CheckCircle2, Plus } from 'lucide-react-native';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { CATEGORIES, CONDITIONS } from '../constants/categories';
 import { colors, radius, sizes, spacing, typography } from '../constants/theme';
-import { Chip, formStyles, LockedScreen, PriceInput, TextArea, TextField, ToggleSwitch } from '../components';
+import { Chip, formStyles, ImageUploader, LockedScreen, PriceInput, TextArea, TextField, ToggleSwitch } from '../components';
 import type { Category, ListingCondition, ListingForm } from '../types.ts';
 
 type CreateListingScreenProps = {
@@ -54,13 +54,10 @@ export function CreateListingScreen({
           {mode === 'edit' ? 'Update your listing details for nearby pet owners.' : 'Sell or donate supplies to nearby pet owners.'}
         </Text>
 
-        <Pressable style={styles.photoPicker}>
-          <Camera size={24} color={colors.primary} />
-          <View>
-            <Text style={styles.photoTitle}>Add photos</Text>
-            <Text style={styles.photoHint}>At least 1 required, up to 15 supported</Text>
-          </View>
-        </Pressable>
+        <ImageUploader
+          images={form.images}
+          onChange={(images) => update('images', images)}
+        />
 
         <TextField
           label="Title"
@@ -148,27 +145,6 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     ...typography.body,
     lineHeight: 22,
-  },
-  photoPicker: {
-    minHeight: 82,
-    borderRadius: radius.medium,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: colors.primary,
-    backgroundColor: colors.surface,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    padding: spacing.md,
-  },
-  photoTitle: {
-    color: colors.textPrimary,
-    ...typography.button,
-  },
-  photoHint: {
-    color: colors.textSecondary,
-    ...typography.small,
-    marginTop: spacing.xs,
   },
   wrapRow: {
     flexDirection: 'row',

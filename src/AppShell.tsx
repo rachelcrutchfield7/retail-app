@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthModal, ReportListingModal, TabBar } from './components';
 import type { AuthModalSubmission, AuthPrompt } from './components';
 import { colors } from './constants/theme';
-import { emptyListingForm, listingImages } from './data/mockData';
+import { emptyListingForm } from './data/mockData';
 import { AuthProvider, useAuth } from './auth';
 import { QueryClientProvider } from './lib/queryClient';
 import { useCreateListing } from './hooks/useCreateListing';
@@ -162,7 +162,7 @@ function AppExperience() {
             return;
           }
 
-          await createListing.createListing(createListingInputFromForm(form, currentProfile, visibleListings.length));
+          await createListing.createListing(createListingInputFromForm(form, currentProfile));
           await listings.refetch();
           setForm(emptyListingForm);
           setShowRescueHub(false);
@@ -499,8 +499,7 @@ function filterListingsByCategory(listings: Listing[], category: CategoryFilter)
 
 function createListingInputFromForm(
   form: ListingForm,
-  profile: Profile | null,
-  listingCount: number
+  profile: Profile | null
 ): CreateListingInput {
   const isDonation = form.donation;
 
@@ -511,7 +510,7 @@ function createListingInputFromForm(
     condition: form.condition,
     listing_type: isDonation ? 'free' : 'sale',
     price: isDonation ? null : form.price.trim() || '$0',
-    images: [listingImages[listingCount % listingImages.length]],
+    images: form.images,
     city: profile?.city?.trim() || 'Austin',
     state: profile?.state?.trim() || 'TX',
     zip_code: profile?.zip_code?.trim() || '78701',
@@ -537,6 +536,7 @@ function updateListingInputFromForm(
     condition: form.condition,
     listing_type: isDonation ? 'free' : 'sale',
     price: isDonation ? null : form.price.trim() || '$0',
+    images: form.images,
     city: listing.city ?? profile?.city?.trim() ?? listing.location.split(',')[0]?.trim() ?? 'Austin',
     state: listing.state ?? profile?.state?.trim() ?? 'TX',
     zip_code: listing.zipCode ?? profile?.zip_code?.trim() ?? '78701',
@@ -557,6 +557,7 @@ function listingFormFromListing(listing: Listing): ListingForm {
     description: listing.description,
     category: listing.category,
     condition: listing.condition,
+    images: listing.image ? [listing.image] : [],
     donation: isFreeListing,
     pickup: listing.pickup,
   };

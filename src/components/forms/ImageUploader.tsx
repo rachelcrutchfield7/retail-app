@@ -1,4 +1,5 @@
 import { Camera, Trash2 } from 'lucide-react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, radius, sizes, spacing, typography } from '../../constants/theme';
 
@@ -10,13 +11,10 @@ type ImageUploaderProps = {
   progress?: number;
 };
 
-const fallbackImage =
-  'https://images.unsplash.com/photo-1583337130417-3346a1be7dee?auto=format&fit=crop&w=900&q=80';
-
 export function ImageUploader({ images, onChange, error, uploading = false, progress = 0 }: ImageUploaderProps) {
   const remainingSlots = Math.max(15 - images.length, 0);
 
-  const chooseImages = () => {
+  const chooseImages = async () => {
     if (remainingSlots === 0) {
       return;
     }
@@ -35,7 +33,28 @@ export function ImageUploader({ images, onChange, error, uploading = false, prog
       return;
     }
 
-    onChange([...images, fallbackImage].slice(0, 15));
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (!permission.granted) {
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsMultipleSelection: true,
+      quality: 0.82,
+      selectionLimit: remainingSlots,
+    });
+
+    if (result.canceled) {
+      return;
+    }
+
+    const selectedImages = result.assets
+      .map((asset) => asset.uri)
+      .filter((uri): uri is string => Boolean(uri));
+
+    onChange([...images, ...selectedImages].slice(0, 15));
   };
 
   const removeImage = (image: string) => {
