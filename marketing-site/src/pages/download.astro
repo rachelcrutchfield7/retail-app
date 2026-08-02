@@ -1,0 +1,123 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+const title = 'Download ReTail | Secondhand Pet Supplies App';
+const description = 'Download ReTail for iOS and Android when public app links are available. ReTail helps pet owners buy, sell, give away, and donate secondhand pet supplies.';
+const highlights = [
+  {
+    title: 'Find pet supplies for less',
+    body: 'Browse secondhand crates, carriers, toys, bowls, tanks, habitats, leashes, grooming supplies, and more from nearby pet owners.',
+  },
+  {
+    title: 'Sell or give away what you no longer use',
+    body: 'Turn extra pet supplies into a local sale, free pickup, or rescue donation instead of letting useful items sit in storage.',
+  },
+  {
+    title: 'Support animal rescues',
+    body: 'Use Rescue Hub to see verified rescues, urgent needs, wishlist items, and donation opportunities in one focused place.',
+  },
+];
+const trustPoints = [
+  'Built specifically for pet supplies, not general classifieds.',
+  'Live animals are not allowed on ReTail.',
+  'Listings require photos so buyers can see what is being offered.',
+  'Messages, reporting, and safety tools are part of the app experience.',
+];
+---
+<BaseLayout title={title} description={description} path="/download" noindex>
+  <section class="download-hero">
+    <div class="section download-hero-grid">
+      <div class="download-copy">
+        <span class="eyebrow">Download ReTail</span>
+        <h1>Pet supplies deserve a second life.</h1>
+        <p class="lead">
+          ReTail is a focused marketplace where pet owners can buy, sell, give away, and donate secondhand pet supplies, with Rescue Hub built in for animal rescue support.
+        </p>
+        <div class="download-actions" aria-label="App download links">
+          <span class="store-badge placeholder" aria-disabled="true">
+            <span class="store-icon">A</span>
+            <span>
+              <small>Coming soon on</small>
+              App Store
+            </span>
+          </span>
+          <span class="store-badge placeholder" aria-disabled="true">
+            <span class="store-icon play">G</span>
+            <span>
+              <small>Coming soon on</small>
+              Google Play
+            </span>
+          </span>
+        </div>
+        <p class="download-note">Public download links are not live yet. This page is ready to update as soon as the iOS and Android store listings are approved.</p>
+      </div>
+      <aside class="phone-card" aria-label="ReTail app preview">
+        <div class="phone-shell">
+          <div class="phone-top">
+            <img src="/assets/app-icon.png" alt="ReTail app icon" width="1024" height="1024" />
+            <div>
+              <strong>ReTail</strong>
+              <span>Secondhand pet supplies</span>
+            </div>
+          </div>
+          <div class="preview-list">
+            <div class="preview-row teal">
+              <strong>Large dog crate</strong>
+              <span>Nearby marketplace listing</span>
+            </div>
+            <div class="preview-row orange">
+              <strong>Rescue needs carriers</strong>
+              <span>Urgent Rescue Hub request</span>
+            </div>
+            <div class="preview-row yellow">
+              <strong>Free cat tree</strong>
+              <span>Giveaway for local pickup</span>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-header">
+      <span class="eyebrow">Why download</span>
+      <h2>A marketplace made for the things pets actually use.</h2>
+      <p>ReTail keeps pet-supply exchanges easier to browse, easier to list, and easier to connect with rescue needs.</p>
+    </div>
+    <div class="grid three">
+      {highlights.map((item) => (
+        <article class="card">
+          <h3>{item.title}</h3>
+          <p>{item.body}</p>
+        </article>
+      ))}
+    </div>
+  </section>
+
+  <section class="section grid two download-band-grid">
+    <div class="band">
+      <span class="eyebrow light">For pet owners</span>
+      <h2>Save money, clear space, and keep useful supplies moving.</h2>
+      <p>Whether you need an affordable setup or have extras after your pet outgrew something, ReTail gives those items a pet-focused place to go.</p>
+    </div>
+    <div class="card">
+      <span class="eyebrow">Built-in guardrails</span>
+      <h2>Focused, not noisy.</h2>
+      <ul>
+        {trustPoints.map((point) => <li>{point}</li>)}
+      </ul>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="download-cta">
+      <img src="/assets/retail-logo-header.png" alt="ReTail" width="991" height="443" />
+      <div>
+        <span class="eyebrow">Launch links coming soon</span>
+        <h2>Check back here for the official app links.</h2>
+        <p>When ReTail is ready in the app stores, this page will point directly to the iOS and Android downloads.</p>
+      </div>
+    </div>
+  </section>
+</BaseLayout>

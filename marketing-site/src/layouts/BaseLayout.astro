@@ -5,12 +5,14 @@ type Props = {
   title: string;
   description: string;
   path?: string;
+  noindex?: boolean;
 };
 
 const {
   title,
   description,
   path = '/',
+  noindex = false,
 } = Astro.props;
 
 const canonical = new URL(path, 'https://retailpetapp.com').toString();
@@ -62,6 +64,7 @@ const structuredData = {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title}</title>
     <meta name="description" content={description} />
+    {noindex && <meta name="robots" content="noindex, nofollow" />}
     <link rel="canonical" href={canonical} />
     <link rel="icon" href="/assets/app-icon.png" type="image/png" />
     <meta property="og:type" content="website" />

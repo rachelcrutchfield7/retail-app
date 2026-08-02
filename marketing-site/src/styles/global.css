@@ -354,6 +354,10 @@ li {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.grid.three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .card {
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -392,6 +396,191 @@ li {
 
 .page-hero {
   padding: 52px 0 24px;
+}
+
+.download-hero {
+  padding: 48px 0 34px;
+  background:
+    radial-gradient(circle at 82% 14%, color-mix(in srgb, #f28b65 24%, transparent) 0 18%, transparent 34%),
+    radial-gradient(circle at 12% 22%, color-mix(in srgb, #f1b743 28%, transparent) 0 14%, transparent 31%);
+}
+
+.download-hero-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(300px, 0.95fr);
+  gap: clamp(26px, 5vw, 58px);
+  align-items: center;
+}
+
+.download-copy h1 {
+  max-width: 720px;
+}
+
+.download-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 30px;
+}
+
+.store-badge {
+  min-height: 64px;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 18px;
+  border-radius: 16px;
+  background: #1f2933;
+  color: #ffffff;
+  font-size: 1.08rem;
+  font-weight: 900;
+  text-decoration: none;
+  box-shadow: 0 14px 28px rgba(31, 41, 51, 0.18);
+}
+
+.store-badge small {
+  display: block;
+  font-size: 0.76rem;
+  line-height: 1.2;
+  opacity: 0.78;
+}
+
+.store-badge.placeholder {
+  cursor: default;
+  background: color-mix(in srgb, var(--text) 88%, #ffffff);
+  opacity: 0.88;
+}
+
+.store-icon {
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #1f2933;
+  font-weight: 950;
+}
+
+.store-icon.play {
+  color: #3f8f6b;
+}
+
+.download-note {
+  max-width: 640px;
+  margin-top: 16px;
+  font-size: 0.98rem;
+}
+
+.phone-card {
+  display: flex;
+  justify-content: center;
+}
+
+.phone-shell {
+  width: min(100%, 380px);
+  border: 1px solid var(--border);
+  border-radius: 36px;
+  padding: 20px;
+  background: linear-gradient(180deg, var(--surface) 0%, var(--surface-soft) 100%);
+  box-shadow: var(--shadow);
+}
+
+.phone-top {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 12px 20px;
+}
+
+.phone-top img {
+  width: 72px;
+  height: 72px;
+  border-radius: 18px;
+  box-shadow: 0 12px 24px rgba(31, 41, 51, 0.14);
+}
+
+.phone-top strong,
+.phone-top span {
+  display: block;
+}
+
+.phone-top strong {
+  color: var(--text);
+  font-size: 1.25rem;
+}
+
+.phone-top span {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.preview-list {
+  display: grid;
+  gap: 12px;
+}
+
+.preview-row {
+  min-height: 86px;
+  border-radius: 22px;
+  padding: 18px;
+  color: #ffffff;
+}
+
+.preview-row strong,
+.preview-row span {
+  display: block;
+}
+
+.preview-row strong {
+  font-size: 1.08rem;
+}
+
+.preview-row span {
+  margin-top: 4px;
+  opacity: 0.9;
+  font-weight: 700;
+}
+
+.preview-row.teal {
+  background: #3f8f6b;
+}
+
+.preview-row.orange {
+  background: #f28b65;
+}
+
+.preview-row.yellow {
+  background: #d99a2b;
+}
+
+.eyebrow.light {
+  color: #ffffff;
+}
+
+.download-band-grid {
+  align-items: stretch;
+}
+
+.download-band-grid > * {
+  min-height: 100%;
+}
+
+.download-cta {
+  display: grid;
+  grid-template-columns: 210px minmax(0, 1fr);
+  gap: 26px;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 28px;
+  padding: clamp(22px, 4vw, 38px);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.download-cta img {
+  width: 210px;
 }
 
 .eyebrow {
@@ -459,8 +648,13 @@ li {
   }
 
   .hero-grid,
+  .download-hero-grid,
   .footer-inner,
   .grid.two {
+    grid-template-columns: 1fr;
+  }
+
+  .grid.three {
     grid-template-columns: 1fr;
   }
 
@@ -492,8 +686,25 @@ li {
     flex-direction: column;
   }
 
+  .download-actions {
+    flex-direction: column;
+  }
+
   .button {
     width: 100%;
+  }
+
+  .store-badge {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .download-cta {
+    grid-template-columns: 1fr;
+  }
+
+  .download-cta img {
+    width: 150px;
   }
 
   .logo-card {
