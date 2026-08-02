@@ -5,6 +5,8 @@ import test from 'node:test';
 const sprint3 = readFileSync(new URL('../src/sprint3/Sprint3App.tsx', import.meta.url), 'utf8');
 const sprint4 = readFileSync(new URL('../src/sprint4/Sprint4App.tsx', import.meta.url), 'utf8');
 const app = readFileSync(new URL('../App.tsx', import.meta.url), 'utf8');
+const appConfig = readFileSync(new URL('../app.config.js', import.meta.url), 'utf8');
+const envExample = readFileSync(new URL('../.env.example', import.meta.url), 'utf8');
 const theme = readFileSync(new URL('../src/constants/theme.ts', import.meta.url), 'utf8');
 const rescueHub = readFileSync(new URL('../src/screens/RescueHubScreen.tsx', import.meta.url), 'utf8');
 const card = readFileSync(new URL('../src/components/ui/Card.tsx', import.meta.url), 'utf8');
@@ -20,7 +22,10 @@ const rescueService = readFileSync(new URL('../src/services/rescueService.ts', i
 const settingsService = readFileSync(new URL('../src/services/settingsService.ts', import.meta.url), 'utf8');
 const profileService = readFileSync(new URL('../src/services/profileService.ts', import.meta.url), 'utf8');
 const authService = readFileSync(new URL('../src/services/authService.ts', import.meta.url), 'utf8');
+const googleAuthService = readFileSync(new URL('../src/services/googleAuthService.ts', import.meta.url), 'utf8');
 const conversationService = readFileSync(new URL('../src/services/conversationService.ts', import.meta.url), 'utf8');
+const authContext = readFileSync(new URL('../src/auth/AuthContext.tsx', import.meta.url), 'utf8');
+const authModal = readFileSync(new URL('../src/components/feedback/AuthModal.tsx', import.meta.url), 'utf8');
 const messageService = readFileSync(new URL('../src/services/messageService.ts', import.meta.url), 'utf8');
 const imageUploader = readFileSync(new URL('../src/components/forms/ImageUploader.tsx', import.meta.url), 'utf8');
 const useSettings = readFileSync(new URL('../src/hooks/useSettings.ts', import.meta.url), 'utf8');
@@ -209,6 +214,46 @@ test('login and signup screen stays focused on authentication', () => {
   assert.doesNotMatch(loggedOutProfile, /Button title="Safety Center"/);
   assert.match(sprint3, /Button title="FAQ"/);
   assert.match(sprint3, /Button title="Safety Center"/);
+  assert.match(loggedOutProfile, /Forgot Password\?/);
+  assert.match(sprint3, /auth\.resetPassword\(email\)/);
+  assert.match(sprint3, /If a ReTail account exists for that email/);
+  assert.match(loggedOutProfile, /Use 8\+ characters with uppercase, lowercase, a number, and a special character\./);
+  assert.match(loggedOutProfile, /textContentType=\{authMode === 'register' \? 'newPassword' : 'password'\}/);
+  assert.match(loggedOutProfile, /pendingVerificationEmail/);
+  assert.match(loggedOutProfile, /We sent a confirmation link to/);
+  assert.match(loggedOutProfile, /Go to Log In/);
+  assert.match(authService, /authEmailRedirectUrl = appLinks\.baseUrl/);
+  assert.match(authService, /emailRedirectTo: authEmailRedirectUrl/);
+  assert.match(authService, /redirectTo: authEmailRedirectUrl/);
+  assert.match(loggedOutProfile, /Continue with Google/);
+  assert.match(loggedOutProfile, /authMode === 'login' \|\| accountType === 'regular'/);
+  assert.match(loggedOutProfile, /loading=\{googleBusy\}/);
+  assert.match(authContext, /signInWithGoogle/);
+  assert.match(authModal, /Continue with Google/);
+  assert.match(authModal, /mode === 'login' \|\| selectedAccountType === 'regular'/);
+  assert.match(authModal, /disabled=\{googleSignInLoading\}/);
+});
+
+test('native Google sign-in stays gated by safe mobile configuration', () => {
+  assert.match(appConfig, /@react-native-google-signin\/google-signin/);
+  assert.match(appConfig, /googleIosUrlScheme/);
+  assert.match(appConfig, /com\.raecrutchfield\.retail/);
+  assert.match(appConfig, /288a25e1-5824-4f77-a3f4-0607df5f7d89/);
+  assert.match(envExample, /EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=/);
+  assert.match(envExample, /EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID=/);
+  assert.match(envExample, /EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID=/);
+  assert.match(envExample, /EXPO_PUBLIC_ENABLE_GOOGLE_SIGN_IN=true/);
+  assert.match(envExample, /EXPO_PUBLIC_ENABLE_GOOGLE_SIGN_IN_IOS=false/);
+  assert.match(sprint3, /getGoogleSignInAvailability\(Platform\.OS\)/);
+  assert.match(sprint3, /warnIfGoogleSignInUnavailable\(Platform\.OS\)/);
+  assert.match(authContext, /signInWithGoogleAccount\(\{ platform: Platform\.OS \}\)/);
+  assert.match(googleAuthService, /platform === 'web'/);
+  assert.match(googleAuthService, /platform === 'ios'/);
+  assert.match(googleAuthService, /googleSignInIosEnabled/);
+  assert.match(googleAuthService, /signInWithIdToken/);
+  assert.match(googleAuthService, /provider: 'google'/);
+  assert.match(googleAuthService, /ensureCurrentProfile/);
+  assert.doesNotMatch(googleAuthService, /createOrUpdateRescueProfile/);
 });
 
 test('animal rescue signup uses a full-width US state selector', () => {
@@ -228,6 +273,7 @@ test('animal rescue signup requires a website or social link', () => {
 
   assert.match(rescueSignup, /Website or Social Link/);
   assert.match(rescueSignup, /Required public website or social page/);
+  assert.match(rescueSignup, /Required for rescue verification\. A website, Facebook page, Instagram, or Linktree works\./);
   assert.doesNotMatch(rescueSignup, /Website or Social Link"[\s\S]*placeholder="Optional"/);
   assert.match(rescueService, /WEBSITE_REQUIRED/);
   assert.match(rescueService, /Add a website or social link so ReTail can verify the rescue/);

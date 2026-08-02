@@ -1,6 +1,6 @@
 import { useState } from 'react';
+import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Building2, Mail, UserRound, X } from 'lucide-react-native';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, radius, sizes, spacing, typography } from '../../constants/theme';
 import { useThemeColors } from '../../lib/themePreference';
 import type { AccountType, IconComponent } from '../../types.ts';
@@ -11,6 +11,9 @@ type AuthModalProps = {
   prompt?: AuthPrompt;
   onClose: () => void;
   onComplete: (submission: AuthModalSubmission) => void | Promise<void>;
+  onGoogleSignIn?: () => void | Promise<void>;
+  googleSignInAvailable?: boolean;
+  googleSignInLoading?: boolean;
 };
 
 export type AuthPrompt = {
@@ -47,7 +50,15 @@ const accountTypeOptions: Array<{
   },
 ];
 
-export function AuthModal({ visible, prompt, onClose, onComplete }: AuthModalProps) {
+export function AuthModal({
+  visible,
+  prompt,
+  onClose,
+  onComplete,
+  onGoogleSignIn,
+  googleSignInAvailable = false,
+  googleSignInLoading = false,
+}: AuthModalProps) {
   const themeColors = useThemeColors();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [selectedAccountType, setSelectedAccountType] = useState<AccountType>('regular');
@@ -94,6 +105,18 @@ export function AuthModal({ visible, prompt, onClose, onComplete }: AuthModalPro
             <ModeButton label="Log In" selected={mode === 'login'} onPress={() => setMode('login')} />
             <ModeButton label="Create Account" selected={mode === 'register'} onPress={() => setMode('register')} />
           </View>
+
+          {googleSignInAvailable && (mode === 'login' || selectedAccountType === 'regular') && onGoogleSignIn ? (
+            <>
+              <AuthButton
+                label="Continue with Google"
+                onPress={() => void onGoogleSignIn()}
+                loading={googleSignInLoading}
+                disabled={googleSignInLoading}
+              />
+              <Text style={[styles.dividerText, { color: themeColors.textSecondary }]}>or continue with email</Text>
+            </>
+          ) : null}
 
           {mode === 'register' ? (
             <View style={styles.accountTypeGrid}>
@@ -196,18 +219,42 @@ function ModeButton({ label, selected, onPress }: { label: string; selected: boo
   );
 }
 
-function AuthButton({ icon: Icon, label, onPress }: { icon: IconComponent; label: string; onPress: () => void }) {
+function AuthButton({
+  icon: Icon,
+  label,
+  onPress,
+  loading = false,
+  disabled = false,
+}: {
+  icon?: IconComponent;
+  label: string;
+  onPress: () => void;
+  loading?: boolean;
+  disabled?: boolean;
+}) {
   const themeColors = useThemeColors();
+  const inactive = loading || disabled;
 
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
-      style={[styles.authButton, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}
+      disabled={inactive}
+      style={[
+        styles.authButton,
+        { backgroundColor: themeColors.surface, borderColor: themeColors.border },
+        inactive && styles.disabledButton,
+      ]}
       onPress={onPress}
     >
-      <Icon size={20} color={themeColors.textPrimary} />
-      <Text style={[styles.authButtonText, { color: themeColors.textPrimary }]}>{label}</Text>
+      {loading ? (
+        <ActivityIndicator color={themeColors.textPrimary} />
+      ) : (
+        <>
+          {Icon ? <Icon size={20} color={themeColors.textPrimary} /> : null}
+          <Text style={[styles.authButtonText, { color: themeColors.textPrimary }]}>{label}</Text>
+        </>
+      )}
     </Pressable>
   );
 }
@@ -338,9 +385,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
+  disabledButton: {
+    opacity: 0.58,
+  },
   authButtonText: {
     color: colors.textPrimary,
     ...typography.button,
+  },
+  dividerText: {
+    alignSelf: 'center',
+    color: colors.textSecondary,
+    ...typography.caption,
   },
   termsText: {
     color: colors.textSecondary,

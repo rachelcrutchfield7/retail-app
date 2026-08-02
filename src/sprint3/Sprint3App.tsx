@@ -107,6 +107,11 @@ import { useUpdateListing } from '../hooks/useUpdateListing';
 import { useUpdateProfile } from '../hooks/useUpdateProfile';
 import { QueryClientProvider } from '../lib/queryClient';
 import { useThemeColors } from '../lib/themePreference';
+import {
+  getGoogleSignInAvailability,
+  isGoogleSignInCancellation,
+  warnIfGoogleSignInUnavailable,
+} from '../services/googleAuthService';
 import type {
   CreateListingInput,
   CreateSavedSearchInput,
@@ -1650,6 +1655,7 @@ export function ProfileScreen({
 }) {
   const auth = useAuth();
   const [busy, setBusy] = useState(false);
+  const [googleBusy, setGoogleBusy] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
@@ -1657,6 +1663,7 @@ export function ProfileScreen({
   const [displayName, setDisplayName] = useState('');
   const [username, setUsername] = useState('');
   const [accountType, setAccountType] = useState<'regular' | 'rescue'>('regular');
+  const [pendingVerificationEmail, setPendingVerificationEmail] = useState('');
   const [rescueOrganizationName, setRescueOrganizationName] = useState('');
   const [rescueAnimals, setRescueAnimals] = useState('');
   const [rescueCity, setRescueCity] = useState('');
@@ -1675,6 +1682,8 @@ export function ProfileScreen({
   const reviews = useReviews(auth.profile?.id ?? '');
   const reviewSummary = useReviewSummary(auth.profile?.id ?? '', Boolean(auth.profile));
   const pendingReviews = usePendingReviews(Boolean(auth.profile));
+  const googleSignInAvailability = getGoogleSignInAvailability(Platform.OS);
+  warnIfGoogleSignInUnavailable(Platform.OS);
 
   if (auth.loading && !auth.profile) {
     return (
@@ -1689,6 +1698,7 @@ export function ProfileScreen({
     setNotice(null);
     try {
       if (authMode === 'register') {
+        const verificationEmail = email.trim().toLowerCase();
         const rescueProfile = accountType === 'rescue'
           ? buildRescueSignupInput({
             organizationName: rescueOrganizationName,
@@ -1717,7 +1727,9 @@ export function ProfileScreen({
           accountType,
           rescueProfile,
         });
-        setNotice({ title: 'Check your email', body: 'Verify your email address, then log in to finish setting up ReTail.' });
+        setPassword('');
+        setAuthMode('login');
+        setPendingVerificationEmail(verificationEmail);
         return;
       }
 
@@ -1732,11 +1744,73 @@ export function ProfileScreen({
     }
   };
 
+  const sendPasswordReset = async () => {
+    setBusy(true);
+    setNotice(null);
+
+    try {
+      await auth.resetPassword(email);
+      setNotice({
+        title: 'Check your email',
+        body: 'If a ReTail account exists for that email, a password reset link has been sent.',
+      });
+    } catch (error) {
+      setNotice({
+        title: 'Reset link not sent',
+        body: handleAppError(error).userMessage,
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const continueWithGoogle = async () => {
+    setGoogleBusy(true);
+    setNotice(null);
+
+    try {
+      const googleSession = await auth.signInWithGoogle();
+      if (!googleSession) {
+        return;
+      }
+    } catch (error) {
+      if (isGoogleSignInCancellation(error)) {
+        return;
+      }
+
+      setNotice({
+        title: 'Google sign-in failed',
+        body: handleAppError(error).userMessage,
+      });
+    } finally {
+      setGoogleBusy(false);
+    }
+  };
+
   const signOut = async () => {
     await auth.signOut();
   };
 
   if (auth.isGuest || !auth.profile) {
+    if (pendingVerificationEmail) {
+      return (
+        <ScreenFrame>
+          <NoticeCard
+            notice={{
+              title: 'Check your email',
+              body: `We sent a confirmation link to ${pendingVerificationEmail}. Verify your email address, then come back and log in to finish setting up ReTail.`,
+            }}
+            actionLabel="Go to Log In"
+            onAction={() => {
+              setPendingVerificationEmail('');
+              setNotice(null);
+              setAuthMode('login');
+            }}
+          />
+        </ScreenFrame>
+      );
+    }
+
     return (
       <ScreenFrame>
         <Card>
@@ -1747,6 +1821,19 @@ export function ProfileScreen({
               <FilterChip label="Log In" selected={authMode === 'login'} onPress={() => setAuthMode('login')} />
               <FilterChip label="Create Account" selected={authMode === 'register'} onPress={() => setAuthMode('register')} />
             </View>
+            {googleSignInAvailability.available && (authMode === 'login' || accountType === 'regular') ? (
+              <>
+                <Button
+                  title="Continue with Google"
+                  variant="outline"
+                  onPress={() => void continueWithGoogle()}
+                  loading={googleBusy}
+                  disabled={busy || auth.loading}
+                  fullWidth
+                />
+                <Text style={styles.filterLabel}>or continue with email</Text>
+              </>
+            ) : null}
             {authMode === 'register' ? (
               <>
                 <View style={styles.wrapRow}>
@@ -1798,7 +1885,24 @@ export function ProfileScreen({
               keyboardType="email-address"
               autoCapitalize="none"
             />
-            <TextInput label="Password" value={password} onChangeText={setPassword} placeholder="Password" secureTextEntry />
+            <TextInput
+              label="Password"
+              value={password}
+              onChangeText={setPassword}
+              placeholder="Password"
+              secureTextEntry
+              helperText={authMode === 'register' ? 'Use 8+ characters with uppercase, lowercase, a number, and a special character.' : undefined}
+              textContentType={authMode === 'register' ? 'newPassword' : 'password'}
+            />
+            {authMode === 'login' ? (
+              <Button
+                title="Forgot Password?"
+                variant="ghost"
+                onPress={() => void sendPasswordReset()}
+                disabled={busy || auth.loading}
+                fullWidth
+              />
+            ) : null}
             {notice ? <NoticeCard notice={notice} /> : null}
             <Button
               title={authMode === 'register' ? 'Create Account' : 'Log In'}
@@ -2065,6 +2169,7 @@ function RescueSignupFields({
         value={websiteUrl}
         onChangeText={onWebsiteUrl}
         placeholder="Required public website or social page"
+        helperText="Required for rescue verification. A website, Facebook page, Instagram, or Linktree works."
         autoCapitalize="none"
       />
       <Text style={styles.filterLabel}>Donation drop-off options</Text>

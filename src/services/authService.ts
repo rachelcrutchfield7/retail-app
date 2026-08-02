@@ -1,3 +1,4 @@
+import { appLinks } from '../constants/links';
 import { supabase } from '../lib/supabase';
 import { identifyUser, resetAnalyticsUser, trackEvent } from '../lib/analytics';
 import { createServiceError } from './errors';
@@ -15,6 +16,7 @@ import type { AccountType, RescueSignupInput, Session, User } from './types';
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const supportedAccountTypes: AccountType[] = ['regular', 'rescue'];
+const authEmailRedirectUrl = appLinks.baseUrl;
 
 function assertValidEmail(email: string): void {
   if (!emailPattern.test(email.trim())) {
@@ -83,6 +85,7 @@ export async function signUpWithEmail(
     email: normalizedEmail,
     password,
     options: {
+      emailRedirectTo: authEmailRedirectUrl,
       data: {
         display_name: displayName.trim(),
         username: normalizedUsername,
@@ -171,7 +174,9 @@ export async function signOut(): Promise<void> {
 
 export async function resetPassword(email: string): Promise<void> {
   assertValidEmail(email);
-  const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase());
+  const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+    redirectTo: authEmailRedirectUrl,
+  });
 
   if (error) {
     throwSupabaseError(error, 'We could not send a reset link. Please try again.');
