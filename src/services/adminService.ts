@@ -116,7 +116,15 @@ export async function moderateListingReport(
   });
 
   if (error) {
-    throwSupabaseError(error, 'We could not update that report.');
+    throwAdminModerationError(error);
+  }
+
+  if (!data) {
+    throw createServiceError(
+      'ADMIN_REPORT_ACTION_EMPTY',
+      'admin_moderate_report returned no report row',
+      'The report action completed without returning the updated report. Please refresh the admin panel.'
+    );
   }
 
   const [report] = await hydrateListingReports([toAdminListingReport(data as Row)]);
@@ -135,6 +143,38 @@ async function requireAdminProfile() {
   }
 
   return profile;
+}
+
+function throwAdminModerationError(error: unknown): never {
+  const details = typeof error === 'object' && error !== null ? error as Row : {};
+  const code = optionalString(details.code);
+  const message = optionalString(details.message) ?? String(error);
+
+  if (code === 'PGRST202' || message.includes('admin_moderate_report')) {
+    throw createServiceError(
+      'ADMIN_RPC_MISSING',
+      message,
+      'The admin action backend is not deployed yet. Apply the latest Supabase migration, then try again.'
+    );
+  }
+
+  if (message.includes('RETAIL_ADMIN_REQUIRED')) {
+    throw createServiceError('ADMIN_REQUIRED', message, 'Admin access is required for this action.');
+  }
+
+  if (message.includes('RETAIL_REPORT_NOT_FOUND')) {
+    throw createServiceError('REPORT_NOT_FOUND', message, 'That report is no longer available. Refresh the admin panel.');
+  }
+
+  if (message.includes('RETAIL_CANNOT_DELETE_SELF')) {
+    throw createServiceError('ADMIN_DELETE_SELF_BLOCKED', message, 'You cannot delete your own admin account from a report.');
+  }
+
+  if (message.includes('RETAIL_CANNOT_DELETE_ADMIN')) {
+    throw createServiceError('ADMIN_DELETE_ADMIN_BLOCKED', message, 'Admin accounts cannot be deleted from the report queue.');
+  }
+
+  throwSupabaseError(error, 'We could not update that report.');
 }
 
 async function hydrateListingReports(reports: AdminListingReport[]): Promise<AdminListingReport[]> {

@@ -2047,9 +2047,16 @@ export function AdminReviewScreen({ onBack, onOpenListing }: { onBack: () => voi
   const approvals = useAdminRescueApprovals(Boolean(auth.profile?.is_admin));
   const listingReports = useAdminListingReports(Boolean(auth.profile?.is_admin), reportTab);
   const [notice, setNotice] = useState<{ title: string; body: string } | null>(null);
+  const [reportNotes, setReportNotes] = useState<Record<string, string>>({});
   const pendingCount = approvals.data?.filter((rescue) => rescue.verification_status === 'pending').length ?? 0;
   const reportCount = listingReports.data?.length ?? 0;
   const activeReportsSelected = reportTab === 'active';
+
+  const noteForReport = (report: AdminListingReport) => reportNotes[report.id] ?? report.admin_notes ?? '';
+
+  const updateReportNote = (reportId: string, note: string) => {
+    setReportNotes((current) => ({ ...current, [reportId]: note }));
+  };
 
   const approve = async (rescue: RescueProfile) => {
     try {
@@ -2071,7 +2078,7 @@ export function AdminReviewScreen({ onBack, onOpenListing }: { onBack: () => voi
 
   const updateReport = async (report: AdminListingReport, status: ReportStatus) => {
     try {
-      await listingReports.updateStatus(report.id, status);
+      await listingReports.updateStatus(report.id, status, noteForReport(report));
       setNotice({
         title: 'Report updated',
         body: adminReportStatusNotice(report, status),
@@ -2089,7 +2096,7 @@ export function AdminReviewScreen({ onBack, onOpenListing }: { onBack: () => voi
   ) => {
     const runModeration = async () => {
       try {
-        await listingReports.moderateReport(report.id, 'resolved', action);
+        await listingReports.moderateReport(report.id, 'resolved', action, noteForReport(report));
         const noticeCopy = adminModerationActionNotice(report, action);
         setNotice({
           title: noticeCopy.title,
@@ -2170,8 +2177,10 @@ export function AdminReviewScreen({ onBack, onOpenListing }: { onBack: () => voi
           key={report.id}
           report={report}
           loading={listingReports.actionLoading}
+          adminNote={noteForReport(report)}
+          onAdminNote={(note) => updateReportNote(report.id, note)}
           onOpenListing={() => report.listing_id ? onOpenListing(report.listing_id) : undefined}
-          onReviewing={() => void updateReport(report, 'reviewing')}
+          onReviewing={() => void updateReport(report, report.status === 'resolved' || report.status === 'dismissed' ? 'open' : 'reviewing')}
           onResolve={() => void updateReport(report, 'resolved')}
           onDismiss={() => void updateReport(report, 'dismissed')}
           onRemoveMessage={() => void moderateReport(
@@ -2231,6 +2240,8 @@ export function AdminReviewScreen({ onBack, onOpenListing }: { onBack: () => voi
 function AdminListingReportCard({
   report,
   loading,
+  adminNote,
+  onAdminNote,
   onOpenListing,
   onReviewing,
   onResolve,
@@ -2241,6 +2252,8 @@ function AdminListingReportCard({
 }: {
   report: AdminListingReport;
   loading: boolean;
+  adminNote: string;
+  onAdminNote: (note: string) => void;
   onOpenListing: () => void;
   onReviewing: () => void;
   onResolve: () => void;
@@ -2282,6 +2295,13 @@ function AdminListingReportCard({
           </View>
         ) : null}
 
+        <TextArea
+          label="Admin note"
+          value={adminNote}
+          onChangeText={onAdminNote}
+          placeholder="Optional private note about what was reviewed or what action was taken."
+        />
+
         <View style={styles.conversationOptionGrid}>
           {report.listing_id ? <Button title="Open Listing" variant="outline" onPress={onOpenListing} fullWidth /> : null}
         </View>
@@ -2293,12 +2313,12 @@ function AdminListingReportCard({
               title={archived ? 'Move to Active' : 'Mark Reviewing'}
               variant="outline"
               onPress={onReviewing}
-              disabled={report.status === 'reviewing'}
+              disabled={report.status === 'reviewing' || loading}
               loading={loading}
               fullWidth
             />
-            <Button title="Resolve Report" icon={CheckCheck} onPress={onResolve} disabled={report.status === 'resolved'} loading={loading} fullWidth />
-            <Button title="Dismiss Report" icon={Flag} variant="outline" onPress={onDismiss} disabled={report.status === 'dismissed'} loading={loading} fullWidth />
+            <Button title="Resolve Report" icon={CheckCheck} onPress={onResolve} disabled={report.status === 'resolved' || loading} loading={loading} fullWidth />
+            <Button title="Dismiss Report" icon={Flag} variant="outline" onPress={onDismiss} disabled={report.status === 'dismissed' || loading} loading={loading} fullWidth />
           </View>
         </View>
 
@@ -2306,9 +2326,9 @@ function AdminListingReportCard({
           <Text style={styles.bodyStrong}>Moderation Actions</Text>
           <Text style={styles.metaText}>These actions close the report as resolved and notify the reporter plus the reported person when available.</Text>
           <View style={styles.conversationOptionGrid}>
-            {canRemoveMessage ? <Button title="Remove Message" icon={Trash2} variant="danger" onPress={onRemoveMessage} loading={loading} fullWidth /> : null}
-            {canRemoveListing ? <Button title="Remove Listing" icon={Trash2} variant="danger" onPress={onRemoveListing} loading={loading} fullWidth /> : null}
-            {canDeleteUser ? <Button title="Delete Account" icon={Trash2} variant="danger" onPress={onDeleteUser} loading={loading} fullWidth /> : null}
+            {canRemoveMessage ? <Button title="Remove Message" icon={Trash2} variant="danger" onPress={onRemoveMessage} disabled={archived || loading} loading={loading} fullWidth /> : null}
+            {canRemoveListing ? <Button title="Remove Listing" icon={Trash2} variant="danger" onPress={onRemoveListing} disabled={archived || loading} loading={loading} fullWidth /> : null}
+            {canDeleteUser ? <Button title="Delete Account" icon={Trash2} variant="danger" onPress={onDeleteUser} disabled={archived || loading} loading={loading} fullWidth /> : null}
           </View>
         </View>
       </View>

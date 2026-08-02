@@ -11,6 +11,7 @@ const seed = readFileSync(join(root, 'supabase/seed.sql'), 'utf8');
 const storage = readFileSync(join(root, 'supabase/storage.sql'), 'utf8');
 const distance = readFileSync(join(root, 'supabase/distance.sql'), 'utf8');
 const rescueAccounts = readFileSync(join(root, 'supabase/rescue_accounts.sql'), 'utf8');
+const adminReportActions = readFileSync(join(root, 'supabase/migrations/20260802012012_repair_admin_report_actions.sql'), 'utf8');
 const backendSpecPaths = [
   join(root, 'docs/blueprint/16-Backend-Implementation-Specification.md'),
   join(
@@ -242,6 +243,27 @@ test('distance setup supports nearby listings and rescue hub search', () => {
   ]) {
     assert.match(distance, new RegExp(requiredSql.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   }
+});
+
+test('admin report action migration provides functional moderation RPC', () => {
+  for (const requiredSql of [
+    'create or replace function public.admin_moderate_report',
+    'security definer',
+    "requested_status not in ('open', 'reviewing', 'resolved', 'dismissed')",
+    "safe_action not in ('none', 'remove_listing', 'delete_user', 'remove_message')",
+    "status = 'removed'::public.listing_status",
+    'is_banned = true',
+    'deleted_at = coalesce(deleted_at, now())',
+    'insert into public.notifications',
+    'insert into public.audit_logs',
+    'grant execute on function public.admin_moderate_report',
+  ]) {
+    assert.match(adminReportActions, new RegExp(requiredSql.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  }
+
+  assert.match(adminReportActions, /target_user_id is distinct from report_row\.reporter_id/);
+  assert.match(adminReportActions, /when safe_status in \('resolved'::public\.report_status, 'dismissed'::public\.report_status\) then now\(\)/);
+  assert.match(adminReportActions, /when safe_status in \('open'::public\.report_status, 'reviewing'::public\.report_status\) then null/);
 });
 
 test('rescue account setup supports verification, wishlists, and urgent needs', () => {

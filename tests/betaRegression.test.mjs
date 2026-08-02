@@ -33,6 +33,8 @@ const useMessages = readFileSync(new URL('../src/hooks/useMessages.ts', import.m
 const founderChecklist = readFileSync(new URL('../docs/private-beta/FOUNDER_PREVIEW_REGRESSION_CHECKLIST.md', import.meta.url), 'utf8');
 const publicRescueOrgDetailsMigration = readFileSync(new URL('../supabase/migrations/20260727132143_public_rescue_org_details_v2.sql', import.meta.url), 'utf8');
 const rescueMessagingMigration = readFileSync(new URL('../supabase/migrations/20260730184000_rescue_public_messaging.sql', import.meta.url), 'utf8');
+const adminService = readFileSync(new URL('../src/services/adminService.ts', import.meta.url), 'utf8');
+const adminModerationMigration = readFileSync(new URL('../supabase/migrations/20260802012012_repair_admin_report_actions.sql', import.meta.url), 'utf8');
 
 function extractBetween(source, start, end) {
   const startIndex = source.indexOf(start);
@@ -205,6 +207,18 @@ test('payment and moderation copy stays launch-ready', () => {
   assert.match(sprint4, /Report Queue/);
   assert.match(sprint4, /FilterChip label="Archived"/);
   assert.match(sprint4, /Delete Account/);
+  assert.match(sprint4, /Admin note/);
+  assert.match(sprint4, /noteForReport\(report\)/);
+  assert.match(sprint4, /report\.status === 'resolved' \|\| report\.status === 'dismissed' \? 'open' : 'reviewing'/);
+  assert.match(sprint4, /disabled=\{archived \|\| loading\}/);
+  assert.match(adminService, /admin_moderate_report/);
+  assert.match(adminService, /ADMIN_RPC_MISSING/);
+  assert.match(adminService, /Apply the latest Supabase migration/);
+  assert.match(adminModerationMigration, /create or replace function public\.admin_moderate_report/);
+  assert.match(adminModerationMigration, /requested_status not in \('open', 'reviewing', 'resolved', 'dismissed'\)/);
+  assert.match(adminModerationMigration, /'remove_listing', 'delete_user', 'remove_message'/);
+  assert.match(adminModerationMigration, /insert into public\.notifications/);
+  assert.match(adminModerationMigration, /insert into public\.audit_logs/);
 });
 
 test('login and signup screen stays focused on authentication', () => {
