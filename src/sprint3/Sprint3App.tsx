@@ -390,14 +390,14 @@ function TabsShell({
 export function HomeScreen({
   onOpenListing,
   onOpenProfile,
-  onMessages,
+  onFavorites,
   onNotifications,
   onOpenRescueHub,
   onOpenSearch,
 }: {
   onOpenListing: (listingId: string) => void;
   onOpenProfile: () => void;
-  onMessages?: () => void;
+  onFavorites?: () => void;
   onNotifications?: () => void;
   onOpenRescueHub?: () => void;
   onOpenSearch?: () => void;
@@ -415,7 +415,6 @@ export function HomeScreen({
   } = useLocation();
   const categories = useTopLevelCategories();
   const favorites = useFavorites(Boolean(auth.user));
-  const unreadMessages = useUnreadMessages(Boolean(auth.user) && Boolean(onMessages));
   const notifications = useNotifications(Boolean(auth.user) && Boolean(onNotifications));
   const params = useMemo<ListingQueryParams>(
     () => ({
@@ -450,7 +449,6 @@ export function HomeScreen({
   const items = mergeFeedListings(ownFilteredListings, filteredMarketplaceListings);
   const sortedItems = sortHomeListings(items, sort);
   const favoriteIds = (favorites.data ?? []).map((listing) => listing.id);
-  const unreadTotal = unreadMessages.data?.total ?? 0;
   const unreadNotificationTotal = notifications.unreadCount ?? 0;
   const locationLabel = [location.city, location.state].filter(Boolean).join(', ');
   const rescueHubStats = useMemo(() => {
@@ -507,20 +505,20 @@ export function HomeScreen({
                 </View>
               </View>
               <View style={styles.homeActionCluster}>
+                {onFavorites ? (
+                  <HeaderShortcut
+                    label="Favorites"
+                    icon={Heart}
+                    count={0}
+                    onPress={onFavorites}
+                  />
+                ) : null}
                 {onNotifications ? (
                   <HeaderShortcut
                     label={unreadNotificationTotal > 0 ? `Notifications, ${unreadNotificationTotal} unread` : 'Notifications'}
                     icon={Bell}
                     count={unreadNotificationTotal}
                     onPress={onNotifications}
-                  />
-                ) : null}
-                {onMessages ? (
-                  <HeaderShortcut
-                    label={unreadTotal > 0 ? `Messages, ${unreadTotal} unread` : 'Messages'}
-                    icon={MessageCircle}
-                    count={unreadTotal}
-                    onPress={onMessages}
                   />
                 ) : null}
               </View>
@@ -1075,10 +1073,12 @@ function SellStep({ icon: Icon, title, body }: { icon: IconComponent; title: str
 }
 
 export function FavoritesScreen({
+  onBack,
   onOpenListing,
   onOpenProfile,
   onBrowse,
 }: {
+  onBack?: () => void;
   onOpenListing: (listingId: string) => void;
   onOpenProfile: () => void;
   onBrowse?: () => void;
@@ -1091,6 +1091,7 @@ export function FavoritesScreen({
   if (auth.isGuest) {
     return (
       <ScreenFrame>
+        {onBack ? <BackButton onPress={onBack} /> : null}
         <Card>
           <View style={styles.stack}>
             <Text style={styles.cardTitle}>Create an account to save listings.</Text>
@@ -1119,6 +1120,7 @@ export function FavoritesScreen({
       ListHeaderComponent={
         <View style={styles.stackLarge}>
           <View style={styles.headerBlock}>
+            {onBack ? <BackButton onPress={onBack} /> : null}
             <Text style={styles.title}>Favorites</Text>
             <Text style={styles.body}>Saved listings you want to revisit.</Text>
           </View>

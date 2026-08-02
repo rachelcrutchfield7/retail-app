@@ -11,7 +11,7 @@ const seed = readFileSync(join(root, 'supabase/seed.sql'), 'utf8');
 const storage = readFileSync(join(root, 'supabase/storage.sql'), 'utf8');
 const distance = readFileSync(join(root, 'supabase/distance.sql'), 'utf8');
 const rescueAccounts = readFileSync(join(root, 'supabase/rescue_accounts.sql'), 'utf8');
-const adminReportActions = readFileSync(join(root, 'supabase/migrations/20260802012012_repair_admin_report_actions.sql'), 'utf8');
+const adminReportActions = readFileSync(join(root, 'supabase/migrations/20260802012858_repair_admin_report_actions.sql'), 'utf8');
 const backendSpecPaths = [
   join(root, 'docs/blueprint/16-Backend-Implementation-Specification.md'),
   join(

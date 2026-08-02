@@ -11,7 +11,6 @@ import {
   ChevronLeft,
   CreditCard,
   Flag,
-  Heart,
   HeartHandshake,
   HelpCircle,
   Home,
@@ -124,7 +123,7 @@ import {
   topSafeAreaPadding,
 } from '../utils/safeAreaLayout';
 
-type SprintTab = 'home' | 'search' | 'sell' | 'favorites' | 'profile';
+type SprintTab = 'home' | 'search' | 'sell' | 'messages' | 'profile';
 type SprintRoute =
   | { name: 'tabs'; tab: SprintTab }
   | { name: 'listing-detail'; listingId: string }
@@ -136,6 +135,7 @@ type SprintRoute =
   | { name: 'messages' }
   | { name: 'conversation'; conversationId: string }
   | { name: 'payment-options'; listingId: string; conversationId?: string; agreedAmount?: string }
+  | { name: 'favorites' }
   | { name: 'notifications' }
   | { name: 'rescue-hub' }
   | { name: 'rescue-profile'; rescue: RescueOrganization }
@@ -151,7 +151,7 @@ const tabs: Array<{ key: SprintTab; label: string; icon: typeof Home }> = [
   { key: 'home', label: 'Home', icon: Home },
   { key: 'search', label: 'Search', icon: Search },
   { key: 'sell', label: 'Sell', icon: Plus },
-  { key: 'favorites', label: 'Favorites', icon: Heart },
+  { key: 'messages', label: 'Messages', icon: MessageCircle },
   { key: 'profile', label: 'Profile', icon: User },
 ];
 
@@ -214,6 +214,7 @@ function Sprint4Experience() {
   const openConversation = (conversationId: string) => setRoute({ name: 'conversation', conversationId });
   const openPaymentOptions = (listingId: string, conversationId?: string, agreedAmount?: string) =>
     setRoute({ name: 'payment-options', listingId, conversationId, agreedAmount });
+  const openFavorites = () => setRoute({ name: 'favorites' });
   const openNotifications = () => setRoute({ name: 'notifications' });
   const openRescueHub = () => setRoute({ name: 'rescue-hub' });
   const openRescueProfile = (rescue: RescueOrganization) => setRoute({ name: 'rescue-profile', rescue });
@@ -252,6 +253,11 @@ function Sprint4Experience() {
         route.name === 'my-listings'
       ) {
         setRoute({ name: 'tabs', tab: 'profile' });
+        return true;
+      }
+
+      if (route.name === 'favorites') {
+        setRoute({ name: 'tabs', tab: 'home' });
         return true;
       }
 
@@ -358,6 +364,10 @@ function Sprint4Experience() {
     );
   }
 
+  if (route.name === 'favorites') {
+    return <FavoritesScreen onBack={() => openTab('home')} onOpenListing={openListing} onOpenProfile={() => openTab('profile')} onBrowse={() => openTab('home')} />;
+  }
+
   if (route.name === 'notifications') {
     return (
       <NotificationsScreen
@@ -432,7 +442,7 @@ function Sprint4Experience() {
         <HomeScreen
           onOpenListing={openListing}
           onOpenProfile={() => openTab('profile')}
-          onMessages={openMessages}
+          onFavorites={openFavorites}
           onNotifications={openNotifications}
           onOpenRescueHub={openRescueHub}
           onOpenSearch={() => openTab('search')}
@@ -440,7 +450,15 @@ function Sprint4Experience() {
       ) : null}
       {route.tab === 'search' ? <SearchScreen onOpenListing={openListing} onOpenProfile={() => openTab('profile')} /> : null}
       {route.tab === 'sell' ? <SellScreen onCreateListing={openCreateListing} onOpenProfile={() => openTab('profile')} /> : null}
-      {route.tab === 'favorites' ? <FavoritesScreen onOpenListing={openListing} onOpenProfile={() => openTab('profile')} onBrowse={() => openTab('home')} /> : null}
+      {route.tab === 'messages' ? (
+        <MessagesScreen
+          onBack={() => openTab('home')}
+          onOpenConversation={openConversation}
+          onOpenProfile={() => openTab('profile')}
+          onBrowse={() => openTab('home')}
+          showBack={false}
+        />
+      ) : null}
       {route.tab === 'profile' ? (
         <ProfileScreen
           onEditProfile={() => setRoute({ name: 'edit-profile' })}
@@ -629,7 +647,7 @@ function TabsShell({
             >
               <View>
                 <Icon size={22} color={selected ? colors.primary : colors.navInactive} />
-                {tab.key === 'profile' && (unread.data?.total ?? 0) > 0 ? (
+                {tab.key === 'messages' && (unread.data?.total ?? 0) > 0 ? (
                   <View style={styles.tabBadge}>
                     <UnreadBadge count={unread.data?.total ?? 0} />
                   </View>
@@ -649,11 +667,13 @@ export function MessagesScreen({
   onOpenConversation,
   onOpenProfile,
   onBrowse,
+  showBack = true,
 }: {
   onBack: () => void;
   onOpenConversation: (conversationId: string) => void;
   onOpenProfile: () => void;
   onBrowse?: () => void;
+  showBack?: boolean;
 }) {
   const auth = useAuth();
   const [search, setSearch] = useState('');
@@ -663,7 +683,7 @@ export function MessagesScreen({
   if (auth.isGuest) {
     return (
       <ScreenFrame>
-        <BackButton onPress={onBack} />
+        {showBack ? <BackButton onPress={onBack} /> : null}
         <Card>
           <View style={styles.stack}>
             <Text style={styles.cardTitle}>Log in to message sellers.</Text>
@@ -679,7 +699,7 @@ export function MessagesScreen({
     <ScreenContainer>
       <ThemedStatusBar />
       <View style={styles.screenHeader}>
-        <BackButton onPress={onBack} />
+        {showBack ? <BackButton onPress={onBack} /> : null}
         <Text style={styles.title}>Messages</Text>
         <Text style={styles.body}>Private conversations for buying, selling, and donating pet supplies.</Text>
         <SearchBar value={search} onChangeText={setSearch} onClear={() => setSearch('')} />

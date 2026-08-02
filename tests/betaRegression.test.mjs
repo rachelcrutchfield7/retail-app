@@ -34,7 +34,7 @@ const founderChecklist = readFileSync(new URL('../docs/private-beta/FOUNDER_PREV
 const publicRescueOrgDetailsMigration = readFileSync(new URL('../supabase/migrations/20260727132143_public_rescue_org_details_v2.sql', import.meta.url), 'utf8');
 const rescueMessagingMigration = readFileSync(new URL('../supabase/migrations/20260730184000_rescue_public_messaging.sql', import.meta.url), 'utf8');
 const adminService = readFileSync(new URL('../src/services/adminService.ts', import.meta.url), 'utf8');
-const adminModerationMigration = readFileSync(new URL('../supabase/migrations/20260802012012_repair_admin_report_actions.sql', import.meta.url), 'utf8');
+const adminModerationMigration = readFileSync(new URL('../supabase/migrations/20260802012858_repair_admin_report_actions.sql', import.meta.url), 'utf8');
 
 function extractBetween(source, start, end) {
   const startIndex = source.indexOf(start);
@@ -193,6 +193,18 @@ test('launch polish keeps guided empty states and profile completion prompts', (
   assert.match(conversationList, /Browse Listings/);
   assert.match(sprint4, /Refresh Reports/);
   assert.match(sprint4, /Refresh Approvals/);
+});
+
+test('primary navigation keeps messages in the tab bar and favorites in the home header', () => {
+  assert.match(sprint4, /\{ key: 'messages', label: 'Messages', icon: MessageCircle \}/);
+  assert.doesNotMatch(sprint4, /\{ key: 'favorites', label: 'Favorites'/);
+  assert.match(sprint4, /route\.tab === 'messages'/);
+  assert.match(sprint4, /tab\.key === 'messages' && \(unread\.data\?\.total \?\? 0\) > 0/);
+  assert.match(sprint4, /onFavorites=\{openFavorites\}/);
+  assert.match(sprint4, /<FavoritesScreen onBack=\{\(\) => openTab\('home'\)\}/);
+  assert.match(sprint3, /onFavorites\?: \(\) => void/);
+  assert.match(sprint3, /label="Favorites"/);
+  assert.match(sprint3, /icon=\{Heart\}/);
 });
 
 test('payment and moderation copy stays launch-ready', () => {

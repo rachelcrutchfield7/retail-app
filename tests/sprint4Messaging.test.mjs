@@ -119,7 +119,9 @@ test('Sprint 4 app is active and messaging UI uses reusable components', () => {
   assert.match(appEntry, /Sprint4App/);
   assert.match(sprintApp, /MessagesScreen/);
   assert.match(sprintApp, /ConversationScreen/);
-  assert.match(sprintApp, /onMessages=\{openMessages\}/);
+  assert.match(sprintApp, /\{ key: 'messages', label: 'Messages', icon: MessageCircle \}/);
+  assert.match(sprintApp, /route\.tab === 'messages'/);
+  assert.match(sprintApp, /showBack=\{false\}/);
   assert.match(sprintApp, /ConversationList/);
   assert.match(sprintApp, /MessageInput/);
   assert.match(sprintApp, /FlatList/);
