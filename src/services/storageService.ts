@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { config } from '../constants/config';
 import { createServiceError } from './errors';
+import { readLocalImageFile } from './localImageFile';
 import {
   ensureCurrentProfile,
   throwSupabaseError,
@@ -54,17 +55,10 @@ async function uploadPublicFile(bucket: string, fileUri: string, folder: string)
     );
   }
 
-  const response = await fetch(fileUri);
-
-  if (!response.ok) {
-    throw createServiceError('IMAGE_UPLOAD_FAILED', `Could not read image ${fileUri}`, 'We could not upload that photo.');
-  }
-
-  const blob = await response.blob();
-  const extension = blob.type.includes('png') ? 'png' : blob.type.includes('webp') ? 'webp' : 'jpg';
+  const { blob, extension, mimeType } = await readLocalImageFile(fileUri, 'IMAGE_UPLOAD_FAILED', 'Could not read listing image');
   const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${extension}`;
   const { error } = await supabase.storage.from(bucket).upload(path, blob, {
-    contentType: blob.type || 'image/jpeg',
+    contentType: mimeType,
     upsert: false,
   });
 

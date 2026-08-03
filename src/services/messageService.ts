@@ -3,6 +3,7 @@ import { config } from '../constants/config';
 import { trackEvent } from '../lib/analytics';
 import { supabase } from '../lib/supabase';
 import { createServiceError } from './errors';
+import { readLocalImageFile } from './localImageFile';
 import {
   getConversationById,
   getConversations,
@@ -291,15 +292,7 @@ export async function uploadMessageImage(fileUri: string, conversationId: string
     );
   }
 
-  const response = await fetch(fileUri);
-
-  if (!response.ok) {
-    throw createServiceError('IMAGE_UPLOAD_FAILED', `Could not read image ${fileUri}`, 'We could not upload that photo.');
-  }
-
-  const blob = await response.blob();
-  const extension = blob.type.includes('png') ? 'png' : blob.type.includes('webp') ? 'webp' : 'jpg';
-  const mimeType = blob.type && ['image/jpeg', 'image/png', 'image/webp'].includes(blob.type) ? blob.type : 'image/jpeg';
+  const { blob, extension, mimeType, size } = await readLocalImageFile(fileUri, 'IMAGE_UPLOAD_FAILED', 'Could not read message image');
   const path = `${conversationId}/${profile.id}/${randomUuid()}.${extension}`;
   const { error } = await supabase.storage.from('message-images').upload(path, blob, {
     contentType: mimeType,
@@ -314,7 +307,7 @@ export async function uploadMessageImage(fileUri: string, conversationId: string
     bucket: 'message-images',
     path,
     mimeType,
-    sizeBytes: blob.size,
+    sizeBytes: size,
   };
 }
 

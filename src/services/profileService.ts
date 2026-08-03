@@ -1,6 +1,7 @@
 import { createServiceError } from './errors';
 import { supabase } from '../lib/supabase';
 import type { Listing } from '../types';
+import { readLocalImageFile } from './localImageFile';
 import type { Profile, PublicProfile, UpdateProfileInput } from './types';
 import {
   ensureCurrentProfile,
@@ -92,34 +93,27 @@ export async function uploadAvatar(fileUri: string): Promise<string> {
     );
   }
 
-  const response = await fetch(fileUri);
+  const { blob, extension, mimeType, size } = await readLocalImageFile(fileUri, 'AVATAR_UPLOAD_FAILED', 'Could not read profile photo');
 
-  if (!response.ok) {
-    throw createServiceError('AVATAR_UPLOAD_FAILED', `Could not read avatar ${fileUri}`, 'We could not upload that photo.');
-  }
-
-  const blob = await response.blob();
-
-  if (!['image/jpeg', 'image/png', 'image/webp'].includes(blob.type)) {
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(mimeType)) {
     throw createServiceError(
       'AVATAR_TYPE_UNSUPPORTED',
-      `Avatar MIME type was ${blob.type}`,
+      `Avatar MIME type was ${mimeType}`,
       'Choose a JPEG, PNG, or WebP profile picture.'
     );
   }
 
-  if (blob.size > 10 * 1024 * 1024) {
+  if (size > 10 * 1024 * 1024) {
     throw createServiceError(
       'AVATAR_TOO_LARGE',
-      `Avatar size was ${blob.size} bytes`,
+      `Avatar size was ${size} bytes`,
       'Choose a profile picture under 10 MB.'
     );
   }
 
-  const extension = blob.type.includes('png') ? 'png' : blob.type.includes('webp') ? 'webp' : 'jpg';
   const path = `${profile.id}/${Date.now()}.${extension}`;
   const { error: uploadError } = await supabase.storage.from('avatars').upload(path, blob, {
-    contentType: blob.type || 'image/jpeg',
+    contentType: mimeType,
     upsert: true,
   });
 

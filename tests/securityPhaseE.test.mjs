@@ -83,7 +83,7 @@ test('Phase E services no longer perform direct sensitive writes from the client
   assert.match(services.reviewService, /rpc\('create_transaction_review'/);
   assert.match(services.reviewService, /rpc\('get_user_review_summary'/);
   assert.match(services.reportService, /rpc\('submit_report'/);
-  assert.match(services.adminService, /rpc\('admin_update_report'/);
+  assert.match(services.adminService, /rpc\('admin_moderate_report'/);
   assert.match(services.notificationService, /rpc\('mark_notification_read'/);
   assert.match(services.notificationService, /rpc\('mark_all_notifications_read'/);
   assert.match(services.notificationService, /rpc\('delete_my_notification'/);

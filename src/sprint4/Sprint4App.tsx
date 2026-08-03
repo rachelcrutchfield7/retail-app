@@ -1555,6 +1555,21 @@ export function AdminReviewScreen({ onBack, onOpenListing }: { onBack: () => voi
     }
   };
 
+  const moderateReport = async (
+    report: AdminListingReport,
+    status: ReportStatus,
+    action: Parameters<typeof listingReports.moderate>[2],
+    successTitle: string,
+    successBody: string
+  ) => {
+    try {
+      await listingReports.moderate(report.id, status, action);
+      setNotice({ title: successTitle, body: successBody });
+    } catch (error) {
+      setNotice({ title: 'Admin action failed', body: handleAppError(error).userMessage });
+    }
+  };
+
   if (auth.isGuest || !auth.profile?.is_admin) {
     return (
       <ScreenFrame>
@@ -1599,6 +1614,9 @@ export function AdminReviewScreen({ onBack, onOpenListing }: { onBack: () => voi
           onReviewing={() => void updateReport(report, 'reviewing')}
           onResolve={() => void updateReport(report, 'resolved')}
           onDismiss={() => void updateReport(report, 'dismissed')}
+          onRemoveListing={() => void moderateReport(report, 'resolved', 'remove_listing', 'Listing removed', 'The listing was removed and the report was resolved.')}
+          onRemoveMessage={() => void moderateReport(report, 'resolved', 'remove_message', 'Message removed', 'The message was removed and the report was resolved.')}
+          onDeleteUser={() => void moderateReport(report, 'resolved', 'delete_user', 'Account removed', 'The reported account was removed and the report was resolved.')}
         />
       ))}
 
@@ -1637,6 +1655,9 @@ function AdminListingReportCard({
   onReviewing,
   onResolve,
   onDismiss,
+  onRemoveListing,
+  onRemoveMessage,
+  onDeleteUser,
 }: {
   report: AdminListingReport;
   loading: boolean;
@@ -1644,8 +1665,14 @@ function AdminListingReportCard({
   onReviewing: () => void;
   onResolve: () => void;
   onDismiss: () => void;
+  onRemoveListing: () => void;
+  onRemoveMessage: () => void;
+  onDeleteUser: () => void;
 }) {
   const alreadyReviewing = report.status === 'reviewing';
+  const canRemoveListing = report.report_type === 'listing' || Boolean(report.listing_id);
+  const canRemoveMessage = report.report_type === 'message' && Boolean(report.message_id);
+  const canDeleteUser = report.report_type === 'user' || report.report_type === 'listing' || report.report_type === 'message' || Boolean(report.reported_user_id);
 
   return (
     <Card>
@@ -1673,6 +1700,9 @@ function AdminListingReportCard({
           <Button title={alreadyReviewing ? 'In Review' : 'Reviewing'} variant="outline" onPress={onReviewing} loading={loading} disabled={alreadyReviewing} fullWidth />
           <Button title="Resolve" icon={CheckCheck} onPress={onResolve} loading={loading} fullWidth />
           <Button title="Dismiss" icon={Flag} variant="danger" onPress={onDismiss} loading={loading} fullWidth />
+          {canRemoveListing ? <Button title="Remove Listing" icon={Trash2} variant="danger" onPress={onRemoveListing} loading={loading} fullWidth /> : null}
+          {canRemoveMessage ? <Button title="Remove Message" icon={Trash2} variant="danger" onPress={onRemoveMessage} loading={loading} fullWidth /> : null}
+          {canDeleteUser ? <Button title="Delete Account" icon={Trash2} variant="danger" onPress={onDeleteUser} loading={loading} fullWidth /> : null}
         </View>
       </View>
     </Card>

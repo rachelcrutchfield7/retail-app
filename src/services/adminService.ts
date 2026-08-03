@@ -4,6 +4,7 @@ import { ensureCurrentProfile, throwSupabaseError } from './supabaseData';
 import type { AdminListingReport, ReportReason, ReportStatus, RescueOrgTypeDb, RescueProfile, RescueVerificationStatus } from './types';
 
 type Row = Record<string, unknown>;
+export type AdminReportAction = 'none' | 'remove_listing' | 'remove_message' | 'delete_user';
 
 const reportReasonLabels: Record<string, ReportReason> = {
   spam: 'Spam',
@@ -85,16 +86,28 @@ export async function getListingReportQueue(): Promise<AdminListingReport[]> {
 }
 
 export async function updateListingReportStatus(reportId: string, status: ReportStatus, adminNotes?: string): Promise<AdminListingReport> {
+  return moderateListingReport(reportId, status, 'none', adminNotes);
+}
+
+export async function moderateListingReport(
+  reportId: string,
+  status: ReportStatus,
+  action: AdminReportAction = 'none',
+  adminNotes?: string,
+  adminMessage?: string
+): Promise<AdminListingReport> {
   await requireAdminProfile();
 
-  const { data, error } = await supabase.rpc('admin_update_report', {
+  const { data, error } = await supabase.rpc('admin_moderate_report', {
     target_report_id: reportId,
     requested_status: status,
-    requested_admin_notes: adminNotes?.trim() || null,
+    requested_action: action,
+    requested_admin_note: adminNotes?.trim() || null,
+    requested_admin_message: adminMessage?.trim() || null,
   });
 
   if (error) {
-    throwSupabaseError(error, 'We could not update that report.');
+    throwSupabaseError(error, 'We could not complete that admin action.');
   }
 
   const [report] = await hydrateListingReports([toAdminListingReport(data as Row)]);

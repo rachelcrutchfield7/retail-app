@@ -397,8 +397,18 @@ export async function createListing(input: CreateListingInput): Promise<Listing>
 
   const listingId = String((data as Record<string, unknown>).id);
 
-  for (const imageUri of input.images) {
-    await uploadListingImage(imageUri, listingId);
+  try {
+    for (const imageUri of input.images) {
+      await uploadListingImage(imageUri, listingId);
+    }
+  } catch (error) {
+    try {
+      await deleteListing(listingId);
+    } catch (cleanupError) {
+      trackEvent('Listing Image Cleanup Failed', { listingId, message: String(cleanupError) });
+    }
+
+    throw error;
   }
 
   const created = await getListingById(listingId);
