@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Alert, BackHandler, FlatList, Image, Keyboard, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Bell,
@@ -530,7 +531,7 @@ export function ConversationScreen({
   const messageItems = useMemo(() => buildMessageList(messages.data ?? []), [messages.data]);
   const lastMessageKey = messageItems.at(-1)?.key ?? 'empty';
 
-  const chooseImage = () => {
+  const chooseImage = async () => {
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
       const input = document.createElement('input');
       input.type = 'file';
@@ -545,7 +546,29 @@ export function ConversationScreen({
       return;
     }
 
-    setImageUri(conversation.data?.listingSummary.image ?? null);
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (!permission.granted) {
+      setNotice('Allow photo library access to attach a photo.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsMultipleSelection: false,
+      quality: 0.82,
+    });
+
+    if (result.canceled) {
+      return;
+    }
+
+    const selectedImage = result.assets[0]?.uri;
+
+    if (selectedImage) {
+      setImageUri(selectedImage);
+      setNotice(null);
+    }
   };
 
   const send = async () => {
@@ -882,7 +905,7 @@ export function ConversationScreen({
           onChangeText={setText}
           imageUri={imageUri}
           onRemoveImage={() => setImageUri(null)}
-          onAttach={chooseImage}
+          onAttach={() => void chooseImage()}
           onSend={() => void send()}
           disabled={offline || messagingBlocked}
           disabledMessage={
@@ -1487,8 +1510,6 @@ export function SettingsScreen({ onBack, onReplayTutorial }: { onBack: () => voi
         <Text style={styles.body}>Website: {appLinks.baseUrl}</Text>
         <Text style={styles.body}>General contact: {appLinks.contactEmail}</Text>
         <Text style={styles.body}>Support, payments, user issues, and reports: {appLinks.supportEmail}</Text>
-        <Button title="Open ReTail Website" variant="outline" onPress={() => void openAppLink(appLinks.baseUrl)} fullWidth />
-        <Button title="Private Beta Page" variant="outline" onPress={() => void openAppLink(appLinks.betaUrl)} fullWidth />
         <Button title="Email General Contact" variant="outline" onPress={() => void openAppLink(appLinks.contactMailto)} fullWidth />
         <Button title="Email Support" variant="outline" onPress={() => void openAppLink(appLinks.supportMailto)} fullWidth />
       </SectionCard>
@@ -1624,6 +1645,8 @@ function AdminListingReportCard({
   onResolve: () => void;
   onDismiss: () => void;
 }) {
+  const alreadyReviewing = report.status === 'reviewing';
+
   return (
     <Card>
       <View style={styles.stack}>
@@ -1647,7 +1670,7 @@ function AdminListingReportCard({
 
         <View style={styles.conversationOptionGrid}>
           <Button title="Open Listing" variant="outline" onPress={onOpenListing} disabled={!report.listing_id} fullWidth />
-          <Button title="Reviewing" variant="outline" onPress={onReviewing} loading={loading} fullWidth />
+          <Button title={alreadyReviewing ? 'In Review' : 'Reviewing'} variant="outline" onPress={onReviewing} loading={loading} disabled={alreadyReviewing} fullWidth />
           <Button title="Resolve" icon={CheckCheck} onPress={onResolve} loading={loading} fullWidth />
           <Button title="Dismiss" icon={Flag} variant="danger" onPress={onDismiss} loading={loading} fullWidth />
         </View>

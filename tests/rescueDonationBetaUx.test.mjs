@@ -69,12 +69,17 @@ test('mobile keyboard and native profile picture upload are wired for beta devic
   const sprint4App = read('src/sprint4/Sprint4App.tsx');
   const profileService = read('src/services/profileService.ts');
   const messageInput = read('src/components/messaging/MessageInput.tsx');
+  const imageUploader = read('src/components/forms/ImageUploader.tsx');
 
   assert.match(appJson, /"softwareKeyboardLayoutMode": "resize"/);
   assert.match(sprint4App, /KeyboardAvoidingView/);
   assert.match(sprint4App, /Keyboard\.dismiss\(\)/);
   assert.match(messageInput, /messageComposerBottomPadding/);
   assert.match(sprint3App, /ImagePicker\.launchImageLibraryAsync/);
+  assert.match(sprint3App, /submitLockedRef/);
+  assert.match(sprint4App, /ImagePicker\.launchImageLibraryAsync/);
+  assert.doesNotMatch(sprint4App, /setImageUri\(conversation\.data\?\.listingSummary\.image/);
+  assert.match(imageUploader, /Photo access needed/);
   assert.match(sprint3App, /Upload profile picture/);
   assert.match(sprint3App, /Change profile picture/);
   assert.match(profileService, /AVATAR_REMOTE_URL_NOT_ALLOWED/);

@@ -1008,18 +1008,24 @@ export function CreateListingScreen({
   const [errors, setErrors] = useState<ReturnType<typeof validateCreateListingInput>['errors']>({});
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
+  const submitLockedRef = useRef(false);
 
   const update = <FieldName extends keyof CreateListingInput>(field: FieldName, value: CreateListingInput[FieldName]) => {
     setForm((current) => ({ ...current, [field]: value }));
   };
 
   const submit = async () => {
+    if (submitLockedRef.current || mutation.loading || uploading) {
+      return;
+    }
+
     const validation = validateCreateListingInput(form);
     if (!validation.isValid) {
       setErrors(validation.errors);
       return;
     }
 
+    submitLockedRef.current = true;
     setErrors({});
     setUploading(true);
     setProgress(25);
@@ -1033,6 +1039,7 @@ export function CreateListingScreen({
     } catch {
       return;
     } finally {
+      submitLockedRef.current = false;
       setUploading(false);
       setProgress(0);
     }

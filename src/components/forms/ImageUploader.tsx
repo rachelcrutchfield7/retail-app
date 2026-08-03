@@ -1,6 +1,6 @@
 import { Camera, Trash2 } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, radius, sizes, spacing, typography } from '../../constants/theme';
 
 type ImageUploaderProps = {
@@ -36,6 +36,7 @@ export function ImageUploader({ images, onChange, error, uploading = false, prog
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (!permission.granted) {
+      Alert.alert('Photo access needed', 'Allow photo library access to add listing photos.');
       return;
     }
 
