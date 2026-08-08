@@ -1,5 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { colors, radius, spacing, typography } from '../../constants/theme';
+import { useThemeColors } from '../../lib/themePreference';
 
 type StatItem = {
   label: string;
@@ -11,12 +12,14 @@ type StatsCardProps = {
 };
 
 export function StatsCard({ stats }: StatsCardProps) {
+  const themeColors = useThemeColors();
+
   return (
     <View style={styles.card}>
       {stats.map((stat) => (
-        <View key={stat.label} style={styles.stat}>
-          <Text style={styles.value}>{stat.value}</Text>
-          <Text style={styles.label}>{stat.label}</Text>
+        <View key={stat.label} style={[styles.stat, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
+          <Text style={[styles.value, { color: themeColors.primary }]}>{stat.value}</Text>
+          <Text style={[styles.label, { color: themeColors.textSecondary }]}>{stat.label}</Text>
         </View>
       ))}
     </View>

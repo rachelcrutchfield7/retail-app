@@ -1,6 +1,9 @@
-import { StyleSheet, Text, TextInput as NativeTextInput } from 'react-native';
+import { useState } from 'react';
+import { Eye, EyeOff } from 'lucide-react-native';
+import { Pressable, StyleSheet, Text, TextInput as NativeTextInput, View } from 'react-native';
 import type { KeyboardTypeOptions, TextInputProps as NativeTextInputProps } from 'react-native';
 import { colors, radius, sizes, spacing, typography } from '../../constants/theme';
+import { useThemeColors } from '../../lib/themePreference';
 import { Field } from './Field';
 
 type TextInputProps = {
@@ -28,39 +31,69 @@ export function TextInput({
   autoCapitalize = 'sentences',
   textContentType,
 }: TextInputProps) {
+  const themeColors = useThemeColors();
+  const [passwordVisible, setPasswordVisible] = useState(false);
+  const resolvedSecureTextEntry = Boolean(secureTextEntry && !passwordVisible);
+  const VisibilityIcon = passwordVisible ? EyeOff : Eye;
+
   return (
     <Field label={label}>
-      <NativeTextInput
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor={colors.textSecondary}
-        style={[styles.input, error && styles.inputError]}
-        keyboardType={keyboardType}
-        secureTextEntry={secureTextEntry}
-        autoCapitalize={autoCapitalize}
-        textContentType={textContentType}
-        accessibilityLabel={label}
-      />
-      {helperText ? <Text style={styles.helper}>{helperText}</Text> : null}
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      <View style={[styles.inputFrame, { backgroundColor: themeColors.surface, borderColor: themeColors.border }, error && styles.inputError]}>
+        <NativeTextInput
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          placeholderTextColor={themeColors.textSecondary}
+          style={[styles.input, { color: themeColors.textPrimary }]}
+          keyboardType={keyboardType}
+          secureTextEntry={resolvedSecureTextEntry}
+          autoCapitalize={autoCapitalize}
+          textContentType={textContentType}
+          accessibilityLabel={label}
+        />
+        {secureTextEntry ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={passwordVisible ? 'Hide password' : 'Show password'}
+            hitSlop={8}
+            onPress={() => setPasswordVisible((visible) => !visible)}
+            style={styles.visibilityButton}
+          >
+            <VisibilityIcon size={20} color={themeColors.textSecondary} />
+          </Pressable>
+        ) : null}
+      </View>
+      {helperText ? <Text style={[styles.helper, { color: themeColors.textSecondary }]}>{helperText}</Text> : null}
+      {error ? <Text style={[styles.error, { color: themeColors.error }]}>{error}</Text> : null}
     </Field>
   );
 }
 
 const styles = StyleSheet.create({
-  input: {
+  inputFrame: {
     minHeight: sizes.buttonHeight,
     borderRadius: radius.medium,
-    paddingHorizontal: spacing.md,
-    color: colors.textPrimary,
-    ...typography.body,
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
   },
+  input: {
+    flex: 1,
+    minHeight: sizes.buttonHeight,
+    paddingHorizontal: spacing.md,
+    color: colors.textPrimary,
+    ...typography.body,
+  },
   inputError: {
     borderColor: colors.error,
+  },
+  visibilityButton: {
+    width: sizes.buttonHeight,
+    minHeight: sizes.buttonHeight,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   helper: {
     color: colors.textSecondary,

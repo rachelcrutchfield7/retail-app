@@ -1,6 +1,8 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, radius, sizes, spacing, typography } from '../../constants/theme';
+import type { ThemeColors } from '../../constants/theme';
 import type { IconComponent } from '../../types.ts';
+import { useThemeColors } from '../../lib/themePreference';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
 
@@ -23,8 +25,11 @@ export function Button({
   icon: Icon,
   fullWidth = false,
 }: ButtonProps) {
+  const themeColors = useThemeColors();
   const inactive = disabled || loading;
-  const textStyle = variant === 'primary' || variant === 'danger' ? styles.buttonTextLight : styles.buttonTextDark;
+  const textColor = variant === 'primary' || variant === 'danger' ? themeColors.white : themeColors.primary;
+  const iconColor = textColor;
+  const variantStyle = themedButtonVariant(variant, themeColors);
 
   return (
     <Pressable
@@ -32,14 +37,14 @@ export function Button({
       accessibilityLabel={title}
       disabled={inactive}
       onPress={onPress}
-      style={[styles.button, variantStyles[variant], fullWidth && styles.fullWidth, inactive && styles.disabled]}
+      style={[styles.button, variantStyles[variant], variantStyle, fullWidth && styles.fullWidth, inactive && styles.disabled]}
     >
       {loading ? (
-        <ActivityIndicator color={variant === 'primary' || variant === 'danger' ? colors.white : colors.primary} />
+        <ActivityIndicator color={textColor} />
       ) : (
         <View style={styles.buttonContent}>
-          {Icon ? <Icon size={20} color={variant === 'primary' || variant === 'danger' ? colors.white : colors.primary} /> : null}
-          <Text style={[styles.buttonText, textStyle]}>{title}</Text>
+          {Icon ? <Icon size={20} color={iconColor} /> : null}
+          <Text style={[styles.buttonText, { color: textColor }]}>{title}</Text>
         </View>
       )}
     </Pressable>
@@ -77,6 +82,26 @@ const styles = StyleSheet.create({
     color: colors.primary,
   },
 });
+
+function themedButtonVariant(variant: ButtonVariant, themeColors: ThemeColors) {
+  if (variant === 'primary') {
+    return { backgroundColor: themeColors.primary, borderColor: themeColors.primary };
+  }
+
+  if (variant === 'secondary') {
+    return { backgroundColor: themeColors.primarySoft, borderColor: themeColors.primarySoft };
+  }
+
+  if (variant === 'outline') {
+    return { backgroundColor: 'transparent', borderColor: themeColors.primary };
+  }
+
+  if (variant === 'danger') {
+    return { backgroundColor: themeColors.error, borderColor: themeColors.error };
+  }
+
+  return { backgroundColor: 'transparent', borderColor: 'transparent' };
+}
 
 const variantStyles = StyleSheet.create<Record<ButtonVariant, object>>({
   primary: {

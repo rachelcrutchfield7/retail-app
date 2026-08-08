@@ -1,5 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { colors, radius, spacing, typography } from '../../constants/theme';
+import type { ThemeColors } from '../../constants/theme';
+import { useThemeColors } from '../../lib/themePreference';
 
 type MetricTone = 'green' | 'coral' | 'gold';
 
@@ -10,10 +12,12 @@ type MetricProps = {
 };
 
 export function Metric({ label, value, tone = 'green' }: MetricProps) {
+  const themeColors = useThemeColors();
+
   return (
-    <View style={styles.metric}>
-      <Text style={[styles.metricValue, metricToneStyles[tone]]}>{value}</Text>
-      <Text style={styles.metricLabel}>{label}</Text>
+    <View style={[styles.metric, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
+      <Text style={[styles.metricValue, { color: getMetricToneColor(tone, themeColors) }]}>{value}</Text>
+      <Text style={[styles.metricLabel, { color: themeColors.textSecondary }]}>{label}</Text>
     </View>
   );
 }
@@ -42,14 +46,14 @@ const styles = StyleSheet.create({
   metricLabel: metricLabelStyle,
 });
 
-const metricToneStyles = StyleSheet.create<Record<MetricTone, { color: string }>>({
-  green: {
-    color: colors.primary,
-  },
-  coral: {
-    color: colors.error,
-  },
-  gold: {
-    color: colors.warning,
-  },
-});
+function getMetricToneColor(tone: MetricTone, themeColors: ThemeColors) {
+  if (tone === 'coral') {
+    return themeColors.logoOrange;
+  }
+
+  if (tone === 'gold') {
+    return themeColors.warning;
+  }
+
+  return themeColors.primary;
+}

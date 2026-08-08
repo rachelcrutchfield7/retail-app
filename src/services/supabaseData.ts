@@ -171,6 +171,12 @@ export function toProfile(row: SupabaseRow): Profile {
     is_verified: Boolean(row.is_verified),
     is_admin: Boolean(row.is_admin),
     is_banned: Boolean(row.is_banned),
+    stripe_connect_account_id: optionalString(row.stripe_connect_account_id),
+    stripe_connect_charges_enabled: Boolean(row.stripe_connect_charges_enabled),
+    stripe_connect_payouts_enabled: Boolean(row.stripe_connect_payouts_enabled),
+    stripe_connect_details_submitted: Boolean(row.stripe_connect_details_submitted),
+    stripe_connect_onboarding_complete_at: optionalString(row.stripe_connect_onboarding_complete_at),
+    stripe_connect_updated_at: optionalString(row.stripe_connect_updated_at),
     created_at: timestampValue(row.created_at),
     updated_at: timestampValue(row.updated_at),
     deleted_at: optionalString(row.deleted_at),
@@ -277,11 +283,16 @@ export async function getCurrentProfileRow(): Promise<Profile | null> {
 }
 
 export async function ensureCurrentProfile(): Promise<Profile> {
+  const result = await ensureCurrentProfileWithStatus();
+  return result.profile;
+}
+
+export async function ensureCurrentProfileWithStatus(): Promise<{ profile: Profile; created: boolean }> {
   const user = await requireSupabaseAuthUser();
   const existingProfile = await getCurrentProfileRow();
 
   if (existingProfile) {
-    return existingProfile;
+    return { profile: existingProfile, created: false };
   }
 
   const metadata = user.user_metadata ?? {};
@@ -304,7 +315,7 @@ export async function ensureCurrentProfile(): Promise<Profile> {
     });
 
     if (!error) {
-      return toProfile(data as SupabaseRow);
+      return { profile: toProfile(data as SupabaseRow), created: true };
     }
 
     if (error.code !== '23505' || attempt === 3) {

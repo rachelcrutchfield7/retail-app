@@ -20,6 +20,7 @@ export type MessageType = 'text' | 'image' | 'system';
 export type SendableMessageType = 'text' | 'image';
 export type ReportType = 'listing' | 'user' | 'message';
 export type ReportStatus = 'open' | 'reviewing' | 'resolved' | 'dismissed';
+export type AdminReportModerationAction = 'none' | 'remove_listing' | 'delete_user' | 'remove_message';
 export type ReportReason =
   | 'Spam'
   | 'Fraud'
@@ -60,6 +61,7 @@ export type Session = {
   user: User;
   accessToken: string;
   expiresAt: string;
+  requiresProfileSetup?: boolean;
 };
 
 export type Profile = {
@@ -80,6 +82,12 @@ export type Profile = {
   is_verified: boolean;
   is_admin: boolean;
   is_banned: boolean;
+  stripe_connect_account_id?: string;
+  stripe_connect_charges_enabled: boolean;
+  stripe_connect_payouts_enabled: boolean;
+  stripe_connect_details_submitted: boolean;
+  stripe_connect_onboarding_complete_at?: string;
+  stripe_connect_updated_at?: string;
   created_at: string;
   updated_at: string;
   deleted_at?: string;
@@ -239,6 +247,8 @@ export type ListingSummary = Listing;
 
 export type Conversation = PrototypeConversation & {
   listingId: string;
+  rescueId?: string;
+  reportId?: string;
   buyerId: string;
   sellerId: string;
   lastMessageAt: string;
@@ -355,6 +365,19 @@ export type Transaction = {
   buyer_id: string;
   status: TransactionStatus;
   outcome?: TransactionOutcome;
+  payment_method?: 'outside_app' | 'stripe';
+  payment_status?: string;
+  amount_cents?: number;
+  platform_fee_cents?: number;
+  seller_amount_cents?: number;
+  currency?: string;
+  stripe_payment_intent_id?: string;
+  stripe_transfer_destination?: string;
+  stripe_latest_charge_id?: string;
+  stripe_receipt_url?: string;
+  paid_at?: string;
+  refunded_at?: string;
+  payment_error?: string;
   completed_at?: string;
   cancelled_at?: string;
   created_at: string;
@@ -455,6 +478,11 @@ export type NotificationPreferences = {
   reviews: boolean;
   listingUpdates: boolean;
   system: boolean;
+  emailMessages?: boolean;
+  emailFavorites?: boolean;
+  emailReviews?: boolean;
+  emailMarketplaceUpdates?: boolean;
+  emailSystem?: boolean;
   pushMessages?: boolean;
   pushFavorites?: boolean;
   pushReviews?: boolean;

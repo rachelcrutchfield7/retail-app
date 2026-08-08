@@ -14,6 +14,12 @@ importers:
       '@react-native-async-storage/async-storage':
         specifier: 2.2.0
         version: 2.2.0(react-native@0.86.0(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3))
+      '@react-native-google-signin/google-signin':
+        specifier: ^16.1.4
+        version: 16.1.4(expo@57.0.8)(react-native@0.86.0(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)
+      '@stripe/stripe-react-native':
+        specifier: ^0.71.0
+        version: 0.71.0(expo@57.0.8)(react-native@0.86.0(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)
       '@supabase/supabase-js':
         specifier: 2.110.2
         version: 2.110.2
@@ -1035,6 +1041,16 @@ packages:
     peerDependencies:
       react-native: ^0.0.0-0 || >=0.65 <1.0
 
+  '@react-native-google-signin/google-signin@16.1.4':
+    resolution: {integrity: sha512-Lt4vjihJ+Nk9I4HjScWHzch3ebtIlP3QIea0XEHVN0PJumwUwiK/J2tU8qs7H9DIqNblC0qlXkR0Ts4ELvq7yA==}
+    peerDependencies:
+      expo: '>=52.0.40'
+      react: '*'
+      react-native: '*'
+    peerDependenciesMeta:
+      expo:
+        optional: true
+
   '@react-native/assets-registry@0.86.0':
     resolution: {integrity: sha512-nIaXbm2jX1OTYp0qbviJ3O6KZivoE8z3BnhUQ2LsqfZSWRoOK/n1qsiAr6oALiNKWnXY3j2KPwtYORnZzp8xew==}
     engines: {node: ^20.19.4 || ^22.13.0 || ^24.3.0 || >= 25.0.0}
@@ -1268,6 +1284,19 @@ packages:
 
   '@sinclair/typebox@0.27.10':
     resolution: {integrity: sha512-MTBk/3jGLNB2tVxv6uLlFh1iu64iYOQ2PbdOSK3NW8JZsmlaOh2q6sdtKowBhfw8QFLmYNzTW4/oK4uATIi6ZA==}
+
+  '@stripe/stripe-react-native@0.71.0':
+    resolution: {integrity: sha512-kMYkyUu1t7vMnl8gMffMkUKfdcSkKb1u4XrpkPJCYsVYHg8OE5kGyAV+Mwcb6chXn5gmNRgQ1TwnSyk6WifpqA==}
+    peerDependencies:
+      expo: '>=46.0.9'
+      react: '*'
+      react-native: '*'
+      react-native-webview: '*'
+    peerDependenciesMeta:
+      expo:
+        optional: true
+      react-native-webview:
+        optional: true
 
   '@supabase/auth-js@2.110.2':
     resolution: {integrity: sha512-Qj7a6EDP+AMMQFWqGv+qFa8r6re//dk+qQI5bA0KK+PZmnI3JPu97TDeNt6SMiQ2FkklP79hP2yDFYSnA989OA==}
@@ -5122,6 +5151,13 @@ snapshots:
       merge-options: 3.0.4
       react-native: 0.86.0(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3)
 
+  '@react-native-google-signin/google-signin@16.1.4(expo@57.0.8)(react-native@0.86.0(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)':
+    dependencies:
+      react: 19.2.3
+      react-native: 0.86.0(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3)
+    optionalDependencies:
+      expo: 57.0.8(@babel/core@7.29.7)(@expo/dom-webview@57.0.0)(@expo/metro-runtime@57.0.7)(react-dom@19.2.3(react@19.2.3))(react-native-web@0.21.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-native@0.86.0(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)(typescript@6.0.3)
+
   '@react-native/assets-registry@0.86.0': {}
 
   '@react-native/babel-plugin-codegen@0.86.0(@babel/core@7.29.7)':
@@ -5319,6 +5355,13 @@ snapshots:
   '@shikijs/vscode-textmate@10.0.2': {}
 
   '@sinclair/typebox@0.27.10': {}
+
+  '@stripe/stripe-react-native@0.71.0(expo@57.0.8)(react-native@0.86.0(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)':
+    dependencies:
+      react: 19.2.3
+      react-native: 0.86.0(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3)
+    optionalDependencies:
+      expo: 57.0.8(@babel/core@7.29.7)(@expo/dom-webview@57.0.0)(@expo/metro-runtime@57.0.7)(react-dom@19.2.3(react@19.2.3))(react-native-web@0.21.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-native@0.86.0(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)(typescript@6.0.3)
 
   '@supabase/auth-js@2.110.2':
     dependencies:

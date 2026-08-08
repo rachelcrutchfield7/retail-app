@@ -5,6 +5,7 @@ import {
   Alert,
   FlatList,
   Image,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -19,12 +20,18 @@ import {
   Archive,
   AlertCircle,
   Bell,
+  Camera,
+  Check,
+  ChevronDown,
   ChevronLeft,
+  ClipboardCheck,
   Edit3,
   Flag,
   Heart,
   HeartHandshake,
+  HelpCircle,
   Home,
+  ListChecks,
   LogOut,
   MapPin,
   MessageCircle,
@@ -33,6 +40,7 @@ import {
   Search,
   Settings,
   ShieldCheck,
+  Sparkles,
   Trash2,
   User,
 } from 'lucide-react-native';
@@ -50,7 +58,9 @@ import {
   EmptyState,
   ErrorState,
   FavoriteButton,
+  Field,
   FilterChip,
+  GoogleSignInButton,
   ImageUploader,
   ListingCard,
   ListingGallery,
@@ -74,6 +84,7 @@ import {
 import { CONDITIONS } from '../constants/categories';
 import { findManualLocationByZipCode } from '../constants/location';
 import { colors, radius, sizes, spacing, typography } from '../constants/theme';
+import type { ThemeColors } from '../constants/theme';
 import { useAuth } from '../hooks/useAuth';
 import { useCategories, useTopLevelCategories } from '../hooks/useCategories';
 import { useCompleteTransaction, useEligibleTransactionParticipants } from '../hooks/useCompleteTransaction';
@@ -96,7 +107,12 @@ import { useUnreadMessages } from '../hooks/useUnreadMessages';
 import { useUpdateListing } from '../hooks/useUpdateListing';
 import { useUpdateProfile } from '../hooks/useUpdateProfile';
 import { QueryClientProvider } from '../lib/queryClient';
-import { useTheme } from '../theme/ThemeProvider';
+import { useThemeColors } from '../lib/themePreference';
+import {
+  getGoogleSignInAvailability,
+  isGoogleSignInCancellation,
+  warnIfGoogleSignInUnavailable,
+} from '../services/googleAuthService';
 import type {
   CreateListingInput,
   CreateSavedSearchInput,
@@ -111,23 +127,14 @@ import type {
   TransactionOutcome,
   UpdateListingInput,
 } from '../services/types';
-import type { Category, IconComponent, Listing, ListingCondition, ListingSort, ListingStatus, RescueNeedUrgency, RescueOrganizationType } from '../types';
+import type { Category, IconComponent, Listing, ListingCondition, ListingStatus, RescueNeedUrgency, RescueOrganization, RescueOrganizationType } from '../types';
 import { handleAppError } from '../utils/errorHandler';
 import { listingLocationLabel } from '../utils/format';
 import {
   bottomTabBarContentClearance,
-  bottomTabBarGap,
   scrollContentBottomClearance,
   topSafeAreaPadding,
 } from '../utils/safeAreaLayout';
-import {
-  listingSortLabel,
-  listingSortOptions,
-  listingTypeBadgeLabel,
-  listingTypeFilterLabel,
-  listingTypeOptions,
-  sortListingsForPreview,
-} from '../utils/listingPresentation';
 import { validateCreateListingInput } from '../validation/createListing';
 
 type SprintTab = 'home' | 'search' | 'sell' | 'favorites' | 'profile';
@@ -139,6 +146,8 @@ type SprintRoute =
   | { name: 'edit-profile' }
   | { name: 'public-profile'; userId: string }
   | { name: 'my-listings' };
+
+type HomeListingSort = 'recent' | 'nearby' | 'price-low' | 'price-high';
 
 type Notice = {
   title: string;
@@ -153,11 +162,72 @@ const tabs: Array<{ key: SprintTab; label: string; icon: typeof Home }> = [
   { key: 'profile', label: 'Profile', icon: User },
 ];
 
+const homeListingSortOptions: Array<{ label: string; value: HomeListingSort }> = [
+  { label: 'Most recent', value: 'recent' },
+  { label: 'Nearby', value: 'nearby' },
+  { label: 'Lowest price', value: 'price-low' },
+  { label: 'Highest price', value: 'price-high' },
+];
+
 const rescueDonationInstructionOptions = [
   'Drop off at the public address during 11 AM-5 PM.',
   'Send us a message through ReTail to coordinate drop-offs.',
   'Visit our website for current donation drop-off instructions.',
   'Please contact us before bringing supplies.',
+];
+
+const usStateOptions = [
+  { label: 'Alabama', value: 'AL' },
+  { label: 'Alaska', value: 'AK' },
+  { label: 'Arizona', value: 'AZ' },
+  { label: 'Arkansas', value: 'AR' },
+  { label: 'California', value: 'CA' },
+  { label: 'Colorado', value: 'CO' },
+  { label: 'Connecticut', value: 'CT' },
+  { label: 'Delaware', value: 'DE' },
+  { label: 'District of Columbia', value: 'DC' },
+  { label: 'Florida', value: 'FL' },
+  { label: 'Georgia', value: 'GA' },
+  { label: 'Hawaii', value: 'HI' },
+  { label: 'Idaho', value: 'ID' },
+  { label: 'Illinois', value: 'IL' },
+  { label: 'Indiana', value: 'IN' },
+  { label: 'Iowa', value: 'IA' },
+  { label: 'Kansas', value: 'KS' },
+  { label: 'Kentucky', value: 'KY' },
+  { label: 'Louisiana', value: 'LA' },
+  { label: 'Maine', value: 'ME' },
+  { label: 'Maryland', value: 'MD' },
+  { label: 'Massachusetts', value: 'MA' },
+  { label: 'Michigan', value: 'MI' },
+  { label: 'Minnesota', value: 'MN' },
+  { label: 'Mississippi', value: 'MS' },
+  { label: 'Missouri', value: 'MO' },
+  { label: 'Montana', value: 'MT' },
+  { label: 'Nebraska', value: 'NE' },
+  { label: 'Nevada', value: 'NV' },
+  { label: 'New Hampshire', value: 'NH' },
+  { label: 'New Jersey', value: 'NJ' },
+  { label: 'New Mexico', value: 'NM' },
+  { label: 'New York', value: 'NY' },
+  { label: 'North Carolina', value: 'NC' },
+  { label: 'North Dakota', value: 'ND' },
+  { label: 'Ohio', value: 'OH' },
+  { label: 'Oklahoma', value: 'OK' },
+  { label: 'Oregon', value: 'OR' },
+  { label: 'Pennsylvania', value: 'PA' },
+  { label: 'Rhode Island', value: 'RI' },
+  { label: 'South Carolina', value: 'SC' },
+  { label: 'South Dakota', value: 'SD' },
+  { label: 'Tennessee', value: 'TN' },
+  { label: 'Texas', value: 'TX' },
+  { label: 'Utah', value: 'UT' },
+  { label: 'Vermont', value: 'VT' },
+  { label: 'Virginia', value: 'VA' },
+  { label: 'Washington', value: 'WA' },
+  { label: 'West Virginia', value: 'WV' },
+  { label: 'Wisconsin', value: 'WI' },
+  { label: 'Wyoming', value: 'WY' },
 ];
 
 const emptyCreateListing: CreateListingInput = {
@@ -257,6 +327,7 @@ function Sprint3Experience() {
         onBack={() => openTab('profile')}
         onOpenListing={openListing}
         onEditListing={openEditListing}
+        onCreateListing={openCreateListing}
       />
     );
   }
@@ -267,7 +338,7 @@ function Sprint3Experience() {
       {route.tab === 'search' ? <SearchScreen onOpenListing={openListing} onOpenProfile={() => openTab('profile')} /> : null}
       {route.tab === 'sell' ? <SellScreen onCreateListing={openCreateListing} onOpenProfile={() => openTab('profile')} /> : null}
       {route.tab === 'favorites' ? (
-        <FavoritesScreen onOpenListing={openListing} onOpenProfile={() => openTab('profile')} />
+        <FavoritesScreen onOpenListing={openListing} onOpenProfile={() => openTab('profile')} onBrowse={() => openTab('home')} />
       ) : null}
       {route.tab === 'profile' ? (
         <ProfileScreen
@@ -290,14 +361,12 @@ function TabsShell({
   children: ReactNode;
 }) {
   const insets = useSafeAreaInsets();
-  const theme = useTheme();
-  const tabBarGap = bottomTabBarGap(insets.bottom);
 
   return (
-    <SafeAreaView edges={['left', 'right']} style={[styles.app, { backgroundColor: theme.palette.background, paddingTop: topSafeAreaPadding(insets.top) }]}>
-      <StatusBar style={theme.resolved === 'dark' ? 'light' : 'dark'} />
+    <SafeAreaView edges={['left', 'right']} style={[styles.app, { paddingTop: topSafeAreaPadding(insets.top) }]}>
+      <StatusBar style={sprint3StatusBarStyle} />
       <View style={[styles.tabContent, { paddingBottom: bottomTabBarContentClearance(insets.bottom) }]}>{children}</View>
-      <View style={[styles.tabBar, { bottom: tabBarGap }]}>
+      <View style={[styles.tabBar, { paddingBottom: Math.max(insets.bottom, spacing.sm) }]}>
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const selected = tab.key === activeTab;
@@ -307,7 +376,7 @@ function TabsShell({
               accessibilityRole="button"
               accessibilityLabel={tab.label}
               onPress={() => onChangeTab(tab.key)}
-              style={styles.tabButton}
+              style={[styles.tabButton, selected && styles.tabButtonActive]}
             >
               <Icon size={22} color={selected ? colors.primary : colors.textSecondary} />
               <Text style={[styles.tabLabel, selected && styles.tabLabelActive]}>{tab.label}</Text>
@@ -322,20 +391,22 @@ function TabsShell({
 export function HomeScreen({
   onOpenListing,
   onOpenProfile,
-  onMessages,
+  onFavorites,
   onNotifications,
   onOpenRescueHub,
+  onOpenSearch,
 }: {
   onOpenListing: (listingId: string) => void;
   onOpenProfile: () => void;
-  onMessages?: () => void;
+  onFavorites?: () => void;
   onNotifications?: () => void;
   onOpenRescueHub?: () => void;
+  onOpenSearch?: () => void;
 }) {
   const auth = useAuth();
   const [search, setSearch] = useState('');
   const [categoryId, setCategoryId] = useState<string | undefined>();
-  const [sort, setSort] = useState<ListingSort>('recent');
+  const [sort, setSort] = useState<HomeListingSort>('recent');
   const [notice, setNotice] = useState<Notice | null>(null);
   const {
     location,
@@ -345,16 +416,14 @@ export function HomeScreen({
   } = useLocation();
   const categories = useTopLevelCategories();
   const favorites = useFavorites(Boolean(auth.user));
-  const unreadMessages = useUnreadMessages(Boolean(auth.user) && Boolean(onMessages));
   const notifications = useNotifications(Boolean(auth.user) && Boolean(onNotifications));
   const params = useMemo<ListingQueryParams>(
     () => ({
       search,
       radiusMiles: location.radiusMiles,
-      sort,
       limit: 50,
     }),
-    [location.radiusMiles, search, sort]
+    [location.radiusMiles, search]
   );
   const rescueSummary = useRescueHub(useMemo(
     () => ({
@@ -378,9 +447,9 @@ export function HomeScreen({
       categorySlug: categoryId,
     })
   );
-  const items = sortListingsForPreview(mergeFeedListings(ownFilteredListings, filteredMarketplaceListings), sort);
+  const items = mergeFeedListings(ownFilteredListings, filteredMarketplaceListings);
+  const sortedItems = sortHomeListings(items, sort);
   const favoriteIds = (favorites.data ?? []).map((listing) => listing.id);
-  const unreadTotal = unreadMessages.data?.total ?? 0;
   const unreadNotificationTotal = notifications.unreadCount ?? 0;
   const locationLabel = [location.city, location.state].filter(Boolean).join(', ');
   const rescueHubStats = useMemo(() => {
@@ -391,6 +460,9 @@ export function HomeScreen({
       urgentNeedCount: rescues.reduce((total, rescue) => total + rescue.urgentNeeds.length, 0),
     };
   }, [rescueSummary.data]);
+  const expandHomeDistance = () => {
+    setRadiusMiles(Math.min(location.radiusMiles === 100 ? 100 : location.radiusMiles + 25, 100));
+  };
 
   const handleFavorite = async (listing: Listing) => {
     if (auth.isGuest) {
@@ -414,7 +486,7 @@ export function HomeScreen({
     <FlatList
       style={styles.listScreen}
       contentContainerStyle={styles.listContent}
-      data={items}
+      data={sortedItems}
       keyExtractor={(item) => item.id}
       ListHeaderComponent={
         <View style={styles.stackLarge}>
@@ -434,20 +506,20 @@ export function HomeScreen({
                 </View>
               </View>
               <View style={styles.homeActionCluster}>
+                {onFavorites ? (
+                  <HeaderShortcut
+                    label="Favorites"
+                    icon={Heart}
+                    count={0}
+                    onPress={onFavorites}
+                  />
+                ) : null}
                 {onNotifications ? (
                   <HeaderShortcut
                     label={unreadNotificationTotal > 0 ? `Notifications, ${unreadNotificationTotal} unread` : 'Notifications'}
                     icon={Bell}
                     count={unreadNotificationTotal}
                     onPress={onNotifications}
-                  />
-                ) : null}
-                {onMessages ? (
-                  <HeaderShortcut
-                    label={unreadTotal > 0 ? `Messages, ${unreadTotal} unread` : 'Messages'}
-                    icon={MessageCircle}
-                    count={unreadTotal}
-                    onPress={onMessages}
                   />
                 ) : null}
               </View>
@@ -465,6 +537,21 @@ export function HomeScreen({
           ) : null}
 
           <SearchBar value={search} onChangeText={setSearch} onClear={() => setSearch('')} />
+
+          {onOpenSearch ? (
+            <Card>
+              <View style={styles.featureCallout}>
+                <View style={styles.featureIconFrame}>
+                  <Bell size={22} color={colors.accent} />
+                </View>
+                <View style={styles.featureCopy}>
+                  <Text style={styles.cardTitle}>Looking for something specific?</Text>
+                  <Text style={styles.body}>Save a search like crates under $50 or cat trees nearby, then turn alerts on.</Text>
+                </View>
+                <Button title="Set Alert" icon={Search} variant="outline" onPress={onOpenSearch} />
+              </View>
+            </Card>
+          ) : null}
 
           <DistanceFilter
             city={location.city}
@@ -487,11 +574,21 @@ export function HomeScreen({
             ))}
           </ScrollView>
 
-          <SectionTitle
-            title="Listings near you"
-            hint={`${items.length} within ${location.radiusMiles} mi`}
-            action={<FilterSortControl value={sort} onChange={setSort} />}
-          />
+          <View style={styles.stack}>
+            <Text style={styles.filterLabel}>Sort listings</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipScroller}>
+              {homeListingSortOptions.map((option) => (
+                <FilterChip
+                  key={option.value}
+                  label={option.label}
+                  selected={sort === option.value}
+                  onPress={() => setSort(option.value)}
+                />
+              ))}
+            </ScrollView>
+          </View>
+
+          <SectionTitle title="Marketplace listings" hint={`${sortedItems.length} within ${location.radiusMiles} mi`} />
           {listings.isLoading ? <LoadingCards /> : null}
           {listings.isError ? <ErrorState message={handleAppError(listings.error).userMessage} onRetry={listings.refetch} /> : null}
         </View>
@@ -512,7 +609,13 @@ export function HomeScreen({
       ItemSeparatorComponent={() => <View style={styles.gridSeparator} />}
       ListEmptyComponent={
         !listings.isLoading && !listings.isError ? (
-          <EmptyState title="No listings nearby yet" body="Try another nearby area, expand the distance, or check back soon." icon={Search} />
+          <EmptyState
+            title="No listings nearby yet"
+            body="Try another nearby area, expand the distance, or set a saved search alert so ReTail can help you watch for new matches."
+            icon={Search}
+            actionTitle={location.radiusMiles < 100 ? 'Expand Distance' : 'Create Search Alert'}
+            onAction={location.radiusMiles < 100 ? expandHomeDistance : onOpenSearch}
+          />
         ) : null
       }
     />
@@ -531,7 +634,6 @@ export function SearchScreen({
   const [categoryId, setCategoryId] = useState<string | undefined>();
   const [condition, setCondition] = useState<ListingCondition | undefined>();
   const [listingType, setListingType] = useState<ListingType | undefined>();
-  const [sort, setSort] = useState<ListingSort>('recent');
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -560,18 +662,17 @@ export function SearchScreen({
       radiusMiles: location.radiusMiles,
       minPrice: parsedMinPrice,
       maxPrice: parsedMaxPrice,
-      sort,
       limit: 50,
     }),
-    [condition, listingType, location.radiusMiles, parsedMaxPrice, parsedMinPrice, search, sort]
+    [condition, listingType, location.radiusMiles, parsedMaxPrice, parsedMinPrice, search]
   );
   const listings = useListings(params);
-  const filteredItems = sortListingsForPreview((listings.data?.items ?? []).filter((listing) =>
+  const filteredItems = (listings.data?.items ?? []).filter((listing) =>
     listingMatchesFeedFilters(listing, {
       search,
       categorySlug: categoryId,
     })
-  ), sort);
+  );
   const favoriteIds = (favorites.data ?? []).map((listing) => listing.id);
 
   const buildSavedSearchInput = (): CreateSavedSearchInput => ({
@@ -650,6 +751,16 @@ export function SearchScreen({
     }
   };
 
+  const clearSearchFilters = () => {
+    setSearch('');
+    setCategoryId(undefined);
+    setCondition(undefined);
+    setListingType(undefined);
+    setMinPrice('');
+    setMaxPrice('');
+    setRadiusMiles(50);
+  };
+
   const handleFavorite = async (listing: Listing) => {
     if (auth.isGuest) {
       setNotice({ title: 'Create an account to save listings.', body: 'Saved listings live in your Favorites tab.' });
@@ -701,9 +812,13 @@ export function SearchScreen({
               />
             ))}
           </ScrollView>
-          <View style={styles.inputGrid}>
-            <TextInput label="Min Price" value={minPrice} onChangeText={setMinPrice} placeholder="$0" keyboardType="numeric" />
-            <TextInput label="Max Price" value={maxPrice} onChangeText={setMaxPrice} placeholder="$100" keyboardType="numeric" />
+          <View style={styles.priceFilterStack}>
+            <View style={styles.priceFilterField}>
+              <TextInput label="Min Price" value={minPrice} onChangeText={setMinPrice} placeholder="$0" keyboardType="numeric" />
+            </View>
+            <View style={styles.priceFilterField}>
+              <TextInput label="Max Price" value={maxPrice} onChangeText={setMaxPrice} placeholder="$100" keyboardType="numeric" />
+            </View>
           </View>
           <Text style={styles.filterLabel}>Condition</Text>
           <View style={styles.wrapRow}>
@@ -715,9 +830,9 @@ export function SearchScreen({
           <Text style={styles.filterLabel}>Listing Type</Text>
           <View style={styles.wrapRow}>
             <FilterChip label="Any" selected={!listingType} onPress={() => setListingType(undefined)} />
-            <FilterChip label="For Sale" selected={listingType === 'sale'} onPress={() => setListingType('sale')} />
+            <FilterChip label="Sale" selected={listingType === 'sale'} onPress={() => setListingType('sale')} />
             <FilterChip label="Free" selected={listingType === 'free'} onPress={() => setListingType('free')} />
-            <FilterChip label="Rescue Donation" selected={listingType === 'donation'} onPress={() => setListingType('donation')} />
+            <FilterChip label="Donation" selected={listingType === 'donation'} onPress={() => setListingType('donation')} />
           </View>
           <Card>
             <View style={styles.stack}>
@@ -748,11 +863,7 @@ export function SearchScreen({
               ))}
             </View>
           ) : null}
-          <SectionTitle
-            title="Results"
-            hint={`${filteredItems.length} within ${location.radiusMiles} mi`}
-            action={<FilterSortControl value={sort} onChange={setSort} />}
-          />
+          <SectionTitle title="Results" hint={`${filteredItems.length} within ${location.radiusMiles} mi`} />
           {listings.isLoading ? <LoadingCards /> : null}
           {listings.isError ? <ErrorState message={handleAppError(listings.error).userMessage} onRetry={listings.refetch} /> : null}
         </View>
@@ -773,7 +884,13 @@ export function SearchScreen({
       ItemSeparatorComponent={() => <View style={styles.gridSeparator} />}
       ListEmptyComponent={
         !listings.isLoading && !listings.isError ? (
-          <EmptyState title="No results found" body="Broaden your search, choose another nearby area, expand the distance, or remove filters." icon={Search} />
+          <EmptyState
+            title="No results found"
+            body="Broaden your search, choose another nearby area, expand the distance, or save an alert for later."
+            icon={Search}
+            actionTitle="Clear Filters"
+            onAction={clearSearchFilters}
+          />
         ) : null
       }
     />
@@ -867,7 +984,15 @@ function savedSearchSummary(savedSearch: SavedSearch): string {
 }
 
 function listingTypeLabel(listingType: ListingType): string {
-  return listingTypeFilterLabel(listingType);
+  if (listingType === 'free') {
+    return 'Free';
+  }
+
+  if (listingType === 'donation') {
+    return 'Donation';
+  }
+
+  return 'Sale';
 }
 
 function priceRangeLabel(minPrice?: number, maxPrice?: number): string {
@@ -912,9 +1037,21 @@ export function SellScreen({
   return (
     <ScreenFrame>
       <Card>
-        <View style={styles.stack}>
-          <Text style={styles.cardTitle}>Create listing</Text>
-          <Text style={styles.body}>Add photos, details, price, free giveaway, or rescue-donation status, and pickup location.</Text>
+        <View style={styles.sellHero}>
+          <View style={styles.sellHeroHeader}>
+            <View style={styles.sellHeroIcon}>
+              <Plus size={26} color={colors.logoOrange} />
+            </View>
+            <View style={styles.sellStepCopy}>
+              <Text style={styles.cardTitle}>Create listing</Text>
+              <Text style={styles.body}>Turn extra pet supplies into a local sale, free pickup, or rescue donation.</Text>
+            </View>
+          </View>
+          <View style={styles.sellStepList}>
+            <SellStep icon={Camera} title="Add clear photos" body="Show the full item, condition, and any size details." />
+            <SellStep icon={ClipboardCheck} title="Pick the right exchange" body="Choose sale, free, donation, pickup, meetup, or shipping." />
+            <SellStep icon={ShieldCheck} title="Keep it comfortable" body="Use messages to confirm timing and safe handoff details." />
+          </View>
           <Button title="Start Listing" onPress={onCreateListing} fullWidth />
         </View>
       </Card>
@@ -922,12 +1059,30 @@ export function SellScreen({
   );
 }
 
+function SellStep({ icon: Icon, title, body }: { icon: IconComponent; title: string; body: string }) {
+  return (
+    <View style={styles.sellStepRow}>
+      <View style={styles.sellStepIcon}>
+        <Icon size={18} color={colors.primary} />
+      </View>
+      <View style={styles.sellStepCopy}>
+        <Text style={styles.bodyStrong}>{title}</Text>
+        <Text style={styles.metaText}>{body}</Text>
+      </View>
+    </View>
+  );
+}
+
 export function FavoritesScreen({
+  onBack,
   onOpenListing,
   onOpenProfile,
+  onBrowse,
 }: {
+  onBack?: () => void;
   onOpenListing: (listingId: string) => void;
   onOpenProfile: () => void;
+  onBrowse?: () => void;
 }) {
   const auth = useAuth();
   const favorites = useFavorites(Boolean(auth.user));
@@ -937,6 +1092,7 @@ export function FavoritesScreen({
   if (auth.isGuest) {
     return (
       <ScreenFrame>
+        {onBack ? <BackButton onPress={onBack} /> : null}
         <Card>
           <View style={styles.stack}>
             <Text style={styles.cardTitle}>Create an account to save listings.</Text>
@@ -965,6 +1121,7 @@ export function FavoritesScreen({
       ListHeaderComponent={
         <View style={styles.stackLarge}>
           <View style={styles.headerBlock}>
+            {onBack ? <BackButton onPress={onBack} /> : null}
             <Text style={styles.title}>Favorites</Text>
             <Text style={styles.body}>Saved listings you want to revisit.</Text>
           </View>
@@ -989,7 +1146,13 @@ export function FavoritesScreen({
       ItemSeparatorComponent={() => <View style={styles.gridSeparator} />}
       ListEmptyComponent={
         !favorites.isLoading && !favorites.isError ? (
-          <EmptyState title="No saved listings yet" body="Save items you love and find them here later." icon={Heart} />
+          <EmptyState
+            title="No saved listings yet"
+            body="Tap the heart on listings you want to compare, revisit, or message about later."
+            icon={Heart}
+            actionTitle={onBrowse ? 'Browse Listings' : undefined}
+            onAction={onBrowse}
+          />
         ) : null
       }
     />
@@ -1019,13 +1182,14 @@ export function CreateListingScreen({
       return;
     }
 
+    submitLockedRef.current = true;
     const validation = validateCreateListingInput(form);
     if (!validation.isValid) {
       setErrors(validation.errors);
+      submitLockedRef.current = false;
       return;
     }
 
-    submitLockedRef.current = true;
     setErrors({});
     setUploading(true);
     setProgress(25);
@@ -1047,12 +1211,12 @@ export function CreateListingScreen({
 
   return (
     <ScreenContainer>
-      <StatusBar style="dark" />
+      <StatusBar style={sprint3StatusBarStyle} />
       <ScrollView style={styles.listScreen} contentContainerStyle={styles.listContent} keyboardShouldPersistTaps="handled">
         <BackButton onPress={onBack} />
         <View style={styles.headerBlock}>
           <Text style={styles.title}>Create listing</Text>
-          <Text style={styles.body}>Sell, give away, or offer pet supplies to a verified rescue nearby.</Text>
+          <Text style={styles.body}>Sell or donate pet supplies nearby.</Text>
         </View>
 
         <ListingForm
@@ -1063,7 +1227,13 @@ export function CreateListingScreen({
           onChange={update}
         />
         {mutation.error ? <Text style={styles.errorText}>{mutation.error}</Text> : null}
-        <Button title="Publish Listing" onPress={submit} loading={mutation.loading || uploading} fullWidth />
+        <Button
+          title="Publish Listing"
+          onPress={submit}
+          loading={mutation.loading || uploading}
+          disabled={mutation.loading || uploading}
+          fullWidth
+        />
       </ScrollView>
     </ScreenContainer>
   );
@@ -1089,12 +1259,11 @@ export function ListingDetailScreen({
   const auth = useAuth();
   const [notice, setNotice] = useState<Notice | null>(null);
   const listing = useListing(listingId);
-  const rescueDashboard = useRescueDashboard(Boolean(auth.profile?.account_type === 'rescue'));
 
   if (listing.isLoading) {
     return (
       <ScreenFrame>
-        <LoadingSpinner />
+        <BrandedLoadingPanel title="Loading listing" body="Fetching the photos, seller details, and handoff options." />
       </ScreenFrame>
     );
   }
@@ -1111,8 +1280,6 @@ export function ListingDetailScreen({
     <ListingDetailContent
       detail={listing.data}
       isGuest={auth.isGuest}
-      currentProfile={auth.profile ?? undefined}
-      rescueProfile={rescueDashboard.data?.profile ?? null}
       currentUserId={auth.profile?.id ?? auth.user?.id}
       notice={notice}
       setNotice={setNotice}
@@ -1130,8 +1297,6 @@ export function ListingDetailScreen({
 function ListingDetailContent({
   detail,
   isGuest,
-  currentProfile,
-  rescueProfile,
   currentUserId,
   notice,
   setNotice,
@@ -1145,8 +1310,6 @@ function ListingDetailContent({
 }: {
   detail: ListingDetail;
   isGuest: boolean;
-  currentProfile?: Profile;
-  rescueProfile?: RescueProfile | null;
   currentUserId?: string;
   notice: Notice | null;
   setNotice: (notice: Notice | null) => void;
@@ -1177,23 +1340,6 @@ function ListingDetailContent({
   const completionDisabled = ['Sold', 'Donated', 'Archived', 'Removed'].includes(item.status);
   const archiveDisabled = ['Sold', 'Donated', 'Archived', 'Removed'].includes(item.status);
   const deleteDisabled = item.status === 'Removed';
-  const rescueDonation = item.listingType === 'donation';
-  const verifiedRescueRequester = Boolean(
-    currentProfile?.account_type === 'rescue'
-    && !currentProfile.is_banned
-    && !currentProfile.deleted_at
-    && rescueProfile?.is_verified
-    && rescueProfile.verification_status === 'verified'
-    && rescueProfile.is_active
-  );
-
-  const donationRequestMessage = isGuest
-    ? 'Log in with a verified rescue account to request this donation.'
-    : currentProfile?.account_type !== 'rescue'
-      ? 'This item is reserved for verified rescue organizations.'
-      : !verifiedRescueRequester
-        ? 'Your rescue must be verified before requesting rescue donations.'
-        : undefined;
 
   const toggleFavorite = async () => {
     if (isGuest) {
@@ -1255,7 +1401,7 @@ function ListingDetailContent({
 
   return (
     <ScreenContainer>
-      <StatusBar style="dark" />
+      <StatusBar style={sprint3StatusBarStyle} />
       <ScrollView style={styles.listScreen} contentContainerStyle={styles.detailContent}>
         <View>
           <ListingGallery images={detail.images} fallbackImage={item.image} title={item.title} />
@@ -1282,52 +1428,16 @@ function ListingDetailContent({
           <View style={styles.wrapRow}>
             <ConditionBadge condition={item.condition} />
             <FilterChip label={item.category} selected onPress={() => undefined} />
-            <Badge label={listingTypeBadgeLabel(item.listingType)} tone={item.listingType === 'donation' ? 'info' : item.listingType === 'free' ? 'success' : 'neutral'} />
           </View>
         </View>
 
         {notice ? <NoticeCard notice={notice} /> : null}
-        {ownerConfirm ? (
-          <Card>
-            <View style={styles.stack}>
-              <Text style={styles.cardTitle}>{ownerConfirm.title}</Text>
-              <Text style={styles.body}>{ownerConfirm.body}</Text>
-              <View style={styles.actionGrid}>
-                <Button title="Cancel" variant="outline" onPress={() => setOwnerConfirm(null)} fullWidth />
-                <Button
-                  title={ownerConfirm.confirmTitle}
-                  variant={ownerConfirm.variant ?? 'primary'}
-                  onPress={() => void runOwnerAction()}
-                  loading={ownerActions.isFetching}
-                  fullWidth
-                />
-              </View>
-            </View>
-          </Card>
-        ) : null}
-
         <Card>
           <View style={styles.stack}>
             <Text style={styles.cardTitle}>Description</Text>
             <Text style={styles.bodyStrong}>{item.description}</Text>
           </View>
         </Card>
-
-        {rescueDonation ? (
-          <Card>
-            <View style={styles.stack}>
-              <Badge label="Rescue Donation" tone="info" />
-              <Text style={styles.cardTitle}>For verified rescues</Text>
-              <Text style={styles.body}>
-                This item is being offered free to a verified animal rescue organization. The donor will choose which rescue receives it.
-              </Text>
-              <Text style={styles.metaText}>
-                ReTail does not determine whether a donation is tax deductible. Ask the receiving organization whether it can provide a donation receipt.
-              </Text>
-              {donationRequestMessage ? <Text style={styles.inlineError}>{donationRequestMessage}</Text> : null}
-            </View>
-          </Card>
-        ) : null}
 
         {listingItemDetailRows(item).length > 0 ? (
           <Card>
@@ -1472,14 +1582,9 @@ function ListingDetailContent({
           ) : (
             <>
               <Button
-                title={rescueDonation ? 'Request this donation' : 'Message Seller'}
+                title="Message Seller"
                 icon={MessageCircle}
                 onPress={() => {
-                  if (rescueDonation && donationRequestMessage) {
-                    setNotice({ title: 'Rescue donation', body: donationRequestMessage });
-                    return;
-                  }
-
                   if (onMessageSeller) {
                     void Promise.resolve(onMessageSeller(item.id, detail.seller.id)).catch((error) => {
                       setNotice({ title: 'Messaging is unavailable', body: handleAppError(error).userMessage });
@@ -1517,6 +1622,16 @@ function ListingDetailContent({
           ) : null}
         </View>
       </ScrollView>
+      <ActionConfirmModal
+        visible={Boolean(ownerConfirm)}
+        title={ownerConfirm?.title ?? ''}
+        body={ownerConfirm?.body ?? ''}
+        confirmTitle={ownerConfirm?.confirmTitle ?? 'Confirm'}
+        variant={ownerConfirm?.variant ?? 'primary'}
+        loading={ownerActions.isFetching}
+        onCancel={() => setOwnerConfirm(null)}
+        onConfirm={() => void runOwnerAction()}
+      />
     </ScreenContainer>
   );
 }
@@ -1528,6 +1643,9 @@ export function ProfileScreen({
   onMessages,
   onNotifications,
   onSettings,
+  onPreferences,
+  onSafetyCenter,
+  onFAQ,
   onAdmin,
   onReviewTransaction,
 }: {
@@ -1537,11 +1655,15 @@ export function ProfileScreen({
   onMessages?: () => void;
   onNotifications?: () => void;
   onSettings?: () => void;
+  onPreferences?: () => void;
+  onSafetyCenter?: () => void;
+  onFAQ?: () => void;
   onAdmin?: () => void;
   onReviewTransaction?: (listingId: string, revieweeId: string, transactionId: string) => void;
 }) {
   const auth = useAuth();
   const [busy, setBusy] = useState(false);
+  const [googleBusy, setGoogleBusy] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
@@ -1549,6 +1671,7 @@ export function ProfileScreen({
   const [displayName, setDisplayName] = useState('');
   const [username, setUsername] = useState('');
   const [accountType, setAccountType] = useState<'regular' | 'rescue'>('regular');
+  const [pendingVerificationEmail, setPendingVerificationEmail] = useState('');
   const [rescueOrganizationName, setRescueOrganizationName] = useState('');
   const [rescueAnimals, setRescueAnimals] = useState('');
   const [rescueCity, setRescueCity] = useState('');
@@ -1563,16 +1686,32 @@ export function ProfileScreen({
   const [rescueOrganizationType, setRescueOrganizationType] = useState<RescueOrganizationType>('Foster-based');
   const [rescueHas501c3, setRescueHas501c3] = useState(false);
   const [rescueEin, setRescueEin] = useState('');
+  const [googleProfileSetup, setGoogleProfileSetup] = useState<{
+    email: string;
+    displayName: string;
+    username: string;
+  } | null>(null);
   const myListings = useMyListings();
   const reviews = useReviews(auth.profile?.id ?? '');
   const reviewSummary = useReviewSummary(auth.profile?.id ?? '', Boolean(auth.profile));
   const pendingReviews = usePendingReviews(Boolean(auth.profile));
+  const googleSignInAvailability = getGoogleSignInAvailability(Platform.OS);
+  warnIfGoogleSignInUnavailable(Platform.OS);
+
+  if (auth.loading && !auth.profile) {
+    return (
+      <ScreenFrame>
+        <BrandedLoadingPanel title="Loading your ReTail profile" body="Getting your listings, rescue tools, and saved activity ready." />
+      </ScreenFrame>
+    );
+  }
 
   const submitAuth = async () => {
     setBusy(true);
     setNotice(null);
     try {
       if (authMode === 'register') {
+        const verificationEmail = email.trim().toLowerCase();
         const rescueProfile = accountType === 'rescue'
           ? buildRescueSignupInput({
             organizationName: rescueOrganizationName,
@@ -1601,7 +1740,9 @@ export function ProfileScreen({
           accountType,
           rescueProfile,
         });
-        setNotice({ title: 'Check your email', body: 'Verify your email address, then log in to finish setting up ReTail.' });
+        setPassword('');
+        setAuthMode('login');
+        setPendingVerificationEmail(verificationEmail);
         return;
       }
 
@@ -1616,11 +1757,81 @@ export function ProfileScreen({
     }
   };
 
+  const sendPasswordReset = async () => {
+    setBusy(true);
+    setNotice(null);
+
+    try {
+      await auth.resetPassword(email);
+      setNotice({
+        title: 'Check your email',
+        body: 'If a ReTail account exists for that email, a password reset link has been sent.',
+      });
+    } catch (error) {
+      setNotice({
+        title: 'Reset link not sent',
+        body: handleAppError(error).userMessage,
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const continueWithGoogle = async () => {
+    setGoogleBusy(true);
+    setNotice(null);
+
+    try {
+      const googleSession = await auth.signInWithGoogle();
+      if (!googleSession) {
+        return;
+      }
+
+      if (googleSession.requiresProfileSetup) {
+        setGoogleProfileSetup({
+          email: googleSession.user.email,
+          displayName: googleSession.user.displayName,
+          username: googleSession.user.username,
+        });
+      }
+    } catch (error) {
+      if (isGoogleSignInCancellation(error)) {
+        return;
+      }
+
+      setNotice({
+        title: 'Google sign-in failed',
+        body: handleAppError(error).userMessage,
+      });
+    } finally {
+      setGoogleBusy(false);
+    }
+  };
+
   const signOut = async () => {
     await auth.signOut();
   };
 
   if (auth.isGuest || !auth.profile) {
+    if (pendingVerificationEmail) {
+      return (
+        <ScreenFrame>
+          <NoticeCard
+            notice={{
+              title: 'Check your email',
+              body: `We sent a confirmation link to ${pendingVerificationEmail}. Verify your email address, then come back and log in to finish setting up ReTail.`,
+            }}
+            actionLabel="Go to Log In"
+            onAction={() => {
+              setPendingVerificationEmail('');
+              setNotice(null);
+              setAuthMode('login');
+            }}
+          />
+        </ScreenFrame>
+      );
+    }
+
     return (
       <ScreenFrame>
         <Card>
@@ -1637,6 +1848,17 @@ export function ProfileScreen({
                   <FilterChip label="Regular User" selected={accountType === 'regular'} onPress={() => setAccountType('regular')} />
                   <FilterChip label="Animal Rescue" selected={accountType === 'rescue'} onPress={() => setAccountType('rescue')} />
                 </View>
+                {googleSignInAvailability.available && accountType === 'regular' ? (
+                  <>
+                    <GoogleSignInButton
+                      label="Sign up with Google"
+                      onPress={() => void continueWithGoogle()}
+                      loading={googleBusy}
+                      disabled={busy || auth.loading}
+                    />
+                    <Text style={styles.filterLabel}>or continue with email</Text>
+                  </>
+                ) : null}
                 {accountType === 'rescue' ? (
                   <RescueSignupFields
                     organizationName={rescueOrganizationName}
@@ -1674,6 +1896,17 @@ export function ProfileScreen({
                 <TextInput label="Username" value={username} onChangeText={setUsername} placeholder="retail_rachel" autoCapitalize="none" />
               </>
             ) : null}
+            {authMode === 'login' && googleSignInAvailability.available ? (
+              <>
+                <GoogleSignInButton
+                  label="Continue with Google"
+                  onPress={() => void continueWithGoogle()}
+                  loading={googleBusy}
+                  disabled={busy || auth.loading}
+                />
+                <Text style={styles.filterLabel}>or continue with email</Text>
+              </>
+            ) : null}
             <TextInput
               label="Email"
               value={email}
@@ -1682,7 +1915,24 @@ export function ProfileScreen({
               keyboardType="email-address"
               autoCapitalize="none"
             />
-            <TextInput label="Password" value={password} onChangeText={setPassword} placeholder="Password" secureTextEntry />
+            <TextInput
+              label="Password"
+              value={password}
+              onChangeText={setPassword}
+              placeholder="Password"
+              secureTextEntry
+              helperText={authMode === 'register' ? 'Use 8+ characters with uppercase, lowercase, a number, and a special character.' : undefined}
+              textContentType={authMode === 'register' ? 'newPassword' : 'password'}
+            />
+            {authMode === 'login' ? (
+              <Button
+                title="Forgot Password?"
+                variant="ghost"
+                onPress={() => void sendPasswordReset()}
+                disabled={busy || auth.loading}
+                fullWidth
+              />
+            ) : null}
             {notice ? <NoticeCard notice={notice} /> : null}
             <Button
               title={authMode === 'register' ? 'Create Account' : 'Log In'}
@@ -1696,12 +1946,26 @@ export function ProfileScreen({
     );
   }
 
+  if (googleProfileSetup && auth.profile?.account_type === 'regular') {
+    return (
+      <GoogleProfileSetupScreen
+        email={googleProfileSetup.email}
+        profile={auth.profile}
+        onComplete={() => setGoogleProfileSetup(null)}
+        onSignOut={signOut}
+      />
+    );
+  }
+
   if (auth.profile.account_type === 'rescue') {
     return (
       <RescueDashboardScreen
         profile={auth.profile}
         onEditProfile={onEditProfile}
         onSettings={onSettings}
+        onPreferences={onPreferences}
+        onSafetyCenter={onSafetyCenter}
+        onFAQ={onFAQ}
         onMessages={onMessages}
         onNotifications={onNotifications}
         onAdmin={onAdmin}
@@ -1711,6 +1975,7 @@ export function ProfileScreen({
   }
 
   const activeListings = (myListings.data ?? []).filter((listing) => listing.status === 'Active').slice(0, 3);
+  const missingProfileItems = profileCompletionItems(auth.profile);
 
   return (
     <ScrollView style={styles.listScreen} contentContainerStyle={styles.listContent}>
@@ -1731,12 +1996,24 @@ export function ProfileScreen({
           { label: 'Reviews', value: auth.profile.review_count },
         ]}
       />
+      {missingProfileItems.length > 0 ? (
+        <NoticeCard
+          notice={{
+            title: 'Finish your profile',
+            body: `Add ${missingProfileItems.join(', ')} so buyers and sellers feel more comfortable connecting with you.`,
+          }}
+          actionLabel="Complete Profile"
+          onAction={onEditProfile}
+        />
+      ) : null}
       <View style={styles.actionGrid}>
         <Button title="Edit Profile" icon={Edit3} onPress={onEditProfile} fullWidth />
         <Button title="My Listings" icon={PackageOpen} variant="outline" onPress={onMyListings} fullWidth />
         {onMessages ? <Button title="Messages" icon={MessageCircle} variant="outline" onPress={onMessages} fullWidth /> : null}
-        {onNotifications ? <Button title="Notifications" icon={Bell} variant="outline" onPress={onNotifications} fullWidth /> : null}
         {onSettings ? <Button title="Settings" icon={Settings} variant="outline" onPress={onSettings} fullWidth /> : null}
+        {onPreferences ? <Button title="Preferences" icon={ListChecks} variant="outline" onPress={onPreferences} fullWidth /> : null}
+        {onSafetyCenter ? <Button title="Safety Center" icon={ShieldCheck} variant="outline" onPress={onSafetyCenter} fullWidth /> : null}
+        {onFAQ ? <Button title="FAQ" icon={HelpCircle} variant="outline" onPress={onFAQ} fullWidth /> : null}
         {auth.profile.is_admin && onAdmin ? <Button title="Admin Review" icon={ShieldCheck} variant="outline" onPress={onAdmin} fullWidth /> : null}
         <Button title="Log Out" icon={LogOut} variant="outline" onPress={signOut} fullWidth />
       </View>
@@ -1780,6 +2057,196 @@ export function ProfileScreen({
         emptyBody="Create your first listing from the Sell tab."
       />
     </ScrollView>
+  );
+}
+
+function GoogleProfileSetupScreen({
+  email,
+  profile,
+  onComplete,
+  onSignOut,
+}: {
+  email: string;
+  profile: Profile;
+  onComplete: () => void;
+  onSignOut: () => void | Promise<void>;
+}) {
+  const themeColors = useThemeColors();
+  const mutation = useUpdateProfile();
+  const [form, setForm] = useState({
+    display_name: profile.display_name,
+    username: profile.username,
+    bio: profile.bio ?? '',
+    city: profile.city ?? '',
+    state: profile.state ?? '',
+    zip_code: profile.zip_code ?? '',
+  });
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const update = (field: keyof typeof form, value: string) => {
+    setForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const save = async () => {
+    const nextErrors: Record<string, string> = {};
+
+    if (!form.display_name.trim()) {
+      nextErrors.display_name = 'Choose how your name should appear.';
+    }
+
+    if (!form.username.trim()) {
+      nextErrors.username = 'Choose a username.';
+    }
+
+    if (form.zip_code.trim() && !/^\d{5}$/.test(form.zip_code.trim())) {
+      nextErrors.zip_code = 'Use a 5-digit zip code.';
+    }
+
+    setErrors(nextErrors);
+
+    if (Object.keys(nextErrors).length > 0) {
+      return;
+    }
+
+    try {
+      await mutation.updateProfile(form);
+      onComplete();
+    } catch {
+      return;
+    }
+  };
+
+  return (
+    <ScreenContainer>
+      <StatusBar style={sprint3StatusBarStyle} />
+      <ScrollView style={styles.listScreen} contentContainerStyle={styles.listContent} keyboardShouldPersistTaps="handled">
+        <View style={styles.headerBlock}>
+          <Text style={styles.title}>Set up your ReTail profile</Text>
+          <Text style={styles.body}>Your Google account is connected. Choose the public details people will see in ReTail.</Text>
+        </View>
+        <Card>
+          <View style={styles.stack}>
+            <Field label="Google email">
+              <View style={[styles.lockedEmailFrame, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
+                <Text style={[styles.lockedEmailText, { color: themeColors.textSecondary }]}>{email}</Text>
+              </View>
+            </Field>
+            <TextInput
+              label="Display Name"
+              value={form.display_name}
+              onChangeText={(value) => update('display_name', value)}
+              placeholder="Rachel C."
+              error={errors.display_name}
+            />
+            <TextInput
+              label="Username"
+              value={form.username}
+              onChangeText={(value) => update('username', value)}
+              placeholder="retail_rachel"
+              helperText="Use the handle you want buyers and sellers to recognize."
+              error={errors.username}
+              autoCapitalize="none"
+            />
+            <TextArea
+              label="Bio"
+              value={form.bio}
+              onChangeText={(value) => update('bio', value)}
+              placeholder="Pet parent, foster, aquarium keeper..."
+            />
+            <LocationPicker
+              city={form.city}
+              state={form.state}
+              onCityChange={(value) => update('city', value)}
+              onStateChange={(value) => update('state', value)}
+            />
+            <TextInput
+              label="Zip Code"
+              value={form.zip_code}
+              onChangeText={(value) => update('zip_code', value)}
+              keyboardType="numeric"
+              error={errors.zip_code}
+            />
+            {mutation.error ? <Text style={styles.errorText}>{mutation.error}</Text> : null}
+            <Button title="Save Profile" onPress={() => void save()} loading={mutation.loading} fullWidth />
+            <Button title="Use a Different Google Account" variant="ghost" onPress={() => void onSignOut()} disabled={mutation.loading} fullWidth />
+          </View>
+        </Card>
+      </ScrollView>
+    </ScreenContainer>
+  );
+}
+
+function StateSelect({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const themeColors = useThemeColors();
+  const normalizedValue = value.trim().toUpperCase();
+  const selectedState = usStateOptions.find((option) => option.value === normalizedValue);
+  const displayValue = selectedState ? `${selectedState.label} (${selectedState.value})` : '';
+
+  const close = () => setOpen(false);
+
+  const selectState = (nextValue: string) => {
+    onChange(nextValue);
+    close();
+  };
+
+  return (
+    <Field label="State">
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Select state"
+        onPress={() => setOpen(true)}
+        style={[styles.stateSelectButton, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}
+      >
+        <Text
+          numberOfLines={1}
+          style={[styles.stateSelectText, { color: selectedState ? themeColors.textPrimary : themeColors.textSecondary }]}
+        >
+          {displayValue || 'Select a state'}
+        </Text>
+        <ChevronDown size={20} color={themeColors.textSecondary} />
+      </Pressable>
+      <Modal transparent visible={open} animationType="fade" onRequestClose={close}>
+        <Pressable style={styles.stateSelectBackdrop} onPress={close}>
+          <Pressable
+            onPress={(event) => event.stopPropagation()}
+            style={[styles.stateSelectSheet, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}
+          >
+            <View style={styles.stateSelectHeader}>
+              <Text style={[styles.stateSelectTitle, { color: themeColors.textPrimary }]}>Select state</Text>
+              <Pressable accessibilityRole="button" accessibilityLabel="Close state selector" onPress={close} hitSlop={8}>
+                <Text style={[styles.stateSelectClose, { color: themeColors.primary }]}>Close</Text>
+              </Pressable>
+            </View>
+            <ScrollView contentContainerStyle={styles.stateOptionList} keyboardShouldPersistTaps="handled">
+              {usStateOptions.map((option) => {
+                const selected = option.value === normalizedValue;
+
+                return (
+                  <Pressable
+                    key={option.value}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Choose ${option.label}`}
+                    onPress={() => selectState(option.value)}
+                    style={[
+                      styles.stateOptionRow,
+                      { borderBottomColor: themeColors.border },
+                      selected && { backgroundColor: themeColors.primarySoft },
+                    ]}
+                  >
+                    <View style={styles.stateOptionCopy}>
+                      <Text style={[styles.stateOptionName, { color: themeColors.textPrimary }]}>{option.label}</Text>
+                      <Text style={[styles.stateOptionCode, { color: themeColors.textSecondary }]}>{option.value}</Text>
+                    </View>
+                    {selected ? <Check size={20} color={themeColors.primary} /> : null}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </Field>
   );
 }
 
@@ -1847,16 +2314,21 @@ function RescueSignupFields({
       <Text style={styles.filterLabel}>Rescue verification details</Text>
       <TextInput label="Organization Name" value={organizationName} onChangeText={onOrganizationName} placeholder="Green Paws Rescue" />
       <TextInput label="Animals Rescued" value={animalsRescued} onChangeText={onAnimalsRescued} placeholder="Dogs, cats, rabbits" />
-      <View style={styles.inputGrid}>
-        <TextInput label="City" value={city} onChangeText={onCity} placeholder="Austin" />
-        <TextInput label="State" value={state} onChangeText={onState} placeholder="TX" autoCapitalize="characters" />
-      </View>
+      <TextInput label="City" value={city} onChangeText={onCity} placeholder="Austin" />
+      <StateSelect value={state} onChange={onState} />
       <TextInput label="Zip Code" value={zipCode} onChangeText={onZipCode} placeholder="Optional public zip code" keyboardType="number-pad" />
       <TextInput label="Public Address" value={addressLine1} onChangeText={onAddressLine1} placeholder="Optional drop-off or facility address" />
       <TextInput label="Address Line 2" value={addressLine2} onChangeText={onAddressLine2} placeholder="Suite, unit, or notes" />
       <TextInput label="Contact Person" value={contactPerson} onChangeText={onContactPerson} placeholder="Avery M." />
       <TextInput label="Contact Phone" value={contactPhone} onChangeText={onContactPhone} placeholder="Optional" keyboardType="phone-pad" />
-      <TextInput label="Website or Social Link" value={websiteUrl} onChangeText={onWebsiteUrl} placeholder="Optional" autoCapitalize="none" />
+      <TextInput
+        label="Website or Social Link"
+        value={websiteUrl}
+        onChangeText={onWebsiteUrl}
+        placeholder="Required public website or social page"
+        helperText="Required for rescue verification. A website, Facebook page, Instagram, or Linktree works."
+        autoCapitalize="none"
+      />
       <Text style={styles.filterLabel}>Donation drop-off options</Text>
       <View style={styles.wrapRow}>
         {rescueDonationInstructionOptions.map((option) => (
@@ -1891,6 +2363,9 @@ function RescueDashboardScreen({
   profile,
   onEditProfile,
   onSettings,
+  onPreferences,
+  onSafetyCenter,
+  onFAQ,
   onMessages,
   onNotifications,
   onAdmin,
@@ -1899,6 +2374,9 @@ function RescueDashboardScreen({
   profile: Profile;
   onEditProfile: () => void;
   onSettings?: () => void;
+  onPreferences?: () => void;
+  onSafetyCenter?: () => void;
+  onFAQ?: () => void;
   onMessages?: () => void;
   onNotifications?: () => void;
   onAdmin?: () => void;
@@ -2054,7 +2532,7 @@ function RescueDashboardScreen({
   if (dashboard.isLoading) {
     return (
       <ScreenFrame>
-        <LoadingSpinner />
+        <BrandedLoadingPanel title="Loading rescue dashboard" body="Gathering your public rescue profile, urgent needs, and wishlist." />
       </ScreenFrame>
     );
   }
@@ -2114,8 +2592,10 @@ function RescueDashboardScreen({
       <View style={styles.actionGrid}>
         <Button title="Edit Profile" icon={Edit3} onPress={onEditProfile} fullWidth />
         {onMessages ? <Button title="Messages" icon={MessageCircle} variant="outline" onPress={onMessages} fullWidth /> : null}
-        {onNotifications ? <Button title="Notifications" icon={Bell} variant="outline" onPress={onNotifications} fullWidth /> : null}
         {onSettings ? <Button title="Settings" icon={Settings} variant="outline" onPress={onSettings} fullWidth /> : null}
+        {onPreferences ? <Button title="Preferences" icon={ListChecks} variant="outline" onPress={onPreferences} fullWidth /> : null}
+        {onSafetyCenter ? <Button title="Safety Center" icon={ShieldCheck} variant="outline" onPress={onSafetyCenter} fullWidth /> : null}
+        {onFAQ ? <Button title="FAQ" icon={HelpCircle} variant="outline" onPress={onFAQ} fullWidth /> : null}
         {profile.is_admin && onAdmin ? <Button title="Admin Review" icon={ShieldCheck} variant="outline" onPress={onAdmin} fullWidth /> : null}
         <Button title="Log Out" icon={LogOut} variant="outline" onPress={onSignOut} fullWidth />
       </View>
@@ -2478,6 +2958,20 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
     setRescueForm((current) => ({ ...current, [field]: value }));
   };
 
+  const uploadSelectedAvatar = async (selectedUri: string, options?: { base64?: string; mimeType?: string }) => {
+    const previousAvatarUrl = form.avatar_url;
+    update('avatar_url', selectedUri);
+
+    try {
+      const avatarUrl = await mutation.uploadAvatar(selectedUri);
+      update('avatar_url', avatarUrl);
+      setNotice({ title: 'Profile photo updated', body: 'Your new profile picture has been saved.' });
+    } catch (error) {
+      update('avatar_url', previousAvatarUrl);
+      setNotice({ title: 'Photo was not uploaded', body: handleAppError(error).userMessage });
+    }
+  };
+
   const chooseAvatar = async () => {
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
       const input = document.createElement('input');
@@ -2488,26 +2982,8 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
         if (!file) {
           return;
         }
-
-        if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
-          setNotice({ title: 'Photo type not supported', body: 'Choose a JPEG, PNG, or WebP image.' });
-          return;
-        }
-
-        if (file.size > 10 * 1024 * 1024) {
-          setNotice({ title: 'Photo is too large', body: 'Choose a profile picture under 10 MB.' });
-          return;
-        }
-
         const uri = URL.createObjectURL(file);
-        update('avatar_url', uri);
-        try {
-          const avatarUrl = await mutation.uploadAvatar(uri);
-          update('avatar_url', avatarUrl);
-          setNotice({ title: 'Profile photo updated', body: 'Your new profile picture has been saved.' });
-        } catch (error) {
-          setNotice({ title: 'Photo was not uploaded', body: handleAppError(error).userMessage });
-        }
+        await uploadSelectedAvatar(uri);
       };
       input.click();
       return;
@@ -2516,7 +2992,10 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (!permission.granted) {
-      setNotice({ title: 'Photo permission needed', body: 'Allow photo library access to upload a profile picture.' });
+      setNotice({
+        title: 'Photo access needed',
+        body: 'Allow ReTail to access your photos so you can upload a profile picture.',
+      });
       return;
     }
 
@@ -2524,35 +3003,25 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
       mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [1, 1],
-      quality: 0.82,
+      quality: 0.85,
+      base64: true,
     });
 
     if (result.canceled) {
       return;
     }
 
-    const asset = result.assets[0];
-    if (!asset?.uri) {
-      setNotice({ title: 'Photo was not selected', body: 'Choose a JPEG, PNG, or WebP image.' });
+    const selectedAsset = result.assets[0];
+    const selectedUri = selectedAsset?.uri;
+
+    if (!selectedUri) {
+      setNotice({ title: 'Photo was not selected', body: 'Choose another image and try again.' });
       return;
     }
 
-    if (asset.mimeType && !['image/jpeg', 'image/png', 'image/webp'].includes(asset.mimeType)) {
-      setNotice({ title: 'Photo type not supported', body: 'Choose a JPEG, PNG, or WebP image.' });
-      return;
-    }
-
-    if (asset.fileSize && asset.fileSize > 10 * 1024 * 1024) {
-      setNotice({ title: 'Photo is too large', body: 'Choose a profile picture under 10 MB.' });
-      return;
-    }
-
-    update('avatar_url', asset.uri);
-    void mutation.uploadAvatar(asset.uri).then((avatarUrl) => {
-      update('avatar_url', avatarUrl);
-      setNotice({ title: 'Profile photo updated', body: 'Your new profile picture has been saved.' });
-    }).catch((error) => {
-      setNotice({ title: 'Photo was not uploaded', body: handleAppError(error).userMessage });
+    await uploadSelectedAvatar(selectedUri, {
+      base64: selectedAsset.base64 ?? undefined,
+      mimeType: selectedAsset.mimeType ?? undefined,
     });
   };
 
@@ -2589,7 +3058,7 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
 
   return (
     <ScreenContainer>
-      <StatusBar style="dark" />
+      <StatusBar style={sprint3StatusBarStyle} />
       <ScrollView style={styles.listScreen} contentContainerStyle={styles.listContent} keyboardShouldPersistTaps="handled">
         <BackButton onPress={onBack} />
         <View style={styles.headerBlock}>
@@ -2598,12 +3067,7 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
         </View>
         <View style={styles.avatarEditRow}>
           <Avatar image={form.avatar_url} initials={initialsFor(form.display_name || 'User')} verified={auth.profile?.is_verified} size="lg" />
-          <Button
-            title={form.avatar_url ? 'Change profile picture' : 'Upload profile picture'}
-            variant="outline"
-            onPress={() => void chooseAvatar()}
-            loading={mutation.loading}
-          />
+          <Button title="Upload Profile Picture" variant="outline" onPress={() => void chooseAvatar()} loading={mutation.loading} />
         </View>
         <TextInput label="Display Name" value={form.display_name} onChangeText={(value) => update('display_name', value)} error={errors.display_name} />
         <TextInput label="Username" value={form.username} onChangeText={(value) => update('username', value)} error={errors.username} autoCapitalize="none" />
@@ -2694,7 +3158,7 @@ export function PublicProfileScreen({
   if (profile.isLoading) {
     return (
       <ScreenFrame>
-        <LoadingSpinner />
+        <BrandedLoadingPanel title="Loading profile" body="Pulling together this seller's profile, listings, and reviews." />
       </ScreenFrame>
     );
   }
@@ -2731,7 +3195,7 @@ export function PublicProfileScreen({
 
   return (
     <ScreenContainer>
-      <StatusBar style="dark" />
+      <StatusBar style={sprint3StatusBarStyle} />
       <ScrollView style={styles.listScreen} contentContainerStyle={styles.listContent}>
         <BackButton onPress={onBack} />
         <ProfileHeader
@@ -2812,16 +3276,20 @@ export function MyListingsScreen({
   onBack,
   onOpenListing,
   onEditListing,
+  onCreateListing,
 }: {
   onBack: () => void;
   onOpenListing: (listingId: string) => void;
   onEditListing: (listingId: string) => void;
+  onCreateListing?: () => void;
 }) {
   const listings = useMyListings();
   const transaction = useCompleteTransaction();
   const [confirm, setConfirm] = useState<{
     title: string;
     body: string;
+    confirmTitle: string;
+    variant?: 'primary' | 'danger';
     action: () => Promise<void>;
   } | null>(null);
   const [completion, setCompletion] = useState<{
@@ -2846,8 +3314,19 @@ export function MyListingsScreen({
     }
   };
 
-  const ask = (title: string, body: string, action: () => Promise<void>) => {
-    setConfirm({ title, body, action });
+  const ask = (
+    title: string,
+    body: string,
+    action: () => Promise<void>,
+    options: { confirmTitle?: string; variant?: 'primary' | 'danger' } = {}
+  ) => {
+    setConfirm({
+      title,
+      body,
+      action,
+      confirmTitle: options.confirmTitle ?? 'Confirm',
+      variant: options.variant ?? 'primary',
+    });
   };
 
   const completeListing = async (buyerId?: string) => {
@@ -2886,7 +3365,7 @@ export function MyListingsScreen({
 
   return (
     <ScreenContainer>
-      <StatusBar style="dark" />
+      <StatusBar style={sprint3StatusBarStyle} />
       <ScrollView style={styles.listScreen} contentContainerStyle={styles.listContent}>
         <BackButton onPress={onBack} />
         <View style={styles.headerBlock}>
@@ -2894,18 +3373,6 @@ export function MyListingsScreen({
           <Text style={styles.body}>Manage active, sold, donated, and archived items.</Text>
         </View>
         {notice ? <NoticeCard notice={notice} /> : null}
-        {confirm ? (
-          <Card>
-            <View style={styles.stack}>
-              <Text style={styles.cardTitle}>{confirm.title}</Text>
-              <Text style={styles.body}>{confirm.body}</Text>
-              <View style={styles.actionGrid}>
-                <Button title="Cancel" variant="outline" onPress={() => setConfirm(null)} fullWidth />
-                <Button title="Confirm" variant="danger" onPress={() => void runConfirmed()} fullWidth />
-              </View>
-            </View>
-          </Card>
-        ) : null}
         {completion ? (
           <Card>
             <View style={styles.stack}>
@@ -2951,7 +3418,13 @@ export function MyListingsScreen({
         {listings.isLoading ? <LoadingCards /> : null}
         {listings.isError ? <ErrorState message={handleAppError(listings.error).userMessage} onRetry={listings.refetch} /> : null}
         {!listings.isLoading && allListings.length === 0 ? (
-          <EmptyState title="You have not listed anything yet" body="Create your first listing from the Sell tab." icon={PackageOpen} />
+          <EmptyState
+            title="You have not listed anything yet"
+            body="Create your first listing so nearby pet owners can find supplies you are ready to sell, donate, or give away."
+            icon={PackageOpen}
+            actionTitle={onCreateListing ? 'Create Listing' : undefined}
+            onAction={onCreateListing}
+          />
         ) : null}
         {groups.map((group) => {
           const groupListings = allListings.filter((listing) => listing.status === group.status);
@@ -2995,7 +3468,8 @@ export function MyListingsScreen({
                   tone: 'danger',
                   onPress: (listing) =>
                     ask('Delete listing?', 'This removes the listing from public marketplace results.', () =>
-                      listings.deleteListing(listing.id)
+                      listings.deleteListing(listing.id),
+                      { confirmTitle: 'Delete', variant: 'danger' }
                     ),
                   disabled: (listing) => listing.status === 'Removed',
                 },
@@ -3004,6 +3478,16 @@ export function MyListingsScreen({
           );
         })}
       </ScrollView>
+      <ActionConfirmModal
+        visible={Boolean(confirm)}
+        title={confirm?.title ?? ''}
+        body={confirm?.body ?? ''}
+        confirmTitle={confirm?.confirmTitle ?? 'Confirm'}
+        variant={confirm?.variant ?? 'primary'}
+        loading={listings.isFetching}
+        onCancel={() => setConfirm(null)}
+        onConfirm={() => void runConfirmed()}
+      />
     </ScreenContainer>
   );
 }
@@ -3023,7 +3507,7 @@ export function EditListingScreen({
   if (listing.isLoading) {
     return (
       <ScreenFrame>
-        <LoadingSpinner />
+        <BrandedLoadingPanel title="Loading listing editor" body="Opening the saved details so you can make changes." />
       </ScreenFrame>
     );
   }
@@ -3064,8 +3548,8 @@ function EditListingForm({
     description: item.description,
     category: item.category,
     condition: item.condition,
-    listing_type: item.listingType,
-    price: item.listingType === 'sale' ? item.price : null,
+    listing_type: listingTypeFor(item.price),
+    price: listingTypeFor(item.price) === 'sale' ? item.price : '',
     images: detail.images.map((image) => image.image_url),
     city: cityFor(item.location),
     state: stateFor(item.location),
@@ -3112,7 +3596,7 @@ function EditListingForm({
 
   return (
     <ScreenContainer>
-      <StatusBar style="dark" />
+      <StatusBar style={sprint3StatusBarStyle} />
       <ScrollView style={styles.listScreen} contentContainerStyle={styles.listContent} keyboardShouldPersistTaps="handled">
         <BackButton onPress={onBack} />
         <View style={styles.headerBlock}>
@@ -3185,6 +3669,7 @@ function ListingForm({
         placeholder="Condition, size, pickup notes..."
         error={errors.description}
       />
+      <ListingQualityChecklist form={form} />
       <Text style={styles.filterLabel}>Item details</Text>
       <TextInput
         label="Brand"
@@ -3226,33 +3711,17 @@ function ListingForm({
       <CategorySelector value={form.category as Category} onChange={(category) => onChange('category', category)} error={errors.category} />
       <ConditionSelector value={form.condition} onChange={(condition) => onChange('condition', condition)} error={errors.condition} />
       <Text style={styles.filterLabel}>Listing Type</Text>
-      <View style={styles.optionCardList}>
-        {listingTypeOptions.map((option) => {
-          const selected = form.listing_type === option.value;
-
-          return (
-            <Pressable
-              key={option.value}
-              accessibilityRole="radio"
-              accessibilityState={{ selected }}
-              accessibilityLabel={`${option.title}. ${option.description}`}
-              onPress={() => {
-                onChange('listing_type', option.value);
-                if (option.value !== 'sale') {
-                  onChange('price', null);
-                }
-              }}
-              style={[styles.optionCard, selected && styles.optionCardSelected]}
-            >
-              <View style={styles.optionCardText}>
-                <Text style={styles.bodyStrong}>{option.title}</Text>
-                <Text style={styles.metaText}>{option.description}</Text>
-              </View>
-              <Badge label={option.badge} tone={option.value === 'donation' ? 'info' : option.value === 'free' ? 'success' : 'neutral'} />
-            </Pressable>
-          );
-        })}
+      <View style={styles.wrapRow}>
+        <FilterChip label="For Sale" selected={form.listing_type === 'sale'} onPress={() => onChange('listing_type', 'sale')} />
+        <FilterChip label="Free" selected={form.listing_type === 'free'} onPress={() => onChange('listing_type', 'free')} />
+        <FilterChip label="Rescue Donation" selected={form.listing_type === 'donation'} onPress={() => onChange('listing_type', 'donation')} />
       </View>
+      {form.listing_type === 'donation' ? (
+        <Text style={styles.body}>
+          For verified rescues. ReTail does not determine whether a donation is tax deductible.
+        </Text>
+      ) : null}
+      <RescueWishlistMatch form={form} />
       {form.listing_type === 'sale' ? (
         <PriceInput value={String(form.price ?? '')} onChangeText={(value) => onChange('price', value)} error={errors.price} />
       ) : null}
@@ -3350,6 +3819,73 @@ function ListingForm({
   );
 }
 
+function ListingQualityChecklist({ form }: { form: CreateListingInput }) {
+  const checklist = [
+    { label: 'Add at least one clear photo', complete: (form.images ?? []).length > 0 },
+    { label: 'Include size, dimensions, or pet fit', complete: Boolean(((form.item_dimensions ?? '') || (form.pet_size ?? '')).trim()) },
+    { label: 'Describe condition honestly', complete: Boolean((form.condition_notes ?? '').trim() || form.description.trim().length >= 40) },
+    { label: 'Share pickup, meetup, or shipping availability', complete: Boolean(form.porch_pickup_available || form.meetup_available || form.shipping_available) },
+  ];
+  const completedCount = checklist.filter((item) => item.complete).length;
+
+  return (
+    <Card>
+      <View style={styles.stack}>
+        <View style={styles.locationRow}>
+          <Sparkles size={20} color={colors.logoOrange} />
+          <Text style={styles.cardTitle}>Listing quality</Text>
+          <Badge label={`${completedCount}/${checklist.length}`} tone={completedCount === checklist.length ? 'success' : 'neutral'} />
+        </View>
+        <Text style={styles.body}>Complete listings get clearer messages and fewer back-and-forth questions.</Text>
+        <View style={styles.qualityList}>
+          {checklist.map((item) => (
+            <View key={item.label} style={styles.qualityRow}>
+              <View style={[styles.qualityDot, item.complete && styles.qualityDotComplete]} />
+              <Text style={item.complete ? styles.bodyStrong : styles.metaText}>{item.label}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+    </Card>
+  );
+}
+
+function RescueWishlistMatch({ form }: { form: CreateListingInput }) {
+  const rescueHub = useRescueHub(useMemo(() => ({ radiusMiles: 50, limit: 10 }), []));
+  const rescues = rescueHub.data ?? [];
+  const matches = rescueWishlistMatches(form, rescues);
+
+  if (form.listing_type === 'sale') {
+    return null;
+  }
+
+  return (
+    <Card>
+      <View style={styles.stack}>
+        <View style={styles.locationRow}>
+          <HeartHandshake size={20} color={colors.logoOrange} />
+          <Text style={styles.cardTitle}>Rescue wishlist match</Text>
+        </View>
+        {matches.length > 0 ? (
+          <>
+            <Text style={styles.body}>These nearby rescues may need something like this listing.</Text>
+            <View style={styles.matchList}>
+              {matches.map((match) => (
+                <View key={`${match.rescueName}-${match.item}`} style={styles.matchRow}>
+                  <Text style={styles.bodyStrong}>{match.item}</Text>
+                  <Text style={styles.metaText}>{match.rescueName} - {match.priority}</Text>
+                </View>
+              ))}
+            </View>
+          </>
+        ) : (
+          <Text style={styles.body}>After you publish, check Rescue Hub for nearby organizations that accept donated supplies.</Text>
+        )}
+      </View>
+    </Card>
+  );
+}
+
 function NoticeCard({
   notice,
   actionLabel,
@@ -3370,13 +3906,51 @@ function NoticeCard({
   );
 }
 
-function ScreenFrame({ children }: { children: ReactNode }) {
-  const insets = useSafeAreaInsets();
-  const theme = useTheme();
+function ActionConfirmModal({
+  visible,
+  title,
+  body,
+  confirmTitle,
+  variant = 'primary',
+  loading = false,
+  onCancel,
+  onConfirm,
+}: {
+  visible: boolean;
+  title: string;
+  body: string;
+  confirmTitle: string;
+  variant?: 'primary' | 'danger';
+  loading?: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const themeColors = useThemeColors();
 
   return (
-    <SafeAreaView edges={['left', 'right']} style={[styles.app, { backgroundColor: theme.palette.background, paddingTop: topSafeAreaPadding(insets.top) }]}>
-      <StatusBar style={theme.resolved === 'dark' ? 'light' : 'dark'} />
+    <Modal transparent visible={visible} animationType="fade" onRequestClose={onCancel}>
+      <View style={styles.confirmModalBackdrop}>
+        <View style={[styles.confirmModalSheet, { backgroundColor: themeColors.secondary, borderColor: themeColors.border }]}>
+          <View style={styles.stack}>
+            <Text style={[styles.cardTitle, { color: themeColors.textPrimary }]}>{title}</Text>
+            <Text style={[styles.body, { color: themeColors.textPrimary }]}>{body}</Text>
+            <View style={styles.actionGrid}>
+              <Button title="Cancel" variant="outline" onPress={onCancel} disabled={loading} fullWidth />
+              <Button title={confirmTitle} variant={variant} onPress={onConfirm} loading={loading} fullWidth />
+            </View>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function ScreenFrame({ children }: { children: ReactNode }) {
+  const insets = useSafeAreaInsets();
+
+  return (
+    <SafeAreaView edges={['left', 'right']} style={[styles.app, { paddingTop: topSafeAreaPadding(insets.top) }]}>
+      <StatusBar style={sprint3StatusBarStyle} />
       <ScrollView
         style={styles.listScreen}
         contentContainerStyle={[styles.listContent, { paddingBottom: scrollContentBottomClearance(insets.bottom) }]}
@@ -3389,10 +3963,9 @@ function ScreenFrame({ children }: { children: ReactNode }) {
 
 function ScreenContainer({ children }: { children: ReactNode }) {
   const insets = useSafeAreaInsets();
-  const theme = useTheme();
 
   return (
-    <SafeAreaView edges={['left', 'right']} style={[styles.app, { backgroundColor: theme.palette.background, paddingTop: topSafeAreaPadding(insets.top) }]}>
+    <SafeAreaView edges={['left', 'right']} style={[styles.app, { paddingTop: topSafeAreaPadding(insets.top) }]}>
       {children}
     </SafeAreaView>
   );
@@ -3430,50 +4003,11 @@ function HeaderShortcut({
   );
 }
 
-function SectionTitle({ title, hint, action }: { title: string; hint?: string; action?: ReactNode }) {
+function SectionTitle({ title, hint }: { title: string; hint?: string }) {
   return (
     <View style={styles.sectionTitleRow}>
-      <View style={styles.sectionTitleText}>
-        <Text style={styles.sectionTitle}>{title}</Text>
-        {hint ? <Text style={styles.metaText}>{hint}</Text> : null}
-      </View>
-      {action}
-    </View>
-  );
-}
-
-function FilterSortControl({ value, onChange }: { value: ListingSort; onChange: (value: ListingSort) => void }) {
-  const [open, setOpen] = useState(false);
-
-  return (
-    <View style={styles.sortControl}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`Filter and sort. Current sort: ${listingSortLabel(value)}`}
-        onPress={() => setOpen((current) => !current)}
-        style={styles.sortButton}
-      >
-        <Text style={styles.sortButtonText}>Filter & Sort</Text>
-      </Pressable>
-      <Text style={styles.sortActiveText}>{listingSortLabel(value)}</Text>
-      {open ? (
-        <View style={styles.sortMenu}>
-          {listingSortOptions.map((option) => (
-            <Pressable
-              key={option.value}
-              accessibilityRole="radio"
-              accessibilityState={{ selected: value === option.value }}
-              onPress={() => {
-                onChange(option.value);
-                setOpen(false);
-              }}
-              style={[styles.sortOption, value === option.value && styles.sortOptionSelected]}
-            >
-              <Text style={[styles.sortOptionText, value === option.value && styles.sortOptionTextSelected]}>{option.label}</Text>
-            </Pressable>
-          ))}
-        </View>
-      ) : null}
+      <Text style={styles.sectionTitle}>{title}</Text>
+      {hint ? <Text style={styles.metaText}>{hint}</Text> : null}
     </View>
   );
 }
@@ -3492,6 +4026,26 @@ function LoadingCards() {
   );
 }
 
+function BrandedLoadingPanel({ title, body }: { title: string; body: string }) {
+  return (
+    <Card>
+      <View style={styles.loadingPanel}>
+        <View style={styles.loadingIconFrame}>
+          <Sparkles size={26} color={colors.logoOrange} />
+        </View>
+        <View style={styles.loadingTextBlock}>
+          <Text style={styles.cardTitle}>{title}</Text>
+          <Text style={styles.body}>{body}</Text>
+        </View>
+        <View style={styles.loadingBars}>
+          <View style={styles.loadingBarWide} />
+          <View style={styles.loadingBar} />
+        </View>
+      </View>
+    </Card>
+  );
+}
+
 function mergeFeedListings(primaryListings: Listing[], secondaryListings: Listing[]): Listing[] {
   const listingIds = new Set<string>();
   const mergedListings: Listing[] = [];
@@ -3506,6 +4060,95 @@ function mergeFeedListings(primaryListings: Listing[], secondaryListings: Listin
   }
 
   return mergedListings;
+}
+
+function sortHomeListings(listings: Listing[], sort: HomeListingSort): Listing[] {
+  if (sort === 'recent') {
+    return listings;
+  }
+
+  const sortedListings = [...listings];
+
+  if (sort === 'price-low') {
+    return sortedListings.sort((first, second) => listingPriceValue(first) - listingPriceValue(second));
+  }
+
+  if (sort === 'price-high') {
+    return sortedListings.sort((first, second) => listingPriceValue(second) - listingPriceValue(first));
+  }
+
+  return sortedListings.sort((first, second) => listingDistanceValue(first) - listingDistanceValue(second));
+}
+
+function listingPriceValue(listing: Listing): number {
+  const normalizedPrice = String(listing.price).trim().toLowerCase();
+
+  if (!normalizedPrice || normalizedPrice === 'free' || normalizedPrice === 'donation') {
+    return 0;
+  }
+
+  const numericPrice = Number(normalizedPrice.replace(/[^0-9.]/g, ''));
+  return Number.isFinite(numericPrice) ? numericPrice : Number.MAX_SAFE_INTEGER;
+}
+
+function listingDistanceValue(listing: Listing): number {
+  if (typeof listing.distanceMiles === 'number' && Number.isFinite(listing.distanceMiles)) {
+    return listing.distanceMiles;
+  }
+
+  const normalizedDistance = listing.distance.toLowerCase();
+
+  if (normalizedDistance.includes('same area')) {
+    return 0;
+  }
+
+  const numericDistance = Number(normalizedDistance.replace(/[^0-9.]/g, ''));
+  return Number.isFinite(numericDistance) ? numericDistance : Number.MAX_SAFE_INTEGER;
+}
+
+function rescueWishlistMatches(form: CreateListingInput, rescues: RescueOrganization[] | null) {
+  if (!rescues) {
+    return [];
+  }
+
+  const listingText = [
+    form.title,
+    form.description,
+    form.category,
+    form.brand,
+    form.item_dimensions,
+    form.pet_size,
+    form.condition_notes,
+  ].filter(Boolean).join(' ').toLowerCase();
+
+  if (!listingText.trim()) {
+    return [];
+  }
+
+  return rescues
+    .flatMap((rescue) => [
+      ...rescue.urgentNeeds.map((need) => ({
+        rescueName: rescue.name,
+        item: need.item,
+        priority: `${need.urgency} urgency`,
+      })),
+      ...rescue.wishlistItems.map((item) => ({
+        rescueName: rescue.name,
+        item: item.item,
+        priority: `${item.priority} wishlist`,
+      })),
+    ])
+    .filter((need) => rescueNeedMatchesListing(need.item, listingText))
+    .slice(0, 3);
+}
+
+function rescueNeedMatchesListing(needItem: string, listingText: string): boolean {
+  const terms = needItem
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((term) => term.length >= 4);
+
+  return terms.some((term) => listingText.includes(term));
 }
 
 function listingMatchesFeedFilters(
@@ -3544,6 +4187,16 @@ function initialsFor(name: string) {
 
 function profileLocation(profile: Pick<Profile | PublicProfile, 'city' | 'state'>) {
   return [profile.city, profile.state].filter(Boolean).join(', ') || 'Location not set';
+}
+
+function profileCompletionItems(profile: Profile): string[] {
+  const missing: string[] = [];
+
+  if (!profile.avatar_url) missing.push('a profile picture');
+  if (!profile.bio) missing.push('a short bio');
+  if (!profile.city || !profile.state) missing.push('city and state');
+
+  return missing;
 }
 
 function ratingLabel(profile: Pick<Profile | PublicProfile, 'buyer_rating' | 'seller_rating' | 'review_count'>) {
@@ -3638,6 +4291,20 @@ function shippingPayerLabel(value: Listing['shippingPayer']) {
   return 'Buyer pays shipping';
 }
 
+function listingTypeFor(price: string): ListingType {
+  const normalized = price.toLowerCase();
+
+  if (normalized === 'free') {
+    return 'free';
+  }
+
+  if (normalized === 'donation') {
+    return 'donation';
+  }
+
+  return 'sale';
+}
+
 function cityFor(location: string) {
   return location.split(',')[0]?.trim() || '';
 }
@@ -3650,7 +4317,18 @@ function zipCodeFor(location: string) {
   return location.match(/\b\d{5}\b/)?.[0] ?? '';
 }
 
-const styles = StyleSheet.create({
+let styles = createSprint3Styles(colors);
+let sprint3StatusBarStyle: 'dark' | 'light' = 'dark';
+
+export function setSprint3ThemeColors(themeColors: ThemeColors) {
+  styles = createSprint3Styles(themeColors);
+  sprint3StatusBarStyle = themeColors.background === colors.background ? 'dark' : 'light';
+}
+
+function createSprint3Styles(themeColors: ThemeColors) {
+  const colors = themeColors;
+
+  return StyleSheet.create({
   app: {
     flex: 1,
     backgroundColor: colors.background,
@@ -3660,19 +4338,20 @@ const styles = StyleSheet.create({
   },
   tabBar: {
     position: 'absolute',
-    left: spacing.md,
-    right: spacing.md,
+    left: 0,
+    right: 0,
+    bottom: 0,
     minHeight: sizes.tabBarHeight,
     flexDirection: 'row',
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.large,
-    backgroundColor: colors.surface,
+    borderColor: colors.primary,
+    borderRadius: 0,
+    backgroundColor: colors.primarySoft,
     paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
+    paddingTop: 2,
     paddingBottom: spacing.sm,
     shadowColor: colors.textPrimary,
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.12,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 5 },
     elevation: 8,
@@ -3682,14 +4361,26 @@ const styles = StyleSheet.create({
     minHeight: sizes.touchTarget,
     alignItems: 'center',
     justifyContent: 'center',
+    marginHorizontal: 2,
+    marginVertical: 5,
     gap: spacing.xs,
+  },
+  tabButtonActive: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.medium,
+    shadowColor: colors.textPrimary,
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 3,
   },
   tabLabel: {
     color: colors.textSecondary,
     ...typography.caption,
+    fontWeight: '600',
   },
   tabLabelActive: {
-    color: colors.primary,
+    color: colors.textPrimary,
   },
   listScreen: {
     flex: 1,
@@ -3791,6 +4482,129 @@ const styles = StyleSheet.create({
   cardStack: {
     gap: spacing.md,
   },
+  featureCallout: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    flexWrap: 'wrap',
+  },
+  featureIconFrame: {
+    width: 48,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.medium,
+    backgroundColor: colors.accentSoft,
+  },
+  featureCopy: {
+    flex: 1,
+    minWidth: 170,
+    gap: spacing.xs,
+  },
+  sellHero: {
+    gap: spacing.lg,
+  },
+  sellHeroHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+  },
+  sellHeroIcon: {
+    width: 58,
+    height: 58,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.large,
+    backgroundColor: colors.logoOrangeSoft,
+    borderWidth: 1,
+    borderColor: colors.logoOrange,
+  },
+  sellStepList: {
+    gap: spacing.sm,
+  },
+  sellStepRow: {
+    minHeight: 62,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    padding: spacing.sm,
+    borderRadius: radius.medium,
+    backgroundColor: colors.surfaceWarm,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  sellStepIcon: {
+    width: 38,
+    height: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.medium,
+    backgroundColor: colors.primarySoft,
+  },
+  sellStepCopy: {
+    flex: 1,
+    gap: spacing.xs,
+  },
+  loadingPanel: {
+    gap: spacing.md,
+  },
+  loadingIconFrame: {
+    width: sizes.iconFrame,
+    height: sizes.iconFrame,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.large,
+    backgroundColor: colors.logoOrangeSoft,
+    borderWidth: 1,
+    borderColor: colors.logoOrange,
+  },
+  loadingTextBlock: {
+    gap: spacing.xs,
+  },
+  loadingBars: {
+    gap: spacing.sm,
+  },
+  loadingBarWide: {
+    height: 12,
+    width: '78%',
+    borderRadius: radius.pill,
+    backgroundColor: colors.primarySoft,
+  },
+  loadingBar: {
+    height: 12,
+    width: '48%',
+    borderRadius: radius.pill,
+    backgroundColor: colors.logoOrangeSoft,
+  },
+  qualityList: {
+    gap: spacing.sm,
+  },
+  qualityRow: {
+    minHeight: 30,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  qualityDot: {
+    width: 12,
+    height: 12,
+    borderRadius: radius.pill,
+    backgroundColor: colors.border,
+  },
+  qualityDotComplete: {
+    backgroundColor: colors.primary,
+  },
+  matchList: {
+    gap: spacing.sm,
+  },
+  matchRow: {
+    gap: spacing.xs,
+    padding: spacing.sm,
+    borderRadius: radius.medium,
+    backgroundColor: colors.surfaceWarm,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
   rowBetween: {
     minHeight: sizes.touchTarget,
     flexDirection: 'row',
@@ -3839,33 +4653,107 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.md,
   },
-  wrapRow: {
+  stateSelectButton: {
+    minHeight: sizes.buttonHeight,
+    borderRadius: radius.medium,
+    borderWidth: 1,
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     gap: spacing.sm,
+    paddingHorizontal: spacing.md,
   },
-  optionCardList: {
-    gap: spacing.sm,
+  stateSelectText: {
+    flex: 1,
+    ...typography.body,
   },
-  optionCard: {
-    minHeight: 82,
+  lockedEmailFrame: {
+    minHeight: sizes.buttonHeight,
+    borderRadius: radius.medium,
+    borderWidth: 1,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+  },
+  lockedEmailText: {
+    color: colors.textSecondary,
+    ...typography.body,
+  },
+  stateSelectBackdrop: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: colors.modalOverlay,
+    padding: spacing.md,
+  },
+  confirmModalBackdrop: {
+    flex: 1,
+    justifyContent: 'center',
+    backgroundColor: colors.modalOverlay,
+    padding: spacing.lg,
+  },
+  confirmModalSheet: {
+    borderRadius: radius.large,
+    borderWidth: 1,
+    padding: spacing.lg,
+    backgroundColor: colors.secondary,
+  },
+  stateSelectSheet: {
+    maxHeight: '78%',
+    borderRadius: radius.large,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  stateSelectHeader: {
+    minHeight: 58,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.md,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.medium,
-    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
-  optionCardSelected: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primarySoft,
+  stateSelectTitle: {
+    ...typography.sectionTitle,
   },
-  optionCardText: {
+  stateSelectClose: {
+    ...typography.small,
+  },
+  stateOptionList: {
+    paddingBottom: spacing.md,
+  },
+  stateOptionRow: {
+    minHeight: 54,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderBottomWidth: 1,
+  },
+  stateOptionCopy: {
     flex: 1,
-    gap: spacing.xs,
+  },
+  stateOptionName: {
+    ...typography.body,
+  },
+  stateOptionCode: {
+    ...typography.caption,
+  },
+  priceFilterStack: {
+    alignSelf: 'stretch',
+    flexDirection: 'column',
+    gap: spacing.md,
+  },
+  priceFilterField: {
+    alignSelf: 'stretch',
+    width: '100%',
+  },
+  wrapRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
   },
   gettingOptionList: {
     gap: spacing.sm,
@@ -3929,70 +4817,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: spacing.md,
   },
-  sectionTitleText: {
-    flex: 1,
-    minWidth: 0,
-  },
   sectionTitle: {
     color: colors.textPrimary,
     ...typography.sectionTitle,
-  },
-  sortControl: {
-    position: 'relative',
-    alignItems: 'flex-end',
-    gap: spacing.xs,
-  },
-  sortButton: {
-    minHeight: sizes.touchTarget,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.pill,
-    backgroundColor: colors.primary,
-  },
-  sortButtonText: {
-    color: colors.white,
-    ...typography.button,
-  },
-  sortActiveText: {
-    maxWidth: 150,
-    color: colors.textSecondary,
-    ...typography.caption,
-    textAlign: 'right',
-  },
-  sortMenu: {
-    position: 'absolute',
-    top: sizes.touchTarget + spacing.md,
-    right: 0,
-    zIndex: 10,
-    width: 230,
-    padding: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.medium,
-    backgroundColor: colors.surface,
-    shadowColor: colors.textPrimary,
-    shadowOpacity: 0.14,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 10,
-    gap: spacing.xs,
-  },
-  sortOption: {
-    minHeight: sizes.touchTarget,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.small,
-  },
-  sortOptionSelected: {
-    backgroundColor: colors.primarySoft,
-  },
-  sortOptionText: {
-    color: colors.textPrimary,
-    ...typography.small,
-  },
-  sortOptionTextSelected: {
-    color: colors.primary,
-    fontWeight: '700',
   },
   backInline: {
     minHeight: sizes.touchTarget,
@@ -4040,12 +4867,6 @@ const styles = StyleSheet.create({
     color: colors.error,
     ...typography.small,
   },
-  inlineError: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    color: colors.error,
-    ...typography.small,
-  },
   skeletonCard: {
     overflow: 'hidden',
     borderRadius: radius.large,
@@ -4078,3 +4899,4 @@ const styles = StyleSheet.create({
     borderRadius: radius.medium,
   },
 });
+}

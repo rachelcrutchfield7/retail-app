@@ -1,7 +1,9 @@
 import { Camera, Trash2 } from 'lucide-react-native';
+import { useState } from 'react';
 import * as ImagePicker from 'expo-image-picker';
 import { Alert, Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, radius, sizes, spacing, typography } from '../../constants/theme';
+import { useThemeColors } from '../../lib/themePreference';
 
 type ImageUploaderProps = {
   images: string[];
@@ -11,13 +13,26 @@ type ImageUploaderProps = {
   progress?: number;
 };
 
+const pickerSupportedMimeTypes = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
+
+function normalizedPickerMimeType(mimeType?: string | null): string {
+  const normalized = mimeType?.toLowerCase();
+  return normalized && pickerSupportedMimeTypes.has(normalized)
+    ? normalized.replace('image/jpg', 'image/jpeg')
+    : 'image/jpeg';
+}
+
 export function ImageUploader({ images, onChange, error, uploading = false, progress = 0 }: ImageUploaderProps) {
+  const themeColors = useThemeColors();
+  const [pickerError, setPickerError] = useState<string | null>(null);
   const remainingSlots = Math.max(15 - images.length, 0);
 
   const chooseImages = async () => {
     if (remainingSlots === 0) {
       return;
     }
+
+    setPickerError(null);
 
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
       const input = document.createElement('input');
@@ -37,14 +52,16 @@ export function ImageUploader({ images, onChange, error, uploading = false, prog
 
     if (!permission.granted) {
       Alert.alert('Photo access needed', 'Allow photo library access to add listing photos.');
+      setPickerError('Allow ReTail to access your photos so you can add listing images.');
       return;
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsMultipleSelection: true,
-      quality: 0.82,
       selectionLimit: remainingSlots,
+      quality: 0.65,
+      base64: true,
     });
 
     if (result.canceled) {
@@ -52,8 +69,20 @@ export function ImageUploader({ images, onChange, error, uploading = false, prog
     }
 
     const selectedImages = result.assets
-      .map((asset) => asset.uri)
-      .filter((uri): uri is string => Boolean(uri));
+      .slice(0, remainingSlots)
+      .map((asset) => {
+        if (asset.base64) {
+          return `data:${normalizedPickerMimeType(asset.mimeType)};base64,${asset.base64}`;
+        }
+
+        return asset.uri;
+      })
+      .filter((image): image is string => Boolean(image));
+
+    if (selectedImages.length === 0) {
+      setPickerError('Choose another image and try again.');
+      return;
+    }
 
     onChange([...images, ...selectedImages].slice(0, 15));
   };
@@ -64,46 +93,49 @@ export function ImageUploader({ images, onChange, error, uploading = false, prog
 
   return (
     <View style={styles.field}>
-      <Text style={styles.label}>Photos</Text>
+      <Text style={[styles.label, { color: themeColors.textPrimary }]}>Photos</Text>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Choose listing photos"
-        style={[styles.uploadButton, error && styles.uploadButtonError]}
+        style={[
+          styles.uploadButton,
+          { backgroundColor: themeColors.surface, borderColor: error ? themeColors.error : themeColors.primary },
+        ]}
         onPress={chooseImages}
       >
-        <Camera size={24} color={colors.primary} />
+        <Camera size={24} color={themeColors.primary} />
         <View style={styles.uploadCopy}>
-          <Text style={styles.uploadTitle}>Choose images</Text>
-          <Text style={styles.uploadHint}>At least 1 required, up to 15 photos</Text>
+          <Text style={[styles.uploadTitle, { color: themeColors.textPrimary }]}>Choose images</Text>
+          <Text style={[styles.uploadHint, { color: themeColors.textSecondary }]}>At least 1 required, up to 15 photos</Text>
         </View>
       </Pressable>
 
       {uploading ? (
-        <View style={styles.progressTrack}>
-          <View style={[styles.progressFill, { width: `${Math.min(Math.max(progress, 0), 100)}%` }]} />
+        <View style={[styles.progressTrack, { backgroundColor: themeColors.border }]}>
+          <View style={[styles.progressFill, { width: `${Math.min(Math.max(progress, 0), 100)}%`, backgroundColor: themeColors.primary }]} />
         </View>
       ) : null}
 
       {images.length ? (
         <View style={styles.previewGrid}>
           {images.map((image, index) => (
-            <View key={`${image}-${index}`} style={styles.previewWrap}>
+            <View key={`${image}-${index}`} style={[styles.previewWrap, { backgroundColor: themeColors.primarySoft }]}>
               <Image source={{ uri: image }} style={styles.previewImage} />
-              {index === 0 ? <Text style={styles.coverBadge}>Cover</Text> : null}
+              {index === 0 ? <Text style={[styles.coverBadge, { backgroundColor: themeColors.primary, color: themeColors.white }]}>Cover</Text> : null}
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Remove photo"
                 style={styles.removeButton}
                 onPress={() => removeImage(image)}
               >
-                <Trash2 size={16} color={colors.white} />
+                <Trash2 size={16} color={themeColors.white} />
               </Pressable>
             </View>
           ))}
         </View>
       ) : null}
 
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {error || pickerError ? <Text style={[styles.error, { color: themeColors.error }]}>{error ?? pickerError}</Text> : null}
     </View>
   );
 }

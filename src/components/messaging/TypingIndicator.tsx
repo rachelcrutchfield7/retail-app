@@ -1,5 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { colors, radius, spacing, typography } from '../../constants/theme';
+import { useThemeColors } from '../../lib/themePreference';
 
 type TypingIndicatorProps = {
   visible?: boolean;
@@ -7,13 +8,15 @@ type TypingIndicatorProps = {
 };
 
 export function TypingIndicator({ visible = false, name = 'Seller' }: TypingIndicatorProps) {
+  const themeColors = useThemeColors();
+
   if (!visible) {
     return null;
   }
 
   return (
-    <View style={styles.wrap}>
-      <Text style={styles.text}>{name} is typing...</Text>
+    <View style={[styles.wrap, { backgroundColor: themeColors.secondary }]}>
+      <Text style={[styles.text, { color: themeColors.textSecondary }]}>{name} is typing...</Text>
     </View>
   );
 }

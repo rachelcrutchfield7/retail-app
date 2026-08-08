@@ -58,6 +58,34 @@ export function parseOfferMessage(message: Message): OfferEvent | null {
   }
 }
 
+export function formatOfferBodyPreview(body?: string | null): string | null {
+  if (!body?.startsWith(offerPrefix)) {
+    return null;
+  }
+
+  try {
+    const payload = JSON.parse(body.slice(offerPrefix.length)) as Partial<OfferEvent>;
+
+    if (!payload.kind || !payload.amount) {
+      return 'Offer update';
+    }
+
+    if (payload.kind === 'offer') {
+      return `Offer made: ${payload.amount}`;
+    }
+
+    if (payload.kind === 'counter_offer') {
+      return `Counter offer: ${payload.amount}`;
+    }
+
+    return payload.status === 'accepted'
+      ? `Offer accepted: ${payload.amount}`
+      : `Offer declined: ${payload.amount}`;
+  } catch {
+    return 'Offer update';
+  }
+}
+
 export function hasOfferResponse(messages: Message[], offerMessageId: string): boolean {
   return messages.some((message) => parseOfferMessage(message)?.respondsTo === offerMessageId);
 }

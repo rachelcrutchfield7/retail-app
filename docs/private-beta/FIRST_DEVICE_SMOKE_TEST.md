@@ -1,5 +1,7 @@
 # First Device Smoke Test
 
+Compare core screens against golden build `94d61284` before approving layout-related changes.
+
 Date: 2026-07-22
 Build profile: `preview`
 Platform: Android

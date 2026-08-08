@@ -1,7 +1,8 @@
 import { config } from '../constants/config';
 import { trackEvent } from '../lib/analytics';
+import { supabase } from '../lib/supabase';
 import type { Listing } from '../types.ts';
-import type { PaymentMethodChoice, PaymentOptionContext, PaymentReadiness } from '../types/payment';
+import type { PaymentMethodChoice, PaymentOptionContext, PaymentReadiness, ProtectedCheckoutSetup } from '../types/payment';
 import { createServiceError } from './errors';
 
 export function isPaidListing(listing: Listing): boolean {
@@ -37,11 +38,16 @@ export function calculatePlatformFeeCents(amountCents: number): number {
     return 0;
   }
 
+  if (amountCents <= config.stripePlatformFeeThresholdCents) {
+    return 0;
+  }
+
   const percentFee = Math.round(amountCents * (config.stripePlatformFeePercent / 100));
-  return Math.max(percentFee, config.stripePlatformMinFeeCents);
+  const fee = Math.max(percentFee, config.stripePlatformMinFeeCents);
+  return Math.min(fee, Math.max(amountCents - 1, 0));
 }
 
-export async function startProtectedCheckout(context: PaymentOptionContext): Promise<void> {
+export async function startProtectedCheckout(context: PaymentOptionContext): Promise<ProtectedCheckoutSetup> {
   const readiness = getPaymentReadiness();
 
   trackPaymentChoice('stripe', context);
@@ -72,11 +78,40 @@ export async function startProtectedCheckout(context: PaymentOptionContext): Pro
     );
   }
 
-  throw createServiceError(
-    'STRIPE_BACKEND_REQUIRED',
-    `Stripe PaymentSheet requires a server-created PaymentIntent before launch. Planned platform fee cents: ${calculatePlatformFeeCents(amountCents)}.`,
-    'Stripe checkout is not connected to the payment backend yet.'
-  );
+  const { data, error } = await supabase.functions.invoke('stripe-create-payment-intent', {
+    body: {
+      listingId: context.listing.id,
+      amountCents,
+    },
+  });
+
+  if (error) {
+    throw createServiceError(
+      'STRIPE_CHECKOUT_FAILED',
+      error.message,
+      'Stripe checkout could not be started. Please try again in a moment.'
+    );
+  }
+
+  const checkout = data as Partial<ProtectedCheckoutSetup> | null;
+
+  if (!checkout?.paymentIntentClientSecret || !checkout.paymentIntentId || !checkout.transactionId) {
+    throw createServiceError(
+      'STRIPE_CHECKOUT_RESPONSE_INVALID',
+      `Stripe checkout response was missing required fields. Planned platform fee cents: ${calculatePlatformFeeCents(amountCents)}.`,
+      'Stripe checkout did not return the payment details ReTail needs.'
+    );
+  }
+
+  return {
+    paymentIntentClientSecret: checkout.paymentIntentClientSecret,
+    paymentIntentId: checkout.paymentIntentId,
+    transactionId: checkout.transactionId,
+    merchantDisplayName: checkout.merchantDisplayName ?? 'ReTail',
+    amountCents: checkout.amountCents ?? amountCents,
+    platformFeeCents: checkout.platformFeeCents ?? calculatePlatformFeeCents(amountCents),
+    sellerAmountCents: checkout.sellerAmountCents ?? amountCents - calculatePlatformFeeCents(amountCents),
+  };
 }
 
 export function recordOutsidePaymentChoice(context: PaymentOptionContext): void {

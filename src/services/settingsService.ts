@@ -1,4 +1,5 @@
 import {
+  defaultNotificationPreferences,
   getNotificationPreferences,
   updateNotificationPreferences,
 } from './notificationService';
@@ -7,7 +8,7 @@ import { createServiceError } from './errors';
 import { supabase } from '../lib/supabase';
 import { ensureCurrentProfile, getSupabaseAuthUser, throwSupabaseError } from './supabaseData';
 
-const defaultPrivacySettings: PrivacySettings = {
+export const defaultPrivacySettings: PrivacySettings = {
   showCityState: true,
   allowMessagesFromBuyers: true,
   allowProfileInSearch: true,
@@ -51,7 +52,7 @@ export async function getPrivacySettings(): Promise<PrivacySettings> {
     throwSupabaseError(error, 'We could not load privacy settings.');
   }
 
-  return data ? privacySettingsFromRow(data as Record<string, unknown>) : defaultPrivacySettings;
+  return data ? privacySettingsFromRow(data as Record<string, unknown>) : defaultPrivacySettingsForAccount(profile.account_type);
 }
 
 export async function updatePrivacySettings(input: Partial<PrivacySettings>): Promise<PrivacySettings> {
@@ -82,11 +83,32 @@ export async function getSettings(): Promise<{
   account: AccountSettings;
   notifications: NotificationPreferences;
   privacy: PrivacySettings;
+  loadWarning?: string;
 }> {
+  const account = await getAccountSettings();
+  const [notificationsResult, privacyResult] = await Promise.allSettled([
+    getNotificationPreferences(),
+    getPrivacySettings(),
+  ]);
+  const loadWarnings: string[] = [];
+
+  if (notificationsResult.status === 'rejected') {
+    loadWarnings.push('Notification settings are using safe defaults right now.');
+  }
+
+  if (privacyResult.status === 'rejected') {
+    loadWarnings.push('Privacy settings are using safe defaults right now.');
+  }
+
   return {
-    account: await getAccountSettings(),
-    notifications: await getNotificationPreferences(),
-    privacy: await getPrivacySettings(),
+    account,
+    notifications: notificationsResult.status === 'fulfilled'
+      ? notificationsResult.value
+      : defaultNotificationPreferences,
+    privacy: privacyResult.status === 'fulfilled'
+      ? privacyResult.value
+      : defaultPrivacySettingsForAccount(account.accountType),
+    loadWarning: loadWarnings.length ? loadWarnings.join(' ') : undefined,
   };
 }
 
@@ -99,5 +121,12 @@ function privacySettingsFromRow(row: Record<string, unknown>): PrivacySettings {
     allowProfileInSearch: row.profile_discoverable !== false,
     allowApproximateDistance: row.allow_approximate_distance !== false,
     rescuePublicContactEnabled: row.rescue_public_contact_enabled === true,
+  };
+}
+
+function defaultPrivacySettingsForAccount(accountType: string): PrivacySettings {
+  return {
+    ...defaultPrivacySettings,
+    rescuePublicContactEnabled: accountType === 'rescue',
   };
 }

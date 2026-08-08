@@ -4,6 +4,7 @@ import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'rea
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Badge, Card, DistanceFilter, EmptyState, ErrorState, HeaderBar, LoadingSpinner, Metric, SearchBar } from '../components';
 import { colors, radius, sizes, spacing, typography } from '../constants/theme';
+import type { ThemeColors } from '../constants/theme';
 import {
   useMarketplaceSearchAreas,
   useMarketplaceSearchPreference,
@@ -11,19 +12,22 @@ import {
 } from '../hooks/useMarketplaceSearchArea';
 import { useRescueHub } from '../hooks/useRescueHub';
 import { useRescueDonationListings } from '../hooks/useListings';
+import { useThemeColors } from '../lib/themePreference';
 import type { Listing, MarketplaceSearchArea, RescueNeedUrgency, RescueOrganization } from '../types.ts';
 import { handleAppError } from '../utils/errorHandler';
-import { scrollContentBottomClearance, topSafeAreaPadding } from '../utils/safeAreaLayout';
-import { listingTypeBadgeLabel } from '../utils/listingPresentation';
 import { listingLocationLabel } from '../utils/format';
+import { listingTypeBadgeLabel } from '../utils/listingPresentation';
+import { scrollContentBottomClearance, topSafeAreaPadding } from '../utils/safeAreaLayout';
 
 type RescueHubScreenProps = {
   onBack: () => void;
-  onOpenListing: (listingId: string) => void;
+  onOpenListing?: (listingId: string) => void;
+  onOpenRescueProfile?: (rescue: RescueOrganization) => void;
 };
 
-export function RescueHubScreen({ onBack, onOpenListing }: RescueHubScreenProps) {
+export function RescueHubScreen({ onBack, onOpenListing, onOpenRescueProfile }: RescueHubScreenProps) {
   const insets = useSafeAreaInsets();
+  const themeColors = useThemeColors();
   const [search, setSearch] = useState('');
   const searchAreas = useMarketplaceSearchAreas();
   const searchPreference = useMarketplaceSearchPreference();
@@ -45,12 +49,7 @@ export function RescueHubScreen({ onBack, onOpenListing }: RescueHubScreenProps)
   );
   const rescues = useRescueHub(rescueParams);
   const donationListings = useRescueDonationListings(useMemo(
-    () => ({
-      search,
-      radiusMiles,
-      limit: 12,
-      sort: 'distance',
-    }),
+    () => ({ search, radiusMiles, limit: 12, sort: 'distance' }),
     [radiusMiles, search]
   ));
   const filteredRescues = rescues.data ?? [];
@@ -59,6 +58,8 @@ export function RescueHubScreen({ onBack, onOpenListing }: RescueHubScreenProps)
     (total, rescue) => total + rescue.urgentNeeds.length,
     0
   );
+
+  styles = createRescueHubStyles(themeColors);
 
   return (
     <ScrollView
@@ -71,15 +72,11 @@ export function RescueHubScreen({ onBack, onOpenListing }: RescueHubScreenProps)
         },
       ]}
     >
-      <View style={styles.headingBlock}>
-        <HeaderBar title="" onBack={onBack} backLabel="Back" backVariant="prominent" />
-        <Text style={styles.pageTitle}>Rescue Hub</Text>
-        <Text style={styles.pageSubtitle}>Find verified rescues and supplies they need.</Text>
-      </View>
+      <HeaderBar title="Rescue Hub" onBack={onBack} backLabel="Back" backVariant="prominent" />
 
       <View style={styles.hero}>
         <View style={styles.heroIcon}>
-          <HeartHandshake size={28} color={colors.primary} />
+          <HeartHandshake size={28} color={themeColors.primary} />
         </View>
         <View style={styles.heroCopy}>
           <Text style={styles.heroTitle}>Nearby rescues and urgent needs</Text>
@@ -123,13 +120,19 @@ export function RescueHubScreen({ onBack, onOpenListing }: RescueHubScreenProps)
       </View>
 
       {donationListings.isLoading ? <LoadingSpinner /> : null}
-      {donationListings.isError ? <ErrorState message={handleAppError(donationListings.error).userMessage} onRetry={donationListings.refetch} /> : null}
+      {donationListings.isError ? (
+        <ErrorState message={handleAppError(donationListings.error).userMessage} onRetry={donationListings.refetch} />
+      ) : null}
       {!donationListings.isLoading && donationItems.length === 0 ? (
         <Text style={styles.nonIntrusiveText}>No rescue donations nearby yet.</Text>
       ) : (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.donationScroller}>
           {donationItems.map((listing) => (
-            <RescueDonationListingCard key={listing.id} listing={listing} onOpen={() => onOpenListing(listing.id)} />
+            <RescueDonationListingCard
+              key={listing.id}
+              listing={listing}
+              onOpen={onOpenListing ? () => onOpenListing(listing.id) : undefined}
+            />
           ))}
         </ScrollView>
       )}
@@ -151,11 +154,13 @@ export function RescueHubScreen({ onBack, onOpenListing }: RescueHubScreenProps)
               : 'Rescue profiles will appear here once local organizations join ReTail.'
           }
           icon={HeartHandshake}
+          actionTitle={search ? 'Clear Search' : undefined}
+          onAction={search ? () => setSearch('') : undefined}
         />
       ) : (
         <View style={styles.rescueList}>
-          {filteredRescues.map((rescue) => (
-            <RescueCard key={rescue.id} rescue={rescue} />
+          {filteredRescues.map((rescue, index) => (
+            <RescueCard key={rescue.id} rescue={rescue} index={index} onPress={onOpenRescueProfile} />
           ))}
         </View>
       )}
@@ -163,9 +168,15 @@ export function RescueHubScreen({ onBack, onOpenListing }: RescueHubScreenProps)
   );
 }
 
-function RescueDonationListingCard({ listing, onOpen }: { listing: Listing; onOpen: () => void }) {
+function RescueDonationListingCard({ listing, onOpen }: { listing: Listing; onOpen?: () => void }) {
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={`Open rescue donation listing ${listing.title}`} onPress={onOpen} style={styles.donationCard}>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Open rescue donation listing ${listing.title}`}
+      onPress={onOpen}
+      disabled={!onOpen}
+      style={({ pressed }) => [styles.donationCard, pressed && styles.pressedCard]}
+    >
       <Image source={{ uri: listing.image }} style={styles.donationImage} />
       <View style={styles.donationCardBody}>
         <Badge label={listingTypeBadgeLabel(listing.listingType)} tone="info" />
@@ -217,78 +228,110 @@ function isAllowedRadius(radiusMiles: number): radiusMiles is 10 | 25 | 50 | 100
   return radiusMiles === 10 || radiusMiles === 25 || radiusMiles === 50 || radiusMiles === 100;
 }
 
-function RescueCard({ rescue }: { rescue: RescueOrganization }) {
+function RescueCard({
+  rescue,
+  index,
+  onPress,
+}: {
+  rescue: RescueOrganization;
+  index: number;
+  onPress?: (rescue: RescueOrganization) => void;
+}) {
+  const themeColors = useThemeColors();
+  const toneStyles = rescueCardToneStyles(themeColors);
+  const toneStyle = toneStyles[index % toneStyles.length];
+
   return (
-    <Card>
-      <View style={styles.rescueHeader}>
-        <View style={styles.rescueTitleBlock}>
-          <Text style={styles.rescueName}>{rescue.name}</Text>
-          <View style={styles.locationRow}>
-            <MapPin size={16} color={colors.textSecondary} />
-            <Text style={styles.locationText}>
-              {rescue.location} - {rescue.distance}
-            </Text>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Open ${rescue.name} rescue profile`}
+      onPress={() => onPress?.(rescue)}
+      disabled={!onPress}
+      style={({ pressed }) => [pressed && styles.pressedCard]}
+    >
+      <Card style={[styles.rescueCard, toneStyle]}>
+        <View style={styles.rescueHeader}>
+          <View style={styles.rescueTitleBlock}>
+            <Text style={styles.rescueName}>{rescue.name}</Text>
+            <View style={styles.locationRow}>
+              <MapPin size={16} color={themeColors.textSecondary} />
+              <Text style={styles.locationText}>
+                {rescue.location} - {rescue.distance}
+              </Text>
+            </View>
           </View>
+
+          {rescue.verified ? (
+            <View style={styles.verifiedPill}>
+              <ShieldCheck size={14} color={themeColors.primary} />
+              <Text style={styles.verifiedText}>Verified</Text>
+            </View>
+          ) : null}
         </View>
 
-        {rescue.verified ? (
-          <View style={styles.verifiedPill}>
-            <ShieldCheck size={14} color={colors.primary} />
-            <Text style={styles.verifiedText}>Verified</Text>
-          </View>
-        ) : null}
-      </View>
+        <Text style={styles.summary}>{rescue.summary}</Text>
+        <Text style={styles.rescueMeta}>
+          {rescue.organizationType} - {rescue.has501c3 ? '501(c)(3)' : 'Verification pending'}
+        </Text>
+        {rescue.websiteUrl ? <Text style={styles.publicInfo}>Website: {rescue.websiteUrl}</Text> : null}
+        {publicRescueAddress(rescue) ? <Text style={styles.publicInfo}>Address: {publicRescueAddress(rescue)}</Text> : null}
 
-      <Text style={styles.summary}>{rescue.summary}</Text>
-      <Text style={styles.rescueMeta}>
-        {rescue.organizationType} - {rescue.has501c3 ? '501(c)(3)' : 'Verification pending'}
-      </Text>
-      {rescue.websiteUrl ? <Text style={styles.publicInfo}>Website: {rescue.websiteUrl}</Text> : null}
-      {publicRescueAddress(rescue) ? <Text style={styles.publicInfo}>Address: {publicRescueAddress(rescue)}</Text> : null}
+        <View style={styles.contactNote}>
+          <Text style={styles.contactLabel}>Donation instructions</Text>
+          <Text style={styles.contactText}>{rescue.contactHint}</Text>
+        </View>
 
-      <View style={styles.needsHeader}>
-        <AlertCircle size={18} color={colors.warning} />
-        <Text style={styles.needsTitle}>Urgent needs</Text>
-      </View>
+        <View style={styles.needsHeader}>
+          <AlertCircle size={18} color={themeColors.warning} />
+          <Text style={styles.needsTitle}>Urgent needs</Text>
+        </View>
 
-      <View style={styles.needList}>
-        {rescue.urgentNeeds.map((need) => (
-          <View key={need.id} style={styles.needRow}>
-            <View style={styles.needCopy}>
-              <Text style={styles.needItem}>{need.item}</Text>
-              <Text style={styles.needQuantity}>{need.quantity}</Text>
-            </View>
-            <Badge label={need.urgency} tone={getUrgencyTone(need.urgency)} />
-          </View>
-        ))}
-      </View>
-
-      {rescue.wishlistItems.length > 0 ? (
-        <>
-          <View style={styles.needsHeader}>
-            <HeartHandshake size={18} color={colors.primary} />
-            <Text style={styles.needsTitle}>Wishlist</Text>
-          </View>
-          <View style={styles.needList}>
-            {rescue.wishlistItems.map((item) => (
-              <View key={item.id} style={styles.needRow}>
-                <View style={styles.needCopy}>
-                  <Text style={styles.needItem}>{item.item}</Text>
-                  <Text style={styles.needQuantity}>{item.quantity}</Text>
-                </View>
-                <Badge label={item.priority} tone={getUrgencyTone(item.priority)} />
+        <View style={styles.needList}>
+          {rescue.urgentNeeds.map((need) => (
+            <View key={need.id} style={styles.needRow}>
+              <View style={styles.needCopy}>
+                <Text style={styles.needItem}>{need.item}</Text>
+                <Text style={styles.needQuantity}>{need.quantity}</Text>
               </View>
-            ))}
-          </View>
-        </>
-      ) : null}
+              <Badge label={need.urgency} tone={getUrgencyTone(need.urgency)} />
+            </View>
+          ))}
+        </View>
 
-      <View style={styles.contactNote}>
-        <Text style={styles.contactLabel}>Donation instructions</Text>
-        <Text style={styles.contactText}>{rescue.contactHint}</Text>
-      </View>
-    </Card>
+        {rescue.wishlistItems.length > 0 ? (
+          <>
+            <View style={styles.needsHeader}>
+              <HeartHandshake size={18} color={themeColors.primary} />
+              <Text style={styles.needsTitle}>Wishlist</Text>
+            </View>
+            <View style={styles.needList}>
+              {rescue.wishlistItems.map((item) => (
+                <View key={item.id} style={styles.needRow}>
+                  <View style={styles.needCopy}>
+                    <Text style={styles.needItem}>{item.item}</Text>
+                    <Text style={styles.needQuantity}>{item.quantity}</Text>
+                  </View>
+                  <Badge label={item.priority} tone={getUrgencyTone(item.priority)} />
+                </View>
+              ))}
+            </View>
+          </>
+        ) : null}
+
+      </Card>
+    </Pressable>
   );
+}
+
+function rescueCardToneStyles(themeColors: ThemeColors) {
+  const colors = themeColors;
+
+  return [
+    { backgroundColor: colors.primarySoft, borderColor: colors.primary },
+    { backgroundColor: colors.logoOrangeSoft, borderColor: colors.logoOrange },
+    { backgroundColor: colors.accentSoft, borderColor: colors.accent },
+    { backgroundColor: colors.secondary, borderColor: colors.warning },
+  ];
 }
 
 function getUrgencyTone(urgency: RescueNeedUrgency): 'error' | 'warning' | 'info' {
@@ -315,30 +358,21 @@ function publicRescueAddress(rescue: RescueOrganization): string {
   ].filter(Boolean).join(', ');
 }
 
-const styles = StyleSheet.create({
+let styles = createRescueHubStyles(colors);
+
+function createRescueHubStyles(themeColors: ThemeColors) {
+  const colors = themeColors;
+
+  return StyleSheet.create({
   screen: {
     flex: 1,
+    backgroundColor: colors.background,
   },
   screenContent: {
     paddingHorizontal: spacing.lg,
     paddingTop: sizes.screenTopGap,
     paddingBottom: spacing.xxl,
     gap: spacing.lg,
-  },
-  headingBlock: {
-    gap: spacing.sm,
-    alignItems: 'flex-start',
-  },
-  pageTitle: {
-    color: colors.rescueAccent,
-    fontSize: 34,
-    fontWeight: '800',
-    lineHeight: 39,
-  },
-  pageSubtitle: {
-    color: colors.textSecondary,
-    ...typography.body,
-    lineHeight: 23,
   },
   hero: {
     flexDirection: 'row',
@@ -348,7 +382,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceWarm,
     borderRadius: radius.large,
     borderWidth: 1,
-    borderColor: colors.rescueAccent,
+    borderColor: colors.primarySoft,
   },
   heroIcon: {
     width: sizes.iconFrame,
@@ -381,7 +415,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   sectionTitle: {
-    color: colors.rescueAccent,
+    color: colors.textPrimary,
     ...typography.sectionTitle,
   },
   sectionHint: {
@@ -394,33 +428,38 @@ const styles = StyleSheet.create({
   },
   donationScroller: {
     gap: spacing.md,
-    paddingRight: spacing.md,
+    paddingRight: spacing.lg,
   },
   donationCard: {
-    width: 190,
+    width: 188,
     overflow: 'hidden',
+    borderRadius: radius.large,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: radius.medium,
     backgroundColor: colors.surface,
   },
   donationImage: {
     width: '100%',
-    aspectRatio: 1,
-    backgroundColor: colors.primarySoft,
+    height: 118,
+    backgroundColor: colors.secondary,
   },
   donationCardBody: {
-    padding: spacing.sm,
     gap: spacing.xs,
+    padding: spacing.md,
   },
   donationTitle: {
+    minHeight: 42,
     color: colors.textPrimary,
-    ...typography.small,
-    fontWeight: '700',
-    lineHeight: 18,
+    ...typography.button,
   },
   rescueList: {
     gap: spacing.md,
+  },
+  pressedCard: {
+    opacity: 0.72,
+  },
+  rescueCard: {
+    borderWidth: 1.5,
   },
   rescueHeader: {
     flexDirection: 'row',
@@ -442,7 +481,7 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   locationText: {
-    color: colors.textSecondary,
+    color: colors.textPrimary,
     ...typography.small,
   },
   verifiedPill: {
@@ -452,7 +491,9 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     paddingHorizontal: spacing.sm,
     borderRadius: radius.pill,
-    backgroundColor: colors.primarySoft,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: colors.surface,
   },
   verifiedText: {
     color: colors.primary,
@@ -460,7 +501,8 @@ const styles = StyleSheet.create({
   },
   summary: {
     marginTop: spacing.md,
-    color: colors.textSecondary,
+    color: colors.textPrimary,
+    lineHeight: 22,
     ...typography.body,
   },
   rescueMeta: {
@@ -481,7 +523,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
   },
   needsTitle: {
-    color: colors.rescueAccent,
+    color: colors.textPrimary,
     ...typography.button,
   },
   needList: {
@@ -513,17 +555,19 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     padding: spacing.md,
     borderRadius: radius.medium,
-    backgroundColor: colors.surfaceWarm,
     borderWidth: 1,
-    borderColor: colors.rescueAccent,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
     gap: spacing.xs,
   },
   contactLabel: {
-    color: colors.rescueAccent,
+    color: colors.logoOrange,
     ...typography.button,
   },
   contactText: {
     color: colors.textPrimary,
+    lineHeight: 20,
     ...typography.small,
   },
 });
+}

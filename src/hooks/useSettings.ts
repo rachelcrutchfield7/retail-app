@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
-import { clearQueryData, getQueryData, setQueryData } from '../lib/queryClient';
+import { clearQueryData, getQueryData, invalidateQuery, setQueryData } from '../lib/queryClient';
+import { queryKeys } from '../lib/queryKeys';
 import {
   deleteAccount,
   updateEmail,
@@ -46,6 +47,8 @@ export function useSettings(autoLoad = true) {
     async (input: Partial<PrivacySettings>) => {
       await updatePrivacySettings(input);
       clearQueryData(settingsKey);
+      invalidateQuery(['rescue-hub']);
+      invalidateQuery(queryKeys.rescueDashboard());
       await resource.refresh();
     },
     [resource]

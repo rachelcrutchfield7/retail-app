@@ -4,7 +4,7 @@ import { emitMessagingUpdate } from './realtimeService';
 import type { DevicePlatform, Notification, NotificationPreferences } from './types';
 import { ensureCurrentProfile, throwSupabaseError } from './supabaseData';
 
-const defaultNotificationPreferences: NotificationPreferences = {
+export const defaultNotificationPreferences: NotificationPreferences = {
   messages: true,
   favorites: true,
   reviews: true,

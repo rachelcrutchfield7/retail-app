@@ -1,6 +1,7 @@
 import { AlertCircle } from 'lucide-react-native';
 import { StyleSheet, Text, View } from 'react-native';
 import { colors, radius, sizes, spacing, typography } from '../../constants/theme';
+import { useThemeColors } from '../../lib/themePreference';
 import { Button } from '../ui/Button';
 
 type ErrorStateProps = {
@@ -20,13 +21,15 @@ export function ErrorState({
   backLabel = 'Go back',
   onBack,
 }: ErrorStateProps) {
+  const themeColors = useThemeColors();
+
   return (
     <View style={styles.errorState}>
-      <View style={styles.iconFrame}>
-        <AlertCircle size={28} color={colors.error} />
+      <View style={[styles.iconFrame, { backgroundColor: themeColors.errorSoft }]}>
+        <AlertCircle size={28} color={themeColors.error} />
       </View>
-      <Text style={styles.title}>{title}</Text>
-      <Text style={styles.message}>{message}</Text>
+      <Text style={[styles.title, { color: themeColors.textPrimary }]}>{title}</Text>
+      <Text style={[styles.message, { color: themeColors.textSecondary }]}>{message}</Text>
       <View style={styles.actionRow}>
         {onBack ? <Button title={backLabel} variant="outline" onPress={onBack} /> : null}
         {onRetry ? <Button title={retryLabel} onPress={onRetry} /> : null}

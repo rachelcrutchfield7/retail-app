@@ -67,14 +67,18 @@ export async function rejectRescueProfile(rescueId: string): Promise<RescueProfi
   return toRescueProfile(data as Row);
 }
 
-export async function getListingReportQueue(): Promise<AdminListingReport[]> {
+export async function getListingReportQueue(view: 'active' | 'archived' = 'active'): Promise<AdminListingReport[]> {
   await requireAdminProfile();
+
+  const statuses: ReportStatus[] = view === 'archived'
+    ? ['resolved', 'dismissed']
+    : ['open', 'reviewing'];
 
   const { data, error } = await supabase
     .from('reports')
     .select('*')
     .in('report_type', ['listing', 'message', 'user'])
-    .in('status', ['open', 'reviewing'])
+    .in('status', statuses)
     .order('created_at', { ascending: false });
 
   if (error) {

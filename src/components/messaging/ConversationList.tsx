@@ -8,9 +8,10 @@ import { ConversationCard } from './ConversationCard';
 type ConversationListProps = {
   conversations: ConversationSummary[];
   onOpenConversation: (conversationId: string) => void;
+  onBrowse?: () => void;
 };
 
-export function ConversationList({ conversations, onOpenConversation }: ConversationListProps) {
+export function ConversationList({ conversations, onOpenConversation, onBrowse }: ConversationListProps) {
   return (
     <FlatList
       data={conversations}
@@ -21,7 +22,13 @@ export function ConversationList({ conversations, onOpenConversation }: Conversa
       )}
       ItemSeparatorComponent={() => <View style={styles.separator} />}
       ListEmptyComponent={
-        <EmptyState title="No conversations yet" body="Message a seller from a listing to start a conversation." icon={MessageCircle} />
+        <EmptyState
+          title="No conversations yet"
+          body="Message a seller from a listing to start a conversation about pickup, meetup, shipping, or payment."
+          icon={MessageCircle}
+          actionTitle={onBrowse ? 'Browse Listings' : undefined}
+          onAction={onBrowse}
+        />
       }
     />
   );

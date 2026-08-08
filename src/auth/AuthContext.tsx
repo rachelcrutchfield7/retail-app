@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   getCurrentSession,
   resetPassword as resetPasswordWithEmail,
@@ -9,6 +9,10 @@ import {
   signUpWithEmail,
 } from '../services/authService';
 import { isAppServiceError } from '../services/errors';
+import {
+  clearGoogleSignInSelection,
+  signInWithGoogle as signInWithGoogleAccount,
+} from '../services/googleAuthService';
 import { getCurrentProfile } from '../services/profileService';
 import type { AccountType, Profile, Session, User } from '../services/types';
 import type { RescueSignupInput } from '../services/types';
@@ -42,6 +46,7 @@ export type SignUpInput = SignInInput & {
 
 type AuthContextValue = AuthState & {
   signIn: (input: SignInInput) => Promise<Session>;
+  signInWithGoogle: () => Promise<Session | null>;
   signUp: (input: SignUpInput) => Promise<User>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
@@ -264,10 +269,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [refreshProfile]
   );
 
+  const signInWithGoogle = useCallback(async () => {
+    setLoading(true);
+    try {
+      await clearPrivateAuthState();
+      const nextSession = await signInWithGoogleAccount({ platform: Platform.OS });
+      await refreshProfile();
+      return nextSession;
+    } finally {
+      setLoading(false);
+    }
+  }, [refreshProfile]);
+
   const signOut = useCallback(async () => {
     setLoading(true);
     try {
       await clearAuthSession();
+      await clearGoogleSignInSelection();
       await clearPrivateAuthState();
       setSession(null);
       setUser(null);
@@ -289,13 +307,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loading,
       isGuest: !session || !user,
       signIn,
+      signInWithGoogle,
       signUp,
       signOut,
       resetPassword,
       refreshProfile,
       startupError,
     }),
-    [loading, profile, refreshProfile, resetPassword, session, signIn, signOut, signUp, startupError, user]
+    [loading, profile, refreshProfile, resetPassword, session, signIn, signInWithGoogle, signOut, signUp, startupError, user]
   );
 
   if (startupError) {

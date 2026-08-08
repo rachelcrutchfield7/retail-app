@@ -5,17 +5,17 @@ export function topSafeAreaPadding(topInset: number): number {
 }
 
 export function bottomTabBarGap(bottomInset: number): number {
-  return Math.max(bottomInset + spacing.md, sizes.tabBarMinimumBottomGap);
+  return Math.max(bottomInset + spacing.sm, sizes.tabBarMinimumBottomGap);
 }
 
 export function bottomTabBarContentClearance(bottomInset: number): number {
-  return sizes.tabBarHeight + bottomTabBarGap(bottomInset) + sizes.tabBarContentClearance;
+  return sizes.tabBarHeight + bottomInset + spacing.sm;
 }
 
 export function scrollContentBottomClearance(bottomInset: number): number {
   return bottomInset + spacing.xxl;
 }
 
-export function messageComposerBottomPadding(bottomInset: number): number {
-  return Math.max(bottomInset, spacing.sm) + spacing.sm;
+export function chatComposerBottomPadding(bottomInset: number): number {
+  return Math.max(bottomInset + spacing.xs, spacing.md);
 }

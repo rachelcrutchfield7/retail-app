@@ -1,6 +1,7 @@
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { CATEGORIES } from '../../constants/categories';
 import { colors, spacing, typography } from '../../constants/theme';
+import { useThemeColors } from '../../lib/themePreference';
 import type { Category } from '../../types';
 import { CategoryChip } from '../marketplace/CategoryChip';
 import { formStyles } from './Field';
@@ -12,9 +13,11 @@ type CategorySelectorProps = {
 };
 
 export function CategorySelector({ value, onChange, error }: CategorySelectorProps) {
+  const themeColors = useThemeColors();
+
   return (
     <View style={styles.field}>
-      <Text style={formStyles.fieldLabel}>Category</Text>
+      <Text style={[formStyles.fieldLabel, { color: themeColors.textPrimary }]}>Category</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
         {CATEGORIES.map((category) => (
           <CategoryChip
@@ -25,7 +28,7 @@ export function CategorySelector({ value, onChange, error }: CategorySelectorPro
           />
         ))}
       </ScrollView>
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {error ? <Text style={[styles.error, { color: themeColors.error }]}>{error}</Text> : null}
     </View>
   );
 }

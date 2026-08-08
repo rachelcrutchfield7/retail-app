@@ -1,5 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { colors, radius, spacing, typography } from '../../constants/theme';
+import type { ThemeColors } from '../../constants/theme';
+import { useThemeColors } from '../../lib/themePreference';
 import type { ListingStatus } from '../../types.ts';
 
 type StatusPillProps = {
@@ -7,22 +9,17 @@ type StatusPillProps = {
 };
 
 export function StatusPill({ status }: StatusPillProps) {
-  const donated = status === 'Donated';
-  const pending = status === 'Pending';
-  const draft = status === 'Draft';
-  const removed = status === 'Removed';
+  const themeColors = useThemeColors();
+  const statusColors = getStatusColors(status, themeColors);
 
   return (
     <View
       style={[
         styles.statusPill,
-        donated && styles.statusDonated,
-        pending && styles.statusPending,
-        draft && styles.statusDraft,
-        removed && styles.statusRemoved,
+        { backgroundColor: statusColors.backgroundColor },
       ]}
     >
-      <Text style={[styles.statusText, donated && styles.statusTextLight, removed && styles.statusTextLight]}>
+      <Text style={[styles.statusText, { color: statusColors.color }]}>
         {status}
       </Text>
     </View>
@@ -37,23 +34,28 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     backgroundColor: colors.primarySoft,
   },
-  statusPending: {
-    backgroundColor: colors.errorSoft,
-  },
-  statusDraft: {
-    backgroundColor: colors.accentSoft,
-  },
-  statusDonated: {
-    backgroundColor: colors.primary,
-  },
-  statusRemoved: {
-    backgroundColor: colors.error,
-  },
   statusText: {
     color: colors.primary,
     ...typography.caption,
   },
-  statusTextLight: {
-    color: colors.white,
-  },
 });
+
+function getStatusColors(status: ListingStatus, themeColors: ThemeColors) {
+  if (status === 'Donated') {
+    return { backgroundColor: themeColors.primary, color: themeColors.white };
+  }
+
+  if (status === 'Pending') {
+    return { backgroundColor: themeColors.errorSoft, color: themeColors.error };
+  }
+
+  if (status === 'Draft') {
+    return { backgroundColor: themeColors.accentSoft, color: themeColors.info };
+  }
+
+  if (status === 'Removed') {
+    return { backgroundColor: themeColors.error, color: themeColors.white };
+  }
+
+  return { backgroundColor: themeColors.primarySoft, color: themeColors.primary };
+}

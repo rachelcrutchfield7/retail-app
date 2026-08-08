@@ -1,5 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { colors, radius, spacing, typography } from '../../constants/theme';
+import type { ThemeColors } from '../../constants/theme';
+import { useThemeColors } from '../../lib/themePreference';
 
 export type BadgeTone = 'success' | 'warning' | 'error' | 'info' | 'neutral';
 
@@ -9,9 +11,12 @@ type BadgeProps = {
 };
 
 export function Badge({ label, tone = 'neutral' }: BadgeProps) {
+  const themeColors = useThemeColors();
+  const toneColors = getBadgeToneColors(tone, themeColors);
+
   return (
-    <View style={[styles.badge, badgeToneStyles[tone]]}>
-      <Text style={[styles.badgeText, textToneStyles[tone]]}>{label}</Text>
+    <View style={[styles.badge, { backgroundColor: toneColors.backgroundColor }]}>
+      <Text style={[styles.badgeText, { color: toneColors.color }]}>{label}</Text>
     </View>
   );
 }
@@ -28,18 +33,22 @@ const styles = StyleSheet.create({
   },
 });
 
-const badgeToneStyles = StyleSheet.create<Record<BadgeTone, object>>({
-  success: { backgroundColor: colors.primarySoft },
-  warning: { backgroundColor: colors.secondary },
-  error: { backgroundColor: colors.errorSoft },
-  info: { backgroundColor: colors.accentSoft },
-  neutral: { backgroundColor: colors.secondary },
-});
+function getBadgeToneColors(tone: BadgeTone, themeColors: ThemeColors) {
+  if (tone === 'success') {
+    return { backgroundColor: themeColors.primarySoft, color: themeColors.primary };
+  }
 
-const textToneStyles = StyleSheet.create<Record<BadgeTone, { color: string }>>({
-  success: { color: colors.primary },
-  warning: { color: colors.warning },
-  error: { color: colors.error },
-  info: { color: colors.info },
-  neutral: { color: colors.textSecondary },
-});
+  if (tone === 'warning') {
+    return { backgroundColor: themeColors.surfaceWarm, color: themeColors.warning };
+  }
+
+  if (tone === 'error') {
+    return { backgroundColor: themeColors.errorSoft, color: themeColors.error };
+  }
+
+  if (tone === 'info') {
+    return { backgroundColor: themeColors.accentSoft, color: themeColors.info };
+  }
+
+  return { backgroundColor: themeColors.secondary, color: themeColors.textSecondary };
+}

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, BackHandler, StyleSheet, View } from 'react-native';
+import { Alert, BackHandler, Platform, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthModal, ReportListingModal, TabBar } from './components';
@@ -16,6 +16,11 @@ import { useProfile } from './hooks/useProfile';
 import { useReports } from './hooks/useReports';
 import { useRescueHub } from './hooks/useRescueHub';
 import { useUpdateListing } from './hooks/useUpdateListing';
+import {
+  getGoogleSignInAvailability,
+  isGoogleSignInCancellation,
+  warnIfGoogleSignInUnavailable,
+} from './services/googleAuthService';
 import {
   BrowseScreen,
   CreateListingScreen,
@@ -59,10 +64,13 @@ function AppExperience() {
   const [editingListing, setEditingListing] = useState<Listing | null>(null);
   const [showRescueHub, setShowRescueHub] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
+  const [googleAuthBusy, setGoogleAuthBusy] = useState(false);
   const [authPrompt, setAuthPrompt] = useState<AuthPrompt | undefined>();
   const [form, setForm] = useState<ListingForm>(emptyListingForm);
   const [messageText, setMessageText] = useState('');
   const isSignedIn = !auth.isGuest;
+  const googleSignInAvailable = getGoogleSignInAvailability(Platform.OS).available;
+  warnIfGoogleSignInUnavailable(Platform.OS);
   const searchPreference = useMarketplaceSearchPreference();
   const listingParams = useMemo(
     () => ({
@@ -276,6 +284,35 @@ function AppExperience() {
     }
   };
 
+  const completeGoogleAuth = async () => {
+    setGoogleAuthBusy(true);
+
+    try {
+      const googleSession = await auth.signInWithGoogle();
+      if (!googleSession) {
+        return;
+      }
+
+      setShowAuth(false);
+      setAuthPrompt(undefined);
+      if (pendingReportListing) {
+        setReportingListing(pendingReportListing);
+        setPendingReportListing(null);
+      }
+    } catch (error) {
+      if (isGoogleSignInCancellation(error)) {
+        return;
+      }
+
+      Alert.alert(
+        'Google sign-in failed',
+        handleAppError(error).userMessage
+      );
+    } finally {
+      setGoogleAuthBusy(false);
+    }
+  };
+
   const signOut = async () => {
     await auth.signOut();
   };
@@ -321,15 +358,6 @@ function AppExperience() {
     setActiveTab(nextTab);
   };
 
-  const openRescueHubListing = (listingId: string) => {
-    const listing = allListings.find((item) => item.id === listingId);
-
-    if (listing) {
-      setSelectedListing(listing);
-      setShowRescueHub(false);
-    }
-  };
-
   const startEditingListing = (listing: Listing) => {
     setForm(listingFormFromListing(listing));
     setEditingListing(listing);
@@ -342,7 +370,7 @@ function AppExperience() {
 
   const renderContent = () => {
     if (showRescueHub) {
-      return <RescueHubScreen onBack={() => setShowRescueHub(false)} onOpenListing={openRescueHubListing} />;
+      return <RescueHubScreen onBack={() => setShowRescueHub(false)} />;
     }
 
     if (selectedListing) {
@@ -415,6 +443,7 @@ function AppExperience() {
           onChange={setForm}
           onPublish={publishListing}
           mode={editingListing ? 'edit' : 'create'}
+          publishing={createListing.loading || updateListing.loading}
           onSignIn={() =>
             requestAuth({
               title: 'List pet supplies',
@@ -478,6 +507,9 @@ function AppExperience() {
           setPendingReportListing(null);
         }}
         onComplete={completeAuth}
+        onGoogleSignIn={completeGoogleAuth}
+        googleSignInAvailable={googleSignInAvailable}
+        googleSignInLoading={googleAuthBusy || auth.loading}
       />
       <ReportListingModal
         visible={Boolean(reportingListing)}
@@ -557,9 +589,9 @@ function listingFormFromListing(listing: Listing): ListingForm {
     description: listing.description,
     category: listing.category,
     condition: listing.condition,
-    images: listing.image ? [listing.image] : [],
     donation: isFreeListing,
     pickup: listing.pickup,
+    images: listing.image ? [listing.image] : [],
   };
 }
 

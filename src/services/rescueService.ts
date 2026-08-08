@@ -401,6 +401,7 @@ function hubRescueFromRow(row: Row): RescueOrganization {
 
   return {
     id: stringValue(row.id),
+    ownerId: optionalString(row.owner_id),
     name: stringValue(row.name),
     location: [city, state].filter(Boolean).join(', '),
     distance: distanceBand ?? 'Distance unavailable',
@@ -409,7 +410,10 @@ function hubRescueFromRow(row: Row): RescueOrganization {
     summary: stringValue(row.summary),
     animalsRescued: arrayValue(row.animals_rescued).map(String),
     organizationType: organizationTypeFromDb(row.organization_type),
-    has501c3: false,
+    has501c3: Boolean(row.has_501c3),
+    addressLine1: optionalString(row.address_line1),
+    addressLine2: optionalString(row.address_line2),
+    zipCode: optionalString(row.zip_code),
     urgentNeeds: arrayValue(row.needs).map((need) => {
       const needRow = need as Row;
       return {

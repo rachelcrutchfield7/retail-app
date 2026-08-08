@@ -25,6 +25,11 @@ const bundledRuntimeEnv: RuntimeEnv = {
   EXPO_PUBLIC_SUPABASE_URL: process.env.EXPO_PUBLIC_SUPABASE_URL,
   EXPO_PUBLIC_SUPABASE_ANON_KEY: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
   EXPO_PUBLIC_GOOGLE_MAPS_API_KEY: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
+  EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+  EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
+  EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
+  EXPO_PUBLIC_ENABLE_GOOGLE_SIGN_IN: process.env.EXPO_PUBLIC_ENABLE_GOOGLE_SIGN_IN,
+  EXPO_PUBLIC_ENABLE_GOOGLE_SIGN_IN_IOS: process.env.EXPO_PUBLIC_ENABLE_GOOGLE_SIGN_IN_IOS,
   EXPO_PUBLIC_POSTHOG_KEY: process.env.EXPO_PUBLIC_POSTHOG_KEY,
   EXPO_PUBLIC_SENTRY_DSN: process.env.EXPO_PUBLIC_SENTRY_DSN,
   EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY: process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY,
@@ -32,6 +37,7 @@ const bundledRuntimeEnv: RuntimeEnv = {
   EXPO_PUBLIC_ENABLE_STRIPE_CHECKOUT: process.env.EXPO_PUBLIC_ENABLE_STRIPE_CHECKOUT,
   RETAIL_PLATFORM_FEE_PERCENT: process.env.RETAIL_PLATFORM_FEE_PERCENT,
   RETAIL_PLATFORM_MIN_FEE_CENTS: process.env.RETAIL_PLATFORM_MIN_FEE_CENTS,
+  RETAIL_PLATFORM_FEE_THRESHOLD_CENTS: process.env.RETAIL_PLATFORM_FEE_THRESHOLD_CENTS,
 };
 
 export function readConfigFromEnv(env: RuntimeEnv) {
@@ -40,15 +46,25 @@ export function readConfigFromEnv(env: RuntimeEnv) {
     supabaseUrl: env.EXPO_PUBLIC_SUPABASE_URL ?? '',
     supabaseAnonKey: env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '',
     googleMapsApiKey: env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? '',
+    googleWebClientId: env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? '',
+    googleAndroidClientId: env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID ?? '',
+    googleIosClientId: env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ?? '',
+    googleSignInEnabled: isEnabledEnvFlag(env.EXPO_PUBLIC_ENABLE_GOOGLE_SIGN_IN),
+    googleSignInIosEnabled: isEnabledEnvFlag(env.EXPO_PUBLIC_ENABLE_GOOGLE_SIGN_IN_IOS),
     posthogKey: env.EXPO_PUBLIC_POSTHOG_KEY ?? '',
     sentryDsn: env.EXPO_PUBLIC_SENTRY_DSN ?? '',
     stripePublishableKey: env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? '',
     stripePaymentsEnabled:
-      env.EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED === 'true' ||
-      env.EXPO_PUBLIC_ENABLE_STRIPE_CHECKOUT === 'true',
+      isEnabledEnvFlag(env.EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED) ||
+      isEnabledEnvFlag(env.EXPO_PUBLIC_ENABLE_STRIPE_CHECKOUT),
     stripePlatformFeePercent: Number(env.RETAIL_PLATFORM_FEE_PERCENT ?? '10'),
-    stripePlatformMinFeeCents: Number(env.RETAIL_PLATFORM_MIN_FEE_CENTS ?? '100'),
+    stripePlatformMinFeeCents: Number(env.RETAIL_PLATFORM_MIN_FEE_CENTS ?? '0'),
+    stripePlatformFeeThresholdCents: Number(env.RETAIL_PLATFORM_FEE_THRESHOLD_CENTS ?? '500'),
   } as const;
+}
+
+function isEnabledEnvFlag(value: string | undefined): boolean {
+  return value?.trim().toLowerCase() === 'true';
 }
 
 export const config = readConfigFromEnv(bundledRuntimeEnv);

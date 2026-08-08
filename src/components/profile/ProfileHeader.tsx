@@ -1,6 +1,7 @@
 import { MapPin, Star } from 'lucide-react-native';
 import { StyleSheet, Text, View } from 'react-native';
 import { colors, spacing, typography } from '../../constants/theme';
+import { useThemeColors } from '../../lib/themePreference';
 import { Avatar } from '../ui/Avatar';
 
 type ProfileHeaderProps = {
@@ -24,25 +25,27 @@ export function ProfileHeader({
   avatarUrl,
   verified = false,
 }: ProfileHeaderProps) {
+  const themeColors = useThemeColors();
+
   return (
     <View style={styles.profileHeader}>
       <Avatar image={avatarUrl} initials={initials} verified={verified} size="lg" />
       <View style={styles.profileText}>
-        <Text style={styles.name}>{name}</Text>
-        {handle ? <Text style={styles.subhead}>{handle}</Text> : null}
+        <Text style={[styles.name, { color: themeColors.textPrimary }]}>{name}</Text>
+        {handle ? <Text style={[styles.subhead, { color: themeColors.textSecondary }]}>{handle}</Text> : null}
         {location ? (
           <View style={styles.metaRow}>
-            <MapPin size={16} color={colors.textSecondary} />
-            <Text style={styles.metaText}>{location}</Text>
+            <MapPin size={16} color={themeColors.textSecondary} />
+            <Text style={[styles.metaText, { color: themeColors.textSecondary }]}>{location}</Text>
           </View>
         ) : null}
         {rating ? (
           <View style={styles.metaRow}>
-            <Star size={16} color={colors.warning} fill={colors.warning} />
-            <Text style={styles.metaText}>{rating}</Text>
+            <Star size={16} color={themeColors.warning} fill={themeColors.warning} />
+            <Text style={[styles.metaText, { color: themeColors.textSecondary }]}>{rating}</Text>
           </View>
         ) : null}
-        {bio ? <Text style={styles.bio}>{bio}</Text> : null}
+        {bio ? <Text style={[styles.bio, { color: themeColors.textPrimary }]}>{bio}</Text> : null}
       </View>
     </View>
   );

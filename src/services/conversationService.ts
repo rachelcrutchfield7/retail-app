@@ -19,11 +19,26 @@ import type { Listing } from '../types';
 type ConversationRow = {
   id: string;
   listing_id: string | null;
+  rescue_id?: string | null;
+  report_id?: string | null;
   buyer_id: string;
   seller_id: string;
   last_message_at?: string | null;
   created_at: string;
   updated_at: string;
+  deleted_at?: string | null;
+};
+
+type RescueConversationRow = {
+  id: string;
+  owner_id: string;
+  name: string;
+  summary?: string | null;
+  city?: string | null;
+  state?: string | null;
+  is_active?: boolean | null;
+  is_verified?: boolean | null;
+  verification_status?: string | null;
   deleted_at?: string | null;
 };
 
@@ -80,6 +95,8 @@ function toConversation(row: ConversationRow, listingTitle = 'Listing'): Convers
     unread: false,
     time: formatConversationTime(lastMessageAt),
     listingId: row.listing_id ?? '',
+    rescueId: row.rescue_id ?? undefined,
+    reportId: row.report_id ?? undefined,
     buyerId: row.buyer_id,
     sellerId: row.seller_id,
     lastMessageAt,
@@ -263,6 +280,53 @@ function unavailableListing(listingId: string): Listing {
   };
 }
 
+function rescueConversationListing(rescue: RescueConversationRow | null, rescueId: string): Listing {
+  const location = rescue ? [rescue.city, rescue.state].filter(Boolean).join(', ') : '';
+
+  return {
+    id: rescueId,
+    title: rescue ? `${rescue.name} rescue` : 'Rescue conversation',
+    description: rescue?.summary?.trim() || 'Coordinate donations, pickup details, and questions directly with this rescue.',
+    price: '',
+    listingType: 'donation',
+    priceAmount: null,
+    category: 'General',
+    condition: 'Good',
+    image: '',
+    location: location || 'Location unavailable',
+    distance: 'Distance unavailable',
+    status: rescue?.deleted_at || rescue?.is_active === false ? 'Archived' : 'Active',
+    seller: rescue?.name || 'Rescue',
+    sellerRating: 0,
+    sellerReviews: 0,
+    posted: 'Rescue Hub',
+    createdAt: new Date().toISOString(),
+    pickup: false,
+    porchPickup: false,
+    meetup: true,
+    shipping: false,
+    favoritedBy: 0,
+  };
+}
+
+async function loadRescueForConversation(rescueId?: string | null): Promise<RescueConversationRow | null> {
+  if (!rescueId) {
+    return null;
+  }
+
+  const { data, error } = await supabase
+    .from('rescue_profiles')
+    .select('id,owner_id,name,summary,city,state,is_active,is_verified,verification_status,deleted_at')
+    .eq('id', rescueId)
+    .maybeSingle();
+
+  if (error) {
+    throwSupabaseError(error, 'Rescue details are unavailable.');
+  }
+
+  return data as RescueConversationRow | null;
+}
+
 async function lastMessageFor(conversationId: string): Promise<Message | undefined> {
   const profile = await ensureCurrentProfile();
   const { data, error } = await supabase
@@ -302,6 +366,8 @@ export async function buildConversationSummary(conversation: Conversation | Conv
     : {
         id: conversation.id,
         listing_id: conversation.listingId,
+        rescue_id: conversation.rescueId,
+        report_id: conversation.reportId,
         buyer_id: conversation.buyerId,
         seller_id: conversation.sellerId,
         last_message_at: conversation.lastMessageAt,
@@ -312,11 +378,14 @@ export async function buildConversationSummary(conversation: Conversation | Conv
   const currentProfile = await requireParticipant(row);
   const otherUserId = row.buyer_id === currentProfile.id ? row.seller_id : row.buyer_id;
   const otherProfile = await loadProfileSafe(otherUserId);
-  const { data: listingData, error: listingError } = await supabase
-    .from('listings')
-    .select(listingRelationsSelect)
-    .eq('id', row.listing_id)
-    .maybeSingle();
+  const rescue = await loadRescueForConversation(row.rescue_id);
+  const { data: listingData, error: listingError } = row.listing_id
+    ? await supabase
+        .from('listings')
+        .select(listingRelationsSelect)
+        .eq('id', row.listing_id)
+        .maybeSingle()
+    : { data: null, error: null };
 
   if (listingError) {
     throwSupabaseError(listingError, 'Listing details are unavailable.');
@@ -324,7 +393,9 @@ export async function buildConversationSummary(conversation: Conversation | Conv
 
   const listingSummary = listingData
     ? toListing(listingData as Record<string, unknown>)
-    : unavailableListing(row.listing_id ?? '');
+    : row.rescue_id
+      ? rescueConversationListing(rescue, row.rescue_id)
+      : unavailableListing(row.listing_id ?? row.report_id ?? '');
   const images = listingData ? imagesFromListingRow(listingData as Record<string, unknown>) : [];
   const lastMessage = await lastMessageFor(row.id);
   const unreadCount = await unreadCountFor(row.id, currentProfile.id);
@@ -370,6 +441,86 @@ export async function getOrCreateConversation(listingId: string, expectedSellerI
 
   trackEvent('Conversation Started', { conversationId: conversation.id, listingId });
   return buildConversationSummary(conversation);
+}
+
+export async function getOrCreateRescueConversation(rescueId: string, expectedOwnerId?: string): Promise<ConversationDetail> {
+  const profile = await ensureCurrentProfile();
+  requireActiveMessageRecipient(profile);
+  const rescue = await loadRescueForConversation(rescueId);
+
+  if (!rescue || rescue.deleted_at || rescue.is_active === false || !rescue.is_verified || rescue.verification_status !== 'verified') {
+    throw createServiceError(
+      'RESCUE_UNAVAILABLE',
+      `Rescue ${rescueId} is not available for messaging`,
+      'This rescue is not available for messages right now.'
+    );
+  }
+
+  const ownerId = rescue.owner_id;
+
+  if (profile.id === ownerId) {
+    throw createServiceError('SELF_MESSAGE_NOT_ALLOWED', 'Rescue owner tried to message themselves', 'You cannot message yourself.');
+  }
+
+  if (expectedOwnerId && expectedOwnerId !== ownerId && expectedOwnerId !== profile.id) {
+    throw createServiceError(
+      'RESCUE_OWNER_MISMATCH',
+      `Expected rescue owner ${expectedOwnerId} did not match ${ownerId}`,
+      'We could not confirm the rescue contact for this profile.'
+    );
+  }
+
+  const existing = await supabase
+    .from('conversations')
+    .select('*')
+    .eq('rescue_id', rescueId)
+    .eq('buyer_id', profile.id)
+    .eq('seller_id', ownerId)
+    .maybeSingle();
+
+  if (existing.error) {
+    throwSupabaseError(existing.error, 'We could not open this rescue conversation.');
+  }
+
+  if (existing.data) {
+    return buildConversationSummary(existing.data as ConversationRow);
+  }
+
+  requireActiveMessageRecipient(await loadProfile(ownerId));
+  await requireNotBlocked(profile.id, ownerId);
+
+  const { data, error } = await supabase
+    .from('conversations')
+    .insert({
+      listing_id: null,
+      rescue_id: rescueId,
+      buyer_id: profile.id,
+      seller_id: ownerId,
+      last_message_at: new Date().toISOString(),
+    })
+    .select('*')
+    .single();
+
+  if (error) {
+    if (error.code === '23505') {
+      const duplicate = await supabase
+        .from('conversations')
+        .select('*')
+        .eq('rescue_id', rescueId)
+        .eq('buyer_id', profile.id)
+        .eq('seller_id', ownerId)
+        .maybeSingle();
+
+      if (!duplicate.error && duplicate.data) {
+        return buildConversationSummary(duplicate.data as ConversationRow);
+      }
+    }
+
+    throwSupabaseError(error, 'We could not start this rescue conversation.');
+  }
+
+  trackEvent('Rescue Conversation Started', { conversationId: String((data as ConversationRow).id), rescueId });
+  return buildConversationSummary(data as ConversationRow);
 }
 
 export async function getConversationById(conversationId: string, userId?: string): Promise<ConversationDetail> {

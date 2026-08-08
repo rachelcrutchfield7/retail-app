@@ -1,6 +1,7 @@
 import { StyleSheet, Text, TextInput } from 'react-native';
 import type { KeyboardTypeOptions } from 'react-native';
 import { colors, radius, sizes, spacing, typography } from '../../constants/theme';
+import { useThemeColors } from '../../lib/themePreference';
 import { Field } from './Field';
 
 type TextFieldProps = {
@@ -24,20 +25,26 @@ export function TextField({
   keyboardType,
   characterLimit,
 }: TextFieldProps) {
+  const themeColors = useThemeColors();
+
   return (
     <Field label={label}>
       <TextInput
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor={colors.textSecondary}
-        style={[styles.input, error && styles.inputError]}
+        placeholderTextColor={themeColors.textSecondary}
+        style={[
+          styles.input,
+          { color: themeColors.textPrimary, backgroundColor: themeColors.surface, borderColor: themeColors.border },
+          error && styles.inputError,
+        ]}
         keyboardType={keyboardType}
         maxLength={characterLimit}
       />
-      {helperText ? <Text style={styles.helper}>{helperText}</Text> : null}
-      {characterLimit ? <Text style={styles.helper}>{value.length}/{characterLimit}</Text> : null}
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {helperText ? <Text style={[styles.helper, { color: themeColors.textSecondary }]}>{helperText}</Text> : null}
+      {characterLimit ? <Text style={[styles.helper, { color: themeColors.textSecondary }]}>{value.length}/{characterLimit}</Text> : null}
+      {error ? <Text style={[styles.error, { color: themeColors.error }]}>{error}</Text> : null}
     </Field>
   );
 }

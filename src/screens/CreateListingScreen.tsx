@@ -11,6 +11,7 @@ import {
 import { CATEGORIES, CONDITIONS } from '../constants/categories';
 import { colors, radius, sizes, spacing, typography } from '../constants/theme';
 import { Chip, formStyles, ImageUploader, LockedScreen, PriceInput, TextArea, TextField, ToggleSwitch } from '../components';
+import { useThemeColors } from '../lib/themePreference';
 import type { Category, ListingCondition, ListingForm } from '../types.ts';
 
 type CreateListingScreenProps = {
@@ -20,6 +21,8 @@ type CreateListingScreenProps = {
   onPublish: () => void;
   onSignIn: () => void;
   mode?: 'create' | 'edit';
+  imageError?: string;
+  publishing?: boolean;
 };
 
 export function CreateListingScreen({
@@ -29,7 +32,11 @@ export function CreateListingScreen({
   onPublish,
   onSignIn,
   mode = 'create',
+  imageError,
+  publishing = false,
 }: CreateListingScreenProps) {
+  const themeColors = useThemeColors();
+
   if (!isSignedIn) {
     return (
       <LockedScreen
@@ -49,14 +56,17 @@ export function CreateListingScreen({
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
       <ScrollView style={styles.screen} contentContainerStyle={styles.screenContent}>
-        <Text style={styles.title}>{mode === 'edit' ? 'Edit listing' : 'Create listing'}</Text>
-        <Text style={styles.subhead}>
+        <Text style={[styles.title, { color: themeColors.textPrimary }]}>{mode === 'edit' ? 'Edit listing' : 'Create listing'}</Text>
+        <Text style={[styles.subhead, { color: themeColors.textSecondary }]}>
           {mode === 'edit' ? 'Update your listing details for nearby pet owners.' : 'Sell or donate supplies to nearby pet owners.'}
         </Text>
 
         <ImageUploader
           images={form.images}
           onChange={(images) => update('images', images)}
+          error={imageError}
+          uploading={publishing}
+          progress={publishing ? 35 : 0}
         />
 
         <TextField
@@ -84,7 +94,7 @@ export function CreateListingScreen({
           <PriceInput value={form.price} onChangeText={(value) => update('price', value)} />
         )}
 
-        <Text style={formStyles.fieldLabel}>Category</Text>
+        <Text style={[formStyles.fieldLabel, { color: themeColors.textPrimary }]}>Category</Text>
         <View style={styles.wrapRow}>
           {CATEGORIES.map((item) => (
             <Chip
@@ -96,7 +106,7 @@ export function CreateListingScreen({
           ))}
         </View>
 
-        <Text style={formStyles.fieldLabel}>Condition</Text>
+        <Text style={[formStyles.fieldLabel, { color: themeColors.textPrimary }]}>Condition</Text>
         <View style={styles.wrapRow}>
           {CONDITIONS.map((item) => (
             <Chip
@@ -115,9 +125,15 @@ export function CreateListingScreen({
           onValueChange={(value) => update('pickup', value)}
         />
 
-        <Pressable style={styles.primaryButtonWide} onPress={onPublish}>
-          <CheckCircle2 size={20} color={colors.white} />
-          <Text style={styles.primaryButtonText}>{mode === 'edit' ? 'Save changes' : 'Publish listing'}</Text>
+        <Pressable
+          style={[styles.primaryButtonWide, { backgroundColor: themeColors.primary }, publishing && styles.disabledButton]}
+          onPress={onPublish}
+          disabled={publishing}
+        >
+          <CheckCircle2 size={20} color={themeColors.white} />
+          <Text style={[styles.primaryButtonText, { color: themeColors.white }]}>
+            {publishing ? 'Uploading...' : mode === 'edit' ? 'Save changes' : 'Publish listing'}
+          </Text>
         </Pressable>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -159,6 +175,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.sm,
     backgroundColor: colors.primary,
+  },
+  disabledButton: {
+    opacity: 0.7,
   },
   primaryButtonText: {
     color: colors.white,

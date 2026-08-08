@@ -2,6 +2,7 @@ import { ChevronLeft, Flag, Heart, MapPin, MessageCircle, Pencil, Star } from 'l
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { colors, radius, sizes, spacing, typography } from '../constants/theme';
 import { InfoTile, StatusPill } from '../components';
+import { useThemeColors } from '../lib/themePreference';
 import type { Listing } from '../types.ts';
 import { initials, listingLocationLabel } from '../utils/format';
 
@@ -26,31 +27,33 @@ export function ListingDetailScreen({
   onEdit,
   canEdit = false,
 }: ListingDetailScreenProps) {
+  const themeColors = useThemeColors();
+
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.detailContent}>
-      <View style={styles.detailImageWrap}>
+      <View style={[styles.detailImageWrap, { backgroundColor: themeColors.primarySoft }]}>
         <Image source={{ uri: listing.image }} style={styles.detailImage} />
-        <Pressable style={styles.backButton} onPress={onBack} accessibilityLabel="Go back">
-          <ChevronLeft size={24} color={colors.textPrimary} />
+        <Pressable style={[styles.backButton, { backgroundColor: themeColors.surface }]} onPress={onBack} accessibilityLabel="Go back">
+          <ChevronLeft size={24} color={themeColors.textPrimary} />
         </Pressable>
-        <Pressable style={styles.detailFavorite} onPress={onFavorite} accessibilityLabel="Save item">
+        <Pressable style={[styles.detailFavorite, { backgroundColor: themeColors.surface }]} onPress={onFavorite} accessibilityLabel="Save item">
           <Heart
             size={22}
-            color={isFavorite ? colors.white : colors.textPrimary}
-            fill={isFavorite ? colors.error : 'transparent'}
+            color={isFavorite ? themeColors.white : themeColors.textPrimary}
+            fill={isFavorite ? themeColors.error : 'transparent'}
           />
         </Pressable>
       </View>
 
       <View style={styles.detailHeader}>
         <View style={styles.priceRow}>
-          <Text style={styles.detailPrice}>{listing.price}</Text>
+          <Text style={[styles.detailPrice, { color: themeColors.primary }]}>{listing.price}</Text>
           <StatusPill status={listing.status} />
         </View>
-        <Text style={styles.detailTitle}>{listing.title}</Text>
+        <Text style={[styles.detailTitle, { color: themeColors.textPrimary }]}>{listing.title}</Text>
         <View style={styles.metaRow}>
-          <MapPin size={16} color={colors.textSecondary} />
-          <Text style={styles.metaText}>{listingLocationLabel(listing)}</Text>
+          <MapPin size={16} color={themeColors.textSecondary} />
+          <Text style={[styles.metaText, { color: themeColors.textSecondary }]}>{listingLocationLabel(listing)}</Text>
         </View>
       </View>
 
@@ -61,19 +64,19 @@ export function ListingDetailScreen({
       </View>
 
       <View style={styles.detailSection}>
-        <Text style={styles.sectionTitle}>Description</Text>
-        <Text style={styles.bodyText}>{listing.description}</Text>
+        <Text style={[styles.sectionTitle, { color: themeColors.textPrimary }]}>Description</Text>
+        <Text style={[styles.bodyText, { color: themeColors.textPrimary }]}>{listing.description}</Text>
       </View>
 
-      <View style={styles.sellerPanel}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{initials(listing.seller)}</Text>
+      <View style={[styles.sellerPanel, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
+        <View style={[styles.avatar, { backgroundColor: themeColors.primarySoft }]}>
+          <Text style={[styles.avatarText, { color: themeColors.primary }]}>{initials(listing.seller)}</Text>
         </View>
         <View style={styles.sellerText}>
-          <Text style={styles.sellerName}>{listing.seller}</Text>
+          <Text style={[styles.sellerName, { color: themeColors.textPrimary }]}>{listing.seller}</Text>
           <View style={styles.metaRow}>
-            <Star size={15} color={colors.warning} fill={colors.warning} />
-            <Text style={styles.metaText}>
+            <Star size={15} color={themeColors.warning} fill={themeColors.warning} />
+            <Text style={[styles.metaText, { color: themeColors.textSecondary }]}>
               {listing.sellerRating} seller rating - {listing.sellerReviews} reviews
             </Text>
           </View>
@@ -83,25 +86,25 @@ export function ListingDetailScreen({
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`Report ${listing.title}`}
-        style={styles.reportButton}
+        style={[styles.reportButton, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}
         onPress={onReport}
       >
-        <View style={styles.reportIcon}>
-          <Flag size={18} color={colors.error} />
+        <View style={[styles.reportIcon, { backgroundColor: themeColors.errorSoft }]}>
+          <Flag size={18} color={themeColors.error} />
         </View>
         <View style={styles.reportCopy}>
-          <Text style={styles.reportTitle}>Report listing</Text>
-          <Text style={styles.reportText}>Spam, fraud, prohibited, or inappropriate content, including live animals</Text>
+          <Text style={[styles.reportTitle, { color: themeColors.textPrimary }]}>Report listing</Text>
+          <Text style={[styles.reportText, { color: themeColors.textSecondary }]}>Spam, fraud, prohibited, or inappropriate content, including live animals</Text>
         </View>
       </Pressable>
 
       <View style={styles.actionRow}>
-        <Pressable style={styles.primaryButton} onPress={canEdit && onEdit ? onEdit : onMessage}>
-          {canEdit ? <Pencil size={19} color={colors.white} /> : <MessageCircle size={19} color={colors.white} />}
-          <Text style={styles.primaryButtonText}>{canEdit ? 'Edit listing' : 'Message seller'}</Text>
+        <Pressable style={[styles.primaryButton, { backgroundColor: themeColors.primary }]} onPress={canEdit && onEdit ? onEdit : onMessage}>
+          {canEdit ? <Pencil size={19} color={themeColors.white} /> : <MessageCircle size={19} color={themeColors.white} />}
+          <Text style={[styles.primaryButtonText, { color: themeColors.white }]}>{canEdit ? 'Edit listing' : 'Message seller'}</Text>
         </Pressable>
-        <Pressable style={styles.secondaryButton} onPress={onFavorite}>
-          <Heart size={19} color={colors.textPrimary} />
+        <Pressable style={[styles.secondaryButton, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]} onPress={onFavorite}>
+          <Heart size={19} color={themeColors.textPrimary} />
         </Pressable>
       </View>
     </ScrollView>

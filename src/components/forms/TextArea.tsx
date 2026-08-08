@@ -1,5 +1,6 @@
 import { StyleSheet, Text, TextInput } from 'react-native';
 import { colors, radius, spacing, typography } from '../../constants/theme';
+import { useThemeColors } from '../../lib/themePreference';
 import { Field } from './Field';
 
 type TextAreaProps = {
@@ -11,17 +12,23 @@ type TextAreaProps = {
 };
 
 export function TextArea({ label, value, onChangeText, placeholder, error }: TextAreaProps) {
+  const themeColors = useThemeColors();
+
   return (
     <Field label={label}>
       <TextInput
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor={colors.textSecondary}
-        style={[styles.textArea, error && styles.inputError]}
+        placeholderTextColor={themeColors.textSecondary}
+        style={[
+          styles.textArea,
+          { color: themeColors.textPrimary, backgroundColor: themeColors.surface, borderColor: themeColors.border },
+          error && styles.inputError,
+        ]}
         multiline
       />
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {error ? <Text style={[styles.error, { color: themeColors.error }]}>{error}</Text> : null}
     </Field>
   );
 }

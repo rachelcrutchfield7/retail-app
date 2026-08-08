@@ -2,6 +2,7 @@ import { CheckCircle2, Star, UserRound } from 'lucide-react-native';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { colors, radius, sizes, spacing, typography } from '../constants/theme';
 import { ErrorState, LoadingSpinner, LockedScreen, Metric } from '../components';
+import { useThemeColors } from '../lib/themePreference';
 import type { AccountType } from '../types.ts';
 import type { Profile } from '../types/profile';
 import { initials } from '../utils/format';
@@ -27,6 +28,8 @@ export function ProfileScreen({
   onSignIn,
   onSignOut,
 }: ProfileScreenProps) {
+  const themeColors = useThemeColors();
+
   if (!isSignedIn) {
     return (
       <LockedScreen
@@ -65,19 +68,19 @@ export function ProfileScreen({
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.screenContent}>
       <View style={styles.profileHeader}>
-        <View style={[styles.avatar, styles.profileAvatar]}>
+        <View style={[styles.avatar, styles.profileAvatar, { backgroundColor: themeColors.primary }]}>
           {profile?.avatar_url ? (
             <Image source={{ uri: profile.avatar_url }} style={styles.profileImage} />
           ) : (
-            <Text style={styles.profileAvatarText}>{initials(displayName)}</Text>
+            <Text style={[styles.profileAvatarText, { color: themeColors.white }]}>{initials(displayName)}</Text>
           )}
         </View>
         <View style={styles.profileText}>
-          <Text style={styles.title}>{displayName}</Text>
-          <Text style={styles.subhead}>{handle}</Text>
+          <Text style={[styles.title, { color: themeColors.textPrimary }]}>{displayName}</Text>
+          <Text style={[styles.subhead, { color: themeColors.textSecondary }]}>{handle}</Text>
           <View style={styles.metaRow}>
-            <Star size={16} color={colors.warning} fill={colors.warning} />
-            <Text style={styles.metaText}>{ratingLabel(profile)}</Text>
+            <Star size={16} color={themeColors.warning} fill={themeColors.warning} />
+            <Text style={[styles.metaText, { color: themeColors.textSecondary }]}>{ratingLabel(profile)}</Text>
           </View>
         </View>
       </View>
@@ -88,20 +91,20 @@ export function ProfileScreen({
         ))}
       </View>
 
-      <View style={styles.profileSection}>
-        <Text style={styles.sectionTitle}>About</Text>
-        <Text style={styles.bodyText}>{about}</Text>
+      <View style={[styles.profileSection, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
+        <Text style={[styles.sectionTitle, { color: themeColors.textPrimary }]}>About</Text>
+        <Text style={[styles.bodyText, { color: themeColors.textPrimary }]}>{about}</Text>
       </View>
 
-      <View style={styles.profileSection}>
-        <Text style={styles.sectionTitle}>Trust and safety</Text>
+      <View style={[styles.profileSection, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
+        <Text style={[styles.sectionTitle, { color: themeColors.textPrimary }]}>Trust and safety</Text>
         {trustItems.map((item) => (
           <ChecklistItem key={item} label={item} />
         ))}
       </View>
 
-      <Pressable style={styles.secondaryButtonWide} onPress={onSignOut}>
-        <Text style={styles.secondaryButtonText}>Log out</Text>
+      <Pressable style={[styles.secondaryButtonWide, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]} onPress={onSignOut}>
+        <Text style={[styles.secondaryButtonText, { color: themeColors.textPrimary }]}>Log out</Text>
       </Pressable>
     </ScrollView>
   );
@@ -122,10 +125,12 @@ function ratingLabel(profile?: Profile | null) {
 }
 
 function ChecklistItem({ label }: { label: string }) {
+  const themeColors = useThemeColors();
+
   return (
     <View style={styles.checkRow}>
-      <CheckCircle2 size={18} color={colors.primary} />
-      <Text style={styles.bodyText}>{label}</Text>
+      <CheckCircle2 size={18} color={themeColors.primary} />
+      <Text style={[styles.bodyText, { color: themeColors.textPrimary }]}>{label}</Text>
     </View>
   );
 }
