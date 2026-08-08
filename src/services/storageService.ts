@@ -1,13 +1,78 @@
 import { supabase } from '../lib/supabase';
 import { config } from '../constants/config';
+import { logger } from '../lib/logger';
 import { createServiceError } from './errors';
-import { readLocalImageFile } from './localImageFile';
+import { readLocalImageBinary } from './localImageFile';
 import {
   ensureCurrentProfile,
   throwSupabaseError,
   toListingImage,
 } from './supabaseData';
 import type { ListingImage } from './types';
+
+const LISTING_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
+
+type StorageUploadClient = {
+  upload: (
+    path: string,
+    body: ArrayBuffer,
+    options: { contentType: string; upsert: boolean }
+  ) => Promise<{ error: unknown }>;
+};
+
+function uriScheme(fileUri: string): string {
+  return /^([a-z][a-z0-9+.-]*):/i.exec(fileUri)?.[1]?.toLowerCase() ?? 'unknown';
+}
+
+function storageErrorContext(error: unknown): Record<string, unknown> {
+  const details = typeof error === 'object' && error !== null ? error as Record<string, unknown> : {};
+
+  return {
+    reason: typeof details.message === 'string' ? details.message : String(error),
+    storageErrorName: typeof details.name === 'string' ? details.name : undefined,
+    storageErrorCode: typeof details.code === 'string' ? details.code : undefined,
+    storageStatus: details.status ?? details.statusCode,
+  };
+}
+
+export async function uploadListingImageBinary(
+  storage: StorageUploadClient,
+  path: string,
+  arrayBuffer: ArrayBuffer,
+  mimeType: 'image/jpeg' | 'image/png' | 'image/webp',
+  sourceScheme: string
+): Promise<void> {
+  let uploadResult: { error: unknown };
+
+  try {
+    uploadResult = await storage.upload(path, arrayBuffer, {
+      contentType: mimeType,
+      upsert: false,
+    });
+  } catch (error) {
+    logger.warning('Listing image upload failed.', {
+      operation: 'listing image upload',
+      bucket: 'listings',
+      mimeType,
+      byteSize: arrayBuffer.byteLength,
+      uriScheme: sourceScheme,
+      ...storageErrorContext(error),
+    });
+    throwSupabaseError(error, 'We could not upload that photo.');
+  }
+
+  if (uploadResult.error) {
+    logger.warning('Listing image upload failed.', {
+      operation: 'listing image upload',
+      bucket: 'listings',
+      mimeType,
+      byteSize: arrayBuffer.byteLength,
+      uriScheme: sourceScheme,
+      ...storageErrorContext(uploadResult.error),
+    });
+    throwSupabaseError(uploadResult.error, 'We could not upload that photo.');
+  }
+}
 
 function publicObjectPath(bucket: string, publicUrl?: string): string | null {
   if (!publicUrl) {
@@ -55,16 +120,22 @@ async function uploadPublicFile(bucket: string, fileUri: string, folder: string)
     );
   }
 
-  const { blob, extension, mimeType } = await readLocalImageFile(fileUri, 'IMAGE_UPLOAD_FAILED', 'Could not read listing image');
-  const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${extension}`;
-  const { error } = await supabase.storage.from(bucket).upload(path, blob, {
-    contentType: mimeType,
-    upsert: false,
-  });
+  const { arrayBuffer, extension, mimeType, size } = await readLocalImageBinary(
+    fileUri,
+    'IMAGE_UPLOAD_FAILED',
+    'Could not read listing image'
+  );
 
-  if (error) {
-    throwSupabaseError(error, 'We could not upload that photo.');
+  if (size > LISTING_IMAGE_MAX_BYTES) {
+    throw createServiceError(
+      'IMAGE_TOO_LARGE',
+      `Listing image exceeded the configured 10 MB limit: ${size} bytes`,
+      'Choose a photo smaller than 10 MB.'
+    );
   }
+
+  const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${extension}`;
+  await uploadListingImageBinary(supabase.storage.from(bucket), path, arrayBuffer, mimeType, uriScheme(fileUri));
 
   const { data } = supabase.storage.from(bucket).getPublicUrl(path);
   return data.publicUrl;

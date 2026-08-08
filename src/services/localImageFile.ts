@@ -1,15 +1,22 @@
 import { createServiceError } from './errors';
 
-type LocalImageFile = {
-  blob: Blob;
+export type LocalImageBinary = {
+  arrayBuffer: ArrayBuffer;
   extension: 'jpg' | 'png' | 'webp';
   mimeType: 'image/jpeg' | 'image/png' | 'image/webp';
   size: number;
 };
 
+type LocalImageFile = LocalImageBinary & {
+  blob: Blob;
+};
+
 type FetchResponse = {
   ok: boolean;
-  blob: () => Promise<Blob>;
+  arrayBuffer: () => Promise<ArrayBuffer>;
+  headers?: {
+    get: (name: string) => string | null;
+  };
 };
 
 export type LocalImageFileDependencies = {
@@ -41,11 +48,13 @@ function mimeTypeFromUri(fileUri: string): LocalImageFile['mimeType'] {
 }
 
 function normalizeMimeType(value: string | null | undefined, fileUri: string): LocalImageFile['mimeType'] {
-  if (value === 'image/png') {
+  const normalized = value?.split(';')[0]?.trim().toLowerCase();
+
+  if (normalized === 'image/png') {
     return 'image/png';
   }
 
-  if (value === 'image/webp') {
+  if (normalized === 'image/webp') {
     return 'image/webp';
   }
 
@@ -64,12 +73,11 @@ function extensionFromMimeType(mimeType: LocalImageFile['mimeType']): LocalImage
   return 'jpg';
 }
 
-function imageFileFromBytes(bytes: Uint8Array, mimeType: LocalImageFile['mimeType']): LocalImageFile {
+function imageFileFromBytes(bytes: Uint8Array, mimeType: LocalImageBinary['mimeType']): LocalImageBinary {
   const arrayBuffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
-  const blob = new Blob([arrayBuffer], { type: mimeType });
 
   return {
-    blob,
+    arrayBuffer,
     extension: extensionFromMimeType(mimeType),
     mimeType,
     size: bytes.byteLength,
@@ -105,7 +113,7 @@ function decodeBase64(value: string): Uint8Array {
   return bytes;
 }
 
-function readDataImageUri(fileUri: string, code: string, internalMessage: string): LocalImageFile {
+function readDataImageUri(fileUri: string, code: string, internalMessage: string): LocalImageBinary {
   try {
     const match = DATA_IMAGE_PATTERN.exec(fileUri);
     const mimeType = match?.[1]?.toLowerCase() as LocalImageFile['mimeType'] | undefined;
@@ -126,40 +134,66 @@ async function readWithFetch(
   code: string,
   internalMessage: string,
   fetchFile: (fileUri: string) => Promise<FetchResponse>
-): Promise<LocalImageFile> {
+): Promise<LocalImageBinary> {
   const response = await fetchFile(fileUri);
 
   if (!response.ok) {
-    throw createServiceError(code, `${internalMessage}: ${fileUri}`, IMAGE_UPLOAD_MESSAGE);
+    throw createServiceError(code, `${internalMessage}: browser image request failed`, IMAGE_UPLOAD_MESSAGE);
   }
 
-  const blob = await response.blob();
-  const mimeType = normalizeMimeType(blob.type, fileUri);
+  const arrayBuffer = await response.arrayBuffer();
+  const mimeType = normalizeMimeType(response.headers?.get('content-type'), fileUri);
 
   return {
-    blob,
+    arrayBuffer,
     extension: extensionFromMimeType(mimeType),
     mimeType,
-    size: blob.size,
+    size: arrayBuffer.byteLength,
   };
 }
 
 async function readWithExpoFile(fileUri: string): Promise<{ bytes: Uint8Array; mimeType?: string | null }> {
-  const { File: ExpoFile } = await import('expo-file-system');
+  const { File: ExpoFile, Paths } = await import('expo-file-system');
   const file = new ExpoFile(fileUri);
 
-  return {
-    bytes: await file.bytes(),
-    mimeType: file.type,
-  };
+  try {
+    return {
+      bytes: await file.bytes(),
+      mimeType: file.type,
+    };
+  } catch (error) {
+    if (!fileUri.startsWith('content:')) {
+      throw error;
+    }
+
+    const extension = file.extension || '.jpg';
+    const cachedFile = new ExpoFile(
+      Paths.cache,
+      `retail-listing-upload-${Date.now()}-${Math.random().toString(36).slice(2, 8)}${extension}`
+    );
+
+    try {
+      file.copy(cachedFile);
+      return {
+        bytes: await cachedFile.bytes(),
+        mimeType: file.type || cachedFile.type,
+      };
+    } finally {
+      try {
+        if (cachedFile.exists) cachedFile.delete();
+      } catch {
+        // Temporary cache cleanup must not hide the original image-read result.
+      }
+    }
+  }
 }
 
-export async function readLocalImageFile(
+export async function readLocalImageBinary(
   fileUri: string,
   code: string,
   internalMessage: string,
   dependencies: LocalImageFileDependencies = {}
-): Promise<LocalImageFile> {
+): Promise<LocalImageBinary> {
   if (fileUri.startsWith('data:')) {
     return readDataImageUri(fileUri, code, internalMessage);
   }
@@ -187,4 +221,19 @@ export async function readLocalImageFile(
       throw createServiceError(code, `${internalMessage}: image file could not be read`, IMAGE_UPLOAD_MESSAGE);
     }
   }
+}
+
+// Avatar and message callers still require Blob until their separate upload paths are migrated.
+export async function readLocalImageFile(
+  fileUri: string,
+  code: string,
+  internalMessage: string,
+  dependencies: LocalImageFileDependencies = {}
+): Promise<LocalImageFile> {
+  const image = await readLocalImageBinary(fileUri, code, internalMessage, dependencies);
+
+  return {
+    ...image,
+    blob: new Blob([image.arrayBuffer], { type: image.mimeType }),
+  };
 }

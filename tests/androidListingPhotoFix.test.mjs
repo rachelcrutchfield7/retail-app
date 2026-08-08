@@ -2,8 +2,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 
-import { readLocalImageFile } from '../src/services/localImageFile.ts';
+import { getLogEntries } from '../src/lib/logger.ts';
+import { readLocalImageBinary } from '../src/services/localImageFile.ts';
 import { reconcileListingImages } from '../src/services/listingService.ts';
+import { uploadListingImageBinary } from '../src/services/storageService.ts';
 
 const listingImage = (id, imageUrl, sortOrder = 0) => ({
   id,
@@ -18,7 +20,7 @@ test('native file and content URIs use native file bytes without network fetch',
   for (const uri of ['file:///photos/listing.jpg', 'content://media/external/images/42']) {
     const nativeReads = [];
     const fetches = [];
-    const result = await readLocalImageFile(uri, 'IMAGE_UPLOAD_FAILED', 'Could not read listing image', {
+    const result = await readLocalImageBinary(uri, 'IMAGE_UPLOAD_FAILED', 'Could not read listing image', {
       readNativeBytes: async (fileUri) => {
         nativeReads.push(fileUri);
         return { bytes: new Uint8Array([0xff, 0xd8, 0xff]), mimeType: 'image/jpeg' };
@@ -34,6 +36,9 @@ test('native file and content URIs use native file bytes without network fetch',
     assert.equal(result.mimeType, 'image/jpeg');
     assert.equal(result.extension, 'jpg');
     assert.equal(result.size, 3);
+    assert.ok(result.arrayBuffer instanceof ArrayBuffer);
+    assert.equal('blob' in result, false);
+    assert.deepEqual([...new Uint8Array(result.arrayBuffer)], [0xff, 0xd8, 0xff]);
   }
 });
 
@@ -44,7 +49,7 @@ for (const [mimeType, extension] of [
 ]) {
   test(`legacy ${mimeType} data URI decodes locally as .${extension}`, async () => {
     const fetches = [];
-    const result = await readLocalImageFile(
+    const result = await readLocalImageBinary(
       `data:${mimeType};base64,AQIDBA==`,
       'IMAGE_UPLOAD_FAILED',
       'Could not read listing image',
@@ -60,14 +65,37 @@ for (const [mimeType, extension] of [
     assert.equal(result.mimeType, mimeType);
     assert.equal(result.extension, extension);
     assert.equal(result.size, 4);
-    assert.deepEqual([...new Uint8Array(await result.blob.arrayBuffer())], [1, 2, 3, 4]);
+    assert.ok(result.arrayBuffer instanceof ArrayBuffer);
+    assert.equal('blob' in result, false);
+    assert.deepEqual([...new Uint8Array(result.arrayBuffer)], [1, 2, 3, 4]);
   });
 }
+
+test('web blob URI is fetched and normalized into an ArrayBuffer', async () => {
+  const expected = new Uint8Array([9, 8, 7]).buffer;
+  const fetches = [];
+  const result = await readLocalImageBinary('blob:https://retailpetapp.com/photo', 'IMAGE_UPLOAD_FAILED', 'Could not read listing image', {
+    fetchFile: async (fileUri) => {
+      fetches.push(fileUri);
+      return {
+        ok: true,
+        arrayBuffer: async () => expected,
+        headers: { get: () => 'image/png' },
+      };
+    },
+  });
+
+  assert.deepEqual(fetches, ['blob:https://retailpetapp.com/photo']);
+  assert.equal(result.arrayBuffer, expected);
+  assert.equal(result.mimeType, 'image/png');
+  assert.equal(result.extension, 'png');
+  assert.equal('blob' in result, false);
+});
 
 test('malformed and unsupported data URIs fail with the friendly upload message', async () => {
   for (const uri of ['data:image/jpeg,not-base64', 'data:image/gif;base64,AQIDBA==', 'data:image/png;base64,%%%']) {
     await assert.rejects(
-      readLocalImageFile(uri, 'IMAGE_UPLOAD_FAILED', 'Could not read listing image'),
+      readLocalImageBinary(uri, 'IMAGE_UPLOAD_FAILED', 'Could not read listing image'),
       (error) => error?.message === 'We could not upload that photo.'
     );
   }
@@ -79,6 +107,69 @@ test('native picker keeps asset URIs and does not request Base64', async () => {
   assert.match(source, /\.map\(\(asset\) => asset\.uri\)/);
   assert.doesNotMatch(source, /base64:\s*true/);
   assert.doesNotMatch(source, /data:\$\{.*base64/);
+});
+
+test('Supabase Storage receives ArrayBuffer image data instead of Blob data', async () => {
+  const calls = [];
+  const binary = new Uint8Array([1, 2, 3, 4]).buffer;
+
+  await uploadListingImageBinary(
+    {
+      async upload(path, body, options) {
+        calls.push({ path, body, options });
+        return { error: null };
+      },
+    },
+    'profile/listing/photo.jpg',
+    binary,
+    'image/jpeg',
+    'content'
+  );
+
+  assert.equal(calls.length, 1);
+  assert.ok(calls[0].body instanceof ArrayBuffer);
+  assert.equal(calls[0].body instanceof Blob, false);
+  assert.equal(calls[0].body, binary);
+  assert.deepEqual(calls[0].options, { contentType: 'image/jpeg', upsert: false });
+});
+
+test('failed Storage upload records safe binary diagnostics and keeps a friendly error', async () => {
+  const binary = new Uint8Array([1, 2, 3]).buffer;
+
+  await assert.rejects(
+    uploadListingImageBinary(
+      {
+        async upload() {
+          return {
+            error: {
+              name: 'StorageApiError',
+              code: '403',
+              statusCode: 403,
+              message: 'new row violates row-level security policy',
+            },
+          };
+        },
+      },
+      'profile/listing/photo.jpg',
+      binary,
+      'image/jpeg',
+      'content'
+    ),
+    /We could not upload that photo\./
+  );
+
+  const diagnostic = getLogEntries().at(-2);
+  assert.equal(diagnostic?.message, 'Listing image upload failed.');
+  assert.equal(diagnostic?.context?.operation, 'listing image upload');
+  assert.equal(diagnostic?.context?.bucket, 'listings');
+  assert.equal(diagnostic?.context?.mimeType, 'image/jpeg');
+  assert.equal(diagnostic?.context?.byteSize, 3);
+  assert.equal(diagnostic?.context?.uriScheme, 'content');
+  assert.equal(diagnostic?.context?.reason, 'new row violates row-level security policy');
+  assert.equal(diagnostic?.context?.storageErrorName, 'StorageApiError');
+  assert.equal(diagnostic?.context?.storageErrorCode, '403');
+  assert.equal(diagnostic?.context?.storageStatus, 403);
+  assert.equal(JSON.stringify(diagnostic?.context).includes('profile/listing/photo.jpg'), false);
 });
 
 function reconciliationHarness({ failUploadUri } = {}) {
