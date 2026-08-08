@@ -2,7 +2,7 @@ import type { Listing } from '../types';
 import { trackEvent } from '../lib/analytics';
 import { supabase } from '../lib/supabase';
 import { createServiceError, isAppServiceError } from './errors';
-import { uploadListingImage } from './storageService';
+import { deleteListingImage, uploadListingImage } from './storageService';
 import {
   conditionToDb,
   ensureCurrentProfile,
@@ -12,10 +12,12 @@ import {
   resolveCategoryId,
   throwSupabaseError,
   toListing,
+  toListingImage,
   toPublicProfile,
 } from './supabaseData';
 import type {
   CreateListingInput,
+  ListingImage,
   ListingDetail,
   PaginatedListings,
   ListingQueryParams,
@@ -23,6 +25,98 @@ import type {
 } from './types';
 
 const allowedSorts = new Set(['recent', 'price_asc', 'price_desc', 'distance', 'favorites']);
+
+type ListingImageReconciliationDependencies = {
+  uploadImage: (imageUri: string) => Promise<ListingImage>;
+  removeImage: (image: ListingImage) => Promise<void>;
+  updateSortOrder: (image: ListingImage, sortOrder: number) => Promise<void>;
+};
+
+function uniqueImageUris(imageUris: string[]): string[] {
+  return imageUris.filter((imageUri, index) => imageUri.trim() && imageUris.indexOf(imageUri) === index);
+}
+
+export async function reconcileListingImages(
+  imageUris: string[],
+  currentImages: ListingImage[],
+  dependencies: ListingImageReconciliationDependencies
+): Promise<void> {
+  if (imageUris.length > 15) {
+    throw createServiceError('IMAGE_LIMIT_REACHED', 'Listing update included more than 15 images', 'You can add up to 15 photos.');
+  }
+
+  const requestedUris = uniqueImageUris(imageUris);
+  const currentByUri = new Map<string, ListingImage>();
+
+  for (const image of currentImages) {
+    currentByUri.set(image.image_url, image);
+    if (image.thumbnail_url) currentByUri.set(image.thumbnail_url, image);
+  }
+
+  const retainedIds = new Set<string>();
+  const requestedImages = requestedUris.map((imageUri) => {
+    const currentImage = currentByUri.get(imageUri);
+
+    if (currentImage && !retainedIds.has(currentImage.id)) {
+      retainedIds.add(currentImage.id);
+      return { imageUri, currentImage };
+    }
+
+    return { imageUri };
+  });
+  const removedImages = currentImages.filter((image) => !retainedIds.has(image.id));
+  const removedEarly = new Set<string>();
+  const uploadedImages = new Map<string, ListingImage>();
+  let activeImageCount = currentImages.length;
+
+  try {
+    for (const requestedImage of requestedImages) {
+      if (requestedImage.currentImage) continue;
+
+      if (activeImageCount >= 15) {
+        const imageToRemove = removedImages.find((image) => !removedEarly.has(image.id));
+
+        if (!imageToRemove) {
+          throw createServiceError('IMAGE_LIMIT_REACHED', 'Listing update could not make room for a new image', 'You can add up to 15 photos.');
+        }
+
+        await dependencies.removeImage(imageToRemove);
+        removedEarly.add(imageToRemove.id);
+        activeImageCount -= 1;
+      }
+
+      const uploadedImage = await dependencies.uploadImage(requestedImage.imageUri);
+      uploadedImages.set(requestedImage.imageUri, uploadedImage);
+      activeImageCount += 1;
+    }
+  } catch (error) {
+    if (removedEarly.size === 0) {
+      for (const uploadedImage of [...uploadedImages.values()].reverse()) {
+        try {
+          await dependencies.removeImage(uploadedImage);
+        } catch {
+          // Preserve the original upload error; cleanup can be retried separately.
+        }
+      }
+    }
+
+    throw error;
+  }
+
+  for (const removedImage of removedImages) {
+    if (!removedEarly.has(removedImage.id)) {
+      await dependencies.removeImage(removedImage);
+    }
+  }
+
+  const finalImages = requestedImages.map(({ imageUri, currentImage }) => currentImage ?? uploadedImages.get(imageUri));
+
+  for (const [sortOrder, image] of finalImages.entries()) {
+    if (image && image.sort_order !== sortOrder) {
+      await dependencies.updateSortOrder(image, sortOrder);
+    }
+  }
+}
 
 function sortParam(params: ListingQueryParams): string {
   return params.sort && allowedSorts.has(params.sort) ? params.sort : 'recent';
@@ -475,13 +569,22 @@ export async function updateListing(listingId: string, input: UpdateListingInput
       throwSupabaseError(currentImagesError, 'We could not update listing photos.');
     }
 
-    for (const image of currentImageRows ?? []) {
-      await supabase.from('listing_images').delete().eq('id', String((image as Record<string, unknown>).id));
-    }
+    const currentImages = (currentImageRows ?? []).map((image) => toListingImage(image as Record<string, unknown>));
 
-    for (const imageUri of input.images) {
-      await uploadListingImage(imageUri, listingId);
-    }
+    await reconcileListingImages(input.images, currentImages, {
+      uploadImage: (imageUri) => uploadListingImage(imageUri, listingId),
+      removeImage: (image) => deleteListingImage(image.id),
+      updateSortOrder: async (image, sortOrder) => {
+        const { error: sortError } = await supabase
+          .from('listing_images')
+          .update({ sort_order: sortOrder })
+          .eq('id', image.id);
+
+        if (sortError) {
+          throwSupabaseError(sortError, 'We could not update listing photo order.');
+        }
+      },
+    });
   }
 
   return (await getListingById(listingId)).listing;

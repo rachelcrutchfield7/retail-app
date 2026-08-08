@@ -5,3 +5,5 @@
 #
 # Example:
 # src/screens/ListingDetailScreen.tsx
+
+src/components/forms/ImageUploader.tsx
