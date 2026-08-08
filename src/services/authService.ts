@@ -12,6 +12,11 @@ import {
   userFromSupabase,
 } from './supabaseData';
 import { createOrUpdateRescueProfile } from './rescueService';
+import {
+  assertRequiredSignupConsent,
+  pendingSignupConsentMetadata,
+  type SignupConsentInput,
+} from './consentService';
 import type { AccountType, RescueSignupInput, Session, User } from './types';
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -53,9 +58,14 @@ export async function signUpWithEmail(
   password: string,
   displayName: string,
   accountType: AccountType = 'regular',
-  username?: string,
-  rescueProfile?: RescueSignupInput
+  username: string | undefined,
+  rescueProfile: RescueSignupInput | undefined,
+  consent: SignupConsentInput,
+  dependencies: {
+    signUp?: typeof supabase.auth.signUp;
+  } = {}
 ): Promise<User> {
+  assertRequiredSignupConsent(consent?.termsAccepted === true);
   assertValidEmail(email);
   assertStrongPassword(password);
   assertSupportedAccountType(accountType);
@@ -67,7 +77,8 @@ export async function signUpWithEmail(
   const normalizedEmail = email.trim().toLowerCase();
   const normalizedAccountType = normalizeAccountType(accountType);
   const normalizedUsername = normalizeUsername(username?.trim() || displayName);
-  const { data, error } = await supabase.auth.signUp({
+  const signUp = dependencies.signUp ?? ((input) => supabase.auth.signUp(input));
+  const { data, error } = await signUp({
     email: normalizedEmail,
     password,
     options: {
@@ -75,6 +86,7 @@ export async function signUpWithEmail(
         display_name: displayName.trim(),
         username: normalizedUsername,
         account_type: normalizedAccountType,
+        ...pendingSignupConsentMetadata(consent, 'email_signup'),
         ...(normalizedAccountType === 'rescue' && rescueProfile ? { rescue_profile: rescueProfile } : {}),
       },
     },

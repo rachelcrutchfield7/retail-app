@@ -3,6 +3,7 @@ import { trackEvent } from '../lib/analytics';
 import type { ReportReason, ReportType } from './types';
 import { createServiceError } from './errors';
 import { ensureCurrentProfile, throwSupabaseError } from './supabaseData';
+import { requireCurrentPolicyAcceptance } from './consentService';
 
 export const reportReasons: ReportReason[] = [
   'Spam',
@@ -63,6 +64,7 @@ async function hasExistingReport(report_type: ReportType, target: Record<string,
 }
 
 async function createReport(report_type: ReportType, reason: string, details?: string, target?: Record<string, string>): Promise<void> {
+  await requireCurrentPolicyAcceptance();
   const profile = await ensureCurrentProfile();
   const normalizedReason = normalizeReportReason(reason);
   const reportTarget = target ?? {};

@@ -17,6 +17,7 @@ test('ReTail public domain links are centralized for app usage', () => {
   assert.equal(appLinks.privacyUrl, 'https://retailpetapp.com/privacy');
   assert.equal(appLinks.termsUrl, 'https://retailpetapp.com/terms');
   assert.equal(appLinks.communityGuidelinesUrl, 'https://retailpetapp.com/community-guidelines');
+  assert.equal(appLinks.accountDeletionUrl, 'https://retailpetapp.com/account-deletion');
   assert.equal(appLinks.contactEmail, 'contact@retailpetapp.com');
   assert.equal(appLinks.contactMailto, 'mailto:contact@retailpetapp.com');
   assert.equal(appLinks.supportEmail, 'support@retailpetapp.com');

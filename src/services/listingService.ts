@@ -2,6 +2,7 @@ import type { Listing } from '../types';
 import { trackEvent } from '../lib/analytics';
 import { supabase } from '../lib/supabase';
 import { createServiceError, isAppServiceError } from './errors';
+import { requireCurrentPolicyAcceptance } from './consentService';
 import { deleteListingImage, uploadListingImage } from './storageService';
 import {
   conditionToDb,
@@ -453,6 +454,7 @@ export async function getListingById(listingId: string): Promise<ListingDetail> 
 }
 
 export async function createListing(input: CreateListingInput): Promise<Listing> {
+  await requireCurrentPolicyAcceptance();
   assertCreateListingInput(input);
   const categoryId = await resolveCategoryId(input.category_id, input.category);
   const listingType = input.listing_type;

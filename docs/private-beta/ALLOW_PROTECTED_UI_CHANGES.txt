@@ -7,3 +7,7 @@
 # src/screens/ListingDetailScreen.tsx
 
 src/components/forms/ImageUploader.tsx
+src/AppShell.tsx
+src/components/feedback/AuthModal.tsx
+src/sprint3/Sprint3App.tsx
+src/sprint4/Sprint4App.tsx

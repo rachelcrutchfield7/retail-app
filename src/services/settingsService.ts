@@ -7,6 +7,7 @@ import type { NotificationPreferences, PrivacySettings } from './types';
 import { createServiceError } from './errors';
 import { supabase } from '../lib/supabase';
 import { ensureCurrentProfile, getSupabaseAuthUser, throwSupabaseError } from './supabaseData';
+import { getCurrentConsentState, updateMarketingEmailPreference } from './consentService';
 
 export const defaultPrivacySettings: PrivacySettings = {
   showCityState: true,
@@ -83,12 +84,14 @@ export async function getSettings(): Promise<{
   account: AccountSettings;
   notifications: NotificationPreferences;
   privacy: PrivacySettings;
+  marketingEmailOptIn: boolean;
   loadWarning?: string;
 }> {
   const account = await getAccountSettings();
-  const [notificationsResult, privacyResult] = await Promise.allSettled([
+  const [notificationsResult, privacyResult, consentResult] = await Promise.allSettled([
     getNotificationPreferences(),
     getPrivacySettings(),
+    getCurrentConsentState(),
   ]);
   const loadWarnings: string[] = [];
 
@@ -100,6 +103,10 @@ export async function getSettings(): Promise<{
     loadWarnings.push('Privacy settings are using safe defaults right now.');
   }
 
+  if (consentResult.status === 'rejected') {
+    loadWarnings.push('Marketing email preference could not be loaded right now.');
+  }
+
   return {
     account,
     notifications: notificationsResult.status === 'fulfilled'
@@ -108,11 +115,15 @@ export async function getSettings(): Promise<{
     privacy: privacyResult.status === 'fulfilled'
       ? privacyResult.value
       : defaultPrivacySettingsForAccount(account.accountType),
+    marketingEmailOptIn: consentResult.status === 'fulfilled'
+      ? consentResult.value.marketingEmailOptIn
+      : false,
     loadWarning: loadWarnings.length ? loadWarnings.join(' ') : undefined,
   };
 }
 
 export { getNotificationPreferences, updateNotificationPreferences };
+export { updateMarketingEmailPreference };
 
 function privacySettingsFromRow(row: Record<string, unknown>): PrivacySettings {
   return {

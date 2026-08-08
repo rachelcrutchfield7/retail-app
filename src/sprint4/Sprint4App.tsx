@@ -1751,6 +1751,12 @@ export function SettingsScreen({
         <ToggleSwitch label="Reviews" value={settings.data.notifications.emailReviews ?? true} onValueChange={(emailReviews) => void settings.updateNotifications({ emailReviews })} />
         <ToggleSwitch label="Listing and saved search updates" value={settings.data.notifications.emailMarketplaceUpdates ?? true} onValueChange={(emailMarketplaceUpdates) => void settings.updateNotifications({ emailMarketplaceUpdates })} />
         <ToggleSwitch label="System and safety notices" value={settings.data.notifications.emailSystem ?? true} onValueChange={(emailSystem) => void settings.updateNotifications({ emailSystem })} />
+        <ToggleSwitch
+          label="Marketing emails"
+          helperText="Receive ReTail news, launch updates, tips, and promotions."
+          value={settings.data.marketingEmailOptIn}
+          onValueChange={(granted) => void settings.updateMarketingEmails(granted)}
+        />
       </SectionCard>
 
       <SectionCard title="Privacy Settings">

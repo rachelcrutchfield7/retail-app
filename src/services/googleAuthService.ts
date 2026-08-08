@@ -2,6 +2,11 @@ import { config } from '../constants/config';
 import { identifyUser, trackEvent } from '../lib/analytics';
 import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
+import {
+  assertRequiredSignupConsent,
+  recordCurrentPolicyAcceptance,
+  type SignupConsentInput,
+} from './consentService';
 import { createServiceError, isAppServiceError } from './errors';
 import { ensureCurrentProfileWithStatus, sessionFromSupabase, throwSupabaseError } from './supabaseData';
 import type { Profile, Session } from './types';
@@ -51,6 +56,8 @@ type GoogleAuthDependencies = {
   statusCodes: GoogleSignInStatusCodes;
   supabaseAuth: SupabaseIdTokenClient;
   ensureProfile: () => Promise<{ profile: Profile; created: boolean }>;
+  signupConsent?: SignupConsentInput;
+  recordPolicyAcceptance: (marketingEmailOptIn: boolean) => Promise<unknown>;
 };
 
 export type GoogleSignInAvailability = {
@@ -122,6 +129,10 @@ export function isGoogleSignInCancellation(error: unknown): boolean {
 export async function signInWithGoogle(
   dependencies?: Partial<GoogleAuthDependencies>
 ): Promise<Session | null> {
+  if (dependencies?.signupConsent) {
+    assertRequiredSignupConsent(dependencies.signupConsent.termsAccepted);
+  }
+
   const resolvedDependencies = await resolveGoogleAuthDependencies(dependencies);
   const runtimeConfig = resolvedDependencies.runtimeConfig;
   const platform = resolvedDependencies.platform;
@@ -177,6 +188,9 @@ export async function signInWithGoogle(
 
     const profileResult = await resolvedDependencies.ensureProfile();
     const profile = profileResult.profile;
+    if (resolvedDependencies.signupConsent) {
+      await resolvedDependencies.recordPolicyAcceptance(resolvedDependencies.signupConsent.marketingEmailOptIn);
+    }
     identifyUser(profile.id, { accountType: profile.account_type });
     trackEvent('Google Sign In', { accountType: profile.account_type });
     return {
@@ -243,6 +257,9 @@ async function resolveGoogleAuthDependencies(
       statusCodes: dependencies.statusCodes,
       supabaseAuth: dependencies.supabaseAuth,
       ensureProfile: dependencies.ensureProfile,
+      signupConsent: dependencies.signupConsent,
+      recordPolicyAcceptance: dependencies.recordPolicyAcceptance ?? ((marketingEmailOptIn) =>
+        recordCurrentPolicyAcceptance(marketingEmailOptIn, 'google_signup')),
     };
   }
 
@@ -254,6 +271,9 @@ async function resolveGoogleAuthDependencies(
     statusCodes: dependencies.statusCodes ?? googleModule.statusCodes,
     supabaseAuth: dependencies.supabaseAuth ?? supabase.auth,
     ensureProfile: dependencies.ensureProfile ?? ensureCurrentProfileWithStatus,
+    signupConsent: dependencies.signupConsent,
+    recordPolicyAcceptance: dependencies.recordPolicyAcceptance ?? ((marketingEmailOptIn) =>
+      recordCurrentPolicyAcceptance(marketingEmailOptIn, 'google_signup')),
   };
 }
 

@@ -5,6 +5,7 @@ import { colors, radius, sizes, spacing, typography } from '../../constants/them
 import { useThemeColors } from '../../lib/themePreference';
 import type { AccountType, IconComponent } from '../../types.ts';
 import { TextInput } from '../forms/TextInput';
+import { PolicyConsentChoices } from '../forms/PolicyConsentChoices';
 import { GoogleSignInButton } from './GoogleSignInButton';
 
 type AuthModalProps = {
@@ -12,7 +13,7 @@ type AuthModalProps = {
   prompt?: AuthPrompt;
   onClose: () => void;
   onComplete: (submission: AuthModalSubmission) => void | Promise<void>;
-  onGoogleSignIn?: () => void | Promise<void>;
+  onGoogleSignIn?: (submission: Pick<AuthModalSubmission, 'mode' | 'termsAccepted' | 'marketingEmailOptIn'>) => void | Promise<void>;
   googleSignInAvailable?: boolean;
   googleSignInLoading?: boolean;
 };
@@ -29,6 +30,8 @@ export type AuthModalSubmission = {
   password: string;
   displayName?: string;
   username?: string;
+  termsAccepted: boolean;
+  marketingEmailOptIn: boolean;
 };
 
 const accountTypeOptions: Array<{
@@ -67,6 +70,8 @@ export function AuthModal({
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [username, setUsername] = useState('');
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [marketingEmailOptIn, setMarketingEmailOptIn] = useState(false);
 
   const submit = () => {
     void onComplete({
@@ -76,6 +81,8 @@ export function AuthModal({
       password,
       displayName: displayName.trim() || undefined,
       username: username.trim() || undefined,
+      termsAccepted,
+      marketingEmailOptIn,
     });
   };
 
@@ -141,7 +148,7 @@ export function AuthModal({
             <>
               <GoogleSignInButton
                 label={mode === 'register' ? 'Sign up with Google' : 'Continue with Google'}
-                onPress={() => void onGoogleSignIn()}
+                onPress={() => void onGoogleSignIn({ mode, termsAccepted, marketingEmailOptIn })}
                 loading={googleSignInLoading}
                 disabled={googleSignInLoading}
               />
@@ -187,6 +194,15 @@ export function AuthModal({
             secureTextEntry
             textContentType={mode === 'register' ? 'newPassword' : 'password'}
           />
+          {mode === 'register' ? (
+            <PolicyConsentChoices
+              termsAccepted={termsAccepted}
+              marketingEmailOptIn={marketingEmailOptIn}
+              onTermsAcceptedChange={setTermsAccepted}
+              onMarketingEmailOptInChange={setMarketingEmailOptIn}
+              disabled={googleSignInLoading}
+            />
+          ) : null}
           <AuthButton
             icon={Mail}
             label={mode === 'register' ? 'Create Account' : 'Log In'}

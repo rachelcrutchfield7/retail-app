@@ -13,6 +13,7 @@ Registrar/DNS: Cloudflare
 | Privacy Policy | `https://retailpetapp.com/privacy` |
 | Terms of Service | `https://retailpetapp.com/terms` |
 | Community Guidelines | `https://retailpetapp.com/community-guidelines` |
+| Account deletion | `https://retailpetapp.com/account-deletion` |
 | General contact | `contact@retailpetapp.com` |
 | Support, payment issues, user issues, and reports | `support@retailpetapp.com` |
 

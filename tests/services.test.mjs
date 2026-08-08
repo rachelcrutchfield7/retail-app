@@ -7,7 +7,10 @@ import { liveSupabaseTest as test } from './liveSupabaseTest.mjs';
 const uniqueEmail = () => `service-test-${Date.now()}-${Math.random().toString(36).slice(2)}@retailtest.dev`;
 
 test('signUpWithEmail creates a user with the selected account type', async () => {
-  const user = await signUpWithEmail(uniqueEmail(), 'Secure123!', 'Service Tester', 'rescue', 'service_tester');
+  const user = await signUpWithEmail(uniqueEmail(), 'Secure123!', 'Service Tester', 'rescue', 'service_tester', undefined, {
+    termsAccepted: true,
+    marketingEmailOptIn: false,
+  });
 
   assert.equal(user.accountType, 'rescue');
   assert.equal(user.emailVerified, false);
@@ -17,7 +20,10 @@ test('signUpWithEmail creates a user with the selected account type', async () =
 });
 
 test('createListing rejects sale listings without a price', async () => {
-  await signUpWithEmail(uniqueEmail(), 'Secure123!', 'Price Tester', 'regular');
+  await signUpWithEmail(uniqueEmail(), 'Secure123!', 'Price Tester', 'regular', undefined, undefined, {
+    termsAccepted: true,
+    marketingEmailOptIn: false,
+  });
 
   await assert.rejects(
     createListing({
@@ -38,7 +44,10 @@ test('createListing rejects sale listings without a price', async () => {
 });
 
 test('favorites service returns saved listings for the signed-in user', async () => {
-  await signUpWithEmail(uniqueEmail(), 'Secure123!', 'Favorite Tester', 'regular');
+  await signUpWithEmail(uniqueEmail(), 'Secure123!', 'Favorite Tester', 'regular', undefined, undefined, {
+    termsAccepted: true,
+    marketingEmailOptIn: false,
+  });
   await favoriteListing('l2');
 
   const favorites = await getFavorites();

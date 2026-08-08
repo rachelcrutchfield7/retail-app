@@ -3,6 +3,7 @@ import { config } from '../constants/config';
 import { trackEvent } from '../lib/analytics';
 import { supabase } from '../lib/supabase';
 import { createServiceError } from './errors';
+import { requireCurrentPolicyAcceptance } from './consentService';
 import { readLocalImageFile } from './localImageFile';
 import {
   getConversationById,
@@ -210,6 +211,7 @@ export async function getPaginatedMessages(conversationId: string, params: Messa
 }
 
 export async function sendMessage(input: SendMessageInput): Promise<Message> {
+  await requireCurrentPolicyAcceptance();
   const profile = await ensureCurrentProfile();
   await requireCanSendInConversation(input.conversationId);
   const messageType: SendableMessageType = input.messageType ?? 'text';
@@ -277,6 +279,7 @@ export async function sendImageMessage(conversationId: string, imageUri: string,
 }
 
 export async function uploadMessageImage(fileUri: string, conversationId: string): Promise<MessageAttachmentInput> {
+  await requireCurrentPolicyAcceptance();
   const profile = await ensureCurrentProfile();
   await requireCanSendInConversation(conversationId);
 

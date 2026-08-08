@@ -1,3 +1,8 @@
+import {
+  CURRENT_PRIVACY_VERSION,
+  CURRENT_TERMS_VERSION,
+} from '../../../src/constants/policyVersions';
+
 export type Section = {
   heading: string;
   body?: string[];
@@ -16,7 +21,8 @@ export type SitePage = {
   contact?: 'general' | 'support' | 'both';
 };
 
-const updated = 'Last updated: July 23, 2026';
+const updated = `Last updated: ${formatPolicyVersion(CURRENT_TERMS_VERSION)}`;
+const privacyUpdated = `Last updated: ${formatPolicyVersion(CURRENT_PRIVACY_VERSION)}`;
 const betaPaymentNotice = 'ReTail is not currently processing public marketplace payments. These policies describe the intended operation of future transaction features and may be updated before public payment services become available.';
 
 export const pages: SitePage[] = [
@@ -126,12 +132,13 @@ export const pages: SitePage[] = [
     eyebrow: 'Policy',
     heading: 'Privacy Policy',
     intro: 'This Privacy Policy explains how ReTail, owned and operated by Crutchfield Interactive LLC, handles information needed to operate a pet-supply marketplace.',
-    updated,
+    updated: privacyUpdated,
     sections: [
       {
         heading: 'Information ReTail collects',
         list: [
           'Account information, such as email address and authentication status.',
+          'Policy acceptance history and current marketing email preference.',
           'Public profile information, such as display name, username, avatar, bio, city, and state.',
           'Listings, including titles, descriptions, photos, categories, condition, price or free status, and general location.',
           'Favorites, messages, reviews, reports, notification records, and account settings.',
@@ -142,6 +149,7 @@ export const pages: SitePage[] = [
       },
       { heading: 'Public information', body: ['Listings, public profiles, review summaries, listing photos, city/state, approximate distance, and marketplace activity may be visible to other users. ReTail does not publicly display exact home addresses, private email addresses, authentication identifiers, or street-level GPS coordinates.'] },
       { heading: 'Messaging and safety records', body: ['Messages are intended for buyer, seller, and rescue coordination. Reports, moderation notes, account actions, and related records may be retained to investigate spam, fraud, harassment, prohibited listings, or unsafe behavior.'] },
+      { heading: 'Marketing email preference', body: ['ReTail may use an account email for ReTail news, launch updates, tips, and promotions only according to the user’s current marketing email preference. Users can opt in or out in Settings. When marketing email launches, messages will also include an unsubscribe mechanism.', 'Marketing messages are separate from transactional, security, payment, account, notification, and other essential service communications. Opting out of marketing does not stop communications needed to operate or protect a ReTail account. ReTail is not currently sending marketing campaigns through this preference.'] },
       { heading: 'Account deletion', body: ['Users can request account deletion. When an account is deleted, profile information may be anonymized and active listings archived. Historical transaction, messaging, review, report, and moderation records may be retained when needed for safety, fraud prevention, audit history, or legal compliance.'] },
       { heading: 'Contact', body: ['General privacy questions can be sent to contact@retailpetapp.com. Account access or safety issues should be sent to support@retailpetapp.com.'] },
     ],
@@ -255,3 +263,13 @@ export const pages: SitePage[] = [
     contact: 'support',
   },
 ];
+
+function formatPolicyVersion(version: string): string {
+  const [year, month, day] = version.split('-').map(Number);
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(Date.UTC(year, month - 1, day)));
+}

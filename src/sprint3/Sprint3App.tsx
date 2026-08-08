@@ -71,6 +71,7 @@ import {
   ProfileActionButton,
   ProfileHeader,
   PendingReviewCard,
+  PolicyConsentChoices,
   RescueHubBanner,
   ReviewCard,
   ReviewSummary,
@@ -1686,6 +1687,8 @@ export function ProfileScreen({
   const [rescueOrganizationType, setRescueOrganizationType] = useState<RescueOrganizationType>('Foster-based');
   const [rescueHas501c3, setRescueHas501c3] = useState(false);
   const [rescueEin, setRescueEin] = useState('');
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [marketingEmailOptIn, setMarketingEmailOptIn] = useState(false);
   const [googleProfileSetup, setGoogleProfileSetup] = useState<{
     email: string;
     displayName: string;
@@ -1739,8 +1742,12 @@ export function ProfileScreen({
           username: username || (accountType === 'rescue' ? rescueOrganizationName : displayName),
           accountType,
           rescueProfile,
+          termsAccepted,
+          marketingEmailOptIn,
         });
         setPassword('');
+        setTermsAccepted(false);
+        setMarketingEmailOptIn(false);
         setAuthMode('login');
         setPendingVerificationEmail(verificationEmail);
         return;
@@ -1782,7 +1789,11 @@ export function ProfileScreen({
     setNotice(null);
 
     try {
-      const googleSession = await auth.signInWithGoogle();
+      const googleSession = await auth.signInWithGoogle({
+        mode: authMode,
+        termsAccepted,
+        marketingEmailOptIn,
+      });
       if (!googleSession) {
         return;
       }
@@ -1924,6 +1935,15 @@ export function ProfileScreen({
               helperText={authMode === 'register' ? 'Use 8+ characters with uppercase, lowercase, a number, and a special character.' : undefined}
               textContentType={authMode === 'register' ? 'newPassword' : 'password'}
             />
+            {authMode === 'register' ? (
+              <PolicyConsentChoices
+                termsAccepted={termsAccepted}
+                marketingEmailOptIn={marketingEmailOptIn}
+                onTermsAcceptedChange={setTermsAccepted}
+                onMarketingEmailOptInChange={setMarketingEmailOptIn}
+                disabled={busy || googleBusy || auth.loading}
+              />
+            ) : null}
             {authMode === 'login' ? (
               <Button
                 title="Forgot Password?"

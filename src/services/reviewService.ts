@@ -4,6 +4,7 @@ import { trackEvent } from '../lib/analytics';
 import { getPendingReviews as getPendingTransactionReviews, toTransaction } from './transactionService';
 import type { CreateReviewInput, PendingReview, Review, ReviewSummary } from './types';
 import { ensureCurrentProfile, throwSupabaseError } from './supabaseData';
+import { requireCurrentPolicyAcceptance } from './consentService';
 
 type TransactionRow = {
   id: string;
@@ -69,6 +70,7 @@ function toReview(row: Record<string, unknown>, reviewerName?: string, revieweeN
 }
 
 export async function createReview(input: CreateReviewInput): Promise<Review> {
+  await requireCurrentPolicyAcceptance();
   const profile = await ensureCurrentProfile();
 
   if (input.rating < 1 || input.rating > 5) {

@@ -8,6 +8,7 @@ import {
 } from '../services/accountService';
 import {
   getSettings,
+  updateMarketingEmailPreference,
   updateNotificationPreferences,
   updatePrivacySettings,
 } from '../services/settingsService';
@@ -54,6 +55,15 @@ export function useSettings(autoLoad = true) {
     [resource]
   );
 
+  const updateMarketingEmails = useCallback(
+    async (granted: boolean) => {
+      await updateMarketingEmailPreference(granted);
+      clearQueryData(settingsKey);
+      await resource.refresh();
+    },
+    [resource]
+  );
+
   const changeEmail = useCallback(
     async (email: string) => {
       await updateEmail({ email });
@@ -76,6 +86,7 @@ export function useSettings(autoLoad = true) {
     ...resource,
     updateNotifications,
     updatePrivacy,
+    updateMarketingEmails,
     updateEmail: changeEmail,
     updatePassword: changePassword,
     deleteAccount,

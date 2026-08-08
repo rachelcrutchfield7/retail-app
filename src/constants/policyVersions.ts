@@ -1,0 +1,5 @@
+export const CURRENT_TERMS_VERSION = '2026-07-23';
+export const CURRENT_COMMUNITY_GUIDELINES_VERSION = '2026-07-23';
+export const CURRENT_PRIVACY_VERSION = '2026-08-08';
+
+export const POLICY_VERSION_SCHEME = 'ISO 8601 publication date (YYYY-MM-DD)';

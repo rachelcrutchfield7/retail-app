@@ -1,0 +1,47 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+const deletionRequest = 'mailto:support@retailpetapp.com?subject=ReTail%20Account%20Deletion%20Request';
+---
+<BaseLayout
+  title="Delete Your ReTail Account | ReTail"
+  description="Delete your ReTail account in the app or request account deletion from ReTail support when you cannot access the app."
+  path="/account-deletion"
+>
+  <section class="section page-hero narrow">
+    <span class="eyebrow">Account privacy</span>
+    <h1>Delete Your ReTail Account</h1>
+    <p class="lead">You can permanently delete your ReTail account from the ReTail app or request account deletion if you no longer have access to the app.</p>
+    <div class="actions">
+      <a class="button" href={deletionRequest}>Request Account Deletion</a>
+    </div>
+  </section>
+
+  <section class="section narrow policy-body">
+    <section>
+      <h2>Delete your account in the ReTail app</h2>
+      <ol>
+        <li>Sign in to ReTail.</li>
+        <li>Open Profile.</li>
+        <li>Open Settings.</li>
+        <li>Find Delete Account.</li>
+        <li>Follow the confirmation steps.</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>Request deletion without the app</h2>
+      <p>If you cannot access ReTail, email <a href={deletionRequest}>support@retailpetapp.com</a> from the email address associated with your account when possible. Include your account email and your ReTail username if known.</p>
+      <p>Never email ReTail your password, Google password, authentication token, or payment information. ReTail may need to verify account ownership before processing the request.</p>
+      <div class="actions">
+        <a class="button" href={deletionRequest}>Request Account Deletion</a>
+      </div>
+    </section>
+
+    <section>
+      <h2>What deletion covers</h2>
+      <p>ReTail will delete or anonymize account data according to the <a href="/privacy">Privacy Policy</a>. Some limited records may be retained for legitimate reasons, including fraud prevention, transaction history, disputes, safety investigations, moderation records, and legal or regulatory obligations.</p>
+      <p>ReTail is owned and operated by Crutchfield Interactive LLC.</p>
+    </section>
+  </section>
+</BaseLayout>

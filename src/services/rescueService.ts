@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase';
 import type { RescueNeedUrgency, RescueOrganization, RescueOrganizationType } from '../types';
 import { createServiceError, isAppServiceError } from './errors';
+import { requireCurrentPolicyAcceptance } from './consentService';
 import { ensureCurrentProfile, throwSupabaseError } from './supabaseData';
 import type {
   RescueDashboard,
@@ -144,6 +145,7 @@ export async function createOrUpdateRescueProfile(input: RescueSignupInput): Pro
 }
 
 export async function createRescueNeed(input: RescueNeedInput): Promise<RescueNeed> {
+  await requireCurrentPolicyAcceptance();
   assertValidItemInput(input.item, 'urgent need');
   const rescueProfile = await requireCurrentRescueProfile();
 
@@ -214,6 +216,7 @@ export async function deleteRescueNeed(needId: string): Promise<void> {
 }
 
 export async function createRescueWishlistItem(input: RescueWishlistItemInput): Promise<RescueWishlistItem> {
+  await requireCurrentPolicyAcceptance();
   assertValidItemInput(input.item, 'wishlist item');
   const rescueProfile = await requireCurrentRescueProfile();
 

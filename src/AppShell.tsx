@@ -263,6 +263,8 @@ function AppExperience() {
           displayName: submission.displayName ?? '',
           username: submission.username,
           accountType: submission.accountType,
+          termsAccepted: submission.termsAccepted,
+          marketingEmailOptIn: submission.marketingEmailOptIn,
         });
       } else {
         await auth.signIn({
@@ -284,11 +286,13 @@ function AppExperience() {
     }
   };
 
-  const completeGoogleAuth = async () => {
+  const completeGoogleAuth = async (
+    submission: Pick<AuthModalSubmission, 'mode' | 'termsAccepted' | 'marketingEmailOptIn'>
+  ) => {
     setGoogleAuthBusy(true);
 
     try {
-      const googleSession = await auth.signInWithGoogle();
+      const googleSession = await auth.signInWithGoogle(submission);
       if (!googleSession) {
         return;
       }

@@ -96,3 +96,18 @@ Price-tag dimensions, typography, and placement remain unchanged.
 - Allowed difference: Distance title remains readable in dark mode.
 - File: `src/components/location/DistanceFilter.tsx`
 - Visual rule: This exception is limited to dark-mode readability and does not authorize changes to Distance filter dimensions, spacing, layout, controls, or general presentation.
+
+## Signup consent and marketing preference
+
+Allowed difference:
+
+Account creation may include the required policy-acceptance checkbox and the separate optional marketing-email checkbox. Authenticated accounts without current acceptance may see the one-time Finish Setting Up ReTail gate. Settings may include the Marketing emails toggle.
+
+- File: `src/components/feedback/AuthModal.tsx`
+- File: `src/sprint3/Sprint3App.tsx`
+- File: `src/sprint4/Sprint4App.tsx`
+- File: `src/AppShell.tsx`
+
+Visual rule:
+
+This exception is limited to the requested account/compliance controls and gate. It does not authorize changes to authentication fields, marketplace presentation, profile presentation, navigation, global controls, spacing, typography, or theme.

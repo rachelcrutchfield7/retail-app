@@ -5,7 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Heart, Home, Plus, Search, User } from 'lucide-react-native';
 import { AuthProvider, useAuth } from '../auth';
-import { Button, Card, LoadingSpinner, TextInput } from '../components';
+import { Button, Card, LoadingSpinner, PolicyConsentChoices, TextInput } from '../components';
 import { colors, radius, sizes, spacing, typography } from '../constants/theme';
 import { QueryClientProvider } from '../lib/queryClient';
 import { useSupabaseStatus } from '../hooks/useSupabaseStatus';
@@ -226,6 +226,8 @@ export function RegisterScreen({
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [marketingEmailOptIn, setMarketingEmailOptIn] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<'displayName' | 'username' | 'email' | 'password' | 'form', string>>>({});
   const [submitting, setSubmitting] = useState(false);
 
@@ -247,6 +249,8 @@ export function RegisterScreen({
         displayName,
         username,
         accountType: 'regular',
+        termsAccepted,
+        marketingEmailOptIn,
       });
       onRegistered?.();
     } catch (error) {
@@ -293,6 +297,13 @@ export function RegisterScreen({
         secureTextEntry
         textContentType="newPassword"
         error={errors.password}
+      />
+      <PolicyConsentChoices
+        termsAccepted={termsAccepted}
+        marketingEmailOptIn={marketingEmailOptIn}
+        onTermsAcceptedChange={setTermsAccepted}
+        onMarketingEmailOptInChange={setMarketingEmailOptIn}
+        disabled={submitting}
       />
       {errors.form ? <Text style={styles.errorText}>{errors.form}</Text> : null}
       <Button title="Create Account" onPress={submit} loading={submitting} fullWidth />

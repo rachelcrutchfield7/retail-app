@@ -23,6 +23,8 @@ import { resetAnalyticsUser } from '../lib/analytics';
 import { logger } from '../lib/logger';
 import { removeAllRealtimeSubscriptions } from '../services/realtimeService';
 import { colors, radius, spacing, typography } from '../constants/theme';
+import { PolicyConsentBoundary } from './PolicyConsentBoundary';
+import type { PolicyConsentSource } from '../services/consentService';
 
 export type AuthState = {
   user: User | null;
@@ -42,11 +44,19 @@ export type SignUpInput = SignInInput & {
   username?: string;
   accountType: AccountType;
   rescueProfile?: RescueSignupInput;
+  termsAccepted: boolean;
+  marketingEmailOptIn: boolean;
+};
+
+export type GoogleSignInInput = {
+  mode: 'login' | 'register';
+  termsAccepted?: boolean;
+  marketingEmailOptIn?: boolean;
 };
 
 type AuthContextValue = AuthState & {
   signIn: (input: SignInInput) => Promise<Session>;
-  signInWithGoogle: () => Promise<Session | null>;
+  signInWithGoogle: (input?: GoogleSignInInput) => Promise<Session | null>;
   signUp: (input: SignUpInput) => Promise<User>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
@@ -99,6 +109,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [startupError, setStartupError] = useState<string | null>(null);
   const [startupRetry, setStartupRetry] = useState(0);
+  const [policyGateSource, setPolicyGateSource] = useState<PolicyConsentSource>('legacy_user_gate');
 
   const refreshProfile = useCallback(async () => {
     let activeSession: Session | null = null;
@@ -239,6 +250,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         await clearPrivateAuthState();
         const nextSession = await signInWithEmail(input.email, input.password);
+        setPolicyGateSource('legacy_user_gate');
         await refreshProfile();
         return nextSession;
       } finally {
@@ -258,7 +270,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           input.displayName,
           input.accountType,
           input.username,
-          input.rescueProfile
+          input.rescueProfile,
+          {
+            termsAccepted: input.termsAccepted,
+            marketingEmailOptIn: input.marketingEmailOptIn,
+          }
         );
         await refreshProfile();
         return nextUser;
@@ -269,11 +285,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [refreshProfile]
   );
 
-  const signInWithGoogle = useCallback(async () => {
+  const signInWithGoogle = useCallback(async (input: GoogleSignInInput = { mode: 'login' }) => {
     setLoading(true);
     try {
       await clearPrivateAuthState();
-      const nextSession = await signInWithGoogleAccount({ platform: Platform.OS });
+      const nextSession = await signInWithGoogleAccount({
+        platform: Platform.OS,
+        signupConsent: input.mode === 'register'
+          ? {
+            termsAccepted: input.termsAccepted === true,
+            marketingEmailOptIn: input.marketingEmailOptIn === true,
+          }
+          : undefined,
+      });
+      setPolicyGateSource(
+        input.mode === 'register' || nextSession?.requiresProfileSetup
+          ? 'google_signup'
+          : 'legacy_user_gate'
+      );
       await refreshProfile();
       return nextSession;
     } finally {
@@ -290,6 +319,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(null);
       setUser(null);
       setProfile(null);
+      setPolicyGateSource('legacy_user_gate');
     } finally {
       setLoading(false);
     }
@@ -338,7 +368,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
   }
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {session && user ? (
+        <PolicyConsentBoundary userId={user.id} source={policyGateSource} onSignOut={signOut}>
+          {children}
+        </PolicyConsentBoundary>
+      ) : children}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth(): AuthContextValue {
