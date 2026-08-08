@@ -34,8 +34,8 @@ Legend: PASS, FAIL, NEEDS VERIFICATION, NOT IMPLEMENTED.
 | Create Stripe onboarding for another user | Server should create only for caller | Function selects/updates `profiles.id = user.id` | PASS |
 | Inspect another seller Stripe status | Server should return caller only | Function selects `profiles.id = user.id` | PASS |
 | Double purchase race | Only one buyer should be able to pay for one-off listing | `reserve_stripe_checkout_listing` locks and reserves the listing before PaymentIntent creation; another buyer receives a controlled 409 while the reservation is active | PASS |
-| Duplicate refund | Refund logic absent | No refund endpoint/source found | NOT IMPLEMENTED |
-| Dispute handling | Dispute events should be recorded/process-defined | `stripe-webhook` does not handle `charge.dispute.*` | NOT IMPLEMENTED |
+| Duplicate refund | Refund amount should not double-count on webhook replay | `charge.refunded` stores Stripe's cumulative `amount_refunded`; `stripe_webhook_events` and `transaction_payment_events` are keyed by Stripe event ID | PASS |
+| Dispute handling | Dispute events should be recorded/process-defined | `stripe-webhook` handles `charge.dispute.created`, `charge.dispute.updated`, and `charge.dispute.closed` without relisting inventory | PASS |
 
 ## Current Marketplace Fee Behavior
 
@@ -54,3 +54,13 @@ Practical effect:
 - Stripe Connect onboarding/status/login functions cannot persist or read Stripe account state in the current live database schema.
 - PaymentIntent creation cannot currently reach a fully functional transaction write path.
 - This is not a client-side price/seller tampering vulnerability, but it is a public-launch blocker for protected checkout.
+
+## Refund and Dispute Handling
+
+Task 3D adds backend-only refund and dispute reconciliation:
+
+- `charge.refunded` records full or partial refund state from Stripe.
+- `charge.dispute.created`, `charge.dispute.updated`, and `charge.dispute.closed` record dispute status, reason, amount, and final resolution state.
+- Refunds and disputes do not automatically relist a sold item.
+- ReTail does not expose a mobile-client refund endpoint.
+- Initial refund initiation remains an authorized ReTail admin action in Stripe Dashboard, followed by Stripe webhook reconciliation.

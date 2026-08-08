@@ -121,5 +121,6 @@ test('checkout reservation task does not change fees, mobile UI, or unsupported 
   assert.match(stripeShared, /RETAIL_PLATFORM_MIN_FEE_CENTS'\) \?\? '0'/);
   assert.match(stripeShared, /RETAIL_PLATFORM_FEE_THRESHOLD_CENTS'\) \?\? '500'/);
   assert.doesNotMatch(stripeCreate, /charge\.refunded|charge\.dispute|refund\.|dispute\./);
-  assert.doesNotMatch(stripeWebhook, /charge\.refunded|charge\.dispute|refund\.|dispute\./);
+  assert.match(stripeWebhook, /charge\.refunded/);
+  assert.match(stripeWebhook, /charge\.dispute\.created/);
 });

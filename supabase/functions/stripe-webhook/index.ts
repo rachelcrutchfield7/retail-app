@@ -9,7 +9,12 @@ const supportedWebhookEvents = new Set([
   'payment_intent.succeeded',
   'payment_intent.payment_failed',
   'payment_intent.canceled',
+  'charge.refunded',
+  'charge.dispute.created',
+  'charge.dispute.updated',
+  'charge.dispute.closed',
 ]);
+const finalDisputeStatuses = new Set(['won', 'lost', 'warning_closed', 'prevented']);
 
 type SupabaseAdmin = ReturnType<typeof createSupabaseAdmin>;
 
@@ -26,7 +31,11 @@ type StripeTransaction = {
   amount_cents: number | null;
   currency: string | null;
   stripe_payment_intent_id: string | null;
+  last_stripe_charge_id?: string | null;
+  payment_status?: string | null;
 };
+
+type NotificationType = 'transaction_completed' | 'listing_sold' | 'system';
 
 function stripeCreatedAt(event: Stripe.Event): string | null {
   return typeof event.created === 'number'
@@ -40,6 +49,34 @@ function safeErrorMessage(error: unknown): string {
   }
 
   return 'Stripe webhook processing failed.';
+}
+
+function expandableStripeId(value: string | { id?: string } | null | undefined): string | null {
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  return typeof value?.id === 'string' ? value.id : null;
+}
+
+function validateStripeAmount(amountCents: number, transaction: StripeTransaction, fieldName: string): number {
+  if (!Number.isInteger(amountCents) || amountCents < 0) {
+    throw new Error(`Stripe ${fieldName} amount is invalid.`);
+  }
+
+  if (transaction.amount_cents !== null && amountCents > transaction.amount_cents) {
+    throw new Error(`Stripe ${fieldName} amount exceeds the ReTail transaction amount.`);
+  }
+
+  return amountCents;
+}
+
+function refundPaymentStatus(refundedAmountCents: number, transaction: StripeTransaction): string {
+  if (transaction.amount_cents !== null && refundedAmountCents >= transaction.amount_cents) {
+    return 'refunded';
+  }
+
+  return refundedAmountCents > 0 ? 'partially_refunded' : transaction.payment_status ?? 'succeeded';
 }
 
 async function claimWebhookEvent(supabaseAdmin: SupabaseAdmin, event: Stripe.Event): Promise<WebhookClaim> {
@@ -154,57 +191,132 @@ async function insertNotificationIfMissing(
   supabaseAdmin: SupabaseAdmin,
   notification: {
     user_id: string;
-    type: 'transaction_completed' | 'listing_sold';
+    type: NotificationType;
     title: string;
     body: string;
     data: Record<string, unknown>;
     dedupe_key: string;
   },
 ): Promise<void> {
-  const { data: existing, error: existingError } = await supabaseAdmin
-    .from('notifications')
-    .select('id')
-    .eq('user_id', notification.user_id)
-    .eq('dedupe_key', notification.dedupe_key)
-    .maybeSingle();
+  const route = typeof notification.data.route === 'string' ? notification.data.route : null;
+  const { error } = await supabaseAdmin.rpc('create_stripe_payment_notification', {
+    p_user_id: notification.user_id,
+    p_notification_type: notification.type,
+    p_title: notification.title,
+    p_body: notification.body,
+    p_route: route,
+    p_data: notification.data,
+    p_dedupe_key: notification.dedupe_key,
+  });
 
-  if (existingError) {
-    throw existingError;
-  }
-
-  if (existing) {
-    return;
-  }
-
-  const { error } = await supabaseAdmin.from('notifications').insert(notification);
-
-  if (error && error.code !== '23505') {
+  if (error) {
     throw error;
   }
 }
 
-async function handlePaymentIntentEvent(supabaseAdmin: SupabaseAdmin, event: Stripe.Event): Promise<void> {
-  const intent = event.data.object as Stripe.PaymentIntent;
-  const { data: transaction, error: transactionReadError } = await supabaseAdmin
-    .from('transactions')
-    .select('id,listing_id,buyer_id,seller_id,amount_cents,currency,stripe_payment_intent_id')
-    .eq('stripe_payment_intent_id', intent.id)
-    .maybeSingle();
+async function recordPaymentEvent(
+  supabaseAdmin: SupabaseAdmin,
+  event: Stripe.Event,
+  transaction: StripeTransaction,
+  values: {
+    amountCents?: number | null;
+    paymentIntentId?: string | null;
+    chargeId?: string | null;
+    disputeId?: string | null;
+    eventStatus?: string | null;
+    metadata?: Record<string, unknown>;
+  } = {},
+): Promise<void> {
+  const { error } = await supabaseAdmin.rpc('record_stripe_transaction_payment_event', {
+    p_transaction_id: transaction.id,
+    p_stripe_event_id: event.id,
+    p_event_type: event.type,
+    p_amount_cents: values.amountCents ?? null,
+    p_stripe_created_at: stripeCreatedAt(event),
+    p_payment_intent_id: values.paymentIntentId ?? transaction.stripe_payment_intent_id,
+    p_charge_id: values.chargeId ?? transaction.last_stripe_charge_id ?? null,
+    p_dispute_id: values.disputeId ?? null,
+    p_event_status: values.eventStatus ?? null,
+    p_metadata: values.metadata ?? {},
+  });
 
-  if (transactionReadError) {
-    throw transactionReadError;
+  if (error) {
+    throw error;
+  }
+}
+
+async function findTransactionByStripeIdentifiers(
+  supabaseAdmin: SupabaseAdmin,
+  identifiers: { paymentIntentId?: string | null; chargeId?: string | null },
+): Promise<StripeTransaction | null> {
+  const selectColumns = 'id,listing_id,buyer_id,seller_id,amount_cents,currency,stripe_payment_intent_id,last_stripe_charge_id,payment_status';
+
+  if (identifiers.paymentIntentId) {
+    const { data, error } = await supabaseAdmin
+      .from('transactions')
+      .select(selectColumns)
+      .eq('stripe_payment_intent_id', identifiers.paymentIntentId)
+      .maybeSingle();
+
+    if (error) {
+      throw error;
+    }
+
+    if (data) {
+      return data as StripeTransaction;
+    }
   }
 
+  if (identifiers.chargeId) {
+    const { data, error } = await supabaseAdmin
+      .from('transactions')
+      .select(selectColumns)
+      .eq('last_stripe_charge_id', identifiers.chargeId)
+      .maybeSingle();
+
+    if (error) {
+      throw error;
+    }
+
+    if (data) {
+      return data as StripeTransaction;
+    }
+  }
+
+  return null;
+}
+
+async function paymentIntentIdFromCharge(chargeId: string): Promise<string | null> {
+  const charge = await getStripe().charges.retrieve(chargeId);
+  return expandableStripeId(charge.payment_intent);
+}
+
+async function handlePaymentIntentEvent(supabaseAdmin: SupabaseAdmin, event: Stripe.Event): Promise<void> {
+  const intent = event.data.object as Stripe.PaymentIntent;
+  const latestChargeId = expandableStripeId(intent.latest_charge);
+  const transaction = await findTransactionByStripeIdentifiers(supabaseAdmin, {
+    paymentIntentId: intent.id,
+    chargeId: latestChargeId,
+  });
   if (!transaction) {
+    console.warn('Stripe PaymentIntent event did not match a ReTail transaction.', {
+      eventId: event.id,
+      eventType: event.type,
+      paymentIntentId: intent.id,
+    });
     return;
   }
 
-  verifyPaymentIntentMatchesTransaction(intent, transaction as StripeTransaction);
+  verifyPaymentIntentMatchesTransaction(intent, transaction);
 
   const update: Record<string, unknown> = {
     payment_status: intent.status,
     updated_at: new Date().toISOString(),
   };
+
+  if (latestChargeId) {
+    update.last_stripe_charge_id = latestChargeId;
+  }
 
   if (event.type === 'payment_intent.succeeded') {
     update.status = 'completed';
@@ -241,8 +353,15 @@ async function handlePaymentIntentEvent(supabaseAdmin: SupabaseAdmin, event: Str
     return;
   }
 
+  await recordPaymentEvent(supabaseAdmin, event, transaction, {
+    amountCents: transaction.amount_cents,
+    paymentIntentId: intent.id,
+    chargeId: latestChargeId,
+    eventStatus: String(update.payment_status ?? intent.status),
+  });
+
   if (event.type === 'payment_intent.payment_failed' || event.type === 'payment_intent.canceled') {
-    await releaseCheckoutReservation(supabaseAdmin, transaction as StripeTransaction, intent.id);
+    await releaseCheckoutReservation(supabaseAdmin, transaction, intent.id);
     return;
   }
 
@@ -294,6 +413,169 @@ async function handlePaymentIntentEvent(supabaseAdmin: SupabaseAdmin, event: Str
   });
 }
 
+async function handleChargeRefunded(supabaseAdmin: SupabaseAdmin, event: Stripe.Event): Promise<void> {
+  const charge = event.data.object as Stripe.Charge;
+  const chargeId = charge.id;
+  const paymentIntentId = expandableStripeId(charge.payment_intent);
+  const transaction = await findTransactionByStripeIdentifiers(supabaseAdmin, {
+    paymentIntentId,
+    chargeId,
+  });
+
+  if (!transaction) {
+    console.warn('Stripe refund event did not match a ReTail transaction.', {
+      eventId: event.id,
+      chargeId,
+      paymentIntentId,
+    });
+    return;
+  }
+
+  if (transaction.currency !== null && charge.currency !== transaction.currency) {
+    throw new Error('Stripe refund currency does not match the ReTail transaction.');
+  }
+
+  const refundedAmountCents = validateStripeAmount(charge.amount_refunded, transaction, 'refund');
+  const paymentStatus = refundPaymentStatus(refundedAmountCents, transaction);
+
+  const { error } = await supabaseAdmin
+    .from('transactions')
+    .update({
+      payment_status: paymentStatus,
+      refunded_amount_cents: refundedAmountCents,
+      refunded_at: refundedAmountCents > 0 ? new Date().toISOString() : null,
+      last_stripe_charge_id: chargeId,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', transaction.id)
+    .eq('stripe_payment_intent_id', transaction.stripe_payment_intent_id);
+
+  if (error) {
+    throw error;
+  }
+
+  await recordPaymentEvent(supabaseAdmin, event, transaction, {
+    amountCents: refundedAmountCents,
+    paymentIntentId,
+    chargeId,
+    eventStatus: paymentStatus,
+    metadata: { refunded: charge.refunded === true },
+  });
+
+  const refundLabel = paymentStatus === 'refunded' ? 'full refund' : 'partial refund';
+  const route = `/listing/${transaction.listing_id}`;
+
+  await insertNotificationIfMissing(supabaseAdmin, {
+    user_id: transaction.buyer_id,
+    type: 'system',
+    title: 'Refund recorded',
+    body: `Stripe reported a ${refundLabel} for your ReTail protected checkout purchase.`,
+    data: { listingId: transaction.listing_id, transactionId: transaction.id, route },
+    dedupe_key: `stripe:${event.id}:refund:buyer`,
+  });
+
+  await insertNotificationIfMissing(supabaseAdmin, {
+    user_id: transaction.seller_id,
+    type: 'system',
+    title: 'Refund recorded',
+    body: `Stripe reported a ${refundLabel} for a ReTail protected checkout sale.`,
+    data: { listingId: transaction.listing_id, transactionId: transaction.id, route },
+    dedupe_key: `stripe:${event.id}:refund:seller`,
+  });
+}
+
+async function handleDisputeEvent(supabaseAdmin: SupabaseAdmin, event: Stripe.Event): Promise<void> {
+  const dispute = event.data.object as Stripe.Dispute;
+  const chargeId = expandableStripeId(dispute.charge);
+  let paymentIntentId = expandableStripeId(dispute.payment_intent);
+
+  if (!paymentIntentId && chargeId) {
+    paymentIntentId = await paymentIntentIdFromCharge(chargeId);
+  }
+
+  const transaction = await findTransactionByStripeIdentifiers(supabaseAdmin, {
+    paymentIntentId,
+    chargeId,
+  });
+
+  if (!transaction) {
+    console.warn('Stripe dispute event did not match a ReTail transaction.', {
+      eventId: event.id,
+      eventType: event.type,
+      chargeId,
+      paymentIntentId,
+      disputeId: dispute.id,
+    });
+    return;
+  }
+
+  if (transaction.currency !== null && dispute.currency !== transaction.currency) {
+    throw new Error('Stripe dispute currency does not match the ReTail transaction.');
+  }
+
+  const disputedAmountCents = validateStripeAmount(dispute.amount, transaction, 'dispute');
+  const disputeCreatedAt = typeof dispute.created === 'number'
+    ? new Date(dispute.created * 1000).toISOString()
+    : null;
+  const disputeResolvedAt = event.type === 'charge.dispute.closed' || finalDisputeStatuses.has(dispute.status)
+    ? new Date().toISOString()
+    : null;
+
+  const { error } = await supabaseAdmin
+    .from('transactions')
+    .update({
+      payment_status: 'disputed',
+      stripe_dispute_id: dispute.id,
+      dispute_status: dispute.status,
+      dispute_amount_cents: disputedAmountCents,
+      dispute_reason: dispute.reason,
+      dispute_created_at: disputeCreatedAt,
+      dispute_resolved_at: disputeResolvedAt,
+      last_stripe_charge_id: chargeId ?? transaction.last_stripe_charge_id,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', transaction.id)
+    .eq('stripe_payment_intent_id', transaction.stripe_payment_intent_id);
+
+  if (error) {
+    throw error;
+  }
+
+  await recordPaymentEvent(supabaseAdmin, event, transaction, {
+    amountCents: disputedAmountCents,
+    paymentIntentId,
+    chargeId,
+    disputeId: dispute.id,
+    eventStatus: dispute.status,
+    metadata: { reason: dispute.reason },
+  });
+
+  const route = `/listing/${transaction.listing_id}`;
+  const disputeClosed = event.type === 'charge.dispute.closed';
+
+  await insertNotificationIfMissing(supabaseAdmin, {
+    user_id: transaction.seller_id,
+    type: 'system',
+    title: disputeClosed ? 'Payment dispute updated' : 'Payment dispute opened',
+    body: disputeClosed
+      ? `Stripe closed a payment dispute with status: ${dispute.status}.`
+      : 'Stripe reported a payment dispute for a ReTail protected checkout sale.',
+    data: { listingId: transaction.listing_id, transactionId: transaction.id, route },
+    dedupe_key: `stripe:${event.id}:dispute:seller`,
+  });
+
+  if (disputeClosed) {
+    await insertNotificationIfMissing(supabaseAdmin, {
+      user_id: transaction.buyer_id,
+      type: 'system',
+      title: 'Payment dispute updated',
+      body: `Stripe closed a payment dispute with status: ${dispute.status}.`,
+      data: { listingId: transaction.listing_id, transactionId: transaction.id, route },
+      dedupe_key: `stripe:${event.id}:dispute:buyer`,
+    });
+  }
+}
+
 Deno.serve(async (request) => {
   const cors = handleCors(request);
   if (cors) return cors;
@@ -333,6 +615,14 @@ Deno.serve(async (request) => {
   try {
     if (event.type === 'account.updated') {
       await handleAccountUpdated(supabaseAdmin, event);
+    } else if (event.type === 'charge.refunded') {
+      await handleChargeRefunded(supabaseAdmin, event);
+    } else if (
+      event.type === 'charge.dispute.created'
+      || event.type === 'charge.dispute.updated'
+      || event.type === 'charge.dispute.closed'
+    ) {
+      await handleDisputeEvent(supabaseAdmin, event);
     } else {
       await handlePaymentIntentEvent(supabaseAdmin, event);
     }

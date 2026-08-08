@@ -54,6 +54,10 @@ test('only currently supported webhook events perform ReTail mutations', () => {
     'payment_intent.succeeded',
     'payment_intent.payment_failed',
     'payment_intent.canceled',
+    'charge.refunded',
+    'charge.dispute.created',
+    'charge.dispute.updated',
+    'charge.dispute.closed',
   ]) {
     assert.match(webhook, new RegExp(`'${eventType}'`));
   }
@@ -61,19 +65,19 @@ test('only currently supported webhook events perform ReTail mutations', () => {
   assert.match(webhook, /!supportedWebhookEvents\.has\(event\.type\)/);
   assert.match(webhook, /markWebhookEventProcessed\(supabaseAdmin, event\.id, 'ignored'\)/);
   assert.match(webhook, /ignored: true/);
-  assert.doesNotMatch(webhook, /charge\.refunded|charge\.dispute|refund\.|dispute\./);
+  assert.doesNotMatch(webhook, /event\.type\.startsWith/);
 });
 
 test('payment success notifications use deterministic dedupe keys', () => {
   assert.match(webhook, /insertNotificationIfMissing/);
-  assert.match(webhook, /\.eq\('dedupe_key', notification\.dedupe_key\)/);
-  assert.match(webhook, /error\.code !== '23505'/);
+  assert.match(webhook, /create_stripe_payment_notification/);
+  assert.match(webhook, /p_dedupe_key: notification\.dedupe_key/);
+  assert.match(migration, /processing_status in \('processing', 'processed', 'failed', 'ignored'\)/);
   assert.match(webhook, /dedupe_key: `stripe:\$\{event\.id\}:buyer`/);
   assert.match(webhook, /dedupe_key: `stripe:\$\{event\.id\}:seller`/);
 });
 
-test('Task 3B idempotency remains separate from refunds, disputes, and fee changes', () => {
-  assert.doesNotMatch(webhook, /charge\.refunded|charge\.dispute|refund\.|dispute\./);
+test('Task 3B idempotency remains separate from fee changes', () => {
   assert.doesNotMatch(migration, /RETAIL_PLATFORM_FEE|calculatePlatformFeeCents/);
   assert.doesNotMatch(webhook, /RETAIL_PLATFORM_FEE|calculatePlatformFeeCents/);
 });
