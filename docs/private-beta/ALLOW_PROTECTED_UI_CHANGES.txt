@@ -1,0 +1,7 @@
+# Normally leave this file empty.
+#
+# A protected UI file may be listed here only when Rachel explicitly approved
+# a visual change for the current task.
+#
+# Example:
+# src/screens/ListingDetailScreen.tsx

@@ -1,0 +1,67 @@
+# App shell and active screen composition
+App.tsx
+src/AppShell.tsx
+src/sprint3/Sprint3App.tsx
+src/sprint4/Sprint4App.tsx
+
+# Navigation
+src/components/navigation/HeaderBar.tsx
+src/components/navigation/TabBar.tsx
+
+# Shared UI
+src/components/ui/Button.tsx
+src/components/ui/Card.tsx
+src/components/ui/Badge.tsx
+src/components/ui/Chip.tsx
+src/components/ui/IconButton.tsx
+src/components/ui/InfoTile.tsx
+
+# Marketplace presentation
+src/components/location/DistanceFilter.tsx
+src/components/marketplace/ListingCard.tsx
+src/components/marketplace/PriceTag.tsx
+src/components/marketplace/RescueHubBanner.tsx
+src/components/marketplace/SearchBar.tsx
+src/components/marketplace/StatusPill.tsx
+
+# Form presentation
+src/components/forms/Field.tsx
+src/components/forms/TextField.tsx
+src/components/forms/TextInput.tsx
+src/components/forms/TextArea.tsx
+src/components/forms/ImageUploader.tsx
+src/components/forms/CategorySelector.tsx
+src/components/forms/ConditionSelector.tsx
+
+# Profile presentation
+src/components/profile/ProfileHeader.tsx
+src/components/profile/ProfileActionButton.tsx
+src/components/profile/StatsCard.tsx
+src/components/profile/UserListingGrid.tsx
+
+# Messaging presentation
+src/components/messaging/ChatBubble.tsx
+src/components/messaging/ConversationCard.tsx
+src/components/messaging/ConversationList.tsx
+src/components/messaging/MessageInput.tsx
+
+# Authentication presentation
+src/components/feedback/AuthModal.tsx
+src/components/feedback/GoogleSignInButton.tsx
+
+# Screens
+src/screens/BrowseScreen.tsx
+src/screens/CreateListingScreen.tsx
+src/screens/FavoritesScreen.tsx
+src/screens/ListingDetailScreen.tsx
+src/screens/MessagesScreen.tsx
+src/screens/ProfileScreen.tsx
+src/screens/RescueHubScreen.tsx
+
+# Theme and safe-area contracts
+src/constants/theme.ts
+constants/theme.ts
+src/theme/ThemeProvider.tsx
+src/theme/palettes.ts
+src/theme/types.ts
+src/utils/safeAreaLayout.ts

@@ -1,0 +1,29 @@
+name: ReTail Beta UI Guard
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  protected-ui:
+    name: Protected UI and task scope
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository with history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Check protected UI changes
+        run: node scripts/check-protected-ui-changes.mjs "origin/${{ github.base_ref }}"
+
+      - name: Report task scope
+        if: always()
+        run: node scripts/report-task-diff.mjs "origin/${{ github.base_ref }}"
