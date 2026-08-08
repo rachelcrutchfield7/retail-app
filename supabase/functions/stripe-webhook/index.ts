@@ -18,6 +18,16 @@ type WebhookClaim = {
   processing_status: 'processing' | 'processed' | 'failed' | 'ignored';
 };
 
+type StripeTransaction = {
+  id: string;
+  listing_id: string;
+  buyer_id: string;
+  seller_id: string;
+  amount_cents: number | null;
+  currency: string | null;
+  stripe_payment_intent_id: string | null;
+};
+
 function stripeCreatedAt(event: Stripe.Event): string | null {
   return typeof event.created === 'number'
     ? new Date(event.created * 1000).toISOString()
@@ -105,6 +115,41 @@ async function handleAccountUpdated(supabaseAdmin: SupabaseAdmin, event: Stripe.
   }
 }
 
+function verifyPaymentIntentMatchesTransaction(intent: Stripe.PaymentIntent, transaction: StripeTransaction): void {
+  const metadata = intent.metadata ?? {};
+
+  if (metadata.retail_listing_id !== transaction.listing_id
+    || metadata.retail_buyer_id !== transaction.buyer_id
+    || metadata.retail_seller_id !== transaction.seller_id
+    || intent.id !== transaction.stripe_payment_intent_id) {
+    throw new Error('Stripe PaymentIntent metadata does not match the ReTail transaction.');
+  }
+
+  if (transaction.amount_cents !== null && intent.amount !== transaction.amount_cents) {
+    throw new Error('Stripe PaymentIntent amount does not match the ReTail transaction.');
+  }
+
+  if (transaction.currency !== null && intent.currency !== transaction.currency) {
+    throw new Error('Stripe PaymentIntent currency does not match the ReTail transaction.');
+  }
+}
+
+async function releaseCheckoutReservation(
+  supabaseAdmin: SupabaseAdmin,
+  transaction: StripeTransaction,
+  paymentIntentId: string,
+): Promise<void> {
+  const { error } = await supabaseAdmin.rpc('release_stripe_checkout_reservation', {
+    p_listing_id: transaction.listing_id,
+    p_buyer_id: transaction.buyer_id,
+    p_payment_intent_id: paymentIntentId,
+  });
+
+  if (error) {
+    throw error;
+  }
+}
+
 async function insertNotificationIfMissing(
   supabaseAdmin: SupabaseAdmin,
   notification: {
@@ -140,6 +185,22 @@ async function insertNotificationIfMissing(
 
 async function handlePaymentIntentEvent(supabaseAdmin: SupabaseAdmin, event: Stripe.Event): Promise<void> {
   const intent = event.data.object as Stripe.PaymentIntent;
+  const { data: transaction, error: transactionReadError } = await supabaseAdmin
+    .from('transactions')
+    .select('id,listing_id,buyer_id,seller_id,amount_cents,currency,stripe_payment_intent_id')
+    .eq('stripe_payment_intent_id', intent.id)
+    .maybeSingle();
+
+  if (transactionReadError) {
+    throw transactionReadError;
+  }
+
+  if (!transaction) {
+    return;
+  }
+
+  verifyPaymentIntentMatchesTransaction(intent, transaction as StripeTransaction);
+
   const update: Record<string, unknown> = {
     payment_status: intent.status,
     updated_at: new Date().toISOString(),
@@ -164,9 +225,10 @@ async function handlePaymentIntentEvent(supabaseAdmin: SupabaseAdmin, event: Str
     update.cancelled_at = new Date().toISOString();
   }
 
-  const { data: transaction, error: transactionError } = await supabaseAdmin
+  const { data: updatedTransaction, error: transactionError } = await supabaseAdmin
     .from('transactions')
     .update(update)
+    .eq('id', transaction.id)
     .eq('stripe_payment_intent_id', intent.id)
     .select('id,listing_id,buyer_id,seller_id,status,outcome')
     .maybeSingle();
@@ -175,34 +237,59 @@ async function handlePaymentIntentEvent(supabaseAdmin: SupabaseAdmin, event: Str
     throw transactionError;
   }
 
-  if (!transaction || event.type !== 'payment_intent.succeeded') {
+  if (!updatedTransaction) {
     return;
   }
 
-  const { error: listingError } = await supabaseAdmin
+  if (event.type === 'payment_intent.payment_failed' || event.type === 'payment_intent.canceled') {
+    await releaseCheckoutReservation(supabaseAdmin, transaction as StripeTransaction, intent.id);
+    return;
+  }
+
+  if (event.type !== 'payment_intent.succeeded') {
+    return;
+  }
+
+  const { data: soldListing, error: listingError } = await supabaseAdmin
     .from('listings')
-    .update({ status: 'sold', updated_at: new Date().toISOString() })
-    .eq('id', transaction.listing_id);
+    .update({
+      status: 'sold',
+      reserved_by: null,
+      reserved_until: null,
+      reservation_payment_intent_id: null,
+      reservation_transaction_id: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', transaction.listing_id)
+    .eq('reserved_by', transaction.buyer_id)
+    .eq('reservation_payment_intent_id', intent.id)
+    .eq('reservation_transaction_id', transaction.id)
+    .select('id')
+    .maybeSingle();
 
   if (listingError) {
     throw listingError;
   }
 
+  if (!soldListing) {
+    throw new Error('Stripe PaymentIntent does not match the current ReTail checkout reservation.');
+  }
+
   await insertNotificationIfMissing(supabaseAdmin, {
-    user_id: transaction.buyer_id,
+    user_id: updatedTransaction.buyer_id,
     type: 'transaction_completed',
     title: 'Purchase completed',
     body: 'Your ReTail protected checkout payment was successful.',
-    data: { listingId: transaction.listing_id, transactionId: transaction.id, route: `/listing/${transaction.listing_id}` },
+    data: { listingId: updatedTransaction.listing_id, transactionId: updatedTransaction.id, route: `/listing/${updatedTransaction.listing_id}` },
     dedupe_key: `stripe:${event.id}:buyer`,
   });
 
   await insertNotificationIfMissing(supabaseAdmin, {
-    user_id: transaction.seller_id,
+    user_id: updatedTransaction.seller_id,
     type: 'listing_sold',
     title: 'Listing sold',
     body: 'A buyer paid through ReTail protected checkout. Stripe will handle the payout.',
-    data: { listingId: transaction.listing_id, transactionId: transaction.id, route: `/listing/${transaction.listing_id}` },
+    data: { listingId: updatedTransaction.listing_id, transactionId: updatedTransaction.id, route: `/listing/${updatedTransaction.listing_id}` },
     dedupe_key: `stripe:${event.id}:seller`,
   });
 }

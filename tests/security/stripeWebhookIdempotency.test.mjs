@@ -72,9 +72,7 @@ test('payment success notifications use deterministic dedupe keys', () => {
   assert.match(webhook, /dedupe_key: `stripe:\$\{event\.id\}:seller`/);
 });
 
-test('Task 3B does not add checkout locking, refunds, disputes, or fee changes', () => {
-  assert.doesNotMatch(migration, /reserved|checkout_lock|reserved_until|reservation_buyer/);
-  assert.doesNotMatch(webhook, /reserved|checkout_lock|reserved_until|reservation_buyer/);
+test('Task 3B idempotency remains separate from refunds, disputes, and fee changes', () => {
   assert.doesNotMatch(webhook, /charge\.refunded|charge\.dispute|refund\.|dispute\./);
   assert.doesNotMatch(migration, /RETAIL_PLATFORM_FEE|calculatePlatformFeeCents/);
   assert.doesNotMatch(webhook, /RETAIL_PLATFORM_FEE|calculatePlatformFeeCents/);

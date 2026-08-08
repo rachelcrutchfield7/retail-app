@@ -33,7 +33,7 @@ Legend: PASS, FAIL, NEEDS VERIFICATION, NOT IMPLEMENTED.
 | Access another seller's Stripe dashboard | Server should derive caller account | Login link uses caller profile `stripe_connect_account_id` | PASS |
 | Create Stripe onboarding for another user | Server should create only for caller | Function selects/updates `profiles.id = user.id` | PASS |
 | Inspect another seller Stripe status | Server should return caller only | Function selects `profiles.id = user.id` | PASS |
-| Double purchase race | Only one buyer should be able to pay for one-off listing | Multiple buyers can create PaymentIntents while listing remains active until webhook success | FAIL |
+| Double purchase race | Only one buyer should be able to pay for one-off listing | `reserve_stripe_checkout_listing` locks and reserves the listing before PaymentIntent creation; another buyer receives a controlled 409 while the reservation is active | PASS |
 | Duplicate refund | Refund logic absent | No refund endpoint/source found | NOT IMPLEMENTED |
 | Dispute handling | Dispute events should be recorded/process-defined | `stripe-webhook` does not handle `charge.dispute.*` | NOT IMPLEMENTED |
 

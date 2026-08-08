@@ -32,11 +32,13 @@ test('deployed Stripe source was synced into the repository', () => {
 
 test('payment intent creation derives amount, buyer, seller, destination, and fee server-side', () => {
   assert.match(stripeCreate, /requireAuthenticatedRequest\(request\)/);
-  assert.match(stripeCreate, /listing\.seller_id === user\.id/);
-  assert.match(stripeCreate, /listing\.status !== 'active' \|\| listing\.listing_type !== 'sale'/);
-  assert.match(stripeCreate, /listingAmountCents !== requestedAmountCents/);
-  assert.match(stripeCreate, /calculatePlatformFeeCents\(listingAmountCents\)/);
-  assert.match(stripeCreate, /destination: String\(seller\.stripe_connect_account_id\)/);
+  assert.match(stripeCreate, /reserve_stripe_checkout_listing/);
+  assert.match(stripeCreate, /p_buyer_id: user\.id/);
+  assert.match(stripeCreate, /p_requested_amount_cents: requestedAmountCents/);
+  assert.match(stripeCreate, /calculatePlatformFeeCents\(reservation\.amount_cents\)/);
+  assert.match(stripeCreate, /destination: String\(reservation\.stripe_connect_account_id\)/);
+  assert.match(stripeCreate, /retail_seller_id: String\(reservation\.seller_id\)/);
+  assert.doesNotMatch(stripeCreate, /body\.(buyerId|sellerId|seller_id|stripe_connect_account_id)/);
   assert.doesNotMatch(stripeCreate, /destinationAccountId|sellerStripeAccountId|connectedAccountId/);
 });
 

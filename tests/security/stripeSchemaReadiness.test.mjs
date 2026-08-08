@@ -128,9 +128,7 @@ test('ordinary transaction writes cannot spoof Stripe payment state while servic
   assert.match(migration, /RETAIL_TRANSACTION_IMMUTABLE/);
 });
 
-test('schema readiness does not implement later Stripe hardening tasks', () => {
+test('schema readiness stays focused on columns, not webhook idempotency or fee changes', () => {
   assert.doesNotMatch(migration, /stripe_webhook_events|processed_event|event_id/);
-  assert.doesNotMatch(migration, /reserved|checkout_lock|reserved_until|reservation_buyer/);
   assert.doesNotMatch(migration, /calculatePlatformFeeCents|RETAIL_PLATFORM_FEE/);
-  assert.doesNotMatch(stripeWebhook, /stripe_webhook_events|processed_event/);
 });
