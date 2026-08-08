@@ -67,11 +67,13 @@ test('Stripe webhook rejects missing or invalid signatures before service-role w
   );
 });
 
-test('Stripe webhook idempotency gaps remain documented instead of silently fixed', () => {
-  assert.doesNotMatch(stripeWebhook, /event\.id/);
-  assert.doesNotMatch(stripeWebhook, /stripe_webhook_events|processed_event/);
-  assert.match(stripeWebhook, /event\.type\.startsWith\('payment_intent\.'\)/);
-  assert.match(stripeWebhook, /\.from\('notifications'\)\.insert/);
+test('Stripe webhook uses event idempotency and explicit event handling', () => {
+  assert.match(stripeWebhook, /claimWebhookEvent\(supabaseAdmin, event\)/);
+  assert.match(stripeWebhook, /event\.id/);
+  assert.match(stripeWebhook, /supportedWebhookEvents/);
+  assert.doesNotMatch(stripeWebhook, /event\.type\.startsWith\('payment_intent\.'\)/);
+  assert.match(stripeWebhook, /dedupe_key: `stripe:\$\{event\.id\}:buyer`/);
+  assert.match(stripeWebhook, /dedupe_key: `stripe:\$\{event\.id\}:seller`/);
 });
 
 test('send-notification requires either trusted secret or related authenticated user', () => {
