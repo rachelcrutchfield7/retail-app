@@ -3,6 +3,7 @@ import { MapPin, Search } from 'lucide-react-native';
 import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { colors, radius, spacing, typography } from '../../constants/theme';
 import { searchRadiusOptions } from '../../constants/location';
+import { useThemeColors } from '../../lib/themePreference';
 import type { MarketplaceSearchArea } from '../../types.ts';
 import { Card } from '../ui/Card';
 import { FilterChip } from '../marketplace/FilterChip';
@@ -30,6 +31,7 @@ export function DistanceFilter({
   selectedSearchAreaId,
   onSearchAreaSelect,
 }: DistanceFilterProps) {
+  const themeColors = useThemeColors();
   const [areaSearch, setAreaSearch] = useState('');
   const locationLabel = [city, state].filter(Boolean).join(', ') || 'your area';
   const normalizedAreaSearch = normalizeLocationSearch(areaSearch);
@@ -65,7 +67,7 @@ export function DistanceFilter({
             <MapPin size={20} color={colors.primary} />
           </View>
           <View style={styles.headerCopy}>
-            <Text style={styles.title}>Distance</Text>
+            <Text style={[styles.title, { color: themeColors.textPrimary }]}>Distance</Text>
             <Text style={styles.body}>Showing results near {locationLabel}</Text>
           </View>
         </View>
