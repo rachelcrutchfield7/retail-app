@@ -35,6 +35,16 @@ test('beta build configuration gate accepts valid preview configuration', () => 
   assert.equal(result.checks.supabasePublicKeyAccepted, true);
 });
 
+test('beta build configuration gate accepts the isolated payments test Supabase project', () => {
+  const result = validateBetaBuildConfig({
+    ...approvedEnv,
+    EXPO_PUBLIC_SUPABASE_URL: 'https://jqzaxzylijbwjdzoqsen.supabase.co',
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.checks.supabaseProjectMatches, true);
+});
+
 test('beta build configuration gate rejects missing or non-beta app environment', () => {
   expectFailure({ EXPO_PUBLIC_APP_ENV: '' }, /App environment is missing/);
   expectFailure({ EXPO_PUBLIC_APP_ENV: 'production' }, /App environment is not beta/);

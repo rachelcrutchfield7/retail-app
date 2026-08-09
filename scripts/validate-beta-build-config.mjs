@@ -3,6 +3,13 @@ import { fileURLToPath } from 'node:url';
 
 const approvedSupabaseProjectRef = 'ycwgsdigvpmprqreoqiz';
 const approvedSupabaseUrl = `https://${approvedSupabaseProjectRef}.supabase.co`;
+const approvedPaymentsTestSupabaseProjectRef = 'jqzaxzylijbwjdzoqsen';
+const approvedPaymentsTestSupabaseUrl = `https://${approvedPaymentsTestSupabaseProjectRef}.supabase.co`;
+const approvedPreviewSupabaseUrls = new Set([approvedSupabaseUrl, approvedPaymentsTestSupabaseUrl]);
+const approvedPreviewSupabaseHosts = new Set([
+  `${approvedSupabaseProjectRef}.supabase.co`,
+  `${approvedPaymentsTestSupabaseProjectRef}.supabase.co`,
+]);
 const publicWebsiteHost = 'retailpetapp.com';
 const localHostPattern = /(^|\.)localhost$|^127\.|^0\.0\.0\.0$|^10\.0\.2\.2$/;
 const placeholderUrlPattern = /example\.supabase\.co/i;
@@ -91,7 +98,7 @@ function validateSupabaseUrl(value) {
 
   if (parsed) {
     const host = parsed.hostname.toLowerCase();
-    projectMatches = normalized === approvedSupabaseUrl;
+    projectMatches = approvedPreviewSupabaseUrls.has(normalized);
 
     if (!isHttps) {
       failures.push('Supabase URL must use HTTPS.');
@@ -105,7 +112,7 @@ function validateSupabaseUrl(value) {
       failures.push('Supabase URL cannot use the public ReTail website domain.');
     }
 
-    if (host !== `${approvedSupabaseProjectRef}.supabase.co`) {
+    if (!approvedPreviewSupabaseHosts.has(host)) {
       failures.push('Supabase project does not match the approved project.');
     }
   }
@@ -114,7 +121,7 @@ function validateSupabaseUrl(value) {
     failures.push('Supabase URL cannot use placeholder text.');
   }
 
-  if (normalized !== approvedSupabaseUrl) {
+  if (!approvedPreviewSupabaseUrls.has(normalized)) {
     failures.push('Supabase URL must exactly match the approved Supabase project URL.');
     projectMatches = false;
   }
