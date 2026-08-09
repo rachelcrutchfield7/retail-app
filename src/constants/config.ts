@@ -16,6 +16,8 @@ const supportedAppEnvironments = new Set<AppEnvironment>(['development', 'beta',
 const releaseLikeAppEnvironments = new Set<AppEnvironment>(['beta', 'production']);
 const approvedSupabaseProjectRef = 'ycwgsdigvpmprqreoqiz';
 const approvedSupabaseUrl = `https://${approvedSupabaseProjectRef}.supabase.co`;
+const approvedPaymentsTestSupabaseProjectRef = 'jqzaxzylijbwjdzoqsen';
+const approvedPaymentsTestSupabaseUrl = `https://${approvedPaymentsTestSupabaseProjectRef}.supabase.co`;
 const publicWebsiteHost = 'retailpetapp.com';
 const localUrlPattern = /(^|\.)localhost$|^127\.|^0\.0\.0\.0$|^10\.0\.2\.2$/;
 const placeholderUrlPattern = /example\.supabase\.co/i;
@@ -126,6 +128,8 @@ export function getAppEnvironmentLabel(value: string = config.appEnv): string {
 
 export function getEnvironmentValidationError(env: RuntimeEnv = bundledRuntimeEnv): string | null {
   const runtimeConfig = readConfigFromEnv(env);
+  const normalizedSupabaseUrl = runtimeConfig.supabaseUrl.trim().toLowerCase();
+  const stripePublishableMode = getStripePublishableMode(runtimeConfig.stripePublishableKey);
 
   if (!isSupportedAppEnvironment(runtimeConfig.appEnv)) {
     return `Unsupported app environment: ${runtimeConfig.appEnv}`;
@@ -140,16 +144,50 @@ export function getEnvironmentValidationError(env: RuntimeEnv = bundledRuntimeEn
       return 'Release builds cannot use the public ReTail website domain as the Supabase API URL.';
     }
 
-    if (runtimeConfig.supabaseUrl.trim().toLowerCase() !== approvedSupabaseUrl) {
-      return 'Release builds must use the approved ReTail Supabase project URL.';
+    if (runtimeConfig.appEnv === 'beta' && normalizedSupabaseUrl !== approvedPaymentsTestSupabaseUrl) {
+      return 'Beta builds must use the approved ReTail payments test Supabase project URL.';
+    }
+
+    if (runtimeConfig.appEnv === 'production' && normalizedSupabaseUrl !== approvedSupabaseUrl) {
+      return 'Production builds must use the approved ReTail production Supabase project URL.';
     }
 
     if (runtimeConfig.supabaseAnonKey.includes('ci-placeholder')) {
       return 'Release builds cannot use CI placeholder Supabase credentials.';
     }
+
+    if (runtimeConfig.stripePaymentsEnabled && stripePublishableMode === 'missing') {
+      return 'Release builds with Stripe payments enabled must include a Stripe publishable key.';
+    }
+
+    if (runtimeConfig.appEnv === 'beta' && stripePublishableMode !== 'test') {
+      return 'Beta builds must use a Stripe test publishable key.';
+    }
+
+    if (runtimeConfig.appEnv === 'production' && stripePublishableMode !== 'live') {
+      return 'Production builds must use a Stripe live publishable key.';
+    }
   }
 
   return null;
+}
+
+export function getStripePublishableMode(value: string): 'missing' | 'test' | 'live' | 'unknown' {
+  const normalized = value.trim();
+
+  if (!normalized) {
+    return 'missing';
+  }
+
+  if (normalized.startsWith('pk_test_')) {
+    return 'test';
+  }
+
+  if (normalized.startsWith('pk_live_')) {
+    return 'live';
+  }
+
+  return 'unknown';
 }
 
 export function isClientSafeSupabaseKey(value: string): boolean {

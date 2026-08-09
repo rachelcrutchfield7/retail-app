@@ -6,6 +6,7 @@ import test from 'node:test';
 
 import {
   getEnvironmentValidationError,
+  getStripePublishableMode,
   getUnsafePublicSupabaseCredentialReason,
   readConfigFromEnv,
 } from '../src/constants/config.ts';
@@ -82,12 +83,86 @@ test('release validation rejects website domains and unsafe server-only credenti
       EXPO_PUBLIC_SUPABASE_URL: 'https://otherproject.supabase.co',
       EXPO_PUBLIC_SUPABASE_ANON_KEY: 'public-anon-key',
     }) ?? '',
-    /approved ReTail Supabase project URL/
+    /approved ReTail payments test Supabase project URL/
   );
   assert.equal(
     getUnsafePublicSupabaseCredentialReason(['service', 'role', 'hidden'].join('_')),
     'server-only Supabase credential'
   );
+});
+
+test('runtime startup guard accepts only approved Supabase and Stripe mode pairings', () => {
+  const publicKey = 'public-anon-key';
+
+  assert.equal(
+    getEnvironmentValidationError({
+      EXPO_PUBLIC_APP_ENV: 'beta',
+      EXPO_PUBLIC_SUPABASE_URL: 'https://jqzaxzylijbwjdzoqsen.supabase.co',
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: publicKey,
+      EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY: 'pk_test_public',
+      EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED: 'true',
+    }),
+    null
+  );
+  assert.equal(
+    getEnvironmentValidationError({
+      EXPO_PUBLIC_APP_ENV: 'production',
+      EXPO_PUBLIC_SUPABASE_URL: 'https://ycwgsdigvpmprqreoqiz.supabase.co',
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: publicKey,
+      EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY: 'pk_live_public',
+      EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED: 'true',
+    }),
+    null
+  );
+  assert.match(
+    getEnvironmentValidationError({
+      EXPO_PUBLIC_APP_ENV: 'beta',
+      EXPO_PUBLIC_SUPABASE_URL: 'https://ycwgsdigvpmprqreoqiz.supabase.co',
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: publicKey,
+      EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY: 'pk_test_public',
+      EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED: 'true',
+    }) ?? '',
+    /payments test Supabase/
+  );
+  assert.match(
+    getEnvironmentValidationError({
+      EXPO_PUBLIC_APP_ENV: 'beta',
+      EXPO_PUBLIC_SUPABASE_URL: 'https://jqzaxzylijbwjdzoqsen.supabase.co',
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: publicKey,
+      EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY: 'pk_live_public',
+      EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED: 'true',
+    }) ?? '',
+    /Stripe test publishable key/
+  );
+  assert.match(
+    getEnvironmentValidationError({
+      EXPO_PUBLIC_APP_ENV: 'production',
+      EXPO_PUBLIC_SUPABASE_URL: 'https://jqzaxzylijbwjdzoqsen.supabase.co',
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: publicKey,
+      EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY: 'pk_live_public',
+      EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED: 'true',
+    }) ?? '',
+    /production Supabase/
+  );
+  assert.match(
+    getEnvironmentValidationError({
+      EXPO_PUBLIC_APP_ENV: 'production',
+      EXPO_PUBLIC_SUPABASE_URL: 'https://ycwgsdigvpmprqreoqiz.supabase.co',
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: publicKey,
+      EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY: 'pk_test_public',
+      EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED: 'true',
+    }) ?? '',
+    /Stripe live publishable key/
+  );
+});
+
+test('runtime startup guard does not depend on non-public Stripe verifier flags', () => {
+  const source = read('src/constants/config.ts');
+
+  assert.equal(getStripePublishableMode('pk_test_public'), 'test');
+  assert.equal(getStripePublishableMode('pk_live_public'), 'live');
+  assert.doesNotMatch(source, /RETAIL_STRIPE_BACKEND_MODE/);
+  assert.doesNotMatch(source, /RETAIL_STRIPE_WEBHOOK_MODE/);
 });
 
 test('Android bundle verification script is safe and connected to package scripts', () => {
