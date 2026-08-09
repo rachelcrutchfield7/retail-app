@@ -26,6 +26,7 @@
     "install:beta-git-hooks": "node scripts/install-retail-git-hooks.mjs",
     "validate:beta-build-config": "node scripts/validate-beta-build-config.mjs --profile-preview",
     "validate:preview-bundle-config": "node scripts/verify-preview-bundle-config.mjs",
+    "verify:stripe-test-environment": "node scripts/verify-stripe-test-environment.mjs --profile preview",
     "eas-build-pre-install": "node scripts/validate-beta-build-config.mjs",
     "build:preview:ios": "pnpm check:beta-guardrails && eas build --profile preview --platform ios",
     "build:preview:android": "pnpm check:beta-guardrails && eas build --profile preview --platform android",
