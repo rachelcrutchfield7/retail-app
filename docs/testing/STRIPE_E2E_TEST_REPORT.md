@@ -74,8 +74,8 @@ Current available evidence is insufficient:
 
 Before resuming Task 4, Rachel or Codex needs one safe way to verify mode without exposing secret values:
 
-1. In Supabase Dashboard, confirm `STRIPE_SECRET_KEY` begins with `sk_test_`, not `sk_live_`.
-2. In EAS/Expo environment, confirm `EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY` begins with `pk_test_`, not `pk_live_`.
+1. In Supabase Dashboard, confirm `STRIPE_SECRET_KEY` is a Stripe test secret key, not a Stripe live secret key.
+2. In EAS/Expo environment, confirm `EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY` is a Stripe test publishable key, not a Stripe live publishable key.
 3. Confirm Stripe webhook endpoint used for Supabase points to the deployed `stripe-webhook` function in test mode.
 
 Do not paste full secret keys into chat. Only confirm:

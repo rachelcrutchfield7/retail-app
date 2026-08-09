@@ -115,6 +115,16 @@ export function AuthModal({
           </View>
 
           {mode === 'register' ? (
+            <PolicyConsentChoices
+              termsAccepted={termsAccepted}
+              marketingEmailOptIn={marketingEmailOptIn}
+              onTermsAcceptedChange={setTermsAccepted}
+              onMarketingEmailOptInChange={setMarketingEmailOptIn}
+              disabled={googleSignInLoading}
+            />
+          ) : null}
+
+          {mode === 'register' ? (
             <View style={styles.accountTypeGrid}>
               {accountTypeOptions.map((option) => {
                 const selected = selectedAccountType === option.type;
@@ -194,15 +204,6 @@ export function AuthModal({
             secureTextEntry
             textContentType={mode === 'register' ? 'newPassword' : 'password'}
           />
-          {mode === 'register' ? (
-            <PolicyConsentChoices
-              termsAccepted={termsAccepted}
-              marketingEmailOptIn={marketingEmailOptIn}
-              onTermsAcceptedChange={setTermsAccepted}
-              onMarketingEmailOptInChange={setMarketingEmailOptIn}
-              disabled={googleSignInLoading}
-            />
-          ) : null}
           <AuthButton
             icon={Mail}
             label={mode === 'register' ? 'Create Account' : 'Log In'}
