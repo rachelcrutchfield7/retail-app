@@ -144,8 +144,18 @@ export function getEnvironmentValidationError(env: RuntimeEnv = bundledRuntimeEn
       return 'Release builds cannot use the public ReTail website domain as the Supabase API URL.';
     }
 
-    if (runtimeConfig.appEnv === 'beta' && normalizedSupabaseUrl !== approvedPaymentsTestSupabaseUrl) {
-      return 'Beta builds must use the approved ReTail payments test Supabase project URL.';
+    if (runtimeConfig.appEnv === 'beta') {
+      if (runtimeConfig.stripePaymentsEnabled) {
+        if (normalizedSupabaseUrl !== approvedPaymentsTestSupabaseUrl) {
+          return 'Beta builds with Stripe payments enabled must use the approved ReTail payments test Supabase project URL.';
+        }
+
+        if (stripePublishableMode !== 'test') {
+          return 'Beta builds with Stripe payments enabled must use a Stripe test publishable key.';
+        }
+      } else if (normalizedSupabaseUrl !== approvedSupabaseUrl) {
+        return 'Beta builds with Stripe payments disabled must use the approved ReTail production Supabase project URL.';
+      }
     }
 
     if (runtimeConfig.appEnv === 'production' && normalizedSupabaseUrl !== approvedSupabaseUrl) {
@@ -158,10 +168,6 @@ export function getEnvironmentValidationError(env: RuntimeEnv = bundledRuntimeEn
 
     if (runtimeConfig.stripePaymentsEnabled && stripePublishableMode === 'missing') {
       return 'Release builds with Stripe payments enabled must include a Stripe publishable key.';
-    }
-
-    if (runtimeConfig.appEnv === 'beta' && stripePublishableMode !== 'test') {
-      return 'Beta builds must use a Stripe test publishable key.';
     }
 
     if (runtimeConfig.appEnv === 'production' && stripePublishableMode !== 'live') {

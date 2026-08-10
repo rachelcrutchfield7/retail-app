@@ -82,8 +82,9 @@ test('release validation rejects website domains and unsafe server-only credenti
       EXPO_PUBLIC_APP_ENV: 'beta',
       EXPO_PUBLIC_SUPABASE_URL: 'https://otherproject.supabase.co',
       EXPO_PUBLIC_SUPABASE_ANON_KEY: 'public-anon-key',
+      EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED: 'false',
     }) ?? '',
-    /approved ReTail payments test Supabase project URL/
+    /approved ReTail production Supabase project URL/
   );
   assert.equal(
     getUnsafePublicSupabaseCredentialReason(['service', 'role', 'hidden'].join('_')),
@@ -94,6 +95,25 @@ test('release validation rejects website domains and unsafe server-only credenti
 test('runtime startup guard accepts only approved Supabase and Stripe mode pairings', () => {
   const publicKey = 'public-anon-key';
 
+  assert.equal(
+    getEnvironmentValidationError({
+      EXPO_PUBLIC_APP_ENV: 'beta',
+      EXPO_PUBLIC_SUPABASE_URL: 'https://ycwgsdigvpmprqreoqiz.supabase.co',
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: publicKey,
+      EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY: 'pk_live_public',
+      EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED: 'false',
+    }),
+    null
+  );
+  assert.equal(
+    getEnvironmentValidationError({
+      EXPO_PUBLIC_APP_ENV: 'beta',
+      EXPO_PUBLIC_SUPABASE_URL: 'https://ycwgsdigvpmprqreoqiz.supabase.co',
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: publicKey,
+      EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED: 'false',
+    }),
+    null
+  );
   assert.equal(
     getEnvironmentValidationError({
       EXPO_PUBLIC_APP_ENV: 'beta',
@@ -129,10 +149,20 @@ test('runtime startup guard accepts only approved Supabase and Stripe mode pairi
       EXPO_PUBLIC_APP_ENV: 'beta',
       EXPO_PUBLIC_SUPABASE_URL: 'https://jqzaxzylijbwjdzoqsen.supabase.co',
       EXPO_PUBLIC_SUPABASE_ANON_KEY: publicKey,
+      EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY: 'pk_test_public',
+      EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED: 'false',
+    }) ?? '',
+    /production Supabase/
+  );
+  assert.match(
+    getEnvironmentValidationError({
+      EXPO_PUBLIC_APP_ENV: 'beta',
+      EXPO_PUBLIC_SUPABASE_URL: 'https://jqzaxzylijbwjdzoqsen.supabase.co',
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: publicKey,
       EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY: 'pk_live_public',
       EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED: 'true',
     }) ?? '',
-    /Stripe test publishable key/
+    /Stripe payments enabled.*Stripe test publishable key/
   );
   assert.match(
     getEnvironmentValidationError({
