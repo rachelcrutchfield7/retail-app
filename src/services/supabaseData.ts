@@ -117,6 +117,54 @@ export function throwSupabaseError(error: unknown, fallbackMessage = 'We could n
     );
   }
 
+  if (message.includes('RETAIL_ADMIN_REQUIRED') || message.includes('RETAIL_REPORT_PERMISSION_DENIED')) {
+    throw createServiceError(
+      'RETAIL_ADMIN_REQUIRED',
+      message,
+      'Admin access is required for this action. Please sign out and back into the admin account if this looks wrong.'
+    );
+  }
+
+  if (message.includes('RETAIL_REPORT_NOT_FOUND') || message.includes('RETAIL_REPORT_TARGET_INVALID')) {
+    throw createServiceError(
+      'RETAIL_REPORT_NOT_FOUND',
+      message,
+      'That report is no longer available.'
+    );
+  }
+
+  if (message.includes('RETAIL_REPORT_STATUS_INVALID') || message.includes('RETAIL_REPORT_VIEW_INVALID')) {
+    throw createServiceError(
+      'RETAIL_REPORT_STATUS_INVALID',
+      message,
+      'That report cannot be moved to that status.'
+    );
+  }
+
+  if (message.includes('RETAIL_REPORT_ACTION_INVALID')) {
+    throw createServiceError(
+      'RETAIL_REPORT_ACTION_INVALID',
+      message,
+      'That moderation action is not available.'
+    );
+  }
+
+  if (message.includes('RETAIL_CANNOT_DELETE_SELF')) {
+    throw createServiceError(
+      'RETAIL_CANNOT_DELETE_SELF',
+      message,
+      'You cannot remove your own admin account.'
+    );
+  }
+
+  if (message.includes('RETAIL_CANNOT_DELETE_ADMIN')) {
+    throw createServiceError(
+      'RETAIL_CANNOT_DELETE_ADMIN',
+      message,
+      'Admin accounts cannot be removed from this panel.'
+    );
+  }
+
   if (message.includes('RETAIL_MESSAGE_LINK_LIMIT')) {
     throw createServiceError(
       'RETAIL_MESSAGE_LINK_LIMIT',

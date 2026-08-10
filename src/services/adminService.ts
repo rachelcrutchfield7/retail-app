@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { logger } from '../lib/logger';
 import { createServiceError } from './errors';
 import { ensureCurrentProfile, throwSupabaseError } from './supabaseData';
 import type { AdminListingReport, ReportReason, ReportStatus, RescueOrgTypeDb, RescueProfile, RescueVerificationStatus } from './types';
@@ -70,16 +71,9 @@ export async function rejectRescueProfile(rescueId: string): Promise<RescueProfi
 export async function getListingReportQueue(view: 'active' | 'archived' = 'active'): Promise<AdminListingReport[]> {
   await requireAdminProfile();
 
-  const statuses: ReportStatus[] = view === 'archived'
-    ? ['resolved', 'dismissed']
-    : ['open', 'reviewing'];
-
-  const { data, error } = await supabase
-    .from('reports')
-    .select('*')
-    .in('report_type', ['listing', 'message', 'user'])
-    .in('status', statuses)
-    .order('created_at', { ascending: false });
+  const { data, error } = await supabase.rpc('get_admin_report_queue', {
+    requested_view: view,
+  });
 
   if (error) {
     throwSupabaseError(error, 'We could not load reports.');
@@ -119,7 +113,31 @@ export async function moderateListingReport(
 }
 
 async function requireAdminProfile() {
+  const authResult = await supabase.auth.getUser();
+
+  if (authResult.error || !authResult.data.user) {
+    throw createServiceError(
+      'ADMIN_AUTH_REQUIRED',
+      authResult.error?.message ?? 'Admin action attempted without an authenticated Supabase user',
+      'Please sign in again before using admin tools.'
+    );
+  }
+
   const profile = await ensureCurrentProfile();
+
+  if (authResult.data.user.id !== profile.id) {
+    logger.warning('Admin action blocked because the auth user did not match the hydrated profile.', {
+      operation: 'admin_action_session_check',
+      hasAuthUser: true,
+      profileIsAdmin: profile.is_admin,
+      authUserMatchesProfile: false,
+    });
+    throw createServiceError(
+      'ADMIN_SESSION_MISMATCH',
+      'Supabase auth user did not match the hydrated admin profile',
+      'Please sign out and back into the admin account before using admin tools.'
+    );
+  }
 
   if (!profile.is_admin) {
     throw createServiceError(
@@ -130,6 +148,23 @@ async function requireAdminProfile() {
   }
 
   return profile;
+}
+
+function adminHydrationRows(result: { data: unknown[] | null; error: unknown }, source: string): Row[] {
+  if (result.error) {
+    const details = typeof result.error === 'object' && result.error !== null
+      ? result.error as { code?: unknown; status?: unknown; statusCode?: unknown }
+      : {};
+    logger.warning('Admin report detail hydration skipped after a supplemental query failed.', {
+      operation: 'admin_report_hydration',
+      source,
+      code: typeof details.code === 'string' ? details.code : 'unknown',
+      status: details.status ?? details.statusCode ?? 'unknown',
+    });
+    return [];
+  }
+
+  return (result.data ?? []) as Row[];
 }
 
 async function hydrateListingReports(reports: AdminListingReport[]): Promise<AdminListingReport[]> {
@@ -165,28 +200,15 @@ async function hydrateListingReports(reports: AdminListingReport[]): Promise<Adm
       : Promise.resolve({ data: [], error: null }),
   ]);
 
-  if (listingsResult.error) {
-    throwSupabaseError(listingsResult.error, 'We could not load reported listing details.');
-  }
-
-  if (reportersResult.error) {
-    throwSupabaseError(reportersResult.error, 'We could not load reporter details.');
-  }
-
-  if (messagesResult.error) {
-    throwSupabaseError(messagesResult.error, 'We could not load reported message details.');
-  }
-
-  if (reportedUsersResult.error) {
-    throwSupabaseError(reportedUsersResult.error, 'We could not load reported user details.');
-  }
-
-  const messages = (messagesResult.data ?? []) as Row[];
+  const listingRows = adminHydrationRows(listingsResult, 'listings');
+  const messages = adminHydrationRows(messagesResult, 'messages');
+  const reporterRows = adminHydrationRows(reportersResult, 'reporters');
+  const reportedUserRows = adminHydrationRows(reportedUsersResult, 'reported_users');
   const conversationIds = Array.from(new Set(messages.map((message) => optionalString(message.conversation_id)).filter(Boolean))) as string[];
-  let listingsById = new Map(((listingsResult.data ?? []) as Row[]).map((listing) => [stringValue(listing.id), listing]));
+  let listingsById = new Map(listingRows.map((listing) => [stringValue(listing.id), listing]));
   const messagesById = new Map(messages.map((message) => [stringValue(message.id), message]));
-  const reportersById = new Map(((reportersResult.data ?? []) as Row[]).map((reporter) => [stringValue(reporter.id), reporter]));
-  const reportedUsersById = new Map(((reportedUsersResult.data ?? []) as Row[]).map((profile) => [stringValue(profile.id), profile]));
+  const reportersById = new Map(reporterRows.map((reporter) => [stringValue(reporter.id), reporter]));
+  const reportedUsersById = new Map(reportedUserRows.map((profile) => [stringValue(profile.id), profile]));
   const conversationsResult = conversationIds.length
     ? await supabase
         .from('conversations')
@@ -194,14 +216,11 @@ async function hydrateListingReports(reports: AdminListingReport[]): Promise<Adm
         .in('id', conversationIds)
     : { data: [], error: null };
 
-  if (conversationsResult.error) {
-    throwSupabaseError(conversationsResult.error, 'We could not load reported conversation details.');
-  }
-
-  const conversationsById = new Map(((conversationsResult.data ?? []) as Row[]).map((conversation) => [stringValue(conversation.id), conversation]));
+  const conversationRows = adminHydrationRows(conversationsResult, 'conversations');
+  const conversationsById = new Map(conversationRows.map((conversation) => [stringValue(conversation.id), conversation]));
   const conversationListingIds = Array.from(
     new Set(
-      ((conversationsResult.data ?? []) as Row[])
+      conversationRows
         .map((conversation) => optionalString(conversation.listing_id))
         .filter((id): id is string => typeof id === 'string' && !listingsById.has(id))
     )
@@ -213,13 +232,10 @@ async function hydrateListingReports(reports: AdminListingReport[]): Promise<Adm
       .select('id,title,price,listing_type,status,city,state,zip_code')
       .in('id', conversationListingIds);
 
-    if (conversationListingsResult.error) {
-      throwSupabaseError(conversationListingsResult.error, 'We could not load listing details for reported messages.');
-    }
-
+    const conversationListingRows = adminHydrationRows(conversationListingsResult, 'conversation_listings');
     listingsById = new Map([
       ...listingsById,
-      ...((conversationListingsResult.data ?? []) as Row[]).map((listing) => [stringValue(listing.id), listing] as const),
+      ...conversationListingRows.map((listing) => [stringValue(listing.id), listing] as const),
     ]);
   }
 

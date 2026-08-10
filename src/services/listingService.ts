@@ -8,7 +8,6 @@ import {
   conditionToDb,
   ensureCurrentProfile,
   imagesFromListingRow,
-  listingRelationsSelect,
   priceNumber,
   resolveCategoryId,
   throwSupabaseError,
@@ -640,19 +639,13 @@ export async function markListingDonated(listingId: string): Promise<Listing> {
 }
 
 export async function getMyListings(): Promise<Listing[]> {
-  const profile = await ensureCurrentProfile();
-  const { data, error } = await supabase
-    .from('listings')
-    .select(listingRelationsSelect)
-    .eq('seller_id', profile.id)
-    .is('deleted_at', null)
-    .order('created_at', { ascending: false });
+  const { data, error } = await supabase.rpc('get_my_listings');
 
   if (error) {
     throwSupabaseError(error, 'We could not load your listings.');
   }
 
-  return (data ?? []).map((row) => toListing(row as Record<string, unknown>));
+  return ((data ?? []) as Record<string, unknown>[]).map((row) => toListing(row));
 }
 
 export async function addImageToListing(fileUri: string, listingId: string) {
