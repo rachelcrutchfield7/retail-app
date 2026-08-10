@@ -14,8 +14,8 @@ Phase E moves high-trust marketplace operations from direct client table writes 
 | --- | --- | --- | --- | --- |
 | `transactions` | No access | Select only when buyer or seller | Select all through RLS | RPC only |
 | `reviews` | Public select of non-deleted reviews | Public select of non-deleted reviews | Public select | `create_transaction_review` only |
-| `reports` | No access | No base-table reporter read | Admin select | `submit_report` and `admin_update_report` only |
-| `report_moderation_events` | No access | No access | Select only | Created by `admin_update_report` only |
+| `reports` | No access | No base-table reporter read | Admin select | `submit_report`; current Admin Panel moderation uses `admin_moderate_report` |
+| `report_moderation_events` | No access | No access | Select only | Created by canonical admin moderation flow |
 | `notifications` | No access | Select own non-deleted notifications | Own select by policy | Trusted database logic and read/delete RPCs |
 | `notification_preferences` | No access | RPC only | RPC only for own user | `update_my_notification_preferences` only |
 | `device_tokens` | No access | RPC only | RPC only for own user | `register_my_device_token` and `remove_my_device_token` only |
@@ -30,7 +30,7 @@ Phase E moves high-trust marketplace operations from direct client table writes 
 | `has_existing_report` | `authenticated` | Returns only whether the caller already has an active report |
 | `submit_report` | `authenticated` | Creates a server-derived report |
 | `get_my_reports` | `authenticated` | Reporter-safe report history |
-| `admin_update_report` | `authenticated` | Admin moderation status transition |
+| `admin_moderate_report` | `authenticated` | Canonical Admin Panel report moderation and actions |
 | `mark_notification_read` | `authenticated` | Marks one owned notification read |
 | `mark_all_notifications_read` | `authenticated` | Marks caller notifications read |
 | `delete_my_notification` | `authenticated` | Soft-deletes one owned notification |

@@ -42,7 +42,9 @@ It excludes `evidence`, `admin_notes`, `assigned_admin_id`, and internal moderat
 
 ## Admin Moderation
 
-Admins update reports only through `admin_update_report(target_report_id, requested_status, requested_admin_notes default null)`.
+Phase E originally updated reports through `admin_update_report(target_report_id, requested_status, requested_admin_notes default null)`.
+
+Current canonical admin moderation uses `admin_moderate_report`. `admin_update_report` is retained only as a deprecated compatibility RPC and must not be used for new Admin Panel work.
 
 Allowed transitions:
 

@@ -265,8 +265,8 @@ Status: pass
 
 - `admin_moderate_report` checks `auth.uid()` and `private.is_admin(caller_id)` before updating reports, deleting users, removing listings, removing messages, or sending admin report messages.
 - `admin_set_rescue_verification` checks `auth.uid()` and `private.is_admin(caller_id)` before changing rescue verification.
-- `admin_update_report` calls `private.require_active_account()` and `private.is_admin(caller_id)` before delegating to its base function.
-- Base admin function `admin_update_report_phase_f_base` is not executable by anon/authenticated users.
+- Legacy/deprecated `admin_update_report` calls `private.require_active_account()` and `private.is_admin(caller_id)` before delegating to its base function.
+- Base admin function `admin_update_report_phase_f_base` is legacy/deprecated and is not executable by anon/authenticated users.
 
 No client-provided admin ID is trusted for admin authorization in inspected admin RPCs.
 

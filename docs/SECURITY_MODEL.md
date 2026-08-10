@@ -50,7 +50,7 @@ High-risk actions use database-controlled functions:
 - `complete_listing_transaction`
 - `create_transaction_review`
 - `get_user_review_summary`
-- `admin_update_report`
+- `admin_moderate_report`
 - `mark_notification_read`
 - `delete_my_notification`
 - `update_my_notification_preferences`
@@ -93,7 +93,7 @@ Public search RPCs validate page size and search input length before returning d
 
 Admin status and verification status are database-protected fields. Users cannot promote themselves, verify themselves, update ratings, update counts, ban accounts, or directly change deletion state.
 
-Admin report moderation uses `admin_update_report`, verifies an active admin identity from `auth.uid()`, writes moderation/audit events, and is rate-limited.
+Admin report moderation uses the canonical `admin_moderate_report` RPC, verifies an active admin identity from `auth.uid()`, writes moderation/audit events, and supports report actions such as resolving, dismissing, removing reported listings/messages, and admin messaging.
 
 ## Known Limits
 

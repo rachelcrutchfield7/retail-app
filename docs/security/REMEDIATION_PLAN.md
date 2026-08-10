@@ -286,7 +286,7 @@ SQL objects changed:
 - `submit_report`
 - `has_existing_report`
 - `get_my_reports`
-- `admin_update_report`
+- `admin_update_report` (legacy Phase E RPC; deprecated for new Admin Panel work)
 - `mark_notification_read`
 - `mark_all_notifications_read`
 - `delete_my_notification`
@@ -307,7 +307,7 @@ Tests required:
 - User cannot create report with trusted fields such as status, assigned admin, resolved timestamp, or admin notes.
 - User cannot fabricate notifications for another user.
 - User cannot retarget review `reviewee_id`, `transaction_id`, `listing_id`, or `rating` after creation.
-- Admin can resolve reports through `admin_update_report`.
+- Admin can resolve reports through canonical `admin_moderate_report`.
 - Report moderation event records status transitions.
 - Preferences and device tokens can be changed only through caller-derived RPCs.
 
@@ -358,7 +358,7 @@ SQL objects changed:
 - `private.ensure_public_search_bounds`
 - `private.cleanup_rate_limit_events`
 - High-risk write triggers for conversations, messages, reports, reviews, listings, favorites, saved searches, blocks, and device tokens
-- Wrappers for `create_or_get_conversation`, `complete_listing_transaction`, `admin_update_report`, and public discovery RPCs
+- Wrappers for `create_or_get_conversation`, `complete_listing_transaction`, legacy `admin_update_report`, and public discovery RPCs
 
 Tests required:
 
