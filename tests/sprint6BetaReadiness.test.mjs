@@ -9,10 +9,10 @@ const read = (path) => readFileSync(join(root, path), 'utf8');
 
 test('dependencies are pinned and beta scripts are available', () => {
   const packageJson = JSON.parse(read('package.json'));
-  assert.equal(packageJson.dependencies.expo, '57.0.8');
-  assert.equal(packageJson.dependencies['@expo/metro-runtime'], '~57.0.7');
-  assert.equal(packageJson.dependencies['expo-constants'], '~57.0.7');
-  assert.equal(packageJson.dependencies['expo-notifications'], '~57.0.7');
+  assert.equal(packageJson.dependencies.expo, '57.0.11');
+  assert.equal(packageJson.dependencies['@expo/metro-runtime'], '~57.0.8');
+  assert.equal(packageJson.dependencies['expo-constants'], '~57.0.9');
+  assert.equal(packageJson.dependencies['expo-notifications'], '~57.0.9');
   assert.equal(packageJson.dependencies['expo-splash-screen'], '~57.0.5');
   assert.equal(packageJson.dependencies['@supabase/supabase-js'], '2.110.2');
 
