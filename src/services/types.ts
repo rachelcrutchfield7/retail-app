@@ -48,6 +48,12 @@ export type AppError = {
   userMessage: string;
 };
 
+export type PendingSignupConsent = {
+  hasCurrentPolicyAcceptance: true;
+  marketingEmailOptIn: boolean;
+  source: 'email_signup' | 'google_signup';
+};
+
 export type User = {
   id: string;
   email: string;
@@ -55,6 +61,7 @@ export type User = {
   username: string;
   accountType: AccountType;
   emailVerified: boolean;
+  pendingSignupConsent?: PendingSignupConsent;
 };
 
 export type Session = {

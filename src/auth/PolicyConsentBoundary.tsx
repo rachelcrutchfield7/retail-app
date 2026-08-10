@@ -4,18 +4,22 @@ import { PolicyConsentGate } from '../components/feedback/PolicyConsentGate';
 import {
   getCurrentConsentState,
   recordCurrentPolicyAcceptance,
+  shouldFinalizePendingSignupConsent,
   type CurrentConsentState,
   type PolicyConsentSource,
 } from '../services/consentService';
+import type { PendingSignupConsent } from '../services/types';
 
 export function PolicyConsentBoundary({
   userId,
   source,
+  pendingSignupConsent,
   onSignOut,
   children,
 }: {
   userId: string;
   source: PolicyConsentSource;
+  pendingSignupConsent?: PendingSignupConsent;
   onSignOut: () => Promise<void>;
   children: ReactNode;
 }) {
@@ -29,7 +33,19 @@ export function PolicyConsentBoundary({
     setNotice(null);
 
     void getCurrentConsentState()
-      .then((nextState) => {
+      .then(async (nextState) => {
+        if (shouldFinalizePendingSignupConsent(nextState, pendingSignupConsent)) {
+          const finalizedState = await recordCurrentPolicyAcceptance(
+            pendingSignupConsent.marketingEmailOptIn,
+            pendingSignupConsent.source
+          );
+
+          if (active) {
+            setState(finalizedState);
+          }
+          return;
+        }
+
         if (active) {
           setState(nextState);
         }
@@ -49,7 +65,7 @@ export function PolicyConsentBoundary({
     return () => {
       active = false;
     };
-  }, [userId]);
+  }, [pendingSignupConsent, userId]);
 
   if (checking) {
     return <PolicyConsentGate checking onAccept={async () => {}} onSignOut={onSignOut} />;

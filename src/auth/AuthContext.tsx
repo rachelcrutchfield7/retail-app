@@ -371,7 +371,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider value={value}>
       {session && user ? (
-        <PolicyConsentBoundary userId={user.id} source={policyGateSource} onSignOut={signOut}>
+        <PolicyConsentBoundary
+          userId={user.id}
+          source={policyGateSource}
+          pendingSignupConsent={user.pendingSignupConsent}
+          onSignOut={signOut}
+        >
           {children}
         </PolicyConsentBoundary>
       ) : children}

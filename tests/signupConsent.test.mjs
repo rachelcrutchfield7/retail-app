@@ -8,9 +8,16 @@ import { signUpWithEmail } from '../src/services/authService.ts';
 import {
   getCurrentConsentState,
   recordCurrentPolicyAcceptance,
+  shouldFinalizePendingSignupConsent,
   updateMarketingEmailPreference,
 } from '../src/services/consentService.ts';
+import {
+  CURRENT_COMMUNITY_GUIDELINES_VERSION,
+  CURRENT_PRIVACY_VERSION,
+  CURRENT_TERMS_VERSION,
+} from '../src/constants/policyVersions.ts';
 import { signInWithGoogle } from '../src/services/googleAuthService.ts';
+import { userFromSupabase } from '../src/services/supabaseData.ts';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const read = (path) => readFileSync(join(root, path), 'utf8');
@@ -199,6 +206,89 @@ test('current acceptance prevents a repeated consent gate', async () => {
 
   assert.equal(state.hasCurrentPolicyAcceptance, true);
   assert.equal(state.marketingEmailOptIn, false);
+});
+
+test('new email user with required signup consent finalizes pending consent instead of showing redundant gate', async () => {
+  const user = userFromSupabase({
+    id: 'new-email-user',
+    email: 'person@example.com',
+    email_confirmed_at: new Date().toISOString(),
+    user_metadata: {
+      display_name: 'Person Name',
+      username: 'person_name',
+      account_type: 'regular',
+      retail_policy_consent_pending: true,
+      retail_terms_accepted: true,
+      retail_terms_version: CURRENT_TERMS_VERSION,
+      retail_community_guidelines_accepted: true,
+      retail_community_guidelines_version: CURRENT_COMMUNITY_GUIDELINES_VERSION,
+      retail_privacy_acknowledged: true,
+      retail_privacy_version: CURRENT_PRIVACY_VERSION,
+      retail_marketing_email_opt_in: false,
+      retail_consent_source: 'email_signup',
+    },
+  });
+  const missingDurableState = {
+    hasCurrentPolicyAcceptance: false,
+    termsAccepted: false,
+    communityGuidelinesAccepted: false,
+    privacyAcknowledged: false,
+    marketingEmailOptIn: false,
+  };
+
+  assert.equal(user.pendingSignupConsent?.hasCurrentPolicyAcceptance, true);
+  assert.equal(user.pendingSignupConsent?.marketingEmailOptIn, false);
+  assert.equal(user.pendingSignupConsent?.source, 'email_signup');
+  assert.equal(shouldFinalizePendingSignupConsent(missingDurableState, user.pendingSignupConsent), true);
+});
+
+test('existing accepted user is not re-finalized even if signup metadata remains present', () => {
+  const acceptedState = {
+    hasCurrentPolicyAcceptance: true,
+    termsAccepted: true,
+    communityGuidelinesAccepted: true,
+    privacyAcknowledged: true,
+    marketingEmailOptIn: false,
+  };
+  const pendingSignupConsent = {
+    hasCurrentPolicyAcceptance: true,
+    marketingEmailOptIn: false,
+    source: 'email_signup',
+  };
+
+  assert.equal(shouldFinalizePendingSignupConsent(acceptedState, pendingSignupConsent), false);
+});
+
+test('legacy users without current signup consent still require the consent gate', () => {
+  const missingDurableState = {
+    hasCurrentPolicyAcceptance: false,
+    termsAccepted: false,
+    communityGuidelinesAccepted: false,
+    privacyAcknowledged: false,
+    marketingEmailOptIn: false,
+  };
+
+  assert.equal(shouldFinalizePendingSignupConsent(missingDurableState, undefined), false);
+});
+
+test('stale or incomplete signup metadata does not bypass required current consent', () => {
+  const user = userFromSupabase({
+    id: 'stale-signup-user',
+    email: 'stale@example.com',
+    user_metadata: {
+      retail_policy_consent_pending: true,
+      retail_terms_accepted: true,
+      retail_terms_version: '2025-01-01',
+      retail_community_guidelines_accepted: true,
+      retail_community_guidelines_version: CURRENT_COMMUNITY_GUIDELINES_VERSION,
+      retail_privacy_acknowledged: true,
+      retail_privacy_version: CURRENT_PRIVACY_VERSION,
+      retail_marketing_email_opt_in: true,
+      retail_consent_source: 'email_signup',
+    },
+  });
+
+  assert.equal(user.pendingSignupConsent, undefined);
 });
 
 test('legacy or new Google accounts without acceptance require the one-time gate', async () => {

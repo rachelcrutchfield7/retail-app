@@ -12,11 +12,17 @@ import type {
   AccountType,
   ListingImage,
   Message,
+  PendingSignupConsent,
   Profile,
   PublicProfile,
   Session,
   User,
 } from './types';
+import {
+  CURRENT_COMMUNITY_GUIDELINES_VERSION,
+  CURRENT_PRIVACY_VERSION,
+  CURRENT_TERMS_VERSION,
+} from '../constants/policyVersions';
 
 type SupabaseRow = Record<string, unknown>;
 const loggedSupabaseErrors = new Set<string>();
@@ -225,6 +231,29 @@ export function userFromSupabase(authUser: SupabaseAuthUser, profile?: Profile):
     username,
     accountType: profile?.account_type ?? normalizeAccountType(metadata.account_type),
     emailVerified: Boolean(authUser.email_confirmed_at || authUser.confirmed_at),
+    pendingSignupConsent: pendingSignupConsentFromMetadata(metadata),
+  };
+}
+
+function pendingSignupConsentFromMetadata(metadata: SupabaseRow): PendingSignupConsent | undefined {
+  const source = stringFromMetadata(metadata.retail_consent_source);
+  const hasCurrentPolicyAcceptance =
+    booleanFromMetadata(metadata.retail_policy_consent_pending) &&
+    booleanFromMetadata(metadata.retail_terms_accepted) &&
+    stringFromMetadata(metadata.retail_terms_version) === CURRENT_TERMS_VERSION &&
+    booleanFromMetadata(metadata.retail_community_guidelines_accepted) &&
+    stringFromMetadata(metadata.retail_community_guidelines_version) === CURRENT_COMMUNITY_GUIDELINES_VERSION &&
+    booleanFromMetadata(metadata.retail_privacy_acknowledged) &&
+    stringFromMetadata(metadata.retail_privacy_version) === CURRENT_PRIVACY_VERSION;
+
+  if (!hasCurrentPolicyAcceptance || (source !== 'email_signup' && source !== 'google_signup')) {
+    return undefined;
+  }
+
+  return {
+    hasCurrentPolicyAcceptance: true,
+    marketingEmailOptIn: booleanFromMetadata(metadata.retail_marketing_email_opt_in),
+    source,
   };
 }
 
@@ -673,4 +702,8 @@ function arrayValue(value: unknown): unknown[] | undefined {
 
 function stringFromMetadata(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function booleanFromMetadata(value: unknown): boolean {
+  return value === true || value === 'true';
 }

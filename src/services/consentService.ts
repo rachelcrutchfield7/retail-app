@@ -6,6 +6,7 @@ import {
 } from '../constants/policyVersions';
 import { createServiceError } from './errors';
 import { throwSupabaseError } from './supabaseData';
+import type { PendingSignupConsent } from './types';
 
 export type PolicyConsentSource = 'email_signup' | 'google_signup' | 'legacy_user_gate';
 
@@ -130,6 +131,13 @@ export async function requireCurrentPolicyAcceptance(
       "Please review and accept ReTail's current policies before continuing."
     );
   }
+}
+
+export function shouldFinalizePendingSignupConsent(
+  state: CurrentConsentState,
+  pendingSignupConsent?: PendingSignupConsent
+): pendingSignupConsent is PendingSignupConsent {
+  return !state.hasCurrentPolicyAcceptance && pendingSignupConsent?.hasCurrentPolicyAcceptance === true;
 }
 
 function consentStateFromRow(row: Record<string, unknown>): CurrentConsentState {
