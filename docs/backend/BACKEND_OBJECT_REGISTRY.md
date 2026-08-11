@@ -210,6 +210,46 @@ NOTES:
 
 - The base helper is retained only because the canonical wrapper still delegates to it.
 
+## Transaction Support
+
+FEATURE: Transaction support
+
+CANONICAL RPC:
+
+- `create_transaction_support_case`
+- `get_my_transaction_support_cases`
+- `get_admin_transaction_support_cases`
+- `admin_update_transaction_support_case`
+
+CANONICAL PRIVATE HELPERS:
+
+- `private.require_active_account`
+- `private.is_admin`
+
+ACTIVE TRIGGERS:
+
+- `set_support_cases_updated_at`
+
+ACTIVE POLICIES:
+
+- Support case party read policy
+- Support case admin read policy
+
+EDGE FUNCTIONS: none
+
+DEPRECATED OBJECTS: none
+
+DO NOT USE:
+
+- General reports as the canonical order/payment/refund/support workflow.
+- Client-side direct writes to `support_cases`.
+- Support-case submission as a trigger for automatic Stripe refunds or cancellations.
+
+NOTES:
+
+- `support_cases` is separate from reports. Reports remain for safety/moderation. Support cases are for order, payment, refund, cancellation, return, shipping, and payout issues.
+- Refund/cancellation actions must continue through secure Stripe/admin payment handling, not arbitrary client-side support-ticket fields.
+
 ## Reports
 
 FEATURE: Reports

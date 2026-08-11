@@ -2,6 +2,8 @@
 
 ReTail exists to help pet owners reuse supplies, save money, reduce waste, and support safer local exchanges.
 
+ReTail is owned and operated by Crutchfield Interactive LLC.
+
 ## Be Honest
 
 Use clear photos and accurate descriptions.
@@ -26,17 +28,23 @@ Do not harass, threaten, pressure, spam, send offensive content, or repeatedly c
 
 ## Meet Safely
 
-Meet in public places when possible.
+Meet in public, well-lit places when possible.
 
 Do not share exact home addresses publicly in listings.
+
+Keep communication in ReTail when possible so there is a record if a safety, order, or support issue needs review.
 
 Inspect items before completing a transaction and use your judgment before meeting someone in person.
 
 ## Support Rescues Responsibly
 
-Rescues and volunteers may use ReTail to find or share supplies.
+Verified rescues may use ReTail to find or share physical pet-supply needs.
 
-Urgent needs and donations must still follow the pet-supplies-only rule. Live animals may not be listed or transferred through ReTail.
+Urgent needs and donations must still follow the pet-supplies-only rule. Food, crates, carriers, bedding, litter, supplies, and enrichment items are examples of permitted physical-goods donation needs.
+
+ReTail does not facilitate monetary rescue donations at launch. Monetary rescue donations are not supported in ReTail. Live animals may not be listed or transferred through ReTail.
+
+Verified rescue donation features are for physical goods donations only.
 
 ## Report Problems
 
@@ -52,3 +60,5 @@ Report listings, profiles, or messages that involve:
 - Unsafe behavior
 
 Reports help moderators keep ReTail trustworthy.
+
+For account access, payment, refund, return, payout, safety, or technical support, contact ReTail Customer Support at support@retailpetapp.com or (877) 514-3697.

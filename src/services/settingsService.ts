@@ -15,6 +15,7 @@ export const defaultPrivacySettings: PrivacySettings = {
   allowProfileInSearch: true,
   allowApproximateDistance: true,
   rescuePublicContactEnabled: false,
+  rescuePublicAddressEnabled: false,
 };
 
 export type AccountSettings = {
@@ -45,7 +46,7 @@ export async function getPrivacySettings(): Promise<PrivacySettings> {
   const profile = await ensureCurrentProfile();
   const { data, error } = await supabase
     .from('privacy_settings')
-    .select('profile_discoverable,show_city_state,allow_approximate_distance,allow_messages_from_buyers,rescue_public_contact_enabled')
+    .select('profile_discoverable,show_city_state,allow_approximate_distance,allow_messages_from_buyers,rescue_public_contact_enabled,rescue_public_address_enabled')
     .eq('user_id', profile.id)
     .maybeSingle();
 
@@ -69,8 +70,9 @@ export async function updatePrivacySettings(input: Partial<PrivacySettings>): Pr
       allow_approximate_distance: next.allowApproximateDistance,
       allow_messages_from_buyers: next.allowMessagesFromBuyers,
       rescue_public_contact_enabled: next.rescuePublicContactEnabled,
+      rescue_public_address_enabled: next.rescuePublicAddressEnabled,
     }, { onConflict: 'user_id' })
-    .select('profile_discoverable,show_city_state,allow_approximate_distance,allow_messages_from_buyers,rescue_public_contact_enabled')
+    .select('profile_discoverable,show_city_state,allow_approximate_distance,allow_messages_from_buyers,rescue_public_contact_enabled,rescue_public_address_enabled')
     .single();
 
   if (error) {
@@ -132,6 +134,7 @@ function privacySettingsFromRow(row: Record<string, unknown>): PrivacySettings {
     allowProfileInSearch: row.profile_discoverable !== false,
     allowApproximateDistance: row.allow_approximate_distance !== false,
     rescuePublicContactEnabled: row.rescue_public_contact_enabled === true,
+    rescuePublicAddressEnabled: row.rescue_public_address_enabled === true,
   };
 }
 
@@ -139,5 +142,6 @@ function defaultPrivacySettingsForAccount(accountType: string): PrivacySettings 
   return {
     ...defaultPrivacySettings,
     rescuePublicContactEnabled: accountType === 'rescue',
+    rescuePublicAddressEnabled: false,
   };
 }

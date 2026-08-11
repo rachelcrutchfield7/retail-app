@@ -400,6 +400,68 @@ export type TransactionParticipant = {
   conversationId?: string;
 };
 
+export type SupportCaseStatus =
+  | 'open'
+  | 'reviewing'
+  | 'waiting_on_buyer'
+  | 'waiting_on_seller'
+  | 'resolved'
+  | 'closed';
+
+export type SupportCaseRequesterRole = 'buyer' | 'seller';
+
+export type SupportCaseIssueCategory =
+  | 'cancel_order'
+  | 'seller_not_shipped'
+  | 'package_not_arrived'
+  | 'item_arrived_damaged'
+  | 'item_not_as_described'
+  | 'wrong_item_received'
+  | 'return_refund_request'
+  | 'payment_problem'
+  | 'payout_problem'
+  | 'shipping_problem'
+  | 'buyer_transaction_issue'
+  | 'other_order_issue'
+  | 'other_sale_issue';
+
+export type TransactionSupportCase = {
+  id: string;
+  transaction_id: string;
+  listing_id: string;
+  buyer_id: string;
+  seller_id: string;
+  requester_id: string;
+  requester_role: SupportCaseRequesterRole;
+  issue_category: SupportCaseIssueCategory;
+  description: string;
+  status: SupportCaseStatus;
+  assigned_admin_id?: string;
+  internal_admin_notes?: string;
+  customer_visible_message?: string;
+  current_payment_status?: string;
+  current_shipment_status?: string;
+  current_delivery_status?: string;
+  created_at: string;
+  updated_at: string;
+  resolved_at?: string;
+  deleted_at?: string;
+};
+
+export type CreateTransactionSupportCaseInput = {
+  transactionId: string;
+  requesterRole: SupportCaseRequesterRole;
+  issueCategory: SupportCaseIssueCategory;
+  description: string;
+};
+
+export type AdminUpdateTransactionSupportCaseInput = {
+  caseId: string;
+  status: SupportCaseStatus;
+  internalNote?: string;
+  customerMessage?: string;
+};
+
 export type CompleteTransactionInput = {
   listingId: string;
   buyerId?: string;
@@ -502,6 +564,7 @@ export type PrivacySettings = {
   allowProfileInSearch: boolean;
   allowApproximateDistance: boolean;
   rescuePublicContactEnabled: boolean;
+  rescuePublicAddressEnabled: boolean;
 };
 
 export type DistanceBand = 'Under 5 miles' | '5-10 miles' | '10-25 miles' | '25-50 miles' | '50+ miles';

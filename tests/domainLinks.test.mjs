@@ -8,7 +8,6 @@ import { appLinks } from '../src/constants/links.ts';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const read = (path) => readFileSync(join(root, path), 'utf8');
-const readJson = (path) => JSON.parse(read(path));
 
 test('ReTail public domain links are centralized for app usage', () => {
   assert.equal(appLinks.domain, 'retailpetapp.com');
@@ -21,6 +20,7 @@ test('ReTail public domain links are centralized for app usage', () => {
   assert.equal(appLinks.contactEmail, 'contact@retailpetapp.com');
   assert.equal(appLinks.contactMailto, 'mailto:contact@retailpetapp.com');
   assert.equal(appLinks.supportEmail, 'support@retailpetapp.com');
+  assert.equal(appLinks.supportPhone, '(877) 514-3697');
   assert.equal(appLinks.supportMailto, 'mailto:support@retailpetapp.com');
   assert.equal(appLinks.paymentSupportMailto, 'mailto:support@retailpetapp.com?subject=ReTail%20payment%20support');
   assert.equal(
@@ -32,17 +32,16 @@ test('ReTail public domain links are centralized for app usage', () => {
 });
 
 test('mobile app metadata is ready for the ReTail domain', () => {
-  const app = readJson('app.json').expo;
+  const appConfig = read('app.config.js');
   const settings = read('src/sprint4/Sprint4App.tsx');
 
-  assert.equal(app.scheme, 'retail');
-  assert.deepEqual(app.ios.associatedDomains, ['applinks:retailpetapp.com', 'applinks:www.retailpetapp.com']);
-  assert.equal(app.android.intentFilters[0].action, 'VIEW');
-  assert.equal(app.android.intentFilters[0].autoVerify, true);
-  assert.deepEqual(app.android.intentFilters[0].data, [
-    { scheme: 'https', host: 'retailpetapp.com' },
-    { scheme: 'https', host: 'www.retailpetapp.com' },
-  ]);
+  assert.match(appConfig, /scheme:\s*'retail'/);
+  assert.match(appConfig, /'applinks:retailpetapp\.com'/);
+  assert.match(appConfig, /'applinks:www\.retailpetapp\.com'/);
+  assert.match(appConfig, /action:\s*'VIEW'/);
+  assert.match(appConfig, /autoVerify:\s*true/);
+  assert.match(appConfig, /host:\s*'retailpetapp\.com'/);
+  assert.match(appConfig, /host:\s*'www\.retailpetapp\.com'/);
   assert.match(settings, /Linking\.openURL\(url\)/);
   assert.match(settings, /appLinks\.termsUrl/);
   assert.match(settings, /appLinks\.privacyUrl/);

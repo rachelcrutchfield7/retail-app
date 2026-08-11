@@ -12,10 +12,14 @@ export function getStaticPaths() {
 const { page } = Astro.props as { page: SitePage };
 const contactLinks = {
   general: [{ href: 'mailto:contact@retailpetapp.com', label: 'Email contact@retailpetapp.com' }],
-  support: [{ href: 'mailto:support@retailpetapp.com', label: 'Email support@retailpetapp.com' }],
+  support: [
+    { href: 'mailto:support@retailpetapp.com', label: 'Email support@retailpetapp.com' },
+    { href: 'tel:+18775143697', label: 'Call (877) 514-3697' },
+  ],
   both: [
     { href: 'mailto:contact@retailpetapp.com', label: 'General questions' },
     { href: 'mailto:support@retailpetapp.com', label: 'Support and safety' },
+    { href: 'tel:+18775143697', label: 'Call (877) 514-3697' },
   ],
 };
 ---
@@ -43,7 +47,7 @@ const contactLinks = {
     {page.contact && (
       <div class="card">
         <h2>Contact ReTail</h2>
-        <p>Use the appropriate ReTail domain email address so your message reaches the right place.</p>
+        <p>Use the appropriate ReTail domain email address or customer support phone number so your message reaches the right place.</p>
         <div class="actions">
           {contactLinks[page.contact].map((link) => <a class="button secondary" href={link.href}>{link.label}</a>)}
         </div>

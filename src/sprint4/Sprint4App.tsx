@@ -58,6 +58,7 @@ import { useAdminListingReports } from '../hooks/useAdminListingReports';
 import { useAdminRescueApprovals } from '../hooks/useAdminRescueApprovals';
 import { useAuth } from '../hooks/useAuth';
 import { useBlockUser } from '../hooks/useBlockUser';
+import { useTransactionByListing } from '../hooks/useCompleteTransaction';
 import {
   useConversation,
   useConversations,
@@ -70,6 +71,7 @@ import { useNotifications } from '../hooks/useNotifications';
 import { useCreateReview } from '../hooks/useReviews';
 import { useReports } from '../hooks/useReports';
 import { useSettings } from '../hooks/useSettings';
+import { useAdminSupportCases, useAdminUpdateSupportCase, useCreateSupportCase, useMySupportCases } from '../hooks/useSupportCases';
 import { QueryClientProvider } from '../lib/queryClient';
 import { useStripe } from '../lib/stripe';
 import { useThemeColors, useThemePreference } from '../lib/themePreference';
@@ -104,6 +106,12 @@ import {
   makeOffer,
   parseOfferMessage,
 } from '../services/offerService';
+import {
+  buyerSupportReasons,
+  sellerSupportReasons,
+  supportReasonLabel,
+  supportStatusLabels,
+} from '../services/supportCaseService';
 import { reportReasons } from '../services/reportService';
 import { useListing } from '../hooks/useListing';
 import type {
@@ -114,6 +122,10 @@ import type {
   ReportReason,
   RescueProfile,
   ReportStatus,
+  SupportCaseIssueCategory,
+  SupportCaseRequesterRole,
+  SupportCaseStatus,
+  TransactionSupportCase,
 } from '../services/types';
 import type { RescueOrganization } from '../types';
 import { handleAppError } from '../utils/errorHandler';
@@ -145,6 +157,7 @@ type SprintRoute =
   | { name: 'faq' }
   | { name: 'admin' }
   | { name: 'report'; targetType: 'listing' | 'user' | 'message'; targetId: string; title: string }
+  | { name: 'support-case'; transactionId: string; requesterRole: SupportCaseRequesterRole; conversationId?: string }
   | { name: 'review'; listingId: string; revieweeId: string; transactionId?: string };
 
 const tabs: Array<{ key: SprintTab; label: string; icon: typeof Home }> = [
@@ -225,6 +238,8 @@ function Sprint4Experience() {
   const openAdmin = () => setRoute({ name: 'admin' });
   const openReport = (targetType: 'listing' | 'user' | 'message', targetId: string, title: string) =>
     setRoute({ name: 'report', targetType, targetId, title });
+  const openSupportCase = (transactionId: string, requesterRole: SupportCaseRequesterRole, conversationId?: string) =>
+    setRoute({ name: 'support-case', transactionId, requesterRole, conversationId });
   const openReview = (listingId: string, revieweeId: string, transactionId?: string) =>
     setRoute({ name: 'review', listingId, revieweeId, transactionId });
 
@@ -241,6 +256,16 @@ function Sprint4Experience() {
 
       if (route.name === 'conversation') {
         setRoute({ name: 'messages' });
+        return true;
+      }
+
+      if (route.name === 'support-case') {
+        if (route.conversationId) {
+          setRoute({ name: 'conversation', conversationId: route.conversationId });
+          return true;
+        }
+
+        setRoute({ name: 'tabs', tab: 'profile' });
         return true;
       }
 
@@ -348,6 +373,7 @@ function Sprint4Experience() {
         onBack={openMessages}
         onOpenListing={openListing}
         onPaymentOptions={(listingId, agreedAmount) => openPaymentOptions(listingId, route.conversationId, agreedAmount)}
+        onSupportCase={(transactionId, requesterRole) => openSupportCase(transactionId, requesterRole, route.conversationId)}
         onReportMessage={(messageId) => openReport('message', messageId, 'Report message')}
         onReview={openReview}
       />
@@ -434,6 +460,16 @@ function Sprint4Experience() {
         targetId={route.targetId}
         title={route.title}
         onBack={() => openTab('home')}
+      />
+    );
+  }
+
+  if (route.name === 'support-case') {
+    return (
+      <TransactionSupportCaseScreen
+        transactionId={route.transactionId}
+        requesterRole={route.requesterRole}
+        onBack={() => route.conversationId ? openConversation(route.conversationId) : openTab('profile')}
       />
     );
   }
@@ -730,6 +766,7 @@ export function ConversationScreen({
   onBack,
   onOpenListing,
   onPaymentOptions,
+  onSupportCase,
   onReportMessage,
   onReview,
 }: {
@@ -737,11 +774,16 @@ export function ConversationScreen({
   onBack: () => void;
   onOpenListing: (listingId: string) => void;
   onPaymentOptions?: (listingId: string, agreedAmount?: string) => void;
+  onSupportCase?: (transactionId: string, requesterRole: SupportCaseRequesterRole) => void;
   onReportMessage?: (messageId: string) => void;
   onReview?: (listingId: string, revieweeId: string) => void;
 }) {
   const auth = useAuth();
   const conversation = useConversation(conversationId);
+  const transactionByListing = useTransactionByListing(
+    conversation.data?.listingId ?? '',
+    Boolean(conversation.data?.listingId)
+  );
   const messages = useMessages(conversationId);
   const sender = useSendMessage(conversationId);
   const blocker = useBlockUser();
@@ -887,6 +929,7 @@ export function ConversationScreen({
     .reverse()
     .find((message) => message.sender_id !== auth.user?.id && message.message_type !== 'system');
   const canReview = ['Sold', 'Donated'].includes(conversationDetail.listingSummary.status);
+  const transaction = transactionByListing.data;
   const messagingBlocked = Boolean(conversationDetail.messagingBlocked);
   const arrangeOutsideReTail = () => {
     recordOutsidePaymentChoice({
@@ -1030,6 +1073,14 @@ export function ConversationScreen({
               ) : null}
               {canReview && onReview && hasListing ? (
                 <Button title="Review" variant="outline" icon={Star} onPress={() => onReview(conversationDetail.listingId, conversationDetail.otherUser.id)} />
+              ) : null}
+              {transaction && onSupportCase ? (
+                <Button
+                  title={isSeller ? 'Get Help With This Sale' : 'Get Help With This Order'}
+                  variant="outline"
+                  icon={HelpCircle}
+                  onPress={() => onSupportCase(transaction.id, isSeller ? 'seller' : 'buyer')}
+                />
               ) : null}
               {latestReportableMessage && onReportMessage ? (
                 <Button title="Report" variant="ghost" icon={Flag} onPress={() => onReportMessage(latestReportableMessage.id)} />
@@ -1520,6 +1571,115 @@ export function ReportScreen({
   );
 }
 
+export function TransactionSupportCaseScreen({
+  transactionId,
+  requesterRole,
+  onBack,
+}: {
+  transactionId: string;
+  requesterRole: SupportCaseRequesterRole;
+  onBack: () => void;
+}) {
+  const support = useCreateSupportCase();
+  const cases = useMySupportCases();
+  const reasons = requesterRole === 'seller' ? sellerSupportReasons : buyerSupportReasons;
+  const [issueCategory, setIssueCategory] = useState<SupportCaseIssueCategory>(reasons[0].value);
+  const [description, setDescription] = useState('');
+  const [submitted, setSubmitted] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const relatedCases = (cases.data ?? []).filter((supportCase) => supportCase.transaction_id === transactionId);
+
+  const submit = async () => {
+    try {
+      await support.createCase({
+        transactionId,
+        requesterRole,
+        issueCategory,
+        description,
+      });
+      setSubmitted(true);
+      setNotice(null);
+      setDescription('');
+      await cases.refetch();
+    } catch (error) {
+      setNotice(handleAppError(error).userMessage);
+    }
+  };
+
+  return (
+    <ScreenFrame>
+      <BackButton onPress={onBack} />
+      <View style={styles.headerBlock}>
+        <Text style={styles.title}>{requesterRole === 'seller' ? 'Get Help With This Sale' : 'Get Help With This Order'}</Text>
+        <Text style={styles.body}>
+          ReTail support can review order, payment, refund, cancellation, return, shipping, and payout issues. Submitting a case does not automatically issue a refund.
+        </Text>
+      </View>
+
+      {submitted ? (
+        <NoticeCard
+          title="Support case opened"
+          body="ReTail support can review the transaction record and follow up in-app or by email if more information is needed."
+        />
+      ) : null}
+      {notice ? <NoticeCard title="Support case not opened" body={notice} /> : null}
+      {support.error ? <Text style={styles.inlineError}>{support.error}</Text> : null}
+
+      <SectionCard title="What do you need help with?">
+        <View style={styles.wrapRow}>
+          {reasons.map((reason) => (
+            <Button
+              key={reason.value}
+              title={reason.label}
+              variant={issueCategory === reason.value ? 'primary' : 'outline'}
+              onPress={() => setIssueCategory(reason.value)}
+            />
+          ))}
+        </View>
+      </SectionCard>
+
+      <SectionCard title="Details">
+        <TextArea
+          label="Tell ReTail support what happened"
+          value={description}
+          onChangeText={setDescription}
+          placeholder="Include shipment timing, item condition, payment details, or what resolution you are asking ReTail to review."
+        />
+        <Text style={styles.metaText}>
+          Keep communication in ReTail when possible. ReTail payment/refund protection does not apply to payments made outside ReTail.
+        </Text>
+        <Button title="Open Support Case" icon={HelpCircle} onPress={() => void submit()} loading={support.loading} fullWidth />
+      </SectionCard>
+
+      <SectionCard title="Support history for this transaction">
+        {cases.isLoading ? <LoadingSpinner /> : null}
+        {cases.isError ? <Text style={styles.inlineError}>{handleAppError(cases.error).userMessage}</Text> : null}
+        {!cases.isLoading && relatedCases.length === 0 ? (
+          <Text style={styles.body}>No support cases have been opened for this transaction yet.</Text>
+        ) : null}
+        {relatedCases.map((supportCase) => (
+          <Card key={supportCase.id}>
+            <View style={styles.stack}>
+              <View style={styles.locationRow}>
+                <Badge label={supportStatusLabels[supportCase.status]} tone={supportCase.status === 'resolved' || supportCase.status === 'closed' ? 'success' : 'info'} />
+                <Text style={styles.metaText}>{new Date(supportCase.created_at).toLocaleDateString()}</Text>
+              </View>
+              <Text style={styles.bodyStrong}>{supportReasonLabel(supportCase.issue_category)}</Text>
+              <Text style={styles.body}>{supportCase.description}</Text>
+              {supportCase.customer_visible_message ? (
+                <View style={styles.noticeInline}>
+                  <Text style={styles.bodyStrong}>ReTail support response</Text>
+                  <Text style={styles.body}>{supportCase.customer_visible_message}</Text>
+                </View>
+              ) : null}
+            </View>
+          </Card>
+        ))}
+      </SectionCard>
+    </ScreenFrame>
+  );
+}
+
 export function ReviewScreen({
   listingId,
   revieweeId,
@@ -1764,11 +1924,19 @@ export function SettingsScreen({
         <ToggleSwitch label="Allow buyer messages" value={settings.data.privacy.allowMessagesFromBuyers} onValueChange={(allowMessagesFromBuyers) => void settings.updatePrivacy({ allowMessagesFromBuyers })} />
         <ToggleSwitch label="Show profile in search" value={settings.data.privacy.allowProfileInSearch} onValueChange={(allowProfileInSearch) => void settings.updatePrivacy({ allowProfileInSearch })} />
         {settings.data.account.accountType === 'rescue' ? (
-          <ToggleSwitch
-            label="Show rescue donation instructions"
-            value={settings.data.privacy.rescuePublicContactEnabled}
-            onValueChange={(rescuePublicContactEnabled) => void settings.updatePrivacy({ rescuePublicContactEnabled })}
-          />
+          <>
+            <ToggleSwitch
+              label="Show rescue donation instructions"
+              value={settings.data.privacy.rescuePublicContactEnabled}
+              onValueChange={(rescuePublicContactEnabled) => void settings.updatePrivacy({ rescuePublicContactEnabled })}
+            />
+            <ToggleSwitch
+              label="Show our physical address publicly"
+              helperText="Off by default. When off, public rescue pages show city and state only."
+              value={settings.data.privacy.rescuePublicAddressEnabled}
+              onValueChange={(rescuePublicAddressEnabled) => void settings.updatePrivacy({ rescuePublicAddressEnabled })}
+            />
+          </>
         ) : null}
       </SectionCard>
 
@@ -1891,6 +2059,17 @@ export function SettingsScreen({
         ))}
       </SectionCard>
 
+      <SectionCard title="Help / Support">
+        <Text style={styles.bodyStrong}>ReTail Customer Support</Text>
+        <Text style={styles.body}>{appLinks.supportEmail}</Text>
+        <Text style={styles.body}>{appLinks.supportPhone}</Text>
+        <Text style={styles.body}>
+          ReTail support can help with account access, listings, messages, safety reports, orders, payments, refunds,
+          returns, shipping, seller payouts, and rescue support.
+        </Text>
+        <Button title="Email Support" icon={HelpCircle} variant="outline" onPress={() => void openAppLink(appLinks.supportMailto)} fullWidth />
+      </SectionCard>
+
       <SectionCard title="Legal & Safety">
         <Text style={styles.bodyStrong}>Pet supplies only</Text>
         <Text style={styles.body}>
@@ -1904,7 +2083,7 @@ export function SettingsScreen({
         </Text>
         <Text style={styles.bodyStrong}>Terms of Service</Text>
         <Text style={styles.body}>
-          Use honest listing details, communicate respectfully, arrange safe local exchanges, and follow applicable laws.
+          Users must be at least 18 years old. Use honest listing details, communicate respectfully, arrange safe local exchanges, and follow applicable laws.
           ReTail may remove listings, restrict accounts, and preserve moderation records when needed for safety.
         </Text>
         <Button title="Open Terms" variant="outline" onPress={() => void openAppLink(appLinks.termsUrl)} fullWidth />
@@ -1927,9 +2106,11 @@ export function SettingsScreen({
         <Text style={styles.body}>Version {version}</Text>
         <Text style={styles.body}>Environment: {getAppEnvironmentLabel(config.appEnv)}</Text>
         <Text style={styles.body}>Secondhand Pet Marketplace for buying, selling, donating, and supporting local rescues.</Text>
+        <Text style={styles.body}>ReTail is owned and operated by Crutchfield Interactive LLC.</Text>
         <Text style={styles.body}>Website: {appLinks.baseUrl}</Text>
         <Text style={styles.body}>General contact: {appLinks.contactEmail}</Text>
         <Text style={styles.body}>Support, payments, user issues, and reports: {appLinks.supportEmail}</Text>
+        <Text style={styles.body}>ReTail Customer Support: {appLinks.supportPhone}</Text>
         <Button title="FAQ" icon={HelpCircle} variant="outline" onPress={onFAQ} fullWidth />
         <Button title="Email General Contact" variant="outline" onPress={() => void openAppLink(appLinks.contactMailto)} fullWidth />
         <Button title="Email Support" variant="outline" onPress={() => void openAppLink(appLinks.supportMailto)} fullWidth />
@@ -2078,15 +2259,22 @@ export function AdminReviewScreen({ onBack, onOpenListing }: { onBack: () => voi
   const [reportTab, setReportTab] = useState<AdminReportTab>('active');
   const approvals = useAdminRescueApprovals(Boolean(auth.profile?.is_admin));
   const listingReports = useAdminListingReports(Boolean(auth.profile?.is_admin), reportTab);
+  const supportCases = useAdminSupportCases(Boolean(auth.profile?.is_admin), reportTab);
+  const supportUpdater = useAdminUpdateSupportCase(reportTab);
   const [notice, setNotice] = useState<{ title: string; body: string } | null>(null);
   const [reportNotes, setReportNotes] = useState<Record<string, string>>({});
   const [reportMessages, setReportMessages] = useState<Record<string, string>>({});
+  const [supportNotes, setSupportNotes] = useState<Record<string, string>>({});
+  const [supportMessages, setSupportMessages] = useState<Record<string, string>>({});
   const pendingCount = approvals.data?.filter((rescue) => rescue.verification_status === 'pending').length ?? 0;
   const reportCount = listingReports.data?.length ?? 0;
+  const supportCaseCount = supportCases.data?.length ?? 0;
   const activeReportsSelected = reportTab === 'active';
 
   const noteForReport = (report: AdminListingReport) => reportNotes[report.id] ?? report.admin_notes ?? '';
   const messageForReport = (report: AdminListingReport) => reportMessages[report.id] ?? '';
+  const noteForSupportCase = (supportCase: TransactionSupportCase) => supportNotes[supportCase.id] ?? supportCase.internal_admin_notes ?? '';
+  const messageForSupportCase = (supportCase: TransactionSupportCase) => supportMessages[supportCase.id] ?? supportCase.customer_visible_message ?? '';
 
   const updateReportNote = (reportId: string, note: string) => {
     setReportNotes((current) => ({ ...current, [reportId]: note }));
@@ -2094,6 +2282,14 @@ export function AdminReviewScreen({ onBack, onOpenListing }: { onBack: () => voi
 
   const updateReportMessage = (reportId: string, message: string) => {
     setReportMessages((current) => ({ ...current, [reportId]: message }));
+  };
+
+  const updateSupportNote = (caseId: string, note: string) => {
+    setSupportNotes((current) => ({ ...current, [caseId]: note }));
+  };
+
+  const updateSupportMessage = (caseId: string, message: string) => {
+    setSupportMessages((current) => ({ ...current, [caseId]: message }));
   };
 
   const approve = async (rescue: RescueProfile) => {
@@ -2160,6 +2356,20 @@ export function AdminReviewScreen({ onBack, onOpenListing }: { onBack: () => voi
     ]);
   };
 
+  const updateSupportCase = async (supportCase: TransactionSupportCase, status: SupportCaseStatus) => {
+    try {
+      await supportUpdater.updateCase({
+        caseId: supportCase.id,
+        status,
+        internalNote: noteForSupportCase(supportCase),
+        customerMessage: messageForSupportCase(supportCase),
+      });
+      setNotice({ title: 'Support case updated', body: `${supportReasonLabel(supportCase.issue_category)} is now ${supportStatusLabels[status].toLowerCase()}.` });
+    } catch (error) {
+      setNotice({ title: 'Support case update failed', body: handleAppError(error).userMessage });
+    }
+  };
+
   if (auth.isGuest || !auth.profile?.is_admin) {
     return (
       <ScreenFrame>
@@ -2192,6 +2402,13 @@ export function AdminReviewScreen({ onBack, onOpenListing }: { onBack: () => voi
           {activeReportsSelected
             ? 'Open and reviewing reports need action. Removing a listing, message, or account will automatically mark the report resolved.'
             : 'Resolved and dismissed reports stay here so you can refer back to moderation decisions later.'}
+        </Text>
+      </SectionCard>
+
+      <SectionCard title="Transaction Support Queue">
+        <Text style={styles.bodyStrong}>{supportCaseCount} {activeReportsSelected ? 'active' : 'archived'}</Text>
+        <Text style={styles.body}>
+          Support cases are for order, payment, refund, cancellation, return, shipping, and seller payout questions. Creating or updating a case does not automatically issue a refund.
         </Text>
       </SectionCard>
 
@@ -2243,6 +2460,31 @@ export function AdminReviewScreen({ onBack, onOpenListing }: { onBack: () => voi
             'Delete Account',
             'This soft-deletes the reported account in ReTail, removes their active listings, and notifies both the reporter and reported user.'
           )}
+        />
+      ))}
+
+      {supportCases.isLoading ? <LoadingSpinner /> : null}
+      {supportCases.isError ? <ErrorState message={handleAppError(supportCases.error).userMessage} onRetry={supportCases.refetch} /> : null}
+      {supportUpdater.error ? <NoticeCard title="Support action failed" body={supportUpdater.error} /> : null}
+      {!supportCases.isLoading && !supportCases.isError && (supportCases.data ?? []).length === 0 ? (
+        <EmptyState
+          title={activeReportsSelected ? 'No active support cases' : 'No archived support cases yet'}
+          body={activeReportsSelected
+            ? 'Order, payment, refund, cancellation, return, shipping, and payout cases will appear here.'
+            : 'Resolved and closed support cases will appear here for reference.'}
+          icon={HelpCircle}
+        />
+      ) : null}
+      {(supportCases.data ?? []).map((supportCase) => (
+        <AdminSupportCaseCard
+          key={supportCase.id}
+          supportCase={supportCase}
+          loading={supportUpdater.loading}
+          adminNote={noteForSupportCase(supportCase)}
+          customerMessage={messageForSupportCase(supportCase)}
+          onAdminNote={(note) => updateSupportNote(supportCase.id, note)}
+          onCustomerMessage={(message) => updateSupportMessage(supportCase.id, message)}
+          onStatus={(status) => void updateSupportCase(supportCase, status)}
         />
       ))}
 
@@ -2382,6 +2624,82 @@ function AdminListingReportCard({
             {canRemoveListing ? <Button title="Remove Listing" icon={Trash2} variant="danger" onPress={onRemoveListing} disabled={archived || loading} loading={loading} fullWidth /> : null}
             {canDeleteUser ? <Button title="Delete Account" icon={Trash2} variant="danger" onPress={onDeleteUser} disabled={archived || loading} loading={loading} fullWidth /> : null}
           </View>
+        </View>
+      </View>
+    </Card>
+  );
+}
+
+function AdminSupportCaseCard({
+  supportCase,
+  loading,
+  adminNote,
+  customerMessage,
+  onAdminNote,
+  onCustomerMessage,
+  onStatus,
+}: {
+  supportCase: TransactionSupportCase;
+  loading: boolean;
+  adminNote: string;
+  customerMessage: string;
+  onAdminNote: (note: string) => void;
+  onCustomerMessage: (message: string) => void;
+  onStatus: (status: SupportCaseStatus) => void;
+}) {
+  const archived = supportCase.status === 'resolved' || supportCase.status === 'closed';
+  const statusOptions: SupportCaseStatus[] = archived
+    ? ['reviewing', 'resolved', 'closed']
+    : ['reviewing', 'waiting_on_buyer', 'waiting_on_seller', 'resolved', 'closed'];
+
+  return (
+    <Card>
+      <View style={styles.stack}>
+        <View style={styles.notificationRow}>
+          <View style={styles.notificationText}>
+            <Text style={styles.cardTitle}>{supportReasonLabel(supportCase.issue_category)}</Text>
+            <Text style={styles.body}>
+              {supportCase.requester_role === 'seller' ? 'Seller case' : 'Buyer case'} - {supportStatusLabels[supportCase.status]}
+            </Text>
+          </View>
+          <Badge label={supportStatusLabels[supportCase.status]} tone={archived ? 'success' : 'info'} />
+        </View>
+        <Text style={styles.body}>Description: {supportCase.description}</Text>
+        <Text style={styles.metaText}>Transaction: {supportCase.transaction_id}</Text>
+        <Text style={styles.metaText}>Listing: {supportCase.listing_id}</Text>
+        <Text style={styles.metaText}>Buyer: {supportCase.buyer_id}</Text>
+        <Text style={styles.metaText}>Seller: {supportCase.seller_id}</Text>
+        {supportCase.current_payment_status ? <Text style={styles.metaText}>Payment: {supportCase.current_payment_status}</Text> : null}
+        <Text style={styles.metaText}>Opened {formatAdminDate(supportCase.created_at)}</Text>
+
+        <TextArea
+          label="Internal admin note"
+          value={adminNote}
+          onChangeText={onAdminNote}
+          placeholder="Private note for support review. Do not include secrets or card data."
+        />
+        <TextArea
+          label="Customer-visible response"
+          value={customerMessage}
+          onChangeText={onCustomerMessage}
+          placeholder="Optional response shown to the requester and sent as an in-app notification."
+        />
+
+        <Text style={styles.metaText}>
+          Support updates do not automatically cancel an order, issue a refund, or change Stripe payment state.
+        </Text>
+        <View style={styles.conversationOptionGrid}>
+          {statusOptions.map((status) => (
+            <Button
+              key={status}
+              title={supportStatusLabels[status]}
+              variant={supportCase.status === status ? 'primary' : 'outline'}
+              onPress={() => onStatus(status)}
+              disabled={supportCase.status === status || loading}
+              loading={loading}
+              fullWidth
+            />
+          ))}
         </View>
       </View>
     </Card>

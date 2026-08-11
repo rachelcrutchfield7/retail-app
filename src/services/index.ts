@@ -13,6 +13,7 @@ export * from './reportService';
 export * from './reviewService';
 export * from './savedSearchService';
 export * from './settingsService';
+export * from './supportCaseService';
 export {
   completeTransaction,
   getEligibleTransactionParticipants,

@@ -29,7 +29,7 @@ export function PolicyConsentGate({
 
   const accept = async () => {
     if (!termsAccepted) {
-      setError("Please agree to ReTail's Terms of Service and Community Guidelines before creating your account.");
+      setError("Please agree to ReTail's Terms of Service and Community Guidelines before continuing.");
       return;
     }
 
@@ -54,7 +54,7 @@ export function PolicyConsentGate({
           </View>
         ) : (
           <>
-            <Text style={[styles.title, { color: themeColors.textPrimary }]}>Finish Setting Up ReTail</Text>
+            <Text style={[styles.title, { color: themeColors.textPrimary }]}>Review ReTail Policies</Text>
             <Text style={[styles.body, { color: themeColors.textSecondary }]}>Review the current policies to continue using your ReTail account.</Text>
             <PolicyConsentChoices
               termsAccepted={termsAccepted}
