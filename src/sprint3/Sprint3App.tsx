@@ -115,10 +115,13 @@ import {
   warnIfGoogleSignInUnavailable,
 } from '../services/googleAuthService';
 import {
+  getStripeConnectPayoutState,
+  getStripeConnectPrimaryActionLabel,
   profileHasStripePayouts,
   refreshStripeConnectStatus,
   startStripeConnectOnboarding,
 } from '../services/stripeConnectService';
+import type { StripeConnectStatus } from '../services/stripeConnectService';
 import type {
   CreateListingInput,
   CreateSavedSearchInput,
@@ -1184,14 +1187,18 @@ export function CreateListingScreen({
   const [progress, setProgress] = useState(0);
   const [stripeBusy, setStripeBusy] = useState(false);
   const [payoutNotice, setPayoutNotice] = useState<Notice | null>(null);
+  const [latestStripeStatus, setLatestStripeStatus] = useState<StripeConnectStatus | null>(null);
   const submitLockedRef = useRef(false);
   const stripeLaunchLockedRef = useRef(false);
-  const stripeStatus = {
+  const profileStripeStatus = {
     accountId: auth.profile?.stripe_connect_account_id,
     chargesEnabled: auth.profile?.stripe_connect_charges_enabled === true,
     payoutsEnabled: auth.profile?.stripe_connect_payouts_enabled === true,
     detailsSubmitted: auth.profile?.stripe_connect_details_submitted === true,
   };
+  const stripeStatus = latestStripeStatus ?? profileStripeStatus;
+  const payoutState = getStripeConnectPayoutState(stripeStatus);
+  const payoutActionLabel = getStripeConnectPrimaryActionLabel(payoutState);
   const payoutsReady = profileHasStripePayouts(stripeStatus);
   const paidListingRequiresPayout = form.listing_type === 'sale';
 
@@ -1207,7 +1214,8 @@ export function CreateListingScreen({
     try {
       stripeLaunchLockedRef.current = true;
       setStripeBusy(true);
-      await startStripeConnectOnboarding();
+      const status = await startStripeConnectOnboarding();
+      setLatestStripeStatus(status);
       setPayoutNotice({
         title: 'Stripe setup opened',
         body: 'Finish the secure Stripe form, then return to ReTail. ReTail will recheck your payout status before your listing can go live.',
@@ -1229,6 +1237,7 @@ export function CreateListingScreen({
     try {
       setStripeBusy(true);
       const status = await refreshStripeConnectStatus();
+      setLatestStripeStatus(status);
       await auth.refreshProfile();
 
       if (profileHasStripePayouts(status)) {
@@ -1305,20 +1314,20 @@ export function CreateListingScreen({
           <Text style={styles.title}>Create listing</Text>
           <Text style={styles.body}>Sell or donate pet supplies nearby.</Text>
         </View>
-        {paidListingRequiresPayout && !payoutsReady ? (
+        {paidListingRequiresPayout && !payoutsReady && !payoutNotice ? (
           <NoticeCard
             notice={{
               title: 'Set up payouts to start selling',
               body: 'ReTail uses Stripe to securely send your earnings. Complete payout setup before your first listing can go live.',
             }}
-            actionLabel={stripeBusy ? 'Opening Stripe...' : stripeStatus.accountId ? 'Continue Payout Setup' : 'Set Up Payouts'}
+            actionLabel={stripeBusy ? 'Opening Stripe...' : payoutActionLabel}
             onAction={() => void setupPayouts()}
           />
         ) : null}
         {payoutNotice ? (
           <NoticeCard
             notice={payoutNotice}
-            actionLabel={payoutNotice.title === 'Payouts ready' ? undefined : stripeBusy ? 'Opening Stripe...' : stripeStatus.accountId ? 'Continue Payout Setup' : 'Set Up Payouts'}
+            actionLabel={payoutNotice.title === 'Payouts ready' ? undefined : stripeBusy ? 'Opening Stripe...' : payoutActionLabel}
             onAction={payoutNotice.title === 'Payouts ready' ? undefined : () => void setupPayouts()}
           />
         ) : null}

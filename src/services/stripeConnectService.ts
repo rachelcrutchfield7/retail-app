@@ -11,6 +11,8 @@ export type StripeConnectStatus = {
   detailsSubmitted: boolean;
 };
 
+export type StripeConnectPayoutState = 'not_set_up' | 'action_required' | 'ready';
+
 type StripeOnboardingResponse = StripeConnectStatus & {
   onboardingUrl?: string;
 };
@@ -32,6 +34,22 @@ function toStatus(data: Partial<StripeConnectStatus> | null | undefined): Stripe
 
 export function profileHasStripePayouts(profile: StripeConnectStatus | null | undefined): boolean {
   return Boolean(profile?.accountId && profile.detailsSubmitted && profile.chargesEnabled && profile.payoutsEnabled);
+}
+
+export function getStripeConnectPayoutState(status: StripeConnectStatus | null | undefined): StripeConnectPayoutState {
+  if (profileHasStripePayouts(status)) {
+    return 'ready';
+  }
+
+  return status?.accountId ? 'action_required' : 'not_set_up';
+}
+
+export function getStripeConnectPrimaryActionLabel(state: StripeConnectPayoutState): 'Set Up Payouts' | 'Continue Payout Setup' | 'Manage Payout Account' {
+  if (state === 'ready') {
+    return 'Manage Payout Account';
+  }
+
+  return state === 'action_required' ? 'Continue Payout Setup' : 'Set Up Payouts';
 }
 
 function validatedStripeUrl(url: unknown, allowedHosts: string[], operation: string): string {

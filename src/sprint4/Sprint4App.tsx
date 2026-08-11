@@ -98,11 +98,14 @@ import {
   startProtectedCheckout,
 } from '../services/paymentService';
 import {
+  getStripeConnectPayoutState,
+  getStripeConnectPrimaryActionLabel,
   openStripeExpressDashboard,
   profileHasStripePayouts,
   refreshStripeConnectStatus,
   startStripeConnectOnboarding,
 } from '../services/stripeConnectService';
+import type { StripeConnectStatus } from '../services/stripeConnectService';
 import {
   acceptOffer,
   counterOffer,
@@ -1987,16 +1990,18 @@ export function SettingsScreen({
   const [password, setPassword] = useState('');
   const [settingsNotice, setSettingsNotice] = useState<{ title: string; body: string } | null>(null);
   const [stripeBusy, setStripeBusy] = useState(false);
+  const [latestStripeStatus, setLatestStripeStatus] = useState<StripeConnectStatus | null>(null);
   const stripeLaunchLockedRef = useRef(false);
   const version = '1.0.0';
-  const stripeStatus = {
+  const profileStripeStatus = {
     accountId: auth.profile?.stripe_connect_account_id,
     chargesEnabled: auth.profile?.stripe_connect_charges_enabled === true,
     payoutsEnabled: auth.profile?.stripe_connect_payouts_enabled === true,
     detailsSubmitted: auth.profile?.stripe_connect_details_submitted === true,
   };
+  const stripeStatus = latestStripeStatus ?? profileStripeStatus;
   const payoutsReady = profileHasStripePayouts(stripeStatus);
-  const payoutStatus = payoutsReady ? 'ready' : stripeStatus.accountId ? 'action_required' : 'not_set_up';
+  const payoutStatus = getStripeConnectPayoutState(stripeStatus);
   const payoutStatusLabel = payoutStatus === 'ready'
     ? 'Ready'
     : payoutStatus === 'action_required'
@@ -2007,11 +2012,7 @@ export function SettingsScreen({
     : payoutStatus === 'action_required'
       ? 'Stripe needs additional information before ReTail can send your earnings.'
       : 'Set up payouts before you publish your first paid listing.';
-  const payoutActionLabel = payoutStatus === 'ready'
-    ? 'Manage Payout Account'
-    : payoutStatus === 'action_required'
-      ? 'Continue Payout Setup'
-      : 'Set Up Payouts';
+  const payoutActionLabel = getStripeConnectPrimaryActionLabel(payoutStatus);
 
   useEffect(() => {
     if (settings.data?.account.email) {
@@ -2060,7 +2061,8 @@ export function SettingsScreen({
     try {
       stripeLaunchLockedRef.current = true;
       setStripeBusy(true);
-      await startStripeConnectOnboarding();
+      const status = await startStripeConnectOnboarding();
+      setLatestStripeStatus(status);
       setSettingsNotice({
         title: 'Stripe setup opened',
         body: 'Finish the secure Stripe form, then return to ReTail and refresh payout status.',
@@ -2078,6 +2080,7 @@ export function SettingsScreen({
     try {
       setStripeBusy(true);
       const status = await refreshStripeConnectStatus();
+      setLatestStripeStatus(status);
       await auth.refreshProfile();
       setSettingsNotice({
         title: profileHasStripePayouts(status) ? 'Payouts ready' : 'Payout setup needs attention',

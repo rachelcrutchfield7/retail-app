@@ -46,13 +46,14 @@ test('create listing shows payout setup prompt and rechecks status before publis
 
   assert.match(sprint3, /Set up payouts to start selling/);
   assert.match(sprint3, /Complete payout setup before your first listing can go live/);
-  assert.match(sprint3, /Set Up Payouts/);
-  assert.match(sprint3, /Continue Payout Setup/);
+  assert.match(sprint3, /getStripeConnectPrimaryActionLabel/);
   assert.match(sprint3, /Opening Stripe\.\.\./);
   assert.match(sprint3, /onAction=\{\(\) => void setupPayouts\(\)\}/);
   assert.match(sprint3, /refreshStripeConnectStatus/);
+  assert.match(sprint3, /setLatestStripeStatus\(status\)/);
   assert.match(sprint3, /confirmPayoutReadyForPublish/);
   assert.match(sprint3, /stripeLaunchLockedRef/);
+  assert.match(sprint3, /paidListingRequiresPayout && !payoutsReady && !payoutNotice/);
   assert.match(sprint3, /setForm\(emptyCreateListing\)[^]*onCreated\(listing\.id\)/);
 });
 
@@ -69,8 +70,28 @@ test('settings exposes Payments & Payouts statuses and rechecks Stripe return li
   assert.match(sprint4, /stripe-connect-return/);
   assert.match(sprint4, /stripe-connect-refresh/);
   assert.match(sprint4, /refreshPayoutStatus/);
+  assert.match(sprint4, /setLatestStripeStatus\(status\)/);
   assert.match(sprint4, /Opening Stripe\.\.\./);
   assert.match(sprint4, /stripeLaunchLockedRef/);
+});
+
+test('payout actions are mutually exclusive for every Stripe Connect state', () => {
+  const stripeService = read('src/services/stripeConnectService.ts');
+  const sprint3 = read('src/sprint3/Sprint3App.tsx');
+  const sprint4 = read('src/sprint4/Sprint4App.tsx');
+
+  assert.match(stripeService, /export type StripeConnectPayoutState = 'not_set_up' \| 'action_required' \| 'ready'/);
+  assert.match(stripeService, /getStripeConnectPayoutState\(status/);
+  assert.match(stripeService, /return status\?\.accountId \? 'action_required' : 'not_set_up'/);
+  assert.match(stripeService, /getStripeConnectPrimaryActionLabel\(state/);
+  assert.match(stripeService, /return state === 'action_required' \? 'Continue Payout Setup' : 'Set Up Payouts'/);
+  assert.match(stripeService, /return 'Manage Payout Account'/);
+  assert.match(sprint3, /const stripeStatus = latestStripeStatus \?\? profileStripeStatus/);
+  assert.match(sprint3, /const payoutState = getStripeConnectPayoutState\(stripeStatus\)/);
+  assert.match(sprint3, /const payoutActionLabel = getStripeConnectPrimaryActionLabel\(payoutState\)/);
+  assert.match(sprint4, /const stripeStatus = latestStripeStatus \?\? profileStripeStatus/);
+  assert.match(sprint4, /const payoutStatus = getStripeConnectPayoutState\(stripeStatus\)/);
+  assert.match(sprint4, /const payoutActionLabel = getStripeConnectPrimaryActionLabel\(payoutStatus\)/);
 });
 
 test('Stripe Connect callbacks have app-level handling and public website pages', () => {
