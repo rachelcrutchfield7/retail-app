@@ -62,8 +62,21 @@ edge_function=send-notification
 canonical_rpc=reserve_stripe_checkout_listing,attach_stripe_checkout_reservation,release_stripe_checkout_reservation,claim_stripe_webhook_event,mark_stripe_webhook_event_processed,mark_stripe_webhook_event_failed,record_stripe_transaction_payment_event,create_stripe_payment_notification
 edge_function=stripe-create-payment-intent,stripe-webhook
 
+[SHIPPING_CHECKOUT]
+status=pending_external_provider_setup
+canonical_tables=pending
+canonical_rpc=pending
+edge_function=pending
+provider=EasyPost
+mode_guard=EASYPOST_MODE,EASYPOST_API_KEY
+deferred=shipping-return-label
+
 [STRIPE_CONNECT]
 edge_function=stripe-connect-account,stripe-account-status,stripe-connect-login-link
+readiness_helper=private.seller_payout_ready
+publish_guard_trigger=enforce_paid_listing_payout_readiness_before_write
+checkout_guard_rpc=reserve_stripe_checkout_listing
+payout_ready_criteria=stripe_connect_account_id,details_submitted,charges_enabled,payouts_enabled
 
 [STORAGE_IMAGES]
 bucket=avatars,listings,message-images

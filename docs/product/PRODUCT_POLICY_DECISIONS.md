@@ -18,9 +18,9 @@ Use the legal operator name in About, legal, privacy, terms, contact, support, f
 
 FINAL:
 
-ReTail Customer Support  
-Crutchfield Interactive LLC  
-support@retailpetapp.com  
+ReTail Customer Support
+Crutchfield Interactive LLC
+support@retailpetapp.com
 (877) 514-3697
 
 The support email remains an official support channel. Phone support must not be the only support channel.
@@ -75,6 +75,33 @@ FINAL: Wave 1 beta testers may create real listings.
 
 Do not label all beta listings as fake or test content. Testers must still comply with ReTail prohibited-item and safety rules.
 
+## Seller Payout Readiness
+
+FINAL: Users must complete Stripe Connect payout setup before publishing their first paid marketplace listing. Local-pickup paid listings are included. Verified rescue physical-goods donation needs do not require payout setup.
+
+FINAL: Payout-ready means ReTail has a Stripe Connect account for the seller and Stripe reports details submitted, charges enabled, and payouts enabled.
+
+FINAL: A seller may browse, message, save favorites, use Rescue Hub features, and otherwise use ReTail without completing Stripe Connect payout setup.
+
+FINAL: Paid marketplace listings cannot go live until payout readiness is verified server-side. A client-side notice may help the seller, but it must not be the only enforcement.
+
+FINAL: If Stripe later reports that a seller is no longer payout-ready, new paid listing publication and new protected checkout must be blocked until the seller resolves the payout issue. Existing active paid listings should not be automatically deleted solely because payout eligibility changed.
+
+Seller help content:
+
+- Why required: ReTail uses Stripe Connect to securely send seller earnings and maintain a protected checkout record.
+- When required: before a paid marketplace listing can go live, including local-pickup paid listings and listings where the seller offers free shipping.
+- How setup works: Stripe handles secure payout onboarding. ReTail stores only non-sensitive readiness status such as account id presence, details submitted, charges enabled, and payouts enabled.
+- Incomplete setup: sellers can continue payout setup from the create-listing prompt or Settings → Payments & Payouts.
+- Management: sellers can refresh payout status or open their Stripe Express dashboard from Settings → Payments & Payouts.
+
+Support contact for payout help:
+
+ReTail Customer Support
+Crutchfield Interactive LLC
+support@retailpetapp.com
+(877) 514-3697
+
 ## Listing Inactivity
 
 FINAL: Do not automatically delete inactive listings.
@@ -101,6 +128,38 @@ Transaction, dispute, moderation, and safety records may be retained where opera
 FINAL: Sellers should ship within 5 calendar days of purchase unless a shorter stated handling time applies.
 
 If the seller has not shipped, ReTail may remind or warn the seller, and the buyer becomes eligible to request cancellation/refund review through the support flow.
+
+## Shipping Provider And Checkout
+
+FINAL: EasyPost is ReTail's shipping provider for rates, labels, tracking, and carrier events.
+
+CURRENT BETA STATUS: PENDING EXTERNAL PROVIDER SETUP. EasyPost account verification/API-key access is not complete yet, so EasyPost migrations, webhooks, secrets, live rates, label purchases, and tracking webhooks must not be treated as active in the normal beta build.
+
+FINAL: Payment stays on ReTail. Shipped marketplace transactions are paid through ReTail Protected Checkout/Stripe, then ReTail purchases the EasyPost label after payment succeeds.
+
+FINAL: ReTail automatically selects the lowest-cost eligible tracked shipping service. Buyers do not choose from multiple carrier/service rates at launch.
+
+FINAL: Untracked shipping services are excluded from the launch checkout flow.
+
+FINAL: ReTail has no postage markup at launch. Actual postage is tracked separately from item price and platform fees.
+
+FINAL: Sellers must provide accurate package weight, package dimensions, and ship-from ZIP code when offering shipping. Sellers are responsible for carrier postage adjustments caused by inaccurate package information. Automated negative seller balances are deferred; adjustments should be routed to admin/support reconciliation until payout accounting is deliberately expanded.
+
+FINAL: Sellers may choose either "Buyer pays shipping" or "Free shipping for buyer." Buyer-paid shipping is added to the buyer total and retained by ReTail for postage purchase. Free shipping charges the buyer $0 for shipping and accounts for postage against seller proceeds/support reconciliation.
+
+FINAL: Label generation happens only after successful payment. Label creation must be idempotent so Stripe webhook retries or support retries do not buy duplicate labels.
+
+FINAL: Tracking is attached automatically from EasyPost whenever available. Manual tracking remains fallback-only.
+
+FINAL: Carrier acceptance/scanning defines shipped status. Label created does not count as shipped.
+
+FINAL: Unused labels should be refunded/voided through EasyPost when eligible. Postage refund state is separate from any Stripe buyer refund.
+
+FINAL: Local pickup remains paid through ReTail when protected checkout is used. Local pickup does not use EasyPost rates, labels, or tracking.
+
+FINAL: Off-platform payments are not covered by ReTail payment/refund protection.
+
+OPERATIONAL REQUIREMENT: Crutchfield Interactive LLC must keep sufficient EasyPost wallet funding available for label purchase. Bank/ACH funding is configured outside the ReTail codebase.
 
 ## Cancellation
 

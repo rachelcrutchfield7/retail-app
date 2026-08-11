@@ -69,6 +69,11 @@ Deno.serve(async (request) => {
     });
   } catch (error) {
     const status = typeof (error as { status?: unknown }).status === 'number' ? (error as { status: number }).status : 500;
+    console.error('Stripe Connect onboarding failed.', {
+      status,
+      name: error instanceof Error ? error.name : 'UnknownError',
+      message: error instanceof Error ? error.message : 'Stripe onboarding failed.',
+    });
     return jsonResponse({ error: error instanceof Error ? error.message : 'Stripe onboarding failed.' }, status);
   }
 });

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Alert, BackHandler, FlatList, Image, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
@@ -90,7 +90,13 @@ import {
   setSprint3ThemeColors,
 } from '../sprint3/Sprint3App';
 import { RescueHubScreen } from '../screens';
-import { getPaymentReadiness, isPaidListing, recordOutsidePaymentChoice, startProtectedCheckout } from '../services/paymentService';
+import {
+  calculatePlatformFeeCents,
+  getPaymentReadiness,
+  isPaidListing,
+  listingPriceToCents,
+  startProtectedCheckout,
+} from '../services/paymentService';
 import {
   openStripeExpressDashboard,
   profileHasStripePayouts,
@@ -125,9 +131,11 @@ import type {
   SupportCaseIssueCategory,
   SupportCaseRequesterRole,
   SupportCaseStatus,
+  Transaction,
   TransactionSupportCase,
 } from '../services/types';
 import type { RescueOrganization } from '../types';
+import type { ProtectedCheckoutSetup } from '../types/payment';
 import { handleAppError } from '../utils/errorHandler';
 import {
   bottomTabBarContentClearance,
@@ -242,6 +250,30 @@ function Sprint4Experience() {
     setRoute({ name: 'support-case', transactionId, requesterRole, conversationId });
   const openReview = (listingId: string, revieweeId: string, transactionId?: string) =>
     setRoute({ name: 'review', listingId, revieweeId, transactionId });
+
+  useEffect(() => {
+    let mounted = true;
+    const shouldHandleStripeConnectCallback = (url?: string | null) =>
+      Boolean(url && (url.includes('stripe-connect-return') || url.includes('stripe-connect-refresh')));
+    const handleStripeConnectCallback = (url?: string | null) => {
+      if (!mounted || !shouldHandleStripeConnectCallback(url)) {
+        return;
+      }
+
+      setRoute({ name: 'settings' });
+      void refreshStripeConnectStatus()
+        .then(() => auth.refreshProfile())
+        .catch(() => auth.refreshProfile());
+    };
+
+    void Linking.getInitialURL().then(handleStripeConnectCallback);
+    const subscription = Linking.addEventListener('url', ({ url }) => handleStripeConnectCallback(url));
+
+    return () => {
+      mounted = false;
+      subscription.remove();
+    };
+  }, [auth]);
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -931,16 +963,6 @@ export function ConversationScreen({
   const canReview = ['Sold', 'Donated'].includes(conversationDetail.listingSummary.status);
   const transaction = transactionByListing.data;
   const messagingBlocked = Boolean(conversationDetail.messagingBlocked);
-  const arrangeOutsideReTail = () => {
-    recordOutsidePaymentChoice({
-      listing: conversationDetail.listingSummary,
-      sellerName: conversationDetail.otherUser.display_name,
-      buyerId: auth.user?.id,
-      agreedAmount: acceptedAmount,
-    });
-
-    setNotice('Outside payments are not covered by ReTail. If you use cash, Venmo, Cash App, PayPal, or another method, ReTail cannot help with payment disputes.');
-  };
   const messageListHeader = (
     <View style={styles.messageListHeader}>
       {messages.isError ? <ErrorState message={handleAppError(messages.error).userMessage} onRetry={messages.refetch} /> : null}
@@ -951,13 +973,16 @@ export function ConversationScreen({
         </Card>
       ) : null}
       <DealFlowCard paidListing={paidListing} acceptedAmount={acceptedAmount} isSeller={isSeller} />
+      {transaction?.fulfillment_method === 'shipping' ? (
+        <ShippingStatusCard transaction={transaction} isSeller={isSeller} />
+      ) : null}
       {paidListing ? (
         <Card>
           <View style={styles.stack}>
             <Text style={styles.cardTitle}>{acceptedAmount ? 'Offer accepted' : 'Deal options'}</Text>
             {acceptedAmount ? (
               <Text style={styles.body}>
-                Accepted price: {acceptedAmount}. Use ReTail Protected Checkout for a payment record and receipt, or arrange payment outside ReTail if both sides prefer.
+                Accepted price: {acceptedAmount}. Use ReTail Protected Checkout for a payment record, receipt, seller payout, and payment/refund support.
               </Text>
             ) : (
               <Text style={styles.body}>
@@ -968,21 +993,14 @@ export function ConversationScreen({
               <View style={styles.conversationOptionGrid}>
                 {onPaymentOptions && hasListing ? (
                   <Button
-                    title="ReTail Protected Checkout"
+                    title="Place Order with ReTail"
                     icon={CreditCard}
                     onPress={() => onPaymentOptions(conversationDetail.listingId, acceptedAmount)}
                     fullWidth
                   />
                 ) : null}
-                <Button
-                  title="Arrange Outside ReTail"
-                  variant="outline"
-                  icon={Wallet}
-                  onPress={arrangeOutsideReTail}
-                  fullWidth
-                />
                 <Text style={styles.metaText}>
-                  Outside payments are not covered by ReTail payment dispute support.
+                  Keep payments on ReTail to stay protected. Payments made outside ReTail are not covered by ReTail payment/refund protection.
                 </Text>
               </View>
             ) : (
@@ -1188,6 +1206,65 @@ export function ConversationScreen({
   );
 }
 
+function ShippingStatusCard({ transaction, isSeller }: { transaction: Transaction; isSeller: boolean }) {
+  const status = transaction.shipping_status ?? 'pending';
+  const trackUrl = transaction.tracking_url;
+
+  return (
+    <Card>
+      <View style={styles.stack}>
+        <View style={styles.locationRow}>
+          <MapPin size={20} color={colors.accent} />
+          <Text style={styles.cardTitle}>{isSeller ? 'Sale shipping' : 'Order shipping'}</Text>
+        </View>
+        <Badge label={shippingStatusLabel(status)} tone={status === 'delivered' ? 'success' : status === 'exception' ? 'error' : 'info'} />
+        {isSeller && transaction.shipping_deadline_at ? (
+          <Text style={styles.body}>Ship by: {formatAdminDate(transaction.shipping_deadline_at)}</Text>
+        ) : null}
+        {transaction.shipping_carrier || transaction.shipping_service ? (
+          <Text style={styles.body}>{[transaction.shipping_carrier, transaction.shipping_service].filter(Boolean).join(' - ')}</Text>
+        ) : null}
+        {transaction.tracking_number ? <Text style={styles.body}>Tracking: {transaction.tracking_number}</Text> : null}
+        {transaction.label_url && isSeller ? (
+          <Button title="View / Print Label" variant="outline" onPress={() => void openSafeUrl(transaction.label_url)} fullWidth />
+        ) : null}
+        {transaction.label_4x6_url && isSeller ? (
+          <Button title="Print 4x6 Label" variant="outline" onPress={() => void openSafeUrl(transaction.label_4x6_url)} fullWidth />
+        ) : null}
+        {transaction.label_qr_url && isSeller ? (
+          <Button title="Show QR / No Printer Option" variant="outline" onPress={() => void openSafeUrl(transaction.label_qr_url)} fullWidth />
+        ) : null}
+        {trackUrl ? (
+          <Button title="Track Package" variant="outline" onPress={() => void openSafeUrl(trackUrl)} fullWidth />
+        ) : null}
+        {transaction.buyer_issue_window_ends_at && !isSeller ? (
+          <Text style={styles.metaText}>You have until {formatAdminDate(transaction.buyer_issue_window_ends_at)} to report a significant item problem.</Text>
+        ) : null}
+        {transaction.shipping_exception ? <Text style={styles.inlineError}>{transaction.shipping_exception}</Text> : null}
+      </View>
+    </Card>
+  );
+}
+
+function shippingStatusLabel(status: Transaction['shipping_status']) {
+  if (status === 'label_created') return 'Preparing';
+  if (status === 'pre_transit' || status === 'in_transit') return 'Shipped';
+  if (status === 'out_for_delivery') return 'Out for delivery';
+  if (status === 'delivered') return 'Delivered';
+  if (status === 'exception') return 'Carrier exception';
+  if (status === 'return_to_sender' || status === 'returned') return 'Returning to seller';
+  if (status === 'cancelled') return 'Cancelled';
+  return 'Preparing';
+}
+
+async function openSafeUrl(url?: string) {
+  if (!url || !/^https:\/\//i.test(url)) {
+    return;
+  }
+
+  await Linking.openURL(url);
+}
+
 function DealFlowCard({
   paidListing,
   acceptedAmount,
@@ -1201,7 +1278,7 @@ function DealFlowCard({
     ? [
       { label: 'Message about condition, timing, and pickup options', complete: true },
       { label: acceptedAmount ? `Offer accepted at ${acceptedAmount}` : isSeller ? 'Review offers from the buyer' : 'Make an offer when details feel right', complete: Boolean(acceptedAmount) },
-      { label: 'Choose ReTail checkout or arrange outside payment', complete: false },
+      { label: 'Place the order with ReTail protected checkout', complete: false },
       { label: 'Confirm pickup, meetup, or shipping plan', complete: false },
       { label: 'Mark complete and leave a review', complete: false },
     ]
@@ -1234,6 +1311,34 @@ function DealFlowCard({
   );
 }
 
+function formatCheckoutCents(cents?: number | null, fallback = 'Pending') {
+  if (typeof cents !== 'number' || !Number.isFinite(cents)) {
+    return fallback;
+  }
+
+  return `$${(cents / 100).toFixed(2)}`;
+}
+
+function CheckoutSummaryRow({
+  label,
+  detail,
+  value,
+}: {
+  label: string;
+  detail?: string;
+  value: string;
+}) {
+  return (
+    <View style={styles.checkoutSummaryRow}>
+      <View style={styles.checkoutSummaryLabel}>
+        <Text style={styles.bodyStrong}>{label}</Text>
+        {detail ? <Text style={styles.metaText}>{detail}</Text> : null}
+      </View>
+      <Text style={styles.checkoutSummaryValue}>{value}</Text>
+    </View>
+  );
+}
+
 export function PaymentOptionsScreen({
   listingId,
   agreedAmount,
@@ -1248,6 +1353,17 @@ export function PaymentOptionsScreen({
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
   const [notice, setNotice] = useState<{ title: string; body: string } | null>(null);
   const [checkoutBusy, setCheckoutBusy] = useState(false);
+  const [checkoutSummary, setCheckoutSummary] = useState<ProtectedCheckoutSetup | null>(null);
+  const [fulfillmentMethod, setFulfillmentMethod] = useState<'pickup' | 'shipping'>('pickup');
+  const [shippingAddress, setShippingAddress] = useState({
+    name: auth.profile?.display_name ?? '',
+    street1: '',
+    street2: '',
+    city: auth.profile?.city ?? '',
+    state: auth.profile?.state ?? '',
+    zipCode: auth.profile?.zip_code ?? '',
+    phone: '',
+  });
   const paymentReadiness = getPaymentReadiness();
 
   if (listing.isLoading) {
@@ -1271,6 +1387,42 @@ export function PaymentOptionsScreen({
   const owner = seller.id === auth.user?.id;
   const paidListing = isPaidListing(item);
   const checkoutAmount = agreedAmount ?? item.price;
+  const canShip = item.shipping;
+  const canPickup = item.pickup || item.porchPickup || item.meetup;
+  const selectedFulfillmentMethod = canShip && !canPickup ? 'shipping' : fulfillmentMethod;
+  const checkoutItemCents = checkoutSummary?.itemAmountCents ?? listingPriceToCents(checkoutAmount) ?? 0;
+  const checkoutFeeCents = checkoutSummary?.platformFeeCents ?? calculatePlatformFeeCents(checkoutItemCents);
+  const sellerOffersFreeShipping = item.shippingPayer === 'seller';
+  const shippingDisplay = selectedFulfillmentMethod === 'pickup'
+    ? '$0.00'
+    : checkoutSummary
+      ? checkoutSummary.shippingPayer === 'seller' || (checkoutSummary.shippingCollectedCents ?? 0) === 0
+        ? 'Free'
+        : formatCheckoutCents(checkoutSummary.shippingCollectedCents)
+      : sellerOffersFreeShipping
+        ? 'Free'
+        : checkoutBusy
+          ? 'Calculating...'
+          : 'Calculated before payment';
+  const totalDisplay = checkoutSummary
+    ? formatCheckoutCents(checkoutSummary.amountCents)
+    : selectedFulfillmentMethod === 'pickup'
+      ? formatCheckoutCents(checkoutItemCents)
+      : sellerOffersFreeShipping
+        ? formatCheckoutCents(checkoutItemCents)
+        : checkoutBusy
+          ? 'Calculating...'
+          : 'Confirmed before payment';
+  const paymentCardAmount = checkoutSummary ? formatCheckoutCents(checkoutSummary.amountCents) : totalDisplay;
+  const updateShippingAddress = (field: keyof typeof shippingAddress, value: string) => {
+    setCheckoutSummary(null);
+    setShippingAddress((current) => ({ ...current, [field]: value }));
+  };
+  const selectFulfillmentMethod = (method: 'pickup' | 'shipping') => {
+    setCheckoutSummary(null);
+    setNotice(null);
+    setFulfillmentMethod(method);
+  };
 
   const payWithStripe = async () => {
     if (auth.isGuest) {
@@ -1283,14 +1435,39 @@ export function PaymentOptionsScreen({
       return;
     }
 
+    if (selectedFulfillmentMethod === 'shipping') {
+      const missingAddress = !shippingAddress.street1.trim()
+        || !shippingAddress.city.trim()
+        || !shippingAddress.state.trim()
+        || !/^\d{5}$/.test(shippingAddress.zipCode.trim());
+
+      if (missingAddress) {
+        setNotice({
+          title: 'Delivery address needed',
+          body: 'Add a street address, city, state, and 5-digit ZIP code before starting shipping checkout.',
+        });
+        return;
+      }
+    }
+
     try {
       setCheckoutBusy(true);
+      setCheckoutSummary(null);
+      if (selectedFulfillmentMethod === 'shipping') {
+        setNotice({
+          title: 'Calculating tracked shipping...',
+          body: 'ReTail is confirming the lowest-cost eligible tracked shipping service for this order before payment.',
+        });
+      }
       const checkout = await startProtectedCheckout({
         listing: item,
         sellerName: seller.display_name,
         buyerId: auth.user?.id,
         agreedAmount: checkoutAmount,
+        fulfillmentMethod: selectedFulfillmentMethod,
+        shippingAddress: selectedFulfillmentMethod === 'shipping' ? shippingAddress : undefined,
       });
+      setCheckoutSummary(checkout);
       const { error: initError } = await initPaymentSheet({
         merchantDisplayName: checkout.merchantDisplayName,
         paymentIntentClientSecret: checkout.paymentIntentClientSecret,
@@ -1311,34 +1488,23 @@ export function PaymentOptionsScreen({
       }
 
       setNotice({
-        title: 'Payment submitted',
-        body: 'Stripe is confirming the payment. ReTail will update the listing and transaction once Stripe confirms it.',
+        title: 'Order placed',
+        body: checkout.fulfillmentMethod === 'shipping'
+          ? 'Payment complete. Seller preparing order. Tracking will appear here once the carrier accepts the package.'
+          : 'Payment complete. Arrange pickup through ReTail messaging.',
       });
       await listing.refetch();
     } catch (error) {
-      setNotice({ title: 'Protected checkout unavailable', body: handleAppError(error).userMessage });
+      setCheckoutSummary(null);
+      setNotice({
+        title: 'Protected checkout unavailable',
+        body: selectedFulfillmentMethod === 'shipping'
+          ? 'We couldn’t calculate shipping for this order. Please check the delivery address and try again.'
+          : handleAppError(error).userMessage,
+      });
     } finally {
       setCheckoutBusy(false);
     }
-  };
-
-  const payOutsideApp = () => {
-    if (owner) {
-      setNotice({ title: 'This is your listing', body: 'Payment options are shown to buyers.' });
-      return;
-    }
-
-    recordOutsidePaymentChoice({
-      listing: item,
-      sellerName: seller.display_name,
-      buyerId: auth.user?.id,
-      agreedAmount: checkoutAmount,
-    });
-
-    setNotice({
-      title: 'Outside payments are not covered',
-      body: 'If you use cash, Venmo, Cash App, PayPal, or another method outside ReTail, ReTail cannot help with payment disputes.',
-    });
   };
 
   return (
@@ -1347,7 +1513,7 @@ export function PaymentOptionsScreen({
       <View style={styles.stackLarge}>
         <View style={styles.stack}>
           <Text style={styles.title}>Checkout</Text>
-          <Text style={styles.body}>Choose how to complete the agreed payment for {item.title}.</Text>
+          <Text style={styles.body}>Review the order for {item.title}. Payment stays on ReTail for shipped orders and local pickup.</Text>
         </View>
 
         {notice ? (
@@ -1360,16 +1526,85 @@ export function PaymentOptionsScreen({
         ) : null}
 
         {paidListing ? (
-          <PaymentChoiceCard
-            price={checkoutAmount}
-            sellerName={seller.display_name}
-            protectedCheckoutReady={paymentReadiness.protectedCheckoutEnabled}
-            disabled={owner}
-            disabledReason={owner ? 'Payment options are visible to buyers, but disabled for your own listing.' : undefined}
-            checkoutLoading={checkoutBusy}
-            onPayWithStripe={() => void payWithStripe()}
-            onPayOutsideApp={payOutsideApp}
-          />
+          <>
+            {canShip ? (
+              <Card>
+                <View style={styles.stack}>
+                  <Text style={styles.cardTitle}>Delivery method</Text>
+                  <View style={styles.wrapRow}>
+                    {canPickup ? (
+                      <FilterChip
+                        label="Pickup or meetup"
+                        selected={selectedFulfillmentMethod === 'pickup'}
+                        onPress={() => selectFulfillmentMethod('pickup')}
+                      />
+                    ) : null}
+                    <FilterChip
+                      label="Ship it"
+                      selected={selectedFulfillmentMethod === 'shipping'}
+                      onPress={() => selectFulfillmentMethod('shipping')}
+                    />
+                  </View>
+                  {selectedFulfillmentMethod === 'shipping' ? (
+                    <>
+                      <Text style={styles.body}>
+                        Standard tracked shipping. ReTail automatically selects the lowest-cost eligible tracked shipping service for this order.
+                      </Text>
+                      <Text style={styles.metaText}>Tracking will be added automatically when your seller ships.</Text>
+                      <Text style={styles.metaText}>Sellers have up to 5 calendar days to get shipped orders accepted by the carrier.</Text>
+                      <Text style={styles.cardTitle}>Delivery address</Text>
+                      <TextInput label="Name" value={shippingAddress.name} onChangeText={(value) => updateShippingAddress('name', value)} />
+                      <TextInput label="Street address" value={shippingAddress.street1} onChangeText={(value) => updateShippingAddress('street1', value)} />
+                      <TextInput label="Apt, suite, or unit" value={shippingAddress.street2} onChangeText={(value) => updateShippingAddress('street2', value)} />
+                      <TextInput label="City" value={shippingAddress.city} onChangeText={(value) => updateShippingAddress('city', value)} />
+                      <TextInput label="State" value={shippingAddress.state} onChangeText={(value) => updateShippingAddress('state', value.toUpperCase().slice(0, 2))} />
+                      <TextInput label="ZIP code" value={shippingAddress.zipCode} onChangeText={(value) => updateShippingAddress('zipCode', value)} keyboardType="number-pad" />
+                      <TextInput label="Phone for carrier" value={shippingAddress.phone} onChangeText={(value) => updateShippingAddress('phone', value)} keyboardType="phone-pad" />
+                    </>
+                  ) : (
+                    <Text style={styles.body}>Payment still stays on ReTail. Arrange pickup details through ReTail messaging.</Text>
+                  )}
+                </View>
+              </Card>
+            ) : null}
+            <Card>
+              <View style={styles.stack}>
+                <Text style={styles.cardTitle}>Order summary</Text>
+                <CheckoutSummaryRow label="Item" value={formatCheckoutCents(checkoutItemCents)} />
+                <CheckoutSummaryRow
+                  label={selectedFulfillmentMethod === 'pickup' ? 'Pickup' : 'Shipping'}
+                  detail={selectedFulfillmentMethod === 'pickup'
+                    ? 'Local pickup'
+                    : 'Standard tracked shipping'}
+                  value={shippingDisplay}
+                />
+                <CheckoutSummaryRow
+                  label="ReTail fee"
+                  detail="Included in seller payout accounting"
+                  value={formatCheckoutCents(checkoutFeeCents)}
+                />
+                <View style={styles.checkoutSummaryDivider} />
+                <CheckoutSummaryRow label="Total" value={totalDisplay} />
+                {selectedFulfillmentMethod === 'pickup' ? (
+                  <Text style={styles.metaText}>Payment still stays on ReTail. Arrange pickup details through ReTail messaging.</Text>
+                ) : null}
+                {selectedFulfillmentMethod === 'shipping' && !checkoutSummary && !sellerOffersFreeShipping ? (
+                  <Text style={styles.metaText}>
+                    Shipping is calculated before payment. The buyer cannot edit the shipping amount.
+                  </Text>
+                ) : null}
+              </View>
+            </Card>
+            <PaymentChoiceCard
+              price={paymentCardAmount}
+              sellerName={seller.display_name}
+              protectedCheckoutReady={paymentReadiness.protectedCheckoutEnabled}
+              disabled={owner}
+              disabledReason={owner ? 'Payment options are visible to buyers, but disabled for your own listing.' : undefined}
+              checkoutLoading={checkoutBusy}
+              onPayWithStripe={() => void payWithStripe()}
+            />
+          </>
         ) : (
           <Card>
             <View style={styles.stack}>
@@ -1752,6 +1987,7 @@ export function SettingsScreen({
   const [password, setPassword] = useState('');
   const [settingsNotice, setSettingsNotice] = useState<{ title: string; body: string } | null>(null);
   const [stripeBusy, setStripeBusy] = useState(false);
+  const stripeLaunchLockedRef = useRef(false);
   const version = '1.0.0';
   const stripeStatus = {
     accountId: auth.profile?.stripe_connect_account_id,
@@ -1760,6 +1996,22 @@ export function SettingsScreen({
     detailsSubmitted: auth.profile?.stripe_connect_details_submitted === true,
   };
   const payoutsReady = profileHasStripePayouts(stripeStatus);
+  const payoutStatus = payoutsReady ? 'ready' : stripeStatus.accountId ? 'action_required' : 'not_set_up';
+  const payoutStatusLabel = payoutStatus === 'ready'
+    ? 'Ready'
+    : payoutStatus === 'action_required'
+      ? 'Action required'
+      : 'Not set up';
+  const payoutStatusBody = payoutStatus === 'ready'
+    ? 'Your payout account is ready.'
+    : payoutStatus === 'action_required'
+      ? 'Stripe needs additional information before ReTail can send your earnings.'
+      : 'Set up payouts before you publish your first paid listing.';
+  const payoutActionLabel = payoutStatus === 'ready'
+    ? 'Manage Payout Account'
+    : payoutStatus === 'action_required'
+      ? 'Continue Payout Setup'
+      : 'Set Up Payouts';
 
   useEffect(() => {
     if (settings.data?.account.email) {
@@ -1801,7 +2053,12 @@ export function SettingsScreen({
   };
 
   const setupStripePayouts = async () => {
+    if (stripeLaunchLockedRef.current) {
+      return;
+    }
+
     try {
+      stripeLaunchLockedRef.current = true;
       setStripeBusy(true);
       await startStripeConnectOnboarding();
       setSettingsNotice({
@@ -1812,27 +2069,47 @@ export function SettingsScreen({
     } catch (error) {
       setSettingsNotice({ title: 'Stripe setup did not open', body: handleAppError(error).userMessage });
     } finally {
+      stripeLaunchLockedRef.current = false;
       setStripeBusy(false);
     }
   };
 
-  const refreshPayoutStatus = async () => {
+  const refreshPayoutStatus = useCallback(async () => {
     try {
       setStripeBusy(true);
       const status = await refreshStripeConnectStatus();
       await auth.refreshProfile();
       setSettingsNotice({
-        title: 'Payout status refreshed',
+        title: profileHasStripePayouts(status) ? 'Payouts ready' : 'Payout setup needs attention',
         body: profileHasStripePayouts(status)
-          ? 'Stripe payouts are ready for protected checkout.'
-          : 'Stripe still needs a little more information before payouts can be enabled.',
+          ? 'You can now publish listings and receive earnings through ReTail.'
+          : 'Stripe needs more information before ReTail can send your earnings.',
       });
     } catch (error) {
       setSettingsNotice({ title: 'Payout status was not refreshed', body: handleAppError(error).userMessage });
     } finally {
       setStripeBusy(false);
     }
-  };
+  }, [auth]);
+
+  useEffect(() => {
+    let mounted = true;
+    const shouldRefreshStripeStatus = (url?: string | null) =>
+      Boolean(url && (url.includes('stripe-connect-return') || url.includes('stripe-connect-refresh')));
+    const recheck = (url?: string | null) => {
+      if (mounted && shouldRefreshStripeStatus(url)) {
+        void refreshPayoutStatus();
+      }
+    };
+
+    void Linking.getInitialURL().then(recheck);
+    const subscription = Linking.addEventListener('url', ({ url }) => recheck(url));
+
+    return () => {
+      mounted = false;
+      subscription.remove();
+    };
+  }, [refreshPayoutStatus]);
 
   const openStripeDashboard = async () => {
     try {
@@ -1954,30 +2231,32 @@ export function SettingsScreen({
         />
       </SectionCard>
 
-      <SectionCard title="Seller Payouts">
+      <SectionCard title="Payments & Payouts">
         <View style={styles.locationRow}>
           <CreditCard size={20} color={payoutsReady ? colors.primary : colors.warning} />
-          <Text style={styles.bodyStrong}>
-            {payoutsReady ? 'Stripe payouts are ready' : stripeStatus.accountId ? 'Finish Stripe payout setup' : 'Set up Stripe payouts'}
-          </Text>
+          <Text style={styles.bodyStrong}>Payout status: {payoutStatusLabel}</Text>
         </View>
-        <Text style={styles.body}>
-          Protected checkout pays sellers through Stripe Connect, keeps a ReTail receipt, and deducts the small platform fee automatically so the seller payout stays simple.
-        </Text>
+        <Text style={styles.body}>{payoutStatusBody}</Text>
+        <Text style={styles.body}>Paid marketplace listings require payout setup before they can go live. Local pickup paid listings are included.</Text>
+        <Text style={styles.body}>Protected checkout pays sellers through Stripe Connect, keeps a ReTail receipt, and deducts the small platform fee automatically so the seller payout stays simple.</Text>
         <View style={styles.wrapRow}>
           <Badge label={stripeStatus.detailsSubmitted ? 'Details submitted' : 'Details needed'} tone={stripeStatus.detailsSubmitted ? 'success' : 'warning'} />
           <Badge label={stripeStatus.chargesEnabled ? 'Charges on' : 'Charges off'} tone={stripeStatus.chargesEnabled ? 'success' : 'warning'} />
           <Badge label={stripeStatus.payoutsEnabled ? 'Payouts on' : 'Payouts off'} tone={stripeStatus.payoutsEnabled ? 'success' : 'warning'} />
         </View>
-        <Button
-          title={stripeStatus.accountId ? 'Continue Stripe Setup' : 'Set Up Stripe Payouts'}
-          icon={CreditCard}
-          onPress={() => void setupStripePayouts()}
-          loading={stripeBusy}
-          fullWidth
-        />
+        {payoutStatus === 'ready' ? (
+          <Button title={stripeBusy ? 'Opening Stripe...' : payoutActionLabel} icon={Wallet} onPress={() => void openStripeDashboard()} loading={stripeBusy} fullWidth />
+        ) : (
+          <Button
+            title={stripeBusy ? 'Opening Stripe...' : payoutActionLabel}
+            icon={CreditCard}
+            onPress={() => void setupStripePayouts()}
+            loading={stripeBusy}
+            fullWidth
+          />
+        )}
         <Button title="Refresh Payout Status" icon={CheckCheck} variant="outline" onPress={() => void refreshPayoutStatus()} disabled={stripeBusy} fullWidth />
-        {stripeStatus.accountId ? (
+        {stripeStatus.accountId && payoutStatus !== 'ready' ? (
           <Button title="Open Stripe Dashboard" icon={Wallet} variant="outline" onPress={() => void openStripeDashboard()} disabled={stripeBusy} fullWidth />
         ) : null}
       </SectionCard>
@@ -2184,7 +2463,7 @@ function SafetyCenterScreen({ onBack, onFAQ }: { onBack: () => void; onFAQ: () =
       </SectionCard>
       <SectionCard title="Payments">
         <Text style={styles.body}>ReTail Protected Checkout creates a payment record and receipt inside the app. The seller is paid automatically through Stripe, and ReTail keeps a small platform fee to help cover hosting, moderation, payment support, and app maintenance.</Text>
-        <Text style={styles.body}>Outside payments can be arranged, but ReTail cannot help with scams, chargebacks, refunds, or payment disputes for those.</Text>
+        <Text style={styles.body}>Keep payments on ReTail to stay protected. Payments made outside ReTail are not covered by ReTail payment/refund protection.</Text>
         <Button title="Why fees exist" icon={HelpCircle} variant="outline" onPress={onFAQ} fullWidth />
       </SectionCard>
       <SectionCard title="Reports and moderation">
@@ -2203,11 +2482,23 @@ function FAQScreen({ onBack }: { onBack: () => void }) {
     },
     {
       question: 'Why does ReTail charge a fee for payments through the app?',
-      answer: 'The fee helps cover secure payment processing, receipts, payment records, support tools, moderation, fraud prevention, hosting, and ongoing app maintenance. Sellers are paid through Stripe automatically, and the platform fee is kept by ReTail. ReTail only takes a platform fee on protected checkout orders over $5. You can arrange outside payment, but outside payments are not covered by ReTail payment support.',
+      answer: 'The fee helps cover secure payment processing, receipts, payment records, support tools, moderation, fraud prevention, hosting, and ongoing app maintenance. Sellers are paid through Stripe automatically, and the platform fee is kept by ReTail. ReTail only takes a platform fee on protected checkout orders over $5. Payments made outside ReTail are not covered by ReTail payment support.',
     },
     {
       question: 'Should I pay inside ReTail or outside the app?',
-      answer: 'Use ReTail Protected Checkout when you want a card payment, a receipt, and an in-app payment record. Outside payments may work for simple local handoffs, but ReTail cannot help resolve payment issues that happen on cash apps, cash, checks, or other platforms.',
+      answer: 'Use ReTail Protected Checkout for card payment, a receipt, an in-app payment record, and ReTail payment/refund protection. Payments made outside ReTail are not covered by ReTail payment support.',
+    },
+    {
+      question: 'How does shipping work?',
+      answer: 'When shipping is offered, the seller enters package weight, dimensions, and ship-from ZIP code. ReTail will calculate a tracked shipping rate during checkout after shipping provider setup is complete. The label will be created after payment succeeds, and tracking will be added to the order automatically.',
+    },
+    {
+      question: 'What should sellers know about shipping?',
+      answer: 'Sellers should enter accurate package measurements, print the label when it is ready, and get the package accepted by the carrier within 5 calendar days. If a no-printer or QR option is available from the carrier, ReTail will show it.',
+    },
+    {
+      question: 'What if there is a shipping problem?',
+      answer: 'Use Get Help With This Order or Get Help With This Sale. ReTail support can review cancellations, missing packages, damaged items, returns, refunds, label issues, and shipping exceptions. Delivered orders have a 48-hour window to report significant item problems.',
     },
     {
       question: 'Can I donate items to rescues?',
@@ -2670,6 +2961,12 @@ function AdminSupportCaseCard({
         <Text style={styles.metaText}>Buyer: {supportCase.buyer_id}</Text>
         <Text style={styles.metaText}>Seller: {supportCase.seller_id}</Text>
         {supportCase.current_payment_status ? <Text style={styles.metaText}>Payment: {supportCase.current_payment_status}</Text> : null}
+        {supportCase.current_shipment_status ? <Text style={styles.metaText}>Shipping: {supportCase.current_shipment_status}</Text> : null}
+        {supportCase.current_tracking_number ? (
+          <Text style={styles.metaText}>
+            Tracking: {[supportCase.current_shipping_carrier, supportCase.current_shipping_service, supportCase.current_tracking_number].filter(Boolean).join(' - ')}
+          </Text>
+        ) : null}
         <Text style={styles.metaText}>Opened {formatAdminDate(supportCase.created_at)}</Text>
 
         <TextArea
@@ -3118,6 +3415,31 @@ function createSprint4Styles(themeColors: ThemeColors) {
     justifyContent: 'space-between',
     alignItems: 'center',
     gap: spacing.md,
+  },
+  checkoutSummaryRow: {
+    minHeight: 34,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  checkoutSummaryLabel: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  checkoutSummaryValue: {
+    maxWidth: '42%',
+    flexShrink: 0,
+    color: themeColors.textPrimary,
+    textAlign: 'right',
+    ...typography.body,
+    fontWeight: '700',
+    lineHeight: 23,
+  },
+  checkoutSummaryDivider: {
+    height: 1,
+    backgroundColor: themeColors.border,
   },
   backInline: {
     minHeight: sizes.touchTarget,

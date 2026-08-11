@@ -23,8 +23,6 @@ import { resetAnalyticsUser } from '../lib/analytics';
 import { logger } from '../lib/logger';
 import { removeAllRealtimeSubscriptions } from '../services/realtimeService';
 import { colors, radius, spacing, typography } from '../constants/theme';
-import { PolicyConsentBoundary } from './PolicyConsentBoundary';
-import type { PolicyConsentSource } from '../services/consentService';
 
 export type AuthState = {
   user: User | null;
@@ -109,7 +107,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [startupError, setStartupError] = useState<string | null>(null);
   const [startupRetry, setStartupRetry] = useState(0);
-  const [policyGateSource, setPolicyGateSource] = useState<PolicyConsentSource>('legacy_user_gate');
 
   const refreshProfile = useCallback(async () => {
     let activeSession: Session | null = null;
@@ -250,7 +247,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         await clearPrivateAuthState();
         const nextSession = await signInWithEmail(input.email, input.password);
-        setPolicyGateSource('legacy_user_gate');
         await refreshProfile();
         return nextSession;
       } finally {
@@ -298,11 +294,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
           : undefined,
       });
-      setPolicyGateSource(
-        input.mode === 'register' || nextSession?.requiresProfileSetup
-          ? 'google_signup'
-          : 'legacy_user_gate'
-      );
       await refreshProfile();
       return nextSession;
     } finally {
@@ -319,7 +310,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(null);
       setUser(null);
       setProfile(null);
-      setPolicyGateSource('legacy_user_gate');
     } finally {
       setLoading(false);
     }
@@ -370,16 +360,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider value={value}>
-      {session && user ? (
-        <PolicyConsentBoundary
-          userId={user.id}
-          source={policyGateSource}
-          pendingSignupConsent={user.pendingSignupConsent}
-          onSignOut={signOut}
-        >
-          {children}
-        </PolicyConsentBoundary>
-      ) : children}
+      {children}
     </AuthContext.Provider>
   );
 }

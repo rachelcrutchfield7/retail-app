@@ -24,6 +24,6 @@ export function calculatePlatformFeeCents(amountCents: number): number {
 }
 
 export function publicAppUrl(path: string): string {
-  const baseUrl = Deno.env.get('RETAIL_APP_URL') ?? 'retail://';
+  const baseUrl = Deno.env.get('RETAIL_APP_URL') ?? 'https://retailpetapp.com';
   return new URL(path, baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`).toString();
 }

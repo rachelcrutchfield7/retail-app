@@ -122,6 +122,35 @@ test('Sprint 4 app is active and messaging UI uses reusable components', () => {
   assert.doesNotMatch(sprintApp, /#[0-9A-Fa-f]{3,8}/, 'Sprint 4 screens should use theme color tokens');
 });
 
+test('conversation summaries use canonical listing detail retrieval and survive broken enrichment', () => {
+  const conversationService = readFileSync(join(root, 'src/services/conversationService.ts'), 'utf8');
+
+  assert.match(conversationService, /import \{ getListingById \} from '\.\/listingService'/);
+  assert.match(conversationService, /getListingById\(listingId\)/);
+  assert.doesNotMatch(conversationService, /listingRelationsSelect/);
+  assert.doesNotMatch(conversationService, /\.from\('listings'\)[\s\S]{0,220}\.select\(/);
+  assert.match(conversationService, /Listing detail unavailable during conversation hydration/);
+  assert.match(conversationService, /Listing unavailable/);
+  assert.match(conversationService, /buildConversationSummarySafe/);
+  assert.match(conversationService, /for \(const conversation of data \?\? \[\]\)/);
+  assert.doesNotMatch(conversationService, /Promise\.all\(\(data \?\? \[\]\)\.map\(\(conversation\) => buildConversationSummary/);
+});
+
+test('message history, sending, reporting, and realtime paths remain wired after hydration fix', () => {
+  const messageService = readFileSync(join(root, 'src/services/messageService.ts'), 'utf8');
+  const reportsHook = readFileSync(join(root, 'src/hooks/useReports.ts'), 'utf8');
+  const realtimeService = readFileSync(join(root, 'src/services/realtimeService.ts'), 'utf8');
+  const sprintApp = readFileSync(join(root, 'src/sprint4/Sprint4App.tsx'), 'utf8');
+
+  assert.match(messageService, /export async function getMessages/);
+  assert.match(messageService, /export async function sendMessage/);
+  assert.match(messageService, /rpc\('send_message'/);
+  assert.match(realtimeService, /table: 'messages'/);
+  assert.match(realtimeService, /table: 'conversations'/);
+  assert.match(reportsHook, /reportMessage/);
+  assert.match(sprintApp, /targetType: 'listing' \| 'user' \| 'message'/);
+});
+
 test('Sprint 4 screens and route files do not contain raw Supabase calls', () => {
   for (const file of [
     ...listFiles(join(root, 'app')).filter((path) => path.endsWith('.tsx')),

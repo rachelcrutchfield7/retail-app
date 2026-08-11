@@ -1,4 +1,5 @@
 import type { CreateListingInput } from '../services/types';
+import { validateShippingPackage } from '../services/shippingRules';
 
 export type CreateListingField =
   | 'images'
@@ -13,6 +14,10 @@ export type CreateListingField =
   | 'getting_options'
   | 'ship_from_zip_code'
   | 'shipping_cost_estimate'
+  | 'package_weight_oz'
+  | 'package_length_in'
+  | 'package_width_in'
+  | 'package_height_in'
   | 'safety_confirmation';
 
 export type CreateListingValidationResult = {
@@ -71,9 +76,33 @@ export function validateCreateListingInput(input: CreateListingInput): CreateLis
 
   if (input.shipping_available) {
     const shipFromZip = input.ship_from_zip_code?.trim() || input.zip_code?.trim();
+    const packageValidation = validateShippingPackage({
+      shipFromZipCode: shipFromZip,
+      weightOz: input.package_weight_oz,
+      lengthIn: input.package_length_in,
+      widthIn: input.package_width_in,
+      heightIn: input.package_height_in,
+      shippingPayer: input.shipping_payer,
+    });
 
     if (shipFromZip && !/^\d{5}$/.test(shipFromZip)) {
       errors.ship_from_zip_code = 'Use a 5-digit ship-from zip code.';
+    }
+
+    if (packageValidation.errors.weightOz) {
+      errors.package_weight_oz = packageValidation.errors.weightOz;
+    }
+
+    if (packageValidation.errors.lengthIn) {
+      errors.package_length_in = packageValidation.errors.lengthIn;
+    }
+
+    if (packageValidation.errors.widthIn) {
+      errors.package_width_in = packageValidation.errors.widthIn;
+    }
+
+    if (packageValidation.errors.heightIn) {
+      errors.package_height_in = packageValidation.errors.heightIn;
     }
 
     const shippingCost = String(input.shipping_cost_estimate ?? '').trim();

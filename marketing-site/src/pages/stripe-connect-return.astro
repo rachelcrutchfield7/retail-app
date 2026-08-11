@@ -1,0 +1,29 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+const appReturnLink = 'retail://stripe-connect-return';
+---
+<BaseLayout
+  title="Return to ReTail | Stripe Payout Setup"
+  description="Return to the ReTail app after completing Stripe payout setup."
+  path="/stripe-connect-return"
+  noindex
+>
+  <section class="section page-hero narrow">
+    <span class="eyebrow">Payout setup</span>
+    <h1>Return to ReTail</h1>
+    <p class="lead">Stripe sent you back to ReTail. Open the app to refresh your payout status and continue setting up your first paid listing.</p>
+    <div class="actions">
+      <a class="button" href={appReturnLink}>Open ReTail</a>
+      <a class="button secondary" href="/contact">Contact Support</a>
+    </div>
+  </section>
+
+  <section class="section narrow policy-body">
+    <section>
+      <h2>What happens next</h2>
+      <p>ReTail checks your Stripe payout status from the server before paid listings can go live. If Stripe still needs information, open ReTail and continue payout setup from Settings.</p>
+      <p>If the app does not open automatically, return to ReTail manually and open Profile, then Settings, then Payments &amp; Payouts.</p>
+    </section>
+  </section>
+</BaseLayout>

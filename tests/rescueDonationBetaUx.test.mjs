@@ -48,7 +48,7 @@ test('first-time tutorial and appearance settings use versioned local preference
   const guestTutorial = read('src/components/feedback/GuestTutorial.tsx');
   const themeProvider = read('src/theme/ThemeProvider.tsx');
   const sprint4App = read('src/sprint4/Sprint4App.tsx');
-  const appJson = read('app.json');
+  const appConfig = read('app.config.js');
 
   assert.match(onboardingService, /retail:onboarding:v1:completed/);
   assert.match(onboardingHook, /authLoading/);
@@ -58,30 +58,30 @@ test('first-time tutorial and appearance settings use versioned local preference
   assert.match(themeProvider, /retail:appearance:v1/);
   assert.match(themeProvider, /useColorScheme/);
   assert.match(themeProvider, /AsyncStorage\.setItem/);
-  assert.match(sprint4App, /Use device setting/);
-  assert.match(sprint4App, /Replay Tutorial/);
-  assert.match(appJson, /"userInterfaceStyle": "automatic"/);
+  assert.match(sprint4App, /label="Dark mode"/);
+  assert.match(sprint4App, /Turn on Dark mode in Settings under Appearance/);
+  assert.match(appConfig, /userInterfaceStyle: 'light'/);
 });
 
 test('mobile keyboard and native profile picture upload are wired for beta devices', () => {
-  const appJson = read('app.json');
+  const appConfig = read('app.config.js');
   const sprint3App = read('src/sprint3/Sprint3App.tsx');
   const sprint4App = read('src/sprint4/Sprint4App.tsx');
   const profileService = read('src/services/profileService.ts');
   const messageInput = read('src/components/messaging/MessageInput.tsx');
   const imageUploader = read('src/components/forms/ImageUploader.tsx');
 
-  assert.match(appJson, /"softwareKeyboardLayoutMode": "resize"/);
+  assert.match(appConfig, /softwareKeyboardLayoutMode: 'resize'/);
   assert.match(sprint4App, /KeyboardAvoidingView/);
-  assert.match(sprint4App, /Keyboard\.dismiss\(\)/);
-  assert.match(messageInput, /messageComposerBottomPadding/);
+  assert.match(sprint4App, /conversationKeyboardFrame/);
+  assert.match(messageInput, /chatComposerBottomPadding/);
   assert.match(sprint3App, /ImagePicker\.launchImageLibraryAsync/);
   assert.match(sprint3App, /submitLockedRef/);
   assert.match(sprint4App, /ImagePicker\.launchImageLibraryAsync/);
   assert.doesNotMatch(sprint4App, /setImageUri\(conversation\.data\?\.listingSummary\.image/);
   assert.match(imageUploader, /Photo access needed/);
-  assert.match(sprint3App, /Upload profile picture/);
-  assert.match(sprint3App, /Change profile picture/);
+  assert.match(sprint3App, /Upload Profile Picture/);
+  assert.match(sprint3App, /Profile photo updated/);
   assert.match(profileService, /AVATAR_REMOTE_URL_NOT_ALLOWED/);
   assert.doesNotMatch(sprint3App, /images\.unsplash\.com/);
 });

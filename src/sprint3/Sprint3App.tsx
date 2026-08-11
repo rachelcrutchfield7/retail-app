@@ -114,6 +114,11 @@ import {
   isGoogleSignInCancellation,
   warnIfGoogleSignInUnavailable,
 } from '../services/googleAuthService';
+import {
+  profileHasStripePayouts,
+  refreshStripeConnectStatus,
+  startStripeConnectOnboarding,
+} from '../services/stripeConnectService';
 import type {
   CreateListingInput,
   CreateSavedSearchInput,
@@ -250,6 +255,10 @@ const emptyCreateListing: CreateListingInput = {
   shipping_cost_estimate: '',
   handling_time: '',
   ship_from_zip_code: '',
+  package_weight_oz: '',
+  package_length_in: '',
+  package_width_in: '',
+  package_height_in: '',
   brand: '',
   item_dimensions: '',
   pet_size: '',
@@ -1167,15 +1176,85 @@ export function CreateListingScreen({
   onBack: () => void;
   onCreated: (listingId: string) => void;
 }) {
+  const auth = useAuth();
   const mutation = useCreateListing();
   const [form, setForm] = useState<CreateListingInput>(emptyCreateListing);
   const [errors, setErrors] = useState<ReturnType<typeof validateCreateListingInput>['errors']>({});
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [stripeBusy, setStripeBusy] = useState(false);
+  const [payoutNotice, setPayoutNotice] = useState<Notice | null>(null);
   const submitLockedRef = useRef(false);
+  const stripeLaunchLockedRef = useRef(false);
+  const stripeStatus = {
+    accountId: auth.profile?.stripe_connect_account_id,
+    chargesEnabled: auth.profile?.stripe_connect_charges_enabled === true,
+    payoutsEnabled: auth.profile?.stripe_connect_payouts_enabled === true,
+    detailsSubmitted: auth.profile?.stripe_connect_details_submitted === true,
+  };
+  const payoutsReady = profileHasStripePayouts(stripeStatus);
+  const paidListingRequiresPayout = form.listing_type === 'sale';
 
   const update = <FieldName extends keyof CreateListingInput>(field: FieldName, value: CreateListingInput[FieldName]) => {
     setForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const setupPayouts = async () => {
+    if (stripeLaunchLockedRef.current) {
+      return;
+    }
+
+    try {
+      stripeLaunchLockedRef.current = true;
+      setStripeBusy(true);
+      await startStripeConnectOnboarding();
+      setPayoutNotice({
+        title: 'Stripe setup opened',
+        body: 'Finish the secure Stripe form, then return to ReTail. ReTail will recheck your payout status before your listing can go live.',
+      });
+      await auth.refreshProfile();
+    } catch (error) {
+      setPayoutNotice({ title: 'Stripe setup did not open', body: handleAppError(error).userMessage });
+    } finally {
+      stripeLaunchLockedRef.current = false;
+      setStripeBusy(false);
+    }
+  };
+
+  const confirmPayoutReadyForPublish = async () => {
+    if (!paidListingRequiresPayout) {
+      return true;
+    }
+
+    try {
+      setStripeBusy(true);
+      const status = await refreshStripeConnectStatus();
+      await auth.refreshProfile();
+
+      if (profileHasStripePayouts(status)) {
+        setPayoutNotice({
+          title: 'Payouts ready',
+          body: 'You can now publish listings and receive earnings through ReTail.',
+        });
+        return true;
+      }
+
+      setPayoutNotice({
+        title: status.accountId ? 'Payout setup needs attention' : 'Set up payouts to start selling',
+        body: status.accountId
+          ? 'Stripe needs more information before ReTail can send your earnings. Continue payout setup, then try publishing again.'
+          : 'ReTail uses Stripe to securely send your earnings. Complete payout setup before your first listing can go live.',
+      });
+      return false;
+    } catch (error) {
+      setPayoutNotice({
+        title: 'Payout status not verified',
+        body: 'We couldn’t verify your payout status. Please try again.',
+      });
+      return false;
+    } finally {
+      setStripeBusy(false);
+    }
   };
 
   const submit = async () => {
@@ -1192,6 +1271,13 @@ export function CreateListingScreen({
     }
 
     setErrors({});
+
+    const payoutReady = await confirmPayoutReadyForPublish();
+    if (!payoutReady) {
+      submitLockedRef.current = false;
+      return;
+    }
+
     setUploading(true);
     setProgress(25);
 
@@ -1219,6 +1305,23 @@ export function CreateListingScreen({
           <Text style={styles.title}>Create listing</Text>
           <Text style={styles.body}>Sell or donate pet supplies nearby.</Text>
         </View>
+        {paidListingRequiresPayout && !payoutsReady ? (
+          <NoticeCard
+            notice={{
+              title: 'Set up payouts to start selling',
+              body: 'ReTail uses Stripe to securely send your earnings. Complete payout setup before your first listing can go live.',
+            }}
+            actionLabel={stripeBusy ? 'Opening Stripe...' : stripeStatus.accountId ? 'Continue Payout Setup' : 'Set Up Payouts'}
+            onAction={() => void setupPayouts()}
+          />
+        ) : null}
+        {payoutNotice ? (
+          <NoticeCard
+            notice={payoutNotice}
+            actionLabel={payoutNotice.title === 'Payouts ready' ? undefined : stripeBusy ? 'Opening Stripe...' : stripeStatus.accountId ? 'Continue Payout Setup' : 'Set Up Payouts'}
+            onAction={payoutNotice.title === 'Payouts ready' ? undefined : () => void setupPayouts()}
+          />
+        ) : null}
 
         <ListingForm
           form={form}
@@ -1231,8 +1334,8 @@ export function CreateListingScreen({
         <Button
           title="Publish Listing"
           onPress={submit}
-          loading={mutation.loading || uploading}
-          disabled={mutation.loading || uploading}
+          loading={mutation.loading || uploading || stripeBusy}
+          disabled={mutation.loading || uploading || stripeBusy}
           fullWidth
         />
       </ScrollView>
@@ -3582,6 +3685,10 @@ function EditListingForm({
     shipping_cost_estimate: item.shippingCostEstimate ?? '',
     handling_time: item.handlingTime ?? '',
     ship_from_zip_code: item.shipFromZipCode ?? item.zipCode ?? '',
+    package_weight_oz: item.packageWeightOz ?? '',
+    package_length_in: item.packageLengthIn ?? '',
+    package_width_in: item.packageWidthIn ?? '',
+    package_height_in: item.packageHeightIn ?? '',
     brand: item.brand ?? '',
     item_dimensions: item.itemDimensions ?? '',
     pet_size: item.petSize ?? '',
@@ -3792,14 +3899,9 @@ function ListingForm({
               onPress={() => onChange('shipping_payer', 'buyer')}
             />
             <FilterChip
-              label="Seller includes"
+              label="Free shipping"
               selected={form.shipping_payer === 'seller'}
               onPress={() => onChange('shipping_payer', 'seller')}
-            />
-            <FilterChip
-              label="Discuss in chat"
-              selected={form.shipping_payer === 'discuss'}
-              onPress={() => onChange('shipping_payer', 'discuss')}
             />
           </View>
           <TextInput
@@ -3825,6 +3927,44 @@ function ListingForm({
             helperText="Publicly shown as a zip code only, not your exact address."
             error={errors.ship_from_zip_code}
           />
+          <TextInput
+            label="Package weight"
+            value={String(form.package_weight_oz ?? '')}
+            onChangeText={(value) => onChange('package_weight_oz', value)}
+            placeholder="16"
+            keyboardType="decimal-pad"
+            helperText="Ounces. Seller is responsible for accurate package weight."
+            error={errors.package_weight_oz}
+          />
+          <View style={styles.gridTwo}>
+            <TextInput
+              label="Length"
+              value={String(form.package_length_in ?? '')}
+              onChangeText={(value) => onChange('package_length_in', value)}
+              placeholder="12"
+              keyboardType="decimal-pad"
+              helperText="Inches"
+              error={errors.package_length_in}
+            />
+            <TextInput
+              label="Width"
+              value={String(form.package_width_in ?? '')}
+              onChangeText={(value) => onChange('package_width_in', value)}
+              placeholder="8"
+              keyboardType="decimal-pad"
+              helperText="Inches"
+              error={errors.package_width_in}
+            />
+            <TextInput
+              label="Height"
+              value={String(form.package_height_in ?? '')}
+              onChangeText={(value) => onChange('package_height_in', value)}
+              placeholder="4"
+              keyboardType="decimal-pad"
+              helperText="Inches"
+              error={errors.package_height_in}
+            />
+          </View>
         </>
       ) : null}
       {errors.getting_options ? <Text style={styles.errorText}>{errors.getting_options}</Text> : null}
@@ -4774,6 +4914,11 @@ function createSprint3Styles(themeColors: ThemeColors) {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.sm,
+  },
+  gridTwo: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.md,
   },
   gettingOptionList: {
     gap: spacing.sm,

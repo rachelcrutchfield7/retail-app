@@ -1,0 +1,29 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+const appRefreshLink = 'retail://stripe-connect-refresh';
+---
+<BaseLayout
+  title="Continue Payout Setup | ReTail"
+  description="Continue Stripe payout setup for your ReTail seller account."
+  path="/stripe-connect-refresh"
+  noindex
+>
+  <section class="section page-hero narrow">
+    <span class="eyebrow">Payout setup</span>
+    <h1>Continue payout setup</h1>
+    <p class="lead">Your secure Stripe setup link needs to be refreshed. Open ReTail and tap Continue Payout Setup to get a new secure Stripe link.</p>
+    <div class="actions">
+      <a class="button" href={appRefreshLink}>Open ReTail</a>
+      <a class="button secondary" href="/contact">Contact Support</a>
+    </div>
+  </section>
+
+  <section class="section narrow policy-body">
+    <section>
+      <h2>Need a new setup link?</h2>
+      <p>Stripe setup links expire for security. ReTail creates a fresh link from inside the app after checking your current payout status.</p>
+      <p>Open ReTail manually if the button does not launch the app, then go to Profile, Settings, and Payments &amp; Payouts.</p>
+    </section>
+  </section>
+</BaseLayout>

@@ -4,17 +4,17 @@ import type { Conversation, ConversationDetail, ConversationSearchParams, Conver
 import { getPublicProfile } from './profileService';
 import { isEitherUserBlocked } from './blockService';
 import { trackEvent } from '../lib/analytics';
+import { logger } from '../lib/logger';
+import { getListingById } from './listingService';
 import {
   ensureCurrentProfile,
-  imagesFromListingRow,
-  listingRelationsSelect,
   throwSupabaseError,
-  toListing,
   toMessage,
   toProfile,
   toPublicProfile,
 } from './supabaseData';
 import type { Listing } from '../types';
+import type { ListingImage } from './types';
 
 type ConversationRow = {
   id: string;
@@ -309,6 +309,14 @@ function rescueConversationListing(rescue: RescueConversationRow | null, rescueI
   };
 }
 
+function logConversationHydrationWarning(context: string, error: unknown, details: Record<string, unknown>): void {
+  logger.warning(`[ReTail Messages] ${context}`, {
+    ...details,
+    errorCode: typeof error === 'object' && error !== null && 'code' in error ? String((error as { code?: unknown }).code) : undefined,
+    errorType: error instanceof Error ? error.name : typeof error,
+  });
+}
+
 async function loadRescueForConversation(rescueId?: string | null): Promise<RescueConversationRow | null> {
   if (!rescueId) {
     return null;
@@ -325,6 +333,20 @@ async function loadRescueForConversation(rescueId?: string | null): Promise<Resc
   }
 
   return data as RescueConversationRow | null;
+}
+
+async function loadListingForConversation(listingId?: string | null): Promise<{ listing: Listing; images: ListingImage[] }> {
+  if (!listingId) {
+    return { listing: unavailableListing(''), images: [] };
+  }
+
+  try {
+    const detail = await getListingById(listingId);
+    return { listing: detail.listing, images: detail.images };
+  } catch (error) {
+    logConversationHydrationWarning('Listing detail unavailable during conversation hydration.', error, { listingId });
+    return { listing: unavailableListing(listingId), images: [] };
+  }
 }
 
 async function lastMessageFor(conversationId: string): Promise<Message | undefined> {
@@ -360,6 +382,25 @@ async function unreadCountFor(conversationId: string, userId: string): Promise<n
   return count ?? 0;
 }
 
+function fallbackConversationSummary(row: ConversationRow, currentUserId: string): ConversationSummary {
+  const otherUserId = row.buyer_id === currentUserId ? row.seller_id : row.buyer_id;
+  const listingSummary = row.rescue_id
+    ? rescueConversationListing(null, row.rescue_id)
+    : unavailableListing(row.listing_id ?? row.report_id ?? '');
+  const normalized = toConversation(row, listingSummary.title);
+
+  return {
+    ...normalized,
+    name: 'Deleted User',
+    listing: listingSummary.title,
+    otherUser: deletedPublicProfile(otherUserId),
+    listingSummary,
+    listingThumbnail: listingSummary.image,
+    unreadCount: 0,
+    messagingBlocked: false,
+  };
+}
+
 export async function buildConversationSummary(conversation: Conversation | ConversationRow): Promise<ConversationSummary> {
   const row = 'listing_id' in conversation
     ? conversation as ConversationRow
@@ -379,24 +420,13 @@ export async function buildConversationSummary(conversation: Conversation | Conv
   const otherUserId = row.buyer_id === currentProfile.id ? row.seller_id : row.buyer_id;
   const otherProfile = await loadProfileSafe(otherUserId);
   const rescue = await loadRescueForConversation(row.rescue_id);
-  const { data: listingData, error: listingError } = row.listing_id
-    ? await supabase
-        .from('listings')
-        .select(listingRelationsSelect)
-        .eq('id', row.listing_id)
-        .maybeSingle()
-    : { data: null, error: null };
-
-  if (listingError) {
-    throwSupabaseError(listingError, 'Listing details are unavailable.');
-  }
-
-  const listingSummary = listingData
-    ? toListing(listingData as Record<string, unknown>)
+  const loadedListing = row.listing_id ? await loadListingForConversation(row.listing_id) : null;
+  const listingSummary = loadedListing
+    ? loadedListing.listing
     : row.rescue_id
       ? rescueConversationListing(rescue, row.rescue_id)
       : unavailableListing(row.listing_id ?? row.report_id ?? '');
-  const images = listingData ? imagesFromListingRow(listingData as Record<string, unknown>) : [];
+  const images = loadedListing?.images ?? [];
   const lastMessage = await lastMessageFor(row.id);
   const unreadCount = await unreadCountFor(row.id, currentProfile.id);
   const normalized = toConversation(row, listingSummary.title);
@@ -416,6 +446,19 @@ export async function buildConversationSummary(conversation: Conversation | Conv
     unreadCount,
     messagingBlocked,
   };
+}
+
+async function buildConversationSummarySafe(conversation: ConversationRow, currentUserId: string): Promise<ConversationSummary> {
+  try {
+    return await buildConversationSummary(conversation);
+  } catch (error) {
+    logConversationHydrationWarning('Conversation summary enrichment failed; using fallback summary.', error, {
+      conversationId: conversation.id,
+      listingId: conversation.listing_id,
+      rescueId: conversation.rescue_id,
+    });
+    return fallbackConversationSummary(conversation, currentUserId);
+  }
 }
 
 export async function getOrCreateConversation(listingId: string, expectedSellerId?: string): Promise<ConversationDetail> {
@@ -564,7 +607,11 @@ export async function getUserConversations(userId: string, params: ConversationS
     throwSupabaseError(error, 'We could not load conversations.');
   }
 
-  const summaries = await Promise.all((data ?? []).map((conversation) => buildConversationSummary(conversation as ConversationRow)));
+  const summaries: ConversationSummary[] = [];
+
+  for (const conversation of data ?? []) {
+    summaries.push(await buildConversationSummarySafe(conversation as ConversationRow, profile.id));
+  }
 
   return summaries.filter((conversation) => {
     if (!search) {

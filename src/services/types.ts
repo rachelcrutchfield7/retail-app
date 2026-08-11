@@ -145,6 +145,18 @@ export type ListingQueryParams = {
   limit?: number;
 };
 
+export type FulfillmentMethod = 'pickup' | 'shipping';
+
+export type BuyerShippingAddressInput = {
+  name?: string;
+  street1: string;
+  street2?: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  phone?: string;
+};
+
 export type SavedSearch = {
   id: string;
   user_id: string;
@@ -239,6 +251,10 @@ export type CreateListingInput = {
   shipping_cost_estimate?: string | number | null;
   handling_time?: string;
   ship_from_zip_code?: string;
+  package_weight_oz?: number | string | null;
+  package_length_in?: number | string | null;
+  package_width_in?: number | string | null;
+  package_height_in?: number | string | null;
   brand?: string;
   item_dimensions?: string;
   pet_size?: string;
@@ -364,6 +380,18 @@ export type CreateReviewInput = {
 
 export type TransactionStatus = 'pending' | 'completed' | 'cancelled';
 export type TransactionOutcome = 'sold' | 'donated';
+export type ShippingStatus =
+  | 'pending'
+  | 'label_created'
+  | 'pre_transit'
+  | 'in_transit'
+  | 'out_for_delivery'
+  | 'delivered'
+  | 'exception'
+  | 'return_to_sender'
+  | 'returned'
+  | 'cancelled';
+export type LabelRefundStatus = 'not_requested' | 'pending' | 'refunded' | 'rejected' | 'not_eligible';
 
 export type Transaction = {
   id: string;
@@ -375,8 +403,36 @@ export type Transaction = {
   payment_method?: 'outside_app' | 'stripe';
   payment_status?: string;
   amount_cents?: number;
+  item_amount_cents?: number;
   platform_fee_cents?: number;
   seller_amount_cents?: number;
+  fulfillment_method?: FulfillmentMethod;
+  shipping_method?: string;
+  shipping_payer?: 'buyer' | 'seller';
+  shipping_amount_cents?: number;
+  shipping_collected_cents?: number;
+  shipping_cost_actual_cents?: number;
+  shipping_adjustment_cents?: number;
+  shipping_carrier?: string;
+  shipping_service?: string;
+  tracking_number?: string;
+  tracking_url?: string;
+  label_url?: string;
+  label_4x6_url?: string;
+  label_qr_url?: string;
+  label_format?: string;
+  label_status?: string;
+  shipping_status?: ShippingStatus;
+  carrier_accepted_at?: string;
+  shipped_at?: string;
+  delivered_at?: string;
+  shipping_deadline_at?: string;
+  buyer_issue_window_ends_at?: string;
+  shipping_exception?: string;
+  returned_to_sender_at?: string;
+  label_refund_status?: LabelRefundStatus;
+  label_refund_requested_at?: string;
+  label_refunded_at?: string;
   currency?: string;
   stripe_payment_intent_id?: string;
   stripe_transfer_destination?: string;
@@ -442,6 +498,9 @@ export type TransactionSupportCase = {
   current_payment_status?: string;
   current_shipment_status?: string;
   current_delivery_status?: string;
+  current_tracking_number?: string;
+  current_shipping_carrier?: string;
+  current_shipping_service?: string;
   created_at: string;
   updated_at: string;
   resolved_at?: string;

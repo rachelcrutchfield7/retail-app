@@ -117,6 +117,30 @@ export function throwSupabaseError(error: unknown, fallbackMessage = 'We could n
     );
   }
 
+  if (message.includes('RETAIL_SELLER_PAYOUT_REQUIRED')) {
+    throw createServiceError(
+      'RETAIL_SELLER_PAYOUT_REQUIRED',
+      message,
+      'Set up payouts before your listing can go live.'
+    );
+  }
+
+  if (message.includes('RETAIL_SELLER_STRIPE_NOT_READY')) {
+    throw createServiceError(
+      'RETAIL_SELLER_STRIPE_NOT_READY',
+      message,
+      'This seller has not set up Stripe payouts yet.'
+    );
+  }
+
+  if (message.includes('RETAIL_SELLER_STRIPE_INCOMPLETE')) {
+    throw createServiceError(
+      'RETAIL_SELLER_STRIPE_INCOMPLETE',
+      message,
+      'Stripe needs more information before this seller can receive payouts.'
+    );
+  }
+
   if (message.includes('RETAIL_ADMIN_REQUIRED') || message.includes('RETAIL_REPORT_PERMISSION_DENIED')) {
     throw createServiceError(
       'RETAIL_ADMIN_REQUIRED',
@@ -492,6 +516,11 @@ export function toListing(row: SupabaseRow): Listing {
     shippingPayer: shippingPayerFromDb(row.shipping_payer),
     shippingCostEstimate: shippingCostEstimate === undefined ? undefined : formatDisplayPrice(shippingCostEstimate),
     handlingTime: optionalString(row.handling_time),
+    shipFromZipCode: optionalString(row.ship_from_zip_code),
+    packageWeightOz: optionalNumber(row.package_weight_oz) ?? null,
+    packageLengthIn: optionalNumber(row.package_length_in) ?? null,
+    packageWidthIn: optionalNumber(row.package_width_in) ?? null,
+    packageHeightIn: optionalNumber(row.package_height_in) ?? null,
     favoritedBy: integerValue(row.favorite_count),
   };
 }

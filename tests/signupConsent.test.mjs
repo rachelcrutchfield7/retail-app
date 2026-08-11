@@ -259,7 +259,7 @@ test('existing accepted user is not re-finalized even if signup metadata remains
   assert.equal(shouldFinalizePendingSignupConsent(acceptedState, pendingSignupConsent), false);
 });
 
-test('legacy users without current signup consent still require the consent gate', () => {
+test('legacy users without current signup consent are not finalized from signup metadata', () => {
   const missingDurableState = {
     hasCurrentPolicyAcceptance: false,
     termsAccepted: false,
@@ -291,7 +291,15 @@ test('stale or incomplete signup metadata does not bypass required current conse
   assert.equal(user.pendingSignupConsent, undefined);
 });
 
-test('legacy or new Google accounts without acceptance require the one-time gate', async () => {
+test('returning accounts are not wrapped in a login-time policy gate', () => {
+  const authContext = read('src/auth/AuthContext.tsx');
+
+  assert.doesNotMatch(authContext, /PolicyConsentBoundary/);
+  assert.doesNotMatch(authContext, /PolicyConsentGate/);
+  assert.doesNotMatch(authContext, /policyGateSource/);
+});
+
+test('missing durable consent can still be read without blocking normal login', async () => {
   const state = await getCurrentConsentState({
     async rpc() {
       return {
@@ -308,8 +316,8 @@ test('legacy or new Google accounts without acceptance require the one-time gate
   });
 
   assert.equal(state.hasCurrentPolicyAcceptance, false);
-  assert.match(read('src/auth/PolicyConsentBoundary.tsx'), /PolicyConsentGate/);
-  assert.match(read('src/auth/AuthContext.tsx'), /requiresProfileSetup/);
+  assert.match(read('src/auth/AuthContext.tsx'), /signInWithGoogleAccount/);
+  assert.doesNotMatch(read('src/auth/AuthContext.tsx'), /recordCurrentPolicyAcceptance/);
 });
 
 test('policy acceptance and marketing preference updates use append-only RPCs', async () => {

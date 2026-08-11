@@ -6,9 +6,52 @@ Starting commit: `7af203321426ed933322915908196fa152a0c7c4`
 
 This audit reviewed the current private-beta code and live Supabase metadata for readiness to send ReTail to a small Wave 1 group of external testers. It did not change app runtime code, database objects, Edge Functions, Stripe configuration, dependencies, production data, or EAS build configuration.
 
+## 2026-08-11 Pre-Build Consolidation Update
+
+Current branch: `codex/easypost-shipping-checkout`
+
+Current baseline commit before consolidation: `14b715fea8d44f6659fefda03fdb846c1d3e873d`
+
+This update verified the current app/backend state for the next Rachel-only beta candidate build, excluding EasyPost provider activation. The beta baseline has no unfinished EasyPost runtime implementation.
+
+### Verification Summary
+
+- Messages: focused static/service coverage passed. Conversation hydration now uses the canonical listing-detail path and falls back gracefully if listing enrichment fails.
+- Login policy popup: removed. Returning users are not wrapped in the login-time policy gate.
+- Signup consent: email and Google signup still enforce required Terms / Community Guidelines / Privacy consent; marketing remains optional and unchecked by default.
+- My Listings: current client path uses `get_my_listings`.
+- Admin panel: current client path uses canonical `admin_moderate_report`.
+- Support cases: support case tables/RPCs are present in the live normal ReTail backend.
+- Stripe Connect payout setup: app opens the canonical backend, validates Stripe-hosted onboarding/dashboard URLs, prevents duplicate launches, and handles return/refresh callbacks.
+- Checkout UI: current UI reflects the final product direction that protected checkout stays on ReTail for shipped orders and local pickup; off-platform payment CTAs are absent.
+- Expo/dependency health: `npx expo install --check` reported dependencies up to date using the local offline dependency map; `npx expo-doctor` passed 20/20.
+- Typecheck, lint, deprecated backend usage check, and working-tree secret scan passed.
+
+### EasyPost Status
+
+EasyPost remains **PENDING EXTERNAL ACCOUNT VERIFICATION**.
+
+Rachel is waiting for EasyPost account verification/API-key access. This update did not deploy EasyPost Edge Functions, add EasyPost secrets, create EasyPost webhooks, run live rate tests, buy labels, or apply EasyPost migrations to the normal ReTail backend.
+
+### Seller Payout Publish Guard
+
+Status: **LIVE / VERIFIED**.
+
+Normal ReTail Supabase project `ycwgsdigvpmprqreoqiz` has the expected Wave 1 policy/support and Stripe foundation migrations through `20260810173611_product_policy_transaction_support`, plus `20260811103000_seller_payout_publish_guard`.
+
+Live rollback-only synthetic verification confirmed:
+
+- Sellers without payout readiness cannot publish paid sale listings.
+- Payout-ready sellers can publish paid sale listings.
+- Local-pickup paid listings still require payout readiness.
+- Rescue physical-goods donation needs are not blocked by seller payout requirements.
+- Buyer checkout rechecks seller payout readiness and blocks payout-ineligible sellers before payment intent creation.
+
+No synthetic users/listings from this verification remained after rollback.
+
 ## Executive Summary
 
-ReTail is suitable for a small, closely monitored Wave 1 private beta after normal pre-build configuration validation. No P0 blockers were found in the inspected areas.
+ReTail is suitable for a small, closely monitored Wave 1 private beta after normal pre-build configuration validation. No P0 blockers were found in the inspected areas, and no P1 issue remains for the current beta baseline.
 
 The highest remaining items are not layout or app-start blockers. They are controlled operational/security hardening items:
 
@@ -322,6 +365,8 @@ P3 or post-beta cleanup candidates:
 ## Wave 1 Blockers
 
 P0 blockers found: none.
+
+P1 high findings for current beta baseline: none.
 
 Required before sending a build to Wave 1 testers:
 

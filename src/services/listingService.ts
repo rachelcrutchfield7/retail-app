@@ -23,6 +23,7 @@ import type {
   ListingQueryParams,
   UpdateListingInput,
 } from './types';
+import { normalizePositiveDecimal, validateShippingPackage } from './shippingRules';
 
 const allowedSorts = new Set(['recent', 'price_asc', 'price_desc', 'distance', 'favorites']);
 
@@ -169,12 +170,28 @@ function assertCreateListingInput(input: CreateListingInput): void {
 
   if (input.shipping_available) {
     const shipFromZip = input.ship_from_zip_code?.trim() || input.zip_code?.trim();
+    const packageValidation = validateShippingPackage({
+      shipFromZipCode: shipFromZip,
+      weightOz: input.package_weight_oz,
+      lengthIn: input.package_length_in,
+      widthIn: input.package_width_in,
+      heightIn: input.package_height_in,
+      shippingPayer: input.shipping_payer,
+    });
 
     if (shipFromZip && !/^\d{5}$/.test(shipFromZip)) {
       throw createServiceError(
         'SHIP_FROM_ZIP_INVALID',
         `Ship-from zip code was invalid: ${shipFromZip}`,
         'Use a valid 5-digit ship-from zip code.'
+      );
+    }
+
+    if (!packageValidation.valid) {
+      throw createServiceError(
+        'SHIPPING_PACKAGE_REQUIRED',
+        `Shipping package details were incomplete: ${Object.keys(packageValidation.errors).join(', ')}`,
+        'Add package weight, dimensions, and a valid ship-from zip code before offering shipping.'
       );
     }
   }
@@ -194,6 +211,30 @@ function assertListingExists(row: unknown, listingId: string): asserts row is Re
       'LISTING_NOT_FOUND',
       `Listing ${listingId} was not found`,
       'This listing is no longer available.'
+    );
+  }
+}
+
+function assertShippingPackageInput(input: UpdateListingInput): void {
+  if (!input.shipping_available) {
+    return;
+  }
+
+  const shipFromZip = input.ship_from_zip_code?.trim() || input.zip_code?.trim();
+  const packageValidation = validateShippingPackage({
+    shipFromZipCode: shipFromZip,
+    weightOz: input.package_weight_oz,
+    lengthIn: input.package_length_in,
+    widthIn: input.package_width_in,
+    heightIn: input.package_height_in,
+    shippingPayer: input.shipping_payer,
+  });
+
+  if (!packageValidation.valid) {
+    throw createServiceError(
+      'SHIPPING_PACKAGE_REQUIRED',
+      `Shipping package details were incomplete: ${Object.keys(packageValidation.errors).join(', ')}`,
+      'Add package weight, dimensions, and a valid ship-from zip code before offering shipping.'
     );
   }
 }
@@ -478,6 +519,10 @@ export async function createListing(input: CreateListingInput): Promise<Listing>
     requested_shipping_cost_estimate: input.shipping_available ? priceNumber(input.shipping_cost_estimate) : null,
     requested_handling_time: input.shipping_available ? input.handling_time?.trim() || null : null,
     requested_ship_from_zip_code: input.shipping_available ? input.ship_from_zip_code?.trim() || input.zip_code?.trim() || null : null,
+    requested_package_weight_oz: input.shipping_available ? normalizePositiveDecimal(input.package_weight_oz) : null,
+    requested_package_length_in: input.shipping_available ? normalizePositiveDecimal(input.package_length_in) : null,
+    requested_package_width_in: input.shipping_available ? normalizePositiveDecimal(input.package_width_in) : null,
+    requested_package_height_in: input.shipping_available ? normalizePositiveDecimal(input.package_height_in) : null,
     requested_item_dimensions: input.item_dimensions?.trim() || null,
     requested_pet_size: input.pet_size?.trim() || null,
     requested_condition_notes: input.condition_notes?.trim() || null,
@@ -513,6 +558,7 @@ export async function createListing(input: CreateListingInput): Promise<Listing>
 
 export async function updateListing(listingId: string, input: UpdateListingInput): Promise<Listing> {
   await ensureCurrentProfile();
+  assertShippingPackageInput(input);
   const submittedStatus = (input as { status?: Listing['status'] }).status;
 
   if (submittedStatus !== undefined) {
@@ -548,6 +594,10 @@ export async function updateListing(listingId: string, input: UpdateListingInput
     requested_shipping_cost_estimate: input.shipping_cost_estimate !== undefined ? priceNumber(input.shipping_cost_estimate) : null,
     requested_handling_time: input.handling_time !== undefined ? input.handling_time?.trim() || '' : null,
     requested_ship_from_zip_code: input.ship_from_zip_code !== undefined ? input.ship_from_zip_code?.trim() || '' : null,
+    requested_package_weight_oz: input.package_weight_oz !== undefined ? normalizePositiveDecimal(input.package_weight_oz) : null,
+    requested_package_length_in: input.package_length_in !== undefined ? normalizePositiveDecimal(input.package_length_in) : null,
+    requested_package_width_in: input.package_width_in !== undefined ? normalizePositiveDecimal(input.package_width_in) : null,
+    requested_package_height_in: input.package_height_in !== undefined ? normalizePositiveDecimal(input.package_height_in) : null,
     requested_item_dimensions: input.item_dimensions !== undefined ? input.item_dimensions?.trim() || '' : null,
     requested_pet_size: input.pet_size !== undefined ? input.pet_size?.trim() || '' : null,
     requested_condition_notes: input.condition_notes !== undefined ? input.condition_notes?.trim() || '' : null,

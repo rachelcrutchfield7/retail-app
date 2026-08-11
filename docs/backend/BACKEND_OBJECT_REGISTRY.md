@@ -645,6 +645,50 @@ NOTES:
 
 - Stripe test environment remains isolated from normal beta unless payment test mode is explicitly enabled.
 
+## Shipping Checkout
+
+FEATURE: Shipping checkout
+
+STATUS: PENDING EXTERNAL PROVIDER SETUP
+
+CANONICAL RPC:
+
+- Pending. Do not treat EasyPost RPCs as live canonical backend objects until EasyPost account verification, API keys, migrations, and Edge Functions are approved and deployed.
+
+CANONICAL PRIVATE HELPERS:
+
+- Pending.
+
+ACTIVE TRIGGERS:
+
+- `protect_transaction_phase_e_fields`
+
+ACTIVE POLICIES:
+
+- Transaction participant read policy
+- Shipping-specific EasyPost policies are pending and not live in the normal beta backend.
+
+EDGE FUNCTIONS:
+
+- Pending. Do not deploy `shipping-rate`, `shipping-label-create`, `shipping-tracking-webhook`, or `shipping-label-refund` until EasyPost account verification is complete.
+
+DEPRECATED OBJECTS: none verified
+
+DO NOT USE:
+
+- Client-submitted shipping prices.
+- EasyPost keys in `EXPO_PUBLIC_*` or mobile source.
+- Public listing/profile fields for buyer delivery addresses or seller origin addresses.
+- Label purchase before Stripe payment succeeds.
+
+NOTES:
+
+- Product decision: EasyPost is the intended provider for rates, labels, tracking, and carrier events.
+- Current beta state: EasyPost integration is pending external account verification/API-key access and is not part of the normal beta build.
+- ReTail should automatically select the lowest-cost eligible tracked service once provider integration is live.
+- Local pickup does not use EasyPost.
+- Return-label creation is deferred until an approved support workflow is specified.
+
 ## Stripe Connect
 
 FEATURE: Stripe Connect
@@ -656,10 +700,12 @@ CANONICAL RPC:
 CANONICAL PRIVATE HELPERS:
 
 - Profile protected-field trigger helpers
+- `private.seller_payout_ready`
 
 ACTIVE TRIGGERS:
 
 - `protect_profile_phase_c_fields_before_write`
+- `enforce_paid_listing_payout_readiness_before_write`
 
 ACTIVE POLICIES:
 
@@ -680,6 +726,9 @@ DO NOT USE:
 NOTES:
 
 - Client should use `src/services/stripeConnectService.ts`.
+- Payout-ready means the seller profile has a Stripe Connect account id, `stripe_connect_details_submitted = true`, `stripe_connect_charges_enabled = true`, and `stripe_connect_payouts_enabled = true`.
+- Paid marketplace listing publication is enforced server-side by `enforce_paid_listing_payout_readiness_before_write`.
+- Buyer checkout revalidates seller payout readiness through `reserve_stripe_checkout_listing`.
 
 ## Refund/Dispute Handling
 

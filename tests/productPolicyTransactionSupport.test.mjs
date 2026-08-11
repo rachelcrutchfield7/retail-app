@@ -70,7 +70,8 @@ test('policy versions were advanced for the product policy update', () => {
   assert.match(migration, /requested_privacy_version <> '2026-08-10'/);
 });
 
-test('policy re-consent gate does not resurrect setup-screen copy', () => {
+test('login no longer uses the policy gate and future gate copy avoids setup-screen language', () => {
+  assert.doesNotMatch(read('src/auth/AuthContext.tsx'), /PolicyConsentBoundary/);
   assert.match(policyConsentGate, /Review ReTail Policies/);
   assert.doesNotMatch(policyConsentGate, /Finish Setting Up ReTail/);
 });

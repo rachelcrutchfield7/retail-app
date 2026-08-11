@@ -1,5 +1,6 @@
-import { Linking } from 'react-native';
+import { Linking, Platform } from 'react-native';
 
+import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
 import { createServiceError } from './errors';
 
@@ -18,6 +19,8 @@ type StripeLoginLinkResponse = {
   url?: string;
 };
 
+let onboardingLaunchInFlight: Promise<StripeConnectStatus> | null = null;
+
 function toStatus(data: Partial<StripeConnectStatus> | null | undefined): StripeConnectStatus {
   return {
     accountId: typeof data?.accountId === 'string' ? data.accountId : undefined,
@@ -28,7 +31,62 @@ function toStatus(data: Partial<StripeConnectStatus> | null | undefined): Stripe
 }
 
 export function profileHasStripePayouts(profile: StripeConnectStatus | null | undefined): boolean {
-  return Boolean(profile?.accountId && profile.chargesEnabled && profile.payoutsEnabled);
+  return Boolean(profile?.accountId && profile.detailsSubmitted && profile.chargesEnabled && profile.payoutsEnabled);
+}
+
+function validatedStripeUrl(url: unknown, allowedHosts: string[], operation: string): string {
+  if (typeof url !== 'string' || url.trim() === '') {
+    throw createServiceError(
+      'STRIPE_URL_MISSING',
+      `${operation} did not return a URL.`,
+      'We couldn’t start payout setup. Please try again.'
+    );
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw createServiceError(
+      'STRIPE_URL_INVALID',
+      `${operation} returned a malformed URL.`,
+      'We couldn’t start payout setup. Please try again.'
+    );
+  }
+
+  const allowed = parsed.protocol === 'https:' && allowedHosts.some((host) => parsed.hostname === host);
+  if (!allowed) {
+    logger.warning('Stripe Connect returned an unexpected URL host.', {
+      operation,
+      protocol: parsed.protocol,
+      host: parsed.hostname,
+    });
+    throw createServiceError(
+      'STRIPE_URL_UNTRUSTED',
+      `${operation} returned an unexpected URL host.`,
+      'We couldn’t start payout setup. Please try again.'
+    );
+  }
+
+  return parsed.toString();
+}
+
+async function openExternalStripeUrl(url: string): Promise<void> {
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    window.location.assign(url);
+    return;
+  }
+
+  const canOpen = await Linking.canOpenURL(url);
+  if (!canOpen) {
+    throw createServiceError(
+      'STRIPE_URL_CANNOT_OPEN',
+      'Device reported Stripe URL cannot be opened.',
+      'We couldn’t start payout setup. Please try again.'
+    );
+  }
+
+  await Linking.openURL(url);
 }
 
 export async function refreshStripeConnectStatus(): Promise<StripeConnectStatus> {
@@ -46,27 +104,37 @@ export async function refreshStripeConnectStatus(): Promise<StripeConnectStatus>
 }
 
 export async function startStripeConnectOnboarding(): Promise<StripeConnectStatus> {
+  if (onboardingLaunchInFlight) {
+    return onboardingLaunchInFlight;
+  }
+
+  onboardingLaunchInFlight = startStripeConnectOnboardingOnce().finally(() => {
+    onboardingLaunchInFlight = null;
+  });
+
+  return onboardingLaunchInFlight;
+}
+
+async function startStripeConnectOnboardingOnce(): Promise<StripeConnectStatus> {
   const { data, error } = await supabase.functions.invoke('stripe-connect-account');
 
   if (error) {
+    logger.warning('Stripe Connect onboarding link request failed.', {
+      status: typeof (error as { status?: unknown }).status === 'number' ? (error as { status: number }).status : undefined,
+      code: typeof (error as { code?: unknown }).code === 'string' ? (error as { code: string }).code : undefined,
+      message: error.message,
+    });
     throw createServiceError(
       'STRIPE_ONBOARDING_FAILED',
       error.message,
-      'ReTail could not start Stripe payout setup.'
+      'We couldn’t start payout setup. Please try again.'
     );
   }
 
   const response = data as StripeOnboardingResponse | null;
+  const onboardingUrl = validatedStripeUrl(response?.onboardingUrl, ['connect.stripe.com'], 'Stripe onboarding');
 
-  if (!response?.onboardingUrl) {
-    throw createServiceError(
-      'STRIPE_ONBOARDING_URL_MISSING',
-      'Stripe onboarding response did not include an onboarding URL.',
-      'Stripe payout setup did not return a link.'
-    );
-  }
-
-  await Linking.openURL(response.onboardingUrl);
+  await openExternalStripeUrl(onboardingUrl);
   return toStatus(response);
 }
 
@@ -82,14 +150,7 @@ export async function openStripeExpressDashboard(): Promise<void> {
   }
 
   const response = data as StripeLoginLinkResponse | null;
+  const loginUrl = validatedStripeUrl(response?.url, ['dashboard.stripe.com', 'connect.stripe.com'], 'Stripe dashboard');
 
-  if (!response?.url) {
-    throw createServiceError(
-      'STRIPE_DASHBOARD_URL_MISSING',
-      'Stripe login link response did not include a URL.',
-      'Stripe did not return a dashboard link.'
-    );
-  }
-
-  await Linking.openURL(response.url);
+  await openExternalStripeUrl(loginUrl);
 }

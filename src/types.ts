@@ -13,6 +13,7 @@ export type ListingStatus = (typeof LISTING_STATUSES)[number];
 export type TabKey = 'browse' | 'favorites' | 'create' | 'messages' | 'profile';
 export type AccountType = 'regular' | 'rescue';
 export type ShippingPayer = 'buyer' | 'seller' | 'discuss';
+export type FulfillmentMethod = 'pickup' | 'shipping';
 export type MarketplaceSearchRadius = 10 | 25 | 50 | 100;
 export type ListingType = 'sale' | 'free' | 'donation';
 export type ListingSort = 'recent' | 'price_asc' | 'price_desc' | 'distance' | 'favorites';
@@ -76,6 +77,10 @@ export type Listing = {
   shippingCostEstimate?: string;
   handlingTime?: string;
   shipFromZipCode?: string;
+  packageWeightOz?: number | null;
+  packageLengthIn?: number | null;
+  packageWidthIn?: number | null;
+  packageHeightIn?: number | null;
   favoritedBy: number;
 };
 

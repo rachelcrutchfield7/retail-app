@@ -38,6 +38,10 @@ function optionalString(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
+function optionalNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
 function toTransaction(row: Row): Transaction {
   return {
     id: stringValue(row.id),
@@ -46,6 +50,36 @@ function toTransaction(row: Row): Transaction {
     buyer_id: stringValue(row.buyer_id),
     status: stringValue(row.status, 'pending') as TransactionStatus,
     outcome: optionalString(row.outcome) as TransactionOutcome | undefined,
+    payment_method: optionalString(row.payment_method) as Transaction['payment_method'],
+    payment_status: optionalString(row.payment_status),
+    amount_cents: optionalNumber(row.amount_cents),
+    item_amount_cents: optionalNumber(row.item_amount_cents),
+    platform_fee_cents: optionalNumber(row.platform_fee_cents),
+    seller_amount_cents: optionalNumber(row.seller_amount_cents),
+    fulfillment_method: optionalString(row.fulfillment_method) as Transaction['fulfillment_method'],
+    shipping_method: optionalString(row.shipping_method),
+    shipping_payer: optionalString(row.shipping_payer) as Transaction['shipping_payer'],
+    shipping_amount_cents: optionalNumber(row.shipping_amount_cents),
+    shipping_collected_cents: optionalNumber(row.shipping_collected_cents),
+    shipping_cost_actual_cents: optionalNumber(row.shipping_cost_actual_cents),
+    shipping_adjustment_cents: optionalNumber(row.shipping_adjustment_cents),
+    shipping_carrier: optionalString(row.shipping_carrier),
+    shipping_service: optionalString(row.shipping_service),
+    tracking_number: optionalString(row.tracking_number),
+    tracking_url: optionalString(row.tracking_url),
+    label_url: optionalString(row.label_url),
+    label_4x6_url: optionalString(row.label_4x6_url),
+    label_qr_url: optionalString(row.label_qr_url),
+    label_status: optionalString(row.label_status),
+    shipping_status: optionalString(row.shipping_status) as Transaction['shipping_status'],
+    carrier_accepted_at: optionalString(row.carrier_accepted_at),
+    shipped_at: optionalString(row.shipped_at),
+    delivered_at: optionalString(row.delivered_at),
+    shipping_deadline_at: optionalString(row.shipping_deadline_at),
+    buyer_issue_window_ends_at: optionalString(row.buyer_issue_window_ends_at),
+    shipping_exception: optionalString(row.shipping_exception),
+    returned_to_sender_at: optionalString(row.returned_to_sender_at),
+    label_refund_status: optionalString(row.label_refund_status) as Transaction['label_refund_status'],
     completed_at: optionalString(row.completed_at),
     cancelled_at: optionalString(row.cancelled_at),
     created_at: stringValue(row.created_at, new Date().toISOString()),

@@ -1,4 +1,5 @@
 import type { Listing } from '../types.ts';
+import type { BuyerShippingAddressInput, FulfillmentMethod } from '../services/types';
 
 export type PaymentMethodChoice = 'stripe' | 'outside_app';
 
@@ -16,6 +17,14 @@ export type ProtectedCheckoutSetup = {
   amountCents: number;
   platformFeeCents: number;
   sellerAmountCents: number;
+  itemAmountCents?: number;
+  fulfillmentMethod?: FulfillmentMethod;
+  shippingPayer?: 'buyer' | 'seller';
+  shippingAmountCents?: number;
+  shippingCollectedCents?: number;
+  shippingCarrier?: string;
+  shippingService?: string;
+  estimatedDelivery?: string;
 };
 
 export type PaymentOptionContext = {
@@ -23,4 +32,6 @@ export type PaymentOptionContext = {
   sellerName: string;
   buyerId?: string;
   agreedAmount?: string;
+  fulfillmentMethod?: FulfillmentMethod;
+  shippingAddress?: BuyerShippingAddressInput;
 };

@@ -82,6 +82,8 @@ export async function startProtectedCheckout(context: PaymentOptionContext): Pro
     body: {
       listingId: context.listing.id,
       amountCents,
+      fulfillmentMethod: context.fulfillmentMethod ?? (context.listing.shipping && !context.listing.pickup ? 'shipping' : 'pickup'),
+      shippingAddress: context.shippingAddress,
     },
   });
 
@@ -111,6 +113,14 @@ export async function startProtectedCheckout(context: PaymentOptionContext): Pro
     amountCents: checkout.amountCents ?? amountCents,
     platformFeeCents: checkout.platformFeeCents ?? calculatePlatformFeeCents(amountCents),
     sellerAmountCents: checkout.sellerAmountCents ?? amountCents - calculatePlatformFeeCents(amountCents),
+    itemAmountCents: checkout.itemAmountCents ?? amountCents,
+    fulfillmentMethod: checkout.fulfillmentMethod,
+    shippingPayer: checkout.shippingPayer,
+    shippingAmountCents: checkout.shippingAmountCents,
+    shippingCollectedCents: checkout.shippingCollectedCents,
+    shippingCarrier: checkout.shippingCarrier,
+    shippingService: checkout.shippingService,
+    estimatedDelivery: checkout.estimatedDelivery,
   };
 }
 
