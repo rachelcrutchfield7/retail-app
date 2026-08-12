@@ -25,6 +25,17 @@
         "simulator": false
       }
     },
+    "play-internal": {
+      "distribution": "store",
+      "environment": "preview",
+      "env": {
+        "EXPO_PUBLIC_APP_ENV": "beta"
+      },
+      "autoIncrement": true,
+      "android": {
+        "buildType": "app-bundle"
+      }
+    },
     "production": {
       "autoIncrement": true,
       "env": {
