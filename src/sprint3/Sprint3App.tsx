@@ -3090,7 +3090,7 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
     setRescueForm((current) => ({ ...current, [field]: value }));
   };
 
-  const uploadSelectedAvatar = async (selectedUri: string, options?: { base64?: string; mimeType?: string }) => {
+  const uploadSelectedAvatar = async (selectedUri: string) => {
     const previousAvatarUrl = form.avatar_url;
     update('avatar_url', selectedUri);
 
@@ -3136,7 +3136,6 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.85,
-      base64: true,
     });
 
     if (result.canceled) {
@@ -3151,10 +3150,7 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
       return;
     }
 
-    await uploadSelectedAvatar(selectedUri, {
-      base64: selectedAsset.base64 ?? undefined,
-      mimeType: selectedAsset.mimeType ?? undefined,
-    });
+    await uploadSelectedAvatar(selectedUri);
   };
 
   const save = async () => {

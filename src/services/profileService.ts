@@ -1,7 +1,8 @@
 import { createServiceError } from './errors';
 import { supabase } from '../lib/supabase';
+import { logger } from '../lib/logger';
 import type { Listing } from '../types';
-import { readLocalImageFile } from './localImageFile';
+import { readLocalImageBinary } from './localImageFile';
 import type { Profile, PublicProfile, UpdateProfileInput } from './types';
 import {
   ensureCurrentProfile,
@@ -10,6 +11,68 @@ import {
   toProfile,
   toPublicProfile,
 } from './supabaseData';
+
+type AvatarStorageUploadClient = {
+  upload: (
+    path: string,
+    body: ArrayBuffer,
+    options: { contentType: string; upsert: boolean }
+  ) => Promise<{ error: unknown }>;
+};
+
+function uriScheme(fileUri: string): string {
+  return /^([a-z][a-z0-9+.-]*):/i.exec(fileUri)?.[1]?.toLowerCase() ?? 'unknown';
+}
+
+function storageErrorContext(error: unknown): Record<string, unknown> {
+  const details = typeof error === 'object' && error !== null ? error as Record<string, unknown> : {};
+
+  return {
+    reason: typeof details.message === 'string' ? details.message : String(error),
+    storageErrorName: typeof details.name === 'string' ? details.name : undefined,
+    storageErrorCode: typeof details.code === 'string' ? details.code : undefined,
+    storageStatus: details.status ?? details.statusCode,
+  };
+}
+
+export async function uploadAvatarImageBinary(
+  storage: AvatarStorageUploadClient,
+  path: string,
+  arrayBuffer: ArrayBuffer,
+  mimeType: 'image/jpeg' | 'image/png' | 'image/webp',
+  sourceScheme: string
+): Promise<void> {
+  let uploadResult: { error: unknown };
+
+  try {
+    uploadResult = await storage.upload(path, arrayBuffer, {
+      contentType: mimeType,
+      upsert: false,
+    });
+  } catch (error) {
+    logger.warning('Profile photo upload failed.', {
+      operation: 'profile photo upload',
+      bucket: 'avatars',
+      mimeType,
+      byteSize: arrayBuffer.byteLength,
+      uriScheme: sourceScheme,
+      ...storageErrorContext(error),
+    });
+    throwSupabaseError(error, "We couldn't update your profile photo. Please try again.");
+  }
+
+  if (uploadResult.error) {
+    logger.warning('Profile photo upload failed.', {
+      operation: 'profile photo upload',
+      bucket: 'avatars',
+      mimeType,
+      byteSize: arrayBuffer.byteLength,
+      uriScheme: sourceScheme,
+      ...storageErrorContext(uploadResult.error),
+    });
+    throwSupabaseError(uploadResult.error, "We couldn't update your profile photo. Please try again.");
+  }
+}
 
 export async function getCurrentProfile(): Promise<Profile> {
   return ensureCurrentProfile();
@@ -93,7 +156,11 @@ export async function uploadAvatar(fileUri: string): Promise<string> {
     );
   }
 
-  const { blob, extension, mimeType, size } = await readLocalImageFile(fileUri, 'AVATAR_UPLOAD_FAILED', 'Could not read profile photo');
+  const { arrayBuffer, extension, mimeType, size } = await readLocalImageBinary(
+    fileUri,
+    'AVATAR_UPLOAD_FAILED',
+    'Could not read profile photo'
+  );
 
   if (!['image/jpeg', 'image/png', 'image/webp'].includes(mimeType)) {
     throw createServiceError(
@@ -111,15 +178,8 @@ export async function uploadAvatar(fileUri: string): Promise<string> {
     );
   }
 
-  const path = `${profile.id}/${Date.now()}.${extension}`;
-  const { error: uploadError } = await supabase.storage.from('avatars').upload(path, blob, {
-    contentType: mimeType,
-    upsert: true,
-  });
-
-  if (uploadError) {
-    throwSupabaseError(uploadError, 'We could not upload your profile photo.');
-  }
+  const path = `${profile.id}/${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${extension}`;
+  await uploadAvatarImageBinary(supabase.storage.from('avatars'), path, arrayBuffer, mimeType, uriScheme(fileUri));
 
   const { data } = supabase.storage.from('avatars').getPublicUrl(path);
   await updateProfile({ avatar_url: data.publicUrl });
