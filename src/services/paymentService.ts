@@ -81,7 +81,6 @@ export async function startProtectedCheckout(context: PaymentOptionContext): Pro
   const { data, error } = await supabase.functions.invoke('stripe-create-payment-intent', {
     body: {
       listingId: context.listing.id,
-      amountCents,
       fulfillmentMethod: context.fulfillmentMethod ?? (context.listing.shipping && !context.listing.pickup ? 'shipping' : 'pickup'),
       shippingAddress: context.shippingAddress,
     },
@@ -114,6 +113,8 @@ export async function startProtectedCheckout(context: PaymentOptionContext): Pro
     platformFeeCents: checkout.platformFeeCents ?? calculatePlatformFeeCents(amountCents),
     sellerAmountCents: checkout.sellerAmountCents ?? amountCents - calculatePlatformFeeCents(amountCents),
     itemAmountCents: checkout.itemAmountCents ?? amountCents,
+    taxAmountCents: checkout.taxAmountCents ?? 0,
+    taxCalculationId: checkout.taxCalculationId,
     fulfillmentMethod: checkout.fulfillmentMethod,
     shippingPayer: checkout.shippingPayer,
     shippingAmountCents: checkout.shippingAmountCents,
@@ -121,6 +122,7 @@ export async function startProtectedCheckout(context: PaymentOptionContext): Pro
     shippingCarrier: checkout.shippingCarrier,
     shippingService: checkout.shippingService,
     estimatedDelivery: checkout.estimatedDelivery,
+    currency: checkout.currency ?? 'usd',
   };
 }
 

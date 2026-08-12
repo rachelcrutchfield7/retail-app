@@ -65,7 +65,7 @@ test('same buyer retry reuses the active PaymentIntent instead of blindly creati
   assert.match(stripeCreate, /reservation\.existing_payment_intent_id/);
   assert.match(stripeCreate, /paymentIntents\.retrieve\(reservation\.existing_payment_intent_id\)/);
   assert.match(stripeCreate, /isPaymentIntentReusable\(existingPaymentIntent\)/);
-  assert.match(stripeCreate, /return jsonResponse\(\{\s*paymentIntentClientSecret: existingPaymentIntent\.client_secret/s);
+  assert.match(stripeCreate, /return jsonResponse\(checkoutResponseFromBreakdown\(existingPaymentIntent, reservation, existingBreakdown\)\)/);
 });
 
 test('expired stale PaymentIntent is canceled before a new buyer receives a fresh checkout session', () => {

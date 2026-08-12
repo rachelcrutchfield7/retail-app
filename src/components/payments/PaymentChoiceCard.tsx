@@ -13,6 +13,7 @@ type PaymentChoiceCardProps = {
   disabled?: boolean;
   disabledReason?: string;
   checkoutLoading?: boolean;
+  actionTitle?: string;
   onPayWithStripe: () => void;
 };
 
@@ -23,6 +24,7 @@ export function PaymentChoiceCard({
   disabled = false,
   disabledReason,
   checkoutLoading = false,
+  actionTitle = 'Place Order',
   onPayWithStripe,
 }: PaymentChoiceCardProps) {
   const themeColors = useThemeColors();
@@ -57,7 +59,7 @@ export function PaymentChoiceCard({
             <Text style={[styles.helper, { color: themeColors.textSecondary }]}>Protected checkout is not available for this listing yet. The seller may still need to finish payout setup.</Text>
           ) : null}
           <Button
-            title="Place Order"
+            title={actionTitle}
             icon={CreditCard}
             onPress={onPayWithStripe}
             disabled={disabled || !protectedCheckoutReady || checkoutLoading}

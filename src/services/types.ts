@@ -406,6 +406,18 @@ export type Transaction = {
   item_amount_cents?: number;
   platform_fee_cents?: number;
   seller_amount_cents?: number;
+  tax_amount_cents?: number;
+  stripe_tax_calculation_id?: string;
+  stripe_tax_transaction_id?: string;
+  tax_behavior?: 'exclusive' | 'inclusive';
+  tax_liability?: 'platform';
+  product_tax_code?: string;
+  shipping_tax_code?: string;
+  retail_fee_tax_code?: string;
+  buyer_tax_address_source?: 'shipping' | 'billing';
+  buyer_tax_country?: string;
+  buyer_tax_state?: string;
+  buyer_tax_postal_code?: string;
   fulfillment_method?: FulfillmentMethod;
   shipping_method?: string;
   shipping_payer?: 'buyer' | 'seller';

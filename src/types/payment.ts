@@ -18,6 +18,8 @@ export type ProtectedCheckoutSetup = {
   platformFeeCents: number;
   sellerAmountCents: number;
   itemAmountCents?: number;
+  taxAmountCents?: number;
+  taxCalculationId?: string;
   fulfillmentMethod?: FulfillmentMethod;
   shippingPayer?: 'buyer' | 'seller';
   shippingAmountCents?: number;
@@ -25,6 +27,7 @@ export type ProtectedCheckoutSetup = {
   shippingCarrier?: string;
   shippingService?: string;
   estimatedDelivery?: string;
+  currency?: string;
 };
 
 export type PaymentOptionContext = {

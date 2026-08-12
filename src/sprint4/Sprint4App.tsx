@@ -1394,7 +1394,6 @@ export function PaymentOptionsScreen({
   const canPickup = item.pickup || item.porchPickup || item.meetup;
   const selectedFulfillmentMethod = canShip && !canPickup ? 'shipping' : fulfillmentMethod;
   const checkoutItemCents = checkoutSummary?.itemAmountCents ?? listingPriceToCents(checkoutAmount) ?? 0;
-  const checkoutFeeCents = checkoutSummary?.platformFeeCents ?? calculatePlatformFeeCents(checkoutItemCents);
   const sellerOffersFreeShipping = item.shippingPayer === 'seller';
   const shippingDisplay = selectedFulfillmentMethod === 'pickup'
     ? '$0.00'
@@ -1417,6 +1416,17 @@ export function PaymentOptionsScreen({
           ? 'Calculating...'
           : 'Confirmed before payment';
   const paymentCardAmount = checkoutSummary ? formatCheckoutCents(checkoutSummary.amountCents) : totalDisplay;
+  const retailFeeDisplay = checkoutSummary
+    ? formatCheckoutCents(checkoutSummary.platformFeeCents)
+    : checkoutBusy
+      ? 'Calculating...'
+      : 'Calculated before payment';
+  const taxDisplay = checkoutSummary
+    ? formatCheckoutCents(checkoutSummary.taxAmountCents ?? 0)
+    : checkoutBusy
+      ? 'Calculating tax...'
+      : 'Calculated before payment';
+  const checkoutActionTitle = checkoutSummary ? 'Pay with Stripe' : 'Review Total';
   const updateShippingAddress = (field: keyof typeof shippingAddress, value: string) => {
     setCheckoutSummary(null);
     setShippingAddress((current) => ({ ...current, [field]: value }));
@@ -1425,6 +1435,35 @@ export function PaymentOptionsScreen({
     setCheckoutSummary(null);
     setNotice(null);
     setFulfillmentMethod(method);
+  };
+
+  const presentStripePaymentSheet = async (checkout: ProtectedCheckoutSetup) => {
+    const { error: initError } = await initPaymentSheet({
+      merchantDisplayName: checkout.merchantDisplayName,
+      paymentIntentClientSecret: checkout.paymentIntentClientSecret,
+      returnURL: 'retail://stripe-redirect',
+      allowsDelayedPaymentMethods: false,
+    });
+
+    if (initError) {
+      setNotice({ title: 'Protected checkout unavailable', body: initError.message });
+      return;
+    }
+
+    const { error: paymentError } = await presentPaymentSheet();
+
+    if (paymentError) {
+      setNotice({ title: 'Payment was not completed', body: paymentError.message });
+      return;
+    }
+
+    setNotice({
+      title: 'Order placed',
+      body: checkout.fulfillmentMethod === 'shipping'
+        ? 'Payment complete. Seller preparing order. Tracking will appear here once the carrier accepts the package.'
+        : 'Payment complete. Arrange pickup through ReTail messaging.',
+    });
+    await listing.refetch();
   };
 
   const payWithStripe = async () => {
@@ -1455,7 +1494,11 @@ export function PaymentOptionsScreen({
 
     try {
       setCheckoutBusy(true);
-      setCheckoutSummary(null);
+      if (checkoutSummary) {
+        await presentStripePaymentSheet(checkoutSummary);
+        return;
+      }
+
       if (selectedFulfillmentMethod === 'shipping') {
         setNotice({
           title: 'Calculating tracked shipping...',
@@ -1471,32 +1514,10 @@ export function PaymentOptionsScreen({
         shippingAddress: selectedFulfillmentMethod === 'shipping' ? shippingAddress : undefined,
       });
       setCheckoutSummary(checkout);
-      const { error: initError } = await initPaymentSheet({
-        merchantDisplayName: checkout.merchantDisplayName,
-        paymentIntentClientSecret: checkout.paymentIntentClientSecret,
-        returnURL: 'retail://stripe-redirect',
-        allowsDelayedPaymentMethods: false,
-      });
-
-      if (initError) {
-        setNotice({ title: 'Protected checkout unavailable', body: initError.message });
-        return;
-      }
-
-      const { error: paymentError } = await presentPaymentSheet();
-
-      if (paymentError) {
-        setNotice({ title: 'Payment was not completed', body: paymentError.message });
-        return;
-      }
-
       setNotice({
-        title: 'Order placed',
-        body: checkout.fulfillmentMethod === 'shipping'
-          ? 'Payment complete. Seller preparing order. Tracking will appear here once the carrier accepts the package.'
-          : 'Payment complete. Arrange pickup through ReTail messaging.',
+        title: 'Review your total',
+        body: 'ReTail calculated tax and the final checkout total. Review the order summary, then tap Pay with Stripe.',
       });
-      await listing.refetch();
     } catch (error) {
       setCheckoutSummary(null);
       setNotice({
@@ -1583,9 +1604,10 @@ export function PaymentOptionsScreen({
                 />
                 <CheckoutSummaryRow
                   label="ReTail fee"
-                  detail="Included in seller payout accounting"
-                  value={formatCheckoutCents(checkoutFeeCents)}
+                  detail="Supports ReTail hosting, moderation, and payment support"
+                  value={retailFeeDisplay}
                 />
+                <CheckoutSummaryRow label="Tax" value={taxDisplay} />
                 <View style={styles.checkoutSummaryDivider} />
                 <CheckoutSummaryRow label="Total" value={totalDisplay} />
                 {selectedFulfillmentMethod === 'pickup' ? (
@@ -1605,6 +1627,7 @@ export function PaymentOptionsScreen({
               disabled={owner}
               disabledReason={owner ? 'Payment options are visible to buyers, but disabled for your own listing.' : undefined}
               checkoutLoading={checkoutBusy}
+              actionTitle={checkoutActionTitle}
               onPayWithStripe={() => void payWithStripe()}
             />
           </>

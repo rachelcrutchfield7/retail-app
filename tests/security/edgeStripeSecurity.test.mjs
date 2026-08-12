@@ -32,13 +32,17 @@ test('deployed Stripe source was synced into the repository', () => {
 
 test('payment intent creation derives amount, buyer, seller, destination, and fee server-side', () => {
   assert.match(stripeCreate, /requireAuthenticatedRequest\(request\)/);
+  assert.match(stripeCreate, /loadCanonicalListingAmountCents\(supabaseAdmin, listingId\)/);
   assert.match(stripeCreate, /reserve_stripe_checkout_listing/);
   assert.match(stripeCreate, /p_buyer_id: user\.id/);
-  assert.match(stripeCreate, /p_requested_amount_cents: requestedAmountCents/);
-  assert.match(stripeCreate, /calculatePlatformFeeCents\(reservation\.amount_cents\)/);
+  assert.match(stripeCreate, /p_requested_amount_cents: canonicalAmountCents/);
+  assert.match(stripeCreate, /calculatePlatformFeeCents\(itemAmountCents\)/);
+  assert.match(stripeCreate, /paymentIntents\.create\(\{\s*amount: checkoutTotalCents/s);
   assert.match(stripeCreate, /destination: String\(reservation\.stripe_connect_account_id\)/);
   assert.match(stripeCreate, /retail_seller_id: String\(reservation\.seller_id\)/);
+  assert.match(stripeCreate, /hooks:\s*\{\s*inputs:\s*\{\s*tax:\s*\{\s*calculation: String\(taxCalculation\.id\)/s);
   assert.doesNotMatch(stripeCreate, /body\.(buyerId|sellerId|seller_id|stripe_connect_account_id)/);
+  assert.doesNotMatch(stripeCreate, /body\.amountCents/);
   assert.doesNotMatch(stripeCreate, /destinationAccountId|sellerStripeAccountId|connectedAccountId/);
 });
 

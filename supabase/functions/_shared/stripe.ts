@@ -1,5 +1,9 @@
 import Stripe from 'npm:stripe@^22';
 
+export const RETAIL_PRODUCT_TAX_CODE = Deno.env.get('RETAIL_PRODUCT_TAX_CODE') ?? 'txcd_99999999';
+export const RETAIL_SHIPPING_TAX_CODE = Deno.env.get('RETAIL_SHIPPING_TAX_CODE') ?? 'txcd_92010001';
+export const RETAIL_FEE_TAX_CODE = Deno.env.get('RETAIL_FEE_TAX_CODE') ?? 'txcd_20030000';
+
 export function getStripe() {
   const secretKey = Deno.env.get('STRIPE_SECRET_KEY');
 

@@ -85,7 +85,8 @@ test('checkout display uses authoritative checkout response values after rate cr
   const checkoutScreen = sprint4CheckoutSource();
 
   assert.match(checkoutScreen, /checkoutSummary\?\.itemAmountCents/);
-  assert.match(checkoutScreen, /checkoutSummary\?\.platformFeeCents/);
+  assert.match(checkoutScreen, /checkoutSummary\.platformFeeCents/);
+  assert.match(checkoutScreen, /checkoutSummary\.taxAmountCents/);
   assert.match(checkoutScreen, /checkoutSummary\.shippingCollectedCents/);
   assert.match(checkoutScreen, /checkoutSummary\.amountCents/);
   assert.match(checkoutScreen, /setCheckoutSummary\(checkout\)/);
