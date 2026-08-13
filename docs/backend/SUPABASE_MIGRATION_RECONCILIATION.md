@@ -79,3 +79,36 @@ Do not repair migration history yet. The repository still does not contain exact
 3. Only use `supabase migration repair` after proving every marked-applied local migration has its schema effects live.
 
 Until then, `supabase db push --dry-run` should not be trusted as the deployment gate for the push migration.
+
+## Baseline Attempt on 2026-08-13
+
+Goal: use an official baseline approach so future `supabase db push --dry-run` can become trustworthy before applying the push notification migration.
+
+Result: blocked before any migration-history mutation.
+
+Commands attempted:
+
+- `npx supabase db dump --linked -f backups/supabase/ycwgsdigvpmprqreoqiz_schema_20260813.sql`
+- `npx supabase db pull --linked`
+- `npx supabase migration list --linked`
+
+Findings:
+
+- `supabase db dump` could not create a schema backup because the current CLI path requires Docker for the dump operation and Docker Desktop is not available in this environment.
+- The failed dump initially produced an empty local file at `backups/supabase/ycwgsdigvpmprqreoqiz_schema_20260813.sql`; it was removed and must not be treated as a valid backup.
+- `supabase db pull --linked` failed before generating a remote baseline migration because the remote migration history still does not match local files.
+- The CLI repair suggestion included `supabase migration repair --status applied 20260812153000`, but the push notification migration is not live. Marking it applied would be false.
+- No migration repair was run.
+- No push migration was applied.
+- No Edge Function was deployed.
+
+Operational rule going forward:
+
+All production schema changes must go through committed migration files. If a migration must be applied through a connector because CLI history is blocked, immediately document the live recorded migration version and reconcile the repository before relying on `db push` again.
+
+Next safe options:
+
+1. Obtain a true schema-only backup using a machine with Docker Desktop or local Postgres `pg_dump` available, then repeat the official baseline workflow.
+2. Restore exact migration files for every live-only version where possible, including early baseline migrations.
+3. Create a deliberate forward-only baseline strategy for timestamp-drifted migrations, reviewed before using `supabase migration repair`.
+4. Do not mark `20260812153000_push_notification_delivery_tracking` as applied until the push schema is actually live.
