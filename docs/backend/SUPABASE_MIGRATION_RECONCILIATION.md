@@ -139,6 +139,61 @@ Current verified live schema facts:
 - Push delivery schema is not live.
 - Push migration `20260812153000_push_notification_delivery_tracking` is not recorded in live migration history.
 
+## Exact File Recovery Search on 2026-08-13
+
+Goal: recover only exact historical migration files for live migration versions that are already recorded as applied remotely. This pass intentionally did not invent replacement files, copy same-feature SQL under remote timestamps, repair migration history, apply pending migrations, or run `db push`.
+
+Search scope:
+
+- Exact-version lookup across all Git refs for every remaining live-only version using `supabase/migrations/<version>_*.sql`.
+- Same-feature migration-name lookup across all Git refs.
+- Historical non-migration SQL support files that appear to have fed the earliest remote migrations: `supabase/schema.sql`, `supabase/policies.sql`, `supabase/storage.sql`, `supabase/distance.sql`, `supabase/listing_getting_options.sql`, and `supabase/listing_detail_fields.sql`.
+- Current schema backup at `/private/tmp/retail-supabase-backups/ycwgsdigvpmprqreoqiz_schema_20260813_081656.sql` for live Stripe Tax and pending push-schema evidence.
+
+Exact historical files recovered in this pass: none.
+
+Exact-version result: no remaining live-only migration version was found in Git history as an exact `supabase/migrations/<version>_*.sql` file.
+
+Timestamp/name equivalents identified:
+
+| Live Version | Live Name | Evidence Found | Classification |
+| --- | --- | --- | --- |
+| `20260727141839` | `admin_report_moderation_actions` | `20260727194012_admin_report_moderation_actions.sql` and later `20260802000000_fix_admin_report_moderation_actions.sql` exist in Git history. | exact equivalent local migration identified under different timestamp/name, with later repairs |
+| `20260730150339` | `notification_email_preferences` | `20260730143000_notification_email_preferences.sql` exists in Git history. | exact equivalent local migration identified under different timestamp/name |
+| `20260730152959` | `restore_conversation_message_insert_policy` | `20260730150000_restore_conversation_message_insert_policy.sql` exists in Git history. | exact equivalent local migration identified under different timestamp/name |
+| `20260730154202` | `restore_messaging_insert_grants` | `20260730151000_restore_messaging_insert_grants.sql` exists in Git history. | exact equivalent local migration identified under different timestamp/name |
+| `20260730154638` | `restore_create_user_notification_rpc` | `20260730152000_restore_create_user_notification_rpc.sql` exists in Git history. | exact equivalent local migration identified under different timestamp/name |
+| `20260730163443` | `rescue_public_conversation_policy` | Related changes are bundled in `20260730184000_rescue_public_messaging.sql` in Git history. | migration behavior reconstructed with high confidence but original provenance not proven |
+| `20260730163512` | `rescue_public_feed_owner_id` | Related changes are bundled in `20260730184000_rescue_public_messaging.sql` in Git history. | migration behavior reconstructed with high confidence but original provenance not proven |
+| `20260730163536` | `rescue_public_by_owner_owner_id` | Related changes are bundled in `20260730184000_rescue_public_messaging.sql` in Git history. | migration behavior reconstructed with high confidence but original provenance not proven |
+| `20260730163609` | `nearby_rescues_owner_id` | Related changes are bundled in `20260730184000_rescue_public_messaging.sql` in Git history. | migration behavior reconstructed with high confidence but original provenance not proven |
+| `20260803012715` | `fix_admin_report_moderation_actions` | `20260802000000_fix_admin_report_moderation_actions.sql` exists locally. | exact equivalent local migration identified under different timestamp/name |
+| `20260808182635` | `signup_consent_and_marketing_preferences` | `20260808172854_signup_consent_and_marketing_preferences.sql` exists locally and was committed from the signup consent branch. | exact equivalent local migration identified under different timestamp/name |
+| `20260808223605` | `stripe_schema_readiness` | `20260808190000_stripe_schema_readiness.sql` exists locally and was committed from the Stripe schema readiness branch. | exact equivalent local migration identified under different timestamp/name |
+| `20260808224818` | `stripe_webhook_idempotency` | `20260808231000_stripe_webhook_idempotency.sql` exists locally and was committed from the Stripe webhook idempotency branch. | exact equivalent local migration identified under different timestamp/name |
+| `20260808232211` | `stripe_checkout_reservation` | `20260808234000_stripe_checkout_reservation.sql` exists locally and was committed from the checkout reservation branch. | exact equivalent local migration identified under different timestamp/name |
+| `20260808234452` | `stripe_refund_dispute_tracking` | `20260808183625_stripe_refund_dispute_tracking.sql` exists locally and was committed from the refund/dispute branch. | exact equivalent local migration identified under different timestamp/name |
+| `20260810173611` | `product_policy_transaction_support` | `20260810111020_product_policy_transaction_support.sql` exists locally and was committed from the Wave 1 product policy branch. | exact equivalent local migration identified under different timestamp/name |
+| `20260811185910` | `seller_payout_publish_guard` | `20260811103000_seller_payout_publish_guard.sql` exists locally and was committed from the Wave 1 beta baseline branch. | exact equivalent local migration identified under different timestamp/name |
+| `20260813125113` | `authoritative_checkout_stripe_tax` | `20260812120000_authoritative_checkout_stripe_tax.sql` exists locally. The live schema backup contains Stripe Tax transaction fields, constraints, and `idx_transactions_stripe_tax_calculation_id`; it does not contain push delivery tracking objects. | exact equivalent local migration identified under different timestamp/name |
+
+Unresolved live-only versions:
+
+| Live Version | Live Name | Current Classification | Notes |
+| --- | --- | --- | --- |
+| `20260706182330` | `initial_retail_schema` | unresolved | No exact migration file found. Historical evidence points to baseline SQL in `supabase/schema.sql`, first added in `3f8e47c680b454837fc5baf6dcf2c9a789287cdd`, but this is not an exact migration file. |
+| `20260706182437` | `retail_rls_policies` | unresolved | No exact migration file found. Historical evidence points to baseline SQL in `supabase/policies.sql`, first added in `3f8e47c680b454837fc5baf6dcf2c9a789287cdd`, but this is not an exact migration file. |
+| `20260706182504` | `retail_storage_buckets` | unresolved | No exact migration file found. Historical evidence points to baseline SQL in `supabase/storage.sql`, first added in `3f8e47c680b454837fc5baf6dcf2c9a789287cdd`, but this is not an exact migration file. |
+| `20260710152514` | `distance_search_foundation` | unresolved | No exact migration file found. Historical evidence points to baseline SQL in `supabase/distance.sql`, first added in `3f8e47c680b454837fc5baf6dcf2c9a789287cdd`, but this is not an exact migration file. |
+| `20260711231736` | `add_rescue_public_address_fields` | unresolved | No exact migration file or same-name equivalent found in Git history. |
+| `20260712124317` | `add_listing_getting_options` | unresolved | No exact migration file found. Historical evidence points to baseline SQL in `supabase/listing_getting_options.sql`, first added in `3f8e47c680b454837fc5baf6dcf2c9a789287cdd`, but this is not an exact migration file. |
+| `20260712125357` | `add_listing_detail_fields` | unresolved | No exact migration file found. Historical evidence points to baseline SQL in `supabase/listing_detail_fields.sql`, first added in `3f8e47c680b454837fc5baf6dcf2c9a789287cdd`, but this is not an exact migration file. |
+| `20260727134418` | `public_rescue_physical_address_fields` | unresolved | No exact migration file or same-name equivalent found in Git history. |
+
+Stripe Tax drift classification:
+
+`20260813125113_authoritative_checkout_stripe_tax` is timestamp/name drift from local reviewed migration `20260812120000_authoritative_checkout_stripe_tax.sql`. The live schema backup includes the Stripe Tax fields, constraints, and index added by that migration. The remote history timestamp differs because the migration was applied through the supported single-migration connector while CLI history was already blocked. This should be treated as a live-equivalent migration, not as evidence that Stripe Tax is pending.
+
 ## Remaining History Mismatch Classification
 
 | Category | Versions | Proposed Action |
