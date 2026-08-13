@@ -220,3 +220,238 @@ Safer plan:
 4. Only after local files and remote history can be made truthful, rerun `supabase migration list --linked`.
 5. Only after `migration list` is coherent, run `supabase db push --dry-run`.
 6. The only acceptable pending migration in that dry-run is `20260812153000_push_notification_delivery_tracking.sql`.
+
+## Deliberate Reconciliation Strategy Design on 2026-08-13
+
+This section designs the next reconciliation step. It does not execute migration repair, modify remote schema, modify remote migration history, apply the push migration, deploy `send-notification`, or create a build.
+
+Official Supabase migration behavior relevant to this decision:
+
+- `supabase db push` compares local files in `supabase/migrations` to rows in `supabase_migrations.schema_migrations` and runs only migrations that are local but not recorded remotely.
+- `supabase migration repair` changes migration tracking history only; it does not run or revert SQL.
+- `supabase db pull` can create a remote-schema migration, but the current project is too divergent for `db pull --linked` to complete before history normalization.
+
+### Remote-Only Version Mapping
+
+| Remote Version | Effects Definitely Present Live | Attributable Objects / Effects | Local Equivalent | Keep Remote Row Applied? | Proposed Representation |
+| --- | --- | --- | --- | --- | --- |
+| `20260706182330` | yes | Core application schema: public enums/tables including profiles, listings, listing images, favorites, conversations, messages, transactions, reviews, reports, blocks, notifications, device tokens, audit/rate-limit objects. | `supabase/schema.sql` baseline SQL, not an exact migration file. | no under baseline strategy; yes only under compatibility-history strategy | consolidated baseline migration |
+| `20260706182437` | yes | Baseline RLS enablement and policies for core public tables. | `supabase/policies.sql` baseline SQL, not an exact migration file. | no under baseline strategy; yes only under compatibility-history strategy | consolidated baseline migration |
+| `20260706182504` | partial | Storage bucket setup and storage object policies for avatars, listings, and message images. Schema backup proves storage policy/function shape, but bucket rows are data in `storage.buckets` and require live/dashboard verification before final baseline approval. | `supabase/storage.sql` baseline SQL, not an exact migration file. | no under baseline strategy; yes only under compatibility-history strategy | consolidated baseline migration plus explicit storage bucket seed SQL |
+| `20260710152514` | yes | PostGIS/distance foundation: listing `location_point`, GIST index, sync trigger/function, nearby listing RPC lineage. | `supabase/distance.sql` baseline SQL, not an exact migration file. | no under baseline strategy; yes only under compatibility-history strategy | consolidated baseline migration |
+| `20260711231736` | yes | Rescue public address fields/schema lineage; current live `rescue_profiles` contains physical-location/public rescue fields used by the app. | no exact or same-name file found | no under baseline strategy; yes only under compatibility-history strategy | consolidated baseline migration |
+| `20260712124317` | yes | Listing getting options such as porch pickup and meetup availability plus related constraints. | `supabase/listing_getting_options.sql`, not an exact migration file. | no under baseline strategy; yes only under compatibility-history strategy | consolidated baseline migration |
+| `20260712125357` | yes | Listing detail and shipping-related fields such as dimensions, pet size, condition notes, shipping payer/cost, and handling time. | `supabase/listing_detail_fields.sql`, not an exact migration file. | no under baseline strategy; yes only under compatibility-history strategy | consolidated baseline migration |
+| `20260727134418` | yes | Public rescue physical-address fields and/or privacy controls represented in current rescue profile schema. | no exact or same-name file found | no under baseline strategy; yes only under compatibility-history strategy | consolidated baseline migration |
+| `20260727141839` | yes | Admin report moderation action RPC lineage. | `20260727194012_admin_report_moderation_actions.sql` plus later admin repair migrations. | no under baseline strategy; yes only under compatibility-history strategy | consolidated baseline migration |
+| `20260730150339` | yes | Notification preference schema/RPC lineage. | `20260730143000_notification_email_preferences.sql` | no under baseline strategy; yes only under compatibility-history strategy | consolidated baseline migration |
+| `20260730152959` | yes | Restored conversation/message insert policy lineage. | `20260730150000_restore_conversation_message_insert_policy.sql` | no under baseline strategy; yes only under compatibility-history strategy | consolidated baseline migration |
+| `20260730154202` | yes | Restored messaging grants lineage. | `20260730151000_restore_messaging_insert_grants.sql` | no under baseline strategy; yes only under compatibility-history strategy | consolidated baseline migration |
+| `20260730154638` | yes | Restored `create_user_notification` RPC lineage. | `20260730152000_restore_create_user_notification_rpc.sql` | no under baseline strategy; yes only under compatibility-history strategy | consolidated baseline migration |
+| `20260730163443` | yes | Rescue public conversation policy lineage. | bundled in `20260730184000_rescue_public_messaging.sql` | no under baseline strategy; yes only under compatibility-history strategy | consolidated baseline migration |
+| `20260730163512` | yes | Rescue public feed owner ID return shape. | bundled in `20260730184000_rescue_public_messaging.sql` | no under baseline strategy; yes only under compatibility-history strategy | consolidated baseline migration |
+| `20260730163536` | yes | Rescue public by-owner owner ID return shape. | bundled in `20260730184000_rescue_public_messaging.sql` | no under baseline strategy; yes only under compatibility-history strategy | consolidated baseline migration |
+| `20260730163609` | yes | Nearby rescues owner ID return shape. | bundled in `20260730184000_rescue_public_messaging.sql` | no under baseline strategy; yes only under compatibility-history strategy | consolidated baseline migration |
+| `20260803012715` | yes | Admin report moderation repair lineage. | `20260802000000_fix_admin_report_moderation_actions.sql` plus exact later admin files already restored. | no under baseline strategy; yes only under compatibility-history strategy | consolidated baseline migration |
+| `20260808182635` | yes | Signup consent and marketing preference schema/RPCs. | `20260808172854_signup_consent_and_marketing_preferences.sql` | no under baseline strategy; yes only under compatibility-history strategy | consolidated baseline migration |
+| `20260808223605` | yes | Stripe schema readiness fields/indexes/RPC support. | `20260808190000_stripe_schema_readiness.sql` | no under baseline strategy; yes only under compatibility-history strategy | consolidated baseline migration |
+| `20260808224818` | yes | Stripe webhook idempotency table and processing support. | `20260808231000_stripe_webhook_idempotency.sql` | no under baseline strategy; yes only under compatibility-history strategy | consolidated baseline migration |
+| `20260808232211` | yes | Checkout reservation fields/RPC support. | `20260808234000_stripe_checkout_reservation.sql` | no under baseline strategy; yes only under compatibility-history strategy | consolidated baseline migration |
+| `20260808234452` | yes | Refund/dispute tracking schema. | `20260808183625_stripe_refund_dispute_tracking.sql` | no under baseline strategy; yes only under compatibility-history strategy | consolidated baseline migration |
+| `20260810173611` | yes | Product policy and transaction support schema/RPCs. | `20260810111020_product_policy_transaction_support.sql` | no under baseline strategy; yes only under compatibility-history strategy | consolidated baseline migration |
+| `20260811185910` | yes | Seller payout publish guard and checkout payout recheck. | `20260811103000_seller_payout_publish_guard.sql` | no under baseline strategy; yes only under compatibility-history strategy | consolidated baseline migration |
+| `20260813125113` | yes | Authoritative Stripe Tax checkout transaction fields, constraints, and index. | `20260812120000_authoritative_checkout_stripe_tax.sql` | no under baseline strategy; yes only under compatibility-history strategy | consolidated baseline migration |
+
+### Strategy A: Reconstruct Local Compatibility History Matching Remote Timestamps
+
+Concept:
+
+1. Keep the current remote migration rows as applied.
+2. Add local migration files for every remote-only timestamp.
+3. Archive or otherwise remove local-only timestamp-drifted migrations from `supabase/migrations` so they do not appear pending.
+4. Leave `20260812153000_push_notification_delivery_tracking.sql` as the only local-only pending migration.
+
+Safety:
+
+- Low to medium. It avoids remote history mutation, but it requires creating local files for historical versions whose exact original SQL cannot be proven.
+- For unresolved early rows, no-op files would make `supabase migration list` look coherent while hiding the fact that a fresh `db reset` would not rebuild the schema.
+- Idempotent compatibility files copied from baseline/support SQL would be more useful than no-ops for `db reset`, but they would still be reconstructed rather than exact historical provenance.
+
+Reversibility:
+
+- Local-only changes are reversible through Git.
+- If future developers depend on the reconstructed compatibility files, later correction becomes harder.
+
+Impact on existing production data:
+
+- None if files are only added locally and no `db push` runs unexpected SQL.
+- Risk appears when a reconstructed file is accidentally treated as pending against any environment that lacks the corresponding remote history row.
+
+Impact on `supabase db reset`:
+
+- No-op compatibility files fail this requirement because a fresh local database would miss schema dependencies.
+- Reconstructed idempotent compatibility files could pass reset only if they fully reproduce the live schema in the correct order.
+
+Impact on future `db push`:
+
+- Could become coherent for the current remote if all remote timestamps are represented locally and timestamp-drifted local files are archived.
+- Fragile for new environments because reconstructed history may not match actual production lineage.
+
+Risk of schema loss:
+
+- Moderate. Archiving current local migrations before a true baseline exists could remove the only reproducible source for some schema effects.
+
+Risk of accidentally marking the push migration applied:
+
+- Low if no repair commands are run.
+- Still present if the CLI continues suggesting broad repairs and a human follows them.
+
+Maintenance burden:
+
+- High. The project would carry many historical compatibility files whose contents are partially reconstructed and whose purpose is easy to misunderstand.
+
+Conclusion:
+
+Strategy A is not recommended. No-op compatibility migrations are especially unsafe because they would make migration history appear healthy while breaking local rebuilds. Reconstructed alias migrations are better than no-ops but still less honest and more brittle than a deliberate baseline.
+
+### Strategy B: Create a Deliberate Current-Schema Baseline
+
+Concept:
+
+1. Preserve the verified schema backup and current migration files.
+2. Move all existing historical migrations except the genuinely pending push migration out of `supabase/migrations` into a clearly named archive folder that Supabase CLI does not scan.
+3. Create one reviewed current-schema baseline migration representing the live schema as of the verified backup.
+4. Keep `20260812153000_push_notification_delivery_tracking.sql` in `supabase/migrations` after the baseline.
+5. Use `supabase migration repair` to normalize remote history: remove old historical rows from the remote migration-history table and mark the new baseline as applied.
+6. Do not mark `20260812153000` as applied until its SQL actually runs.
+
+Safety:
+
+- Medium to high if performed with a fresh backup, reviewed baseline SQL, and a narrow repair command list.
+- It changes migration history but not production schema/data.
+- It avoids inventing many historical files and makes the repository honest about the current launch baseline.
+
+Reversibility:
+
+- Good for local repository changes through Git.
+- Remote migration-history repair is reversible by restoring the pre-repair migration-history rows from the captured `supabase migration list --linked` output, but it requires care.
+- Production schema/data is not changed by repair.
+
+Impact on existing production data:
+
+- No schema/data impact when only history repair is executed.
+- Production data remains untouched.
+
+Impact on `supabase db reset`:
+
+- Best option. A fresh local database can be rebuilt from the baseline plus pending/future migrations.
+- The baseline must include application-owned public/private schemas, RLS, policies, functions, triggers, indexes, extensions, storage policies, and storage bucket seed rows required by ReTail.
+
+Impact on future `db push`:
+
+- Best option. After repair, `supabase migration list --linked` should show the baseline as present locally and remotely, with only `20260812153000_push_notification_delivery_tracking.sql` pending.
+- `supabase db push --dry-run` should then be trustworthy and show only the push notification migration.
+
+Risk of schema loss:
+
+- Low if the baseline is generated from the verified live backup and audited before repair.
+- Main risk is an incomplete baseline, especially storage bucket rows and Supabase-managed schemas. This must be checked before execution.
+
+Risk of accidentally marking the push migration applied:
+
+- Low if the repair command list explicitly excludes `20260812153000`.
+- The push migration stays local-only and pending.
+
+Maintenance burden:
+
+- Low to medium. Historical migrations are retained in an archive for research, while normal development starts from a clean current-schema baseline.
+
+Conclusion:
+
+Strategy B is recommended. It is the clearest way to satisfy all final-state requirements without pretending unrecoverable early migrations were recovered.
+
+### Recommended Plan: Baseline and Repair, Not Compatibility No-Ops
+
+Recommended strategy: Strategy B.
+
+Why:
+
+- It is honest about the fact that exact early migration provenance is unrecoverable.
+- It keeps production schema/data untouched.
+- It keeps Stripe Tax live and represented in the baseline.
+- It keeps `20260812153000_push_notification_delivery_tracking.sql` pending.
+- It makes future `db push --dry-run` useful again.
+- It gives fresh local databases a reproducible baseline instead of a stack of no-op compatibility files.
+
+Files that would be created:
+
+- `supabase/migrations/20260813143000_prelaunch_current_schema_baseline.sql`
+- `docs/backend/archived-migrations/prebaseline-20260813/README.md`
+
+Files that would be archived:
+
+- All existing migration files currently under `supabase/migrations` except `20260812153000_push_notification_delivery_tracking.sql`.
+- Archive destination: `docs/backend/archived-migrations/prebaseline-20260813/supabase-migrations/`
+
+Baseline content requirements:
+
+- Include current live application schema from `/private/tmp/retail-supabase-backups/ycwgsdigvpmprqreoqiz_schema_20260813_081656.sql`.
+- Include app-required storage bucket seed SQL for `avatars`, `listings`, and `message-images`, because schema-only dumps do not reliably preserve rows in `storage.buckets`.
+- Include extension declarations without pinning explicit extension versions.
+- Exclude secrets, production data, auth users, storage objects, and migration-history table rows.
+- Exclude `notification_push_deliveries` and `remove_invalid_device_token_from_push_delivery`, because those belong to the pending push migration.
+
+Proposed migration repair commands, for later approval only:
+
+```bash
+# Mark the new baseline as already represented by the current live schema.
+npx supabase migration repair --linked --status applied 20260813143000
+
+# Remove old pre-baseline history rows after they are archived and represented by the baseline.
+npx supabase migration repair --linked --status reverted \
+  20260706182330 20260706182437 20260706182504 20260710152514 \
+  20260711231736 20260712124317 20260712125357 20260717125609 \
+  20260717134801 20260717161849 20260717171018 20260717174159 \
+  20260717180029 20260719003237 20260719011141 20260719015639 \
+  20260719015856 20260719015942 20260719120708 20260719175607 \
+  20260720010133 20260720014405 20260720015113 20260720015350 \
+  20260720120248 20260727134418 20260727141839 20260730150339 \
+  20260730152959 20260730154202 20260730154638 20260730163443 \
+  20260730163512 20260730163536 20260730163609 20260802012858 \
+  20260802132552 20260803012715 20260808182635 20260808223605 \
+  20260808224818 20260808232211 20260808234452 20260810173611 \
+  20260811185910 20260813125113
+```
+
+Do not include `20260812153000` in any `--status applied` repair command. It is not live.
+
+Expected migration list after repair:
+
+| Local | Remote | Meaning |
+| --- | --- | --- |
+| `20260813143000` | `20260813143000` | Current-schema baseline applied/represented live |
+| `20260812153000` | empty | Push notification delivery tracking remains pending |
+
+Expected dry-run after repair:
+
+- `supabase db push --dry-run` should show only `20260812153000_push_notification_delivery_tracking.sql`.
+- If anything else appears, stop before push.
+
+Rollback plan:
+
+1. Keep the verified schema backup at `/private/tmp/retail-supabase-backups/ycwgsdigvpmprqreoqiz_schema_20260813_081656.sql`.
+2. Commit the archive/baseline files before any repair.
+3. Save `supabase migration list --linked` output immediately before repair.
+4. If repair produces an unexpected migration list, do not run `db push`.
+5. Restore the repository with Git.
+6. Restore remote history with inverse `supabase migration repair` commands based on the saved pre-repair list: mark removed historical versions `applied` again and mark the baseline `reverted`.
+7. Re-run `supabase migration list --linked`.
+
+Execution status:
+
+- Repair executed: no.
+- Remote history modified: no.
+- Remote schema changes required: no.
+- Push migration applied: no.
+- `send-notification` deployed: no.
+- EAS build created: no.
