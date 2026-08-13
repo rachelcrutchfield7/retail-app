@@ -606,3 +606,153 @@ The currently prepared local structure expects the later repair step to:
 4. Run `supabase migration list --linked`.
 5. Run `supabase db push --dry-run`.
 6. Stop unless the dry-run shows only `20260812153000_push_notification_delivery_tracking.sql`.
+
+## Remote History Repair on 2026-08-13
+
+Rachel explicitly approved the remote migration-history normalization step on 2026-08-13.
+
+This step modified Supabase migration-history tracking only. It did not run baseline SQL against the remote database, did not apply the push-notification migration, did not deploy `send-notification`, and did not create an EAS build.
+
+### Preconditions Verified
+
+Linked project:
+
+- `ycwgsdigvpmprqreoqiz`
+
+Preserved schema backup:
+
+- `/private/tmp/retail-supabase-backups/ycwgsdigvpmprqreoqiz_schema_20260813_081656.sql`
+- Verified non-empty: 782683 bytes.
+
+Active local migrations before repair:
+
+- `20260812152900_prelaunch_current_schema_baseline_created_20260813.sql`
+- `20260812153000_push_notification_delivery_tracking.sql`
+
+Pre-repair migration list summary:
+
+- Remote-only historical/pre-baseline rows: 46.
+- Local-only baseline: `20260812152900`.
+- Local-only pending push migration: `20260812153000`.
+- Remote-only Stripe Tax timestamp drift row: `20260813125113`.
+
+### Repair Commands Executed
+
+Baseline marked applied:
+
+```bash
+npx supabase migration repair --linked --status applied 20260812152900
+```
+
+Old pre-baseline and timestamp-drift remote history rows marked reverted:
+
+```bash
+npx supabase migration repair --linked --status reverted \
+  20260706182330 20260706182437 20260706182504 20260710152514 \
+  20260711231736 20260712124317 20260712125357 20260717125609 \
+  20260717134801 20260717161849 20260717171018 20260717174159 \
+  20260717180029 20260719003237 20260719011141 20260719015639 \
+  20260719015856 20260719015942 20260719120708 20260719175607 \
+  20260720010133 20260720014405 20260720015113 20260720015350 \
+  20260720120248 20260727134418 20260727141839 20260730150339 \
+  20260730152959 20260730154202 20260730154638 20260730163443 \
+  20260730163512 20260730163536 20260730163609 20260802012858 \
+  20260802132552 20260803012715 20260808182635 20260808223605 \
+  20260808224818 20260808232211 20260808234452 20260810173611 \
+  20260811185910 20260813125113
+```
+
+The pending push notification migration `20260812153000` was not included in any repair command and remains unapplied remotely.
+
+### Post-Repair Migration List
+
+`npx supabase migration list --linked` returned:
+
+```json
+{
+  "migrations": [
+    { "local": "20260812152900", "remote": "20260812152900", "time": "2026-08-12 15:29:00" },
+    { "local": "20260812153000", "remote": "", "time": "2026-08-12 15:30:00" }
+  ],
+  "message": "Migrations listed"
+}
+```
+
+Meaning:
+
+- `20260812152900_prelaunch_current_schema_baseline_created_20260813.sql` is applied locally and remotely.
+- `20260812153000_push_notification_delivery_tracking.sql` is the only local-only pending migration.
+- Old archived/pre-baseline migration-history rows no longer create CLI planning divergence.
+
+### Dry Run
+
+`npx supabase db push --dry-run` returned:
+
+```text
+Would push these migrations:
+ • 20260812153000_push_notification_delivery_tracking.sql
+```
+
+Structured CLI output confirmed:
+
+```json
+{
+  "upToDate": false,
+  "dryRun": true,
+  "migrations": ["20260812153000_push_notification_delivery_tracking.sql"],
+  "seeds": [],
+  "roles": [],
+  "message": "Finished supabase db push."
+}
+```
+
+No actual `supabase db push` was run.
+
+### Schema Verification After Repair
+
+Read-only post-repair schema dump:
+
+- `/private/tmp/retail-supabase-backups/ycwgsdigvpmprqreoqiz_schema_post_repair_20260813.sql`
+- Verified non-empty: 782683 bytes.
+
+Core application tables still present:
+
+- `public.profiles`
+- `public.listings`
+- `public.transactions`
+- `public.reports`
+- `public.messages`
+- `public.rescue_profiles`
+
+Stripe Tax schema still present:
+
+- `transactions.tax_amount_cents`
+- `transactions.stripe_tax_calculation_id`
+- `transactions.stripe_tax_transaction_id`
+- `transactions.tax_behavior`
+- `transactions.buyer_tax_postal_code`
+- `idx_transactions_stripe_tax_calculation_id`
+
+Pending push-delivery schema still absent remotely:
+
+- `public.notification_push_deliveries`: absent
+- `public.remove_invalid_device_token_from_push_delivery(text)`: absent
+- `retail.trusted_push_token_cleanup`: absent
+
+### Rollback Status
+
+Rollback was not required.
+
+If rollback is ever needed, use the saved pre-repair list and inverse `supabase migration repair` commands described above: mark old historical versions applied again and mark `20260812152900` reverted. Do not mark `20260812153000` applied unless the push migration has actually been applied.
+
+### Final State
+
+- Migration-history repair executed: yes.
+- Remote application schema modified: no.
+- Baseline marked applied: yes.
+- Old pre-baseline history normalized: yes.
+- Push migration marked applied: no.
+- Push migration applied remotely: no.
+- `send-notification` deployed: no.
+- EAS build created: no.
+- Safe next step: apply `20260812153000_push_notification_delivery_tracking.sql` in a separate approved task, then deploy only the canonical `send-notification` Edge Function.
