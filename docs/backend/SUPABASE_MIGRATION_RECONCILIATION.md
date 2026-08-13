@@ -385,7 +385,7 @@ Why:
 
 Files that would be created:
 
-- `supabase/migrations/20260813143000_prelaunch_current_schema_baseline.sql`
+- `supabase/migrations/20260812152900_prelaunch_current_schema_baseline_created_20260813.sql`
 - `docs/backend/archived-migrations/prebaseline-20260813/README.md`
 
 Files that would be archived:
@@ -405,7 +405,7 @@ Proposed migration repair commands, for later approval only:
 
 ```bash
 # Mark the new baseline as already represented by the current live schema.
-npx supabase migration repair --linked --status applied 20260813143000
+npx supabase migration repair --linked --status applied 20260812152900
 
 # Remove old pre-baseline history rows after they are archived and represented by the baseline.
 npx supabase migration repair --linked --status reverted \
@@ -429,7 +429,7 @@ Expected migration list after repair:
 
 | Local | Remote | Meaning |
 | --- | --- | --- |
-| `20260813143000` | `20260813143000` | Current-schema baseline applied/represented live |
+| `20260812152900` | `20260812152900` | Current-schema baseline applied/represented live |
 | `20260812153000` | empty | Push notification delivery tracking remains pending |
 
 Expected dry-run after repair:
@@ -455,3 +455,154 @@ Execution status:
 - Push migration applied: no.
 - `send-notification` deployed: no.
 - EAS build created: no.
+
+## Local Baseline Implementation on 2026-08-13
+
+This implementation step created and validated the local baseline/archive structure only. It did not execute migration-history repair, modify remote schema, modify remote migration history, apply the push migration remotely, deploy `send-notification`, or create a build.
+
+### Preserved Pre-Change Evidence
+
+Local evidence snapshot:
+
+- `/private/tmp/retail-supabase-backups/prebaseline-evidence-20260813/git_status_before.txt`
+- `/private/tmp/retail-supabase-backups/prebaseline-evidence-20260813/migration_inventory_before.txt`
+- `/private/tmp/retail-supabase-backups/prebaseline-evidence-20260813/migration_list_before.txt`
+- `/private/tmp/retail-supabase-backups/prebaseline-evidence-20260813/SUPABASE_MIGRATION_RECONCILIATION_before.md`
+
+Additional read-only storage-schema evidence:
+
+- `/private/tmp/retail-supabase-backups/ycwgsdigvpmprqreoqiz_storage_schema_20260813_baseline_audit.sql`
+
+### Archive
+
+Archive destination:
+
+- `docs/backend/archived-migrations/prebaseline-20260813/`
+
+Archived migration count:
+
+- 32 historical/pre-baseline migration files.
+
+Active migration files after archive:
+
+- `supabase/migrations/20260812152900_prelaunch_current_schema_baseline_created_20260813.sql`
+- `supabase/migrations/20260812153000_push_notification_delivery_tracking.sql`
+
+### Baseline
+
+Baseline file:
+
+- `supabase/migrations/20260812152900_prelaunch_current_schema_baseline_created_20260813.sql`
+
+Baseline timestamp:
+
+- `20260812152900`
+
+Ordering decision:
+
+- The baseline was created on 2026-08-13 but intentionally uses `20260812152900` so it sorts one minute before the already-reviewed pending migration `20260812153000_push_notification_delivery_tracking.sql`.
+- The pending push migration was not renamed and its contents were not changed.
+- A filename suffix, `created_20260813`, records the actual reconciliation date.
+
+Baseline source:
+
+- Main application schema from verified remote schema backup `/private/tmp/retail-supabase-backups/ycwgsdigvpmprqreoqiz_schema_20260813_081656.sql`.
+- Live storage policy evidence from read-only storage-schema dump `/private/tmp/retail-supabase-backups/ycwgsdigvpmprqreoqiz_storage_schema_20260813_baseline_audit.sql`.
+- Explicit ReTail storage bucket seed rows for `avatars`, `listings`, and `message-images`.
+
+Supabase-managed exclusions:
+
+- Optional/platform advisor extensions `hypopg`, `index_advisor`, `pg_stat_statements`, and `supabase_vault` were not included as baseline-required app schema.
+- Supabase-managed `auth` and `storage` internal tables were not recreated by the baseline.
+- ReTail-owned storage bucket rows and `storage.objects` policies were included without recreating storage internals.
+
+Privilege normalization:
+
+- The baseline now revokes inherited local default privileges from ReTail public/private functions and public tables immediately before replaying the verified remote grant section.
+- This avoids local Supabase default grants drifting away from hosted grant state.
+
+### Local Migration Validation
+
+Docker:
+
+- Docker Desktop verified accessible.
+
+Local Supabase start:
+
+- `npx supabase start` applied the baseline and push migration but initially failed the full service health check because analytics/vector/storage reported unhealthy.
+- `npx supabase start --ignore-health-check` completed with local DB available; analytics/vector warnings remained local-service noise.
+
+Fresh DB reset:
+
+- `npx supabase db reset` completed successfully after the baseline privilege-normalization fix.
+- Applied migration order:
+  1. `20260812152900_prelaunch_current_schema_baseline_created_20260813.sql`
+  2. `20260812153000_push_notification_delivery_tracking.sql`
+
+Duplicate/dependency errors:
+
+- none.
+
+Local migration list after reset:
+
+- `20260812152900`
+- `20260812153000`
+
+Focused local schema checks after reset:
+
+- Stripe Tax fields present on `public.transactions`: 5/5.
+- `idx_transactions_stripe_tax_calculation_id` present.
+- Storage buckets present: `avatars:true`, `listings:true`, `message-images:false`.
+- Storage `Phase D` object policies present: 7.
+- Push delivery table present after push migration: `public.notification_push_deliveries`.
+- Push cleanup RPC present after push migration: `public.remove_invalid_device_token_from_push_delivery(text)`.
+
+### Remote vs Local Schema Comparison
+
+Verified remote schema backup before push:
+
+- public/private tables: 31
+- public/private functions: 149
+- public types: 15
+- public indexes: 86
+- public triggers: 58
+- public policies: 53
+- public RLS enable statements: 31
+- public force RLS statements: 1
+
+Fresh local schema after baseline plus pending push migration:
+
+- public/private tables: 32
+- public/private functions: 150
+- public types: 15
+- public indexes: 88
+- public triggers: 59
+- public policies: 53
+- public RLS enable statements: 32
+- public force RLS statements: 2
+
+Meaningful differences:
+
+- Expected push-migration delta: +1 table, +1 function, +2 indexes, +1 trigger, +1 RLS enable, +1 force RLS.
+- Local dump includes local Supabase-managed `pg_net` extension output; this is not ReTail application schema.
+- Optional remote advisor/platform extensions were excluded from the baseline as not required ReTail application schema.
+- PostgreSQL dump output normalizes some equivalent RLS boolean expressions and grant ordering.
+- No missing ReTail application table/function/type/index/trigger/policy was identified in the local baseline-plus-push dump.
+
+Push baseline exclusion:
+
+- `notification_push_deliveries`, `remove_invalid_device_token_from_push_delivery`, and `retail.trusted_push_token_cleanup` are absent from the baseline file.
+- Those objects exist only in `20260812153000_push_notification_delivery_tracking.sql`.
+
+### Remaining Remote Repair Plan
+
+Do not run repair until Rachel explicitly approves the remote-history step.
+
+The currently prepared local structure expects the later repair step to:
+
+1. Mark `20260812152900` applied because the baseline represents current live schema.
+2. Mark old pre-baseline remote history rows reverted because they are now archived and represented by the baseline.
+3. Leave `20260812153000` unapplied/pending.
+4. Run `supabase migration list --linked`.
+5. Run `supabase db push --dry-run`.
+6. Stop unless the dry-run shows only `20260812153000_push_notification_delivery_tracking.sql`.
