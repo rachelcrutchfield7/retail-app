@@ -112,3 +112,56 @@ Next safe options:
 2. Restore exact migration files for every live-only version where possible, including early baseline migrations.
 3. Create a deliberate forward-only baseline strategy for timestamp-drifted migrations, reviewed before using `supabase migration repair`.
 4. Do not mark `20260812153000_push_notification_delivery_tracking` as applied until the push schema is actually live.
+
+## Docker-Enabled Baseline Attempt on 2026-08-13
+
+Docker Desktop was later installed and verified from the terminal.
+
+Schema backup:
+
+- Backup path: `/private/tmp/retail-supabase-backups/ycwgsdigvpmprqreoqiz_schema_20260813_081656.sql`
+- Size: 764 KB
+- Lines: 16,997
+- Verified contents include core public tables, RLS policies, support cases, device tokens, Stripe Tax transaction fields, and Stripe Tax indexes.
+- Verified contents do not include `public.notification_push_deliveries`, which matches the live schema audit that push delivery tracking remains unapplied.
+
+Official baseline pull:
+
+- `npx supabase db pull --linked` still failed before generating a baseline file.
+- Failure code: `LegacyDbPullMigrationConflictError`
+- Cause: remote migration history still does not match local files in `supabase/migrations`.
+- The CLI again suggested marking `20260812153000` as applied, but live schema checks confirm `notification_push_deliveries` and `remove_invalid_device_token_from_push_delivery` do not exist. That repair would be false and must not be run.
+
+Current verified live schema facts:
+
+- Stripe Tax schema is live.
+- Stripe Tax was recorded in live migration history as `20260813125113_authoritative_checkout_stripe_tax`.
+- Push delivery schema is not live.
+- Push migration `20260812153000_push_notification_delivery_tracking` is not recorded in live migration history.
+
+## Remaining History Mismatch Classification
+
+| Category | Versions | Proposed Action |
+| --- | --- | --- |
+| Exact historical migration missing locally | `20260706182330`, `20260706182437`, `20260706182504`, `20260710152514`, `20260711231736`, `20260712124317`, `20260712125357`, `20260727134418`, `20260727141839`, `20260730150339`, `20260730152959`, `20260730154202`, `20260730154638`, `20260730163443`, `20260730163512`, `20260730163536`, `20260730163609`, `20260803012715`, `20260808182635`, `20260808223605`, `20260808224818`, `20260808232211`, `20260808234452`, `20260810173611`, `20260811185910` | Restore or reconstruct exact local migration files when provenance can be proven. Do not delete remote history rows merely because local files are missing. |
+| Timestamp/name drift where equivalent schema is already live | `20260803012715`, `20260808182635`, `20260808223605`, `20260808224818`, `20260808232211`, `20260808234452`, `20260810173611`, `20260811185910`, `20260813125113` | Prefer adding local files that match live history or a reviewed baseline strategy. Avoid `repair --status reverted` because schema effects are live. |
+| Remote migration-history entry needing investigation | early/base migrations and rescue physical-address migrations | Recover original migration provenance before any history mutation. |
+| Genuinely pending migration | `20260812153000_push_notification_delivery_tracking` | Do not repair as applied. Apply only after a trustworthy deployment path is approved. |
+
+## Proposed Repair Plan
+
+No repair commands are currently safe to execute.
+
+Unsafe repair actions to avoid:
+
+- Do not run `supabase migration repair --status applied 20260812153000`; push schema is absent.
+- Do not run the CLI-suggested `--status reverted` commands for live-only rows without first restoring or replacing their local files. Those rows represent real live schema history, even when local filenames drifted.
+
+Safer plan:
+
+1. Restore exact local migration files for every live-only version where Git history or a trusted backup can prove the original SQL.
+2. For live-only versions whose exact SQL cannot be recovered, create a reviewed baseline/reconciliation strategy that is intentionally documented before touching migration history.
+3. For local-only migrations whose effects are already live under different timestamps, decide whether to keep them as historical development artifacts or replace them with exact live-version files. Do not mark them applied until the mismatch is resolved in a way that keeps `20260812153000` pending.
+4. Only after local files and remote history can be made truthful, rerun `supabase migration list --linked`.
+5. Only after `migration list` is coherent, run `supabase db push --dry-run`.
+6. The only acceptable pending migration in that dry-run is `20260812153000_push_notification_delivery_tracking.sql`.
