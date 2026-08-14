@@ -21,6 +21,19 @@ type StripeLoginLinkResponse = {
   url?: string;
 };
 
+export type StripeConnectAccountSession = {
+  clientSecret: string;
+  expiresAt?: number;
+  status: StripeConnectStatus;
+};
+
+type StripeAccountSessionResponse = Partial<StripeConnectStatus> & {
+  clientSecret?: string;
+  client_secret?: string;
+  expiresAt?: number;
+  expires_at?: number;
+};
+
 let onboardingLaunchInFlight: Promise<StripeConnectStatus> | null = null;
 
 function toStatus(data: Partial<StripeConnectStatus> | null | undefined): StripeConnectStatus {
@@ -44,12 +57,40 @@ export function getStripeConnectPayoutState(status: StripeConnectStatus | null |
   return status?.accountId ? 'action_required' : 'not_set_up';
 }
 
-export function getStripeConnectPrimaryActionLabel(state: StripeConnectPayoutState): 'Set Up Payouts' | 'Continue Payout Setup' | 'Manage Payout Account' {
+export function getStripeConnectPrimaryActionLabel(state: StripeConnectPayoutState): 'Set Up My Payouts' | 'Continue Payout Setup' | 'Manage Payout Account' {
   if (state === 'ready') {
     return 'Manage Payout Account';
   }
 
-  return state === 'action_required' ? 'Continue Payout Setup' : 'Set Up Payouts';
+  return state === 'action_required' ? 'Continue Payout Setup' : 'Set Up My Payouts';
+}
+
+export function getStripeConnectStatusNotice(status: StripeConnectStatus): { title: string; body: string } {
+  if (profileHasStripePayouts(status)) {
+    return {
+      title: "You're ready to sell!",
+      body: 'Your payout account is set up. Earnings from ReTail sales will be sent through Stripe.',
+    };
+  }
+
+  if (status.accountId && status.detailsSubmitted) {
+    return {
+      title: 'Stripe is reviewing your information',
+      body: 'You can return here to check your payout status.',
+    };
+  }
+
+  if (status.accountId) {
+    return {
+      title: 'Stripe needs a little more information',
+      body: 'Continue setup before payouts can be enabled.',
+    };
+  }
+
+  return {
+    title: 'Finish setting up payouts',
+    body: 'Finish setting up payouts to sell on ReTail.',
+  };
 }
 
 function validatedStripeUrl(url: unknown, allowedHosts: string[], operation: string): string {
@@ -119,6 +160,40 @@ export async function refreshStripeConnectStatus(): Promise<StripeConnectStatus>
   }
 
   return toStatus(data as Partial<StripeConnectStatus> | null);
+}
+
+export async function createStripeConnectAccountSession(): Promise<StripeConnectAccountSession> {
+  const { data, error } = await supabase.functions.invoke('stripe-connect-account-session');
+
+  if (error) {
+    logger.warning('Stripe Connect account session request failed.', {
+      status: typeof (error as { status?: unknown }).status === 'number' ? (error as { status: number }).status : undefined,
+      code: typeof (error as { code?: unknown }).code === 'string' ? (error as { code: string }).code : undefined,
+      message: error.message,
+    });
+    throw createServiceError(
+      'STRIPE_ACCOUNT_SESSION_FAILED',
+      error.message,
+      'We couldn’t start payout setup inside ReTail. Please try again.'
+    );
+  }
+
+  const response = data as StripeAccountSessionResponse | null;
+  const clientSecret = response?.clientSecret ?? response?.client_secret;
+
+  if (typeof clientSecret !== 'string' || clientSecret.trim() === '') {
+    throw createServiceError(
+      'STRIPE_ACCOUNT_SESSION_SECRET_MISSING',
+      'Stripe account session did not return a client secret.',
+      'We couldn’t start payout setup inside ReTail. Please try again.'
+    );
+  }
+
+  return {
+    clientSecret,
+    expiresAt: typeof response?.expiresAt === 'number' ? response.expiresAt : response?.expires_at,
+    status: toStatus(response),
+  };
 }
 
 export async function startStripeConnectOnboarding(): Promise<StripeConnectStatus> {

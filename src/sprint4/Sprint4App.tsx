@@ -44,6 +44,7 @@ import {
   PaymentChoiceCard,
   SearchBar,
   StarRatingInput,
+  StripeConnectOnboardingScreen,
   TextArea,
   TextInput,
   TypingIndicator,
@@ -100,10 +101,10 @@ import {
 import {
   getStripeConnectPayoutState,
   getStripeConnectPrimaryActionLabel,
+  getStripeConnectStatusNotice,
   openStripeExpressDashboard,
   profileHasStripePayouts,
   refreshStripeConnectStatus,
-  startStripeConnectOnboarding,
 } from '../services/stripeConnectService';
 import type { StripeConnectStatus } from '../services/stripeConnectService';
 import {
@@ -2014,7 +2015,7 @@ export function SettingsScreen({
   const [settingsNotice, setSettingsNotice] = useState<{ title: string; body: string } | null>(null);
   const [stripeBusy, setStripeBusy] = useState(false);
   const [latestStripeStatus, setLatestStripeStatus] = useState<StripeConnectStatus | null>(null);
-  const stripeLaunchLockedRef = useRef(false);
+  const [payoutOnboardingVisible, setPayoutOnboardingVisible] = useState(false);
   const version = '1.0.0';
   const profileStripeStatus = {
     accountId: auth.profile?.stripe_connect_account_id,
@@ -2034,7 +2035,7 @@ export function SettingsScreen({
     ? 'Your payout account is ready.'
     : payoutStatus === 'action_required'
       ? 'Stripe needs additional information before ReTail can send your earnings.'
-      : 'Set up payouts before you publish your first paid listing.';
+      : 'ReTail uses Stripe to securely send your earnings to you.';
   const payoutActionLabel = getStripeConnectPrimaryActionLabel(payoutStatus);
 
   useEffect(() => {
@@ -2076,27 +2077,14 @@ export function SettingsScreen({
     }
   };
 
-  const setupStripePayouts = async () => {
-    if (stripeLaunchLockedRef.current) {
-      return;
-    }
+  const setupStripePayouts = () => {
+    setPayoutOnboardingVisible(true);
+  };
 
-    try {
-      stripeLaunchLockedRef.current = true;
-      setStripeBusy(true);
-      const status = await startStripeConnectOnboarding();
-      setLatestStripeStatus(status);
-      setSettingsNotice({
-        title: 'Stripe setup opened',
-        body: 'Finish the secure Stripe form, then return to ReTail and refresh payout status.',
-      });
-      await auth.refreshProfile();
-    } catch (error) {
-      setSettingsNotice({ title: 'Stripe setup did not open', body: handleAppError(error).userMessage });
-    } finally {
-      stripeLaunchLockedRef.current = false;
-      setStripeBusy(false);
-    }
+  const handlePayoutStatusChange = async (status: StripeConnectStatus) => {
+    setLatestStripeStatus(status);
+    setSettingsNotice(getStripeConnectStatusNotice(status));
+    await auth.refreshProfile();
   };
 
   const refreshPayoutStatus = useCallback(async () => {
@@ -2263,6 +2251,14 @@ export function SettingsScreen({
           <Text style={styles.bodyStrong}>Payout status: {payoutStatusLabel}</Text>
         </View>
         <Text style={styles.body}>{payoutStatusBody}</Text>
+        {payoutStatus !== 'ready' ? (
+          <>
+            <Text style={styles.bodyStrong}>You don't need to own a business to sell on ReTail.</Text>
+            <Text style={styles.body}>Stripe will ask for basic information to verify your identity and connect your payout account. This may include your name, birthday, address, tax information, and bank account.</Text>
+            <Text style={styles.body}>Your sensitive banking and identity information is handled securely by Stripe.</Text>
+            <Text style={styles.metaText}>Usually takes just a few minutes.</Text>
+          </>
+        ) : null}
         <Text style={styles.body}>Paid marketplace listings require payout setup before they can go live. Local pickup paid listings are included.</Text>
         <Text style={styles.body}>Protected checkout pays sellers through Stripe Connect, keeps a ReTail receipt, and deducts the small platform fee automatically so the seller payout stays simple.</Text>
         <View style={styles.wrapRow}>
@@ -2274,9 +2270,9 @@ export function SettingsScreen({
           <Button title={stripeBusy ? 'Opening Stripe...' : payoutActionLabel} icon={Wallet} onPress={() => void openStripeDashboard()} loading={stripeBusy} fullWidth />
         ) : (
           <Button
-            title={stripeBusy ? 'Opening Stripe...' : payoutActionLabel}
+            title={stripeBusy ? 'Checking...' : payoutActionLabel}
             icon={CreditCard}
-            onPress={() => void setupStripePayouts()}
+            onPress={setupStripePayouts}
             loading={stripeBusy}
             fullWidth
           />
@@ -2420,6 +2416,12 @@ export function SettingsScreen({
         <Button title="Email General Contact" variant="outline" onPress={() => void openAppLink(appLinks.contactMailto)} fullWidth />
         <Button title="Email Support" variant="outline" onPress={() => void openAppLink(appLinks.supportMailto)} fullWidth />
       </SectionCard>
+      <StripeConnectOnboardingScreen
+        visible={payoutOnboardingVisible}
+        currentStatus={stripeStatus}
+        onClose={() => setPayoutOnboardingVisible(false)}
+        onStatusChange={handlePayoutStatusChange}
+      />
     </ScreenFrame>
   );
 }

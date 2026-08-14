@@ -77,6 +77,7 @@ import {
   ReviewSummary,
   SearchBar,
   StatsCard,
+  StripeConnectOnboardingScreen,
   TextArea,
   TextInput,
   ToggleSwitch,
@@ -117,9 +118,9 @@ import {
 import {
   getStripeConnectPayoutState,
   getStripeConnectPrimaryActionLabel,
+  getStripeConnectStatusNotice,
   profileHasStripePayouts,
   refreshStripeConnectStatus,
-  startStripeConnectOnboarding,
 } from '../services/stripeConnectService';
 import type { StripeConnectStatus } from '../services/stripeConnectService';
 import type {
@@ -1188,8 +1189,8 @@ export function CreateListingScreen({
   const [stripeBusy, setStripeBusy] = useState(false);
   const [payoutNotice, setPayoutNotice] = useState<Notice | null>(null);
   const [latestStripeStatus, setLatestStripeStatus] = useState<StripeConnectStatus | null>(null);
+  const [payoutOnboardingVisible, setPayoutOnboardingVisible] = useState(false);
   const submitLockedRef = useRef(false);
-  const stripeLaunchLockedRef = useRef(false);
   const profileStripeStatus = {
     accountId: auth.profile?.stripe_connect_account_id,
     chargesEnabled: auth.profile?.stripe_connect_charges_enabled === true,
@@ -1206,27 +1207,14 @@ export function CreateListingScreen({
     setForm((current) => ({ ...current, [field]: value }));
   };
 
-  const setupPayouts = async () => {
-    if (stripeLaunchLockedRef.current) {
-      return;
-    }
+  const setupPayouts = () => {
+    setPayoutOnboardingVisible(true);
+  };
 
-    try {
-      stripeLaunchLockedRef.current = true;
-      setStripeBusy(true);
-      const status = await startStripeConnectOnboarding();
-      setLatestStripeStatus(status);
-      setPayoutNotice({
-        title: 'Stripe setup opened',
-        body: 'Finish the secure Stripe form, then return to ReTail. ReTail will recheck your payout status before your listing can go live.',
-      });
-      await auth.refreshProfile();
-    } catch (error) {
-      setPayoutNotice({ title: 'Stripe setup did not open', body: handleAppError(error).userMessage });
-    } finally {
-      stripeLaunchLockedRef.current = false;
-      setStripeBusy(false);
-    }
+  const handlePayoutStatusChange = async (status: StripeConnectStatus) => {
+    setLatestStripeStatus(status);
+    setPayoutNotice(getStripeConnectStatusNotice(status));
+    await auth.refreshProfile();
   };
 
   const confirmPayoutReadyForPublish = async () => {
@@ -1249,10 +1237,10 @@ export function CreateListingScreen({
       }
 
       setPayoutNotice({
-        title: status.accountId ? 'Payout setup needs attention' : 'Set up payouts to start selling',
+        title: status.accountId ? 'Payout setup needs attention' : 'Get paid for your sales',
         body: status.accountId
           ? 'Stripe needs more information before ReTail can send your earnings. Continue payout setup, then try publishing again.'
-          : 'ReTail uses Stripe to securely send your earnings. Complete payout setup before your first listing can go live.',
+          : "ReTail uses Stripe to securely send your earnings to you. You don't need to own a business to sell on ReTail.",
       });
       return false;
     } catch (error) {
@@ -1317,18 +1305,18 @@ export function CreateListingScreen({
         {paidListingRequiresPayout && !payoutsReady && !payoutNotice ? (
           <NoticeCard
             notice={{
-              title: 'Set up payouts to start selling',
-              body: 'ReTail uses Stripe to securely send your earnings. Complete payout setup before your first listing can go live.',
+              title: 'Get paid for your sales',
+              body: "ReTail uses Stripe to securely send your earnings to you. You don't need to own a business to sell on ReTail. Usually takes just a few minutes.",
             }}
-            actionLabel={stripeBusy ? 'Opening Stripe...' : payoutActionLabel}
-            onAction={() => void setupPayouts()}
+            actionLabel={stripeBusy ? 'Checking...' : payoutActionLabel}
+            onAction={setupPayouts}
           />
         ) : null}
         {payoutNotice ? (
           <NoticeCard
             notice={payoutNotice}
-            actionLabel={payoutNotice.title === 'Payouts ready' ? undefined : stripeBusy ? 'Opening Stripe...' : payoutActionLabel}
-            onAction={payoutNotice.title === 'Payouts ready' ? undefined : () => void setupPayouts()}
+            actionLabel={profileHasStripePayouts(stripeStatus) ? undefined : stripeBusy ? 'Checking...' : payoutActionLabel}
+            onAction={profileHasStripePayouts(stripeStatus) ? undefined : setupPayouts}
           />
         ) : null}
 
@@ -1348,6 +1336,12 @@ export function CreateListingScreen({
           fullWidth
         />
       </ScrollView>
+      <StripeConnectOnboardingScreen
+        visible={payoutOnboardingVisible}
+        currentStatus={stripeStatus}
+        onClose={() => setPayoutOnboardingVisible(false)}
+        onStatusChange={handlePayoutStatusChange}
+      />
     </ScreenContainer>
   );
 }

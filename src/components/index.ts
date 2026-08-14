@@ -42,6 +42,7 @@ export { OfferMessageCard } from './messaging/OfferMessageCard';
 export { TypingIndicator } from './messaging/TypingIndicator';
 export { UnreadBadge } from './messaging/UnreadBadge';
 export { PaymentChoiceCard } from './payments/PaymentChoiceCard';
+export { StripeConnectOnboardingScreen } from './payments/StripeConnectOnboardingScreen';
 export { HeaderBar } from './navigation/HeaderBar';
 export { TabBar } from './navigation/TabBar';
 export { Metric, metricLabelStyle } from './profile/Metric';
