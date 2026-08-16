@@ -131,11 +131,11 @@ If the seller has not shipped, ReTail may remind or warn the seller, and the buy
 
 ## Shipping Provider And Checkout
 
-FINAL: EasyPost is ReTail's shipping provider for rates, labels, tracking, and carrier events.
+FINAL: ShipStation is ReTail's active shipping provider for rates, labels, tracking, and carrier events.
 
-CURRENT BETA STATUS: PENDING EXTERNAL PROVIDER SETUP. EasyPost account verification/API-key access is not complete yet, so EasyPost migrations, webhooks, secrets, live rates, label purchases, and tracking webhooks must not be treated as active in the normal beta build.
+CURRENT BETA STATUS: ShipStation provider setup is active for beta shipping-rate testing. Label purchase must remain gated by approved test/sandbox confirmation before any postage is purchased.
 
-FINAL: Payment stays on ReTail. Shipped marketplace transactions are paid through ReTail Protected Checkout/Stripe, then ReTail purchases the EasyPost label after payment succeeds.
+FINAL: Payment stays on ReTail. Shipped marketplace transactions are paid through ReTail Protected Checkout/Stripe, then ReTail purchases the ShipStation label after payment succeeds.
 
 FINAL: ReTail automatically selects the lowest-cost eligible tracked shipping service. Buyers do not choose from multiple carrier/service rates at launch.
 
@@ -149,17 +149,17 @@ FINAL: Sellers may choose either "Buyer pays shipping" or "Free shipping for buy
 
 FINAL: Label generation happens only after successful payment. Label creation must be idempotent so Stripe webhook retries or support retries do not buy duplicate labels.
 
-FINAL: Tracking is attached automatically from EasyPost whenever available. Manual tracking remains fallback-only.
+FINAL: Tracking is attached automatically from ShipStation whenever available. Manual tracking remains fallback-only.
 
 FINAL: Carrier acceptance/scanning defines shipped status. Label created does not count as shipped.
 
-FINAL: Unused labels should be refunded/voided through EasyPost when eligible. Postage refund state is separate from any Stripe buyer refund.
+FINAL: Unused labels should be voided through ShipStation when eligible. Postage refund state is separate from any Stripe buyer refund.
 
-FINAL: Local pickup remains paid through ReTail when protected checkout is used. Local pickup does not use EasyPost rates, labels, or tracking.
+FINAL: Local pickup remains paid through ReTail when protected checkout is used. Local pickup does not use ShipStation rates, labels, or tracking.
 
 FINAL: Off-platform payments are not covered by ReTail payment/refund protection.
 
-OPERATIONAL REQUIREMENT: Crutchfield Interactive LLC must keep sufficient EasyPost wallet funding available for label purchase. Bank/ACH funding is configured outside the ReTail codebase.
+OPERATIONAL REQUIREMENT: Crutchfield Interactive LLC must keep sufficient ShipStation postage funding available for label purchase. Funding configuration is managed outside the ReTail codebase.
 
 ## Cancellation
 

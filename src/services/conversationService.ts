@@ -1,6 +1,6 @@
-import { createServiceError } from './errors';
+import { createServiceError, isAppServiceError } from './errors';
 import { supabase } from '../lib/supabase';
-import type { Conversation, ConversationDetail, ConversationSearchParams, ConversationSummary, Message, Profile } from './types';
+import type { Conversation, ConversationDetail, ConversationSearchParams, ConversationSummary, Message, Profile, PublicProfile } from './types';
 import { getPublicProfile } from './profileService';
 import { isEitherUserBlocked } from './blockService';
 import { trackEvent } from '../lib/analytics';
@@ -11,7 +11,6 @@ import {
   throwSupabaseError,
   toMessage,
   toProfile,
-  toPublicProfile,
 } from './supabaseData';
 import type { Listing } from '../types';
 import type { ListingImage } from './types';
@@ -162,18 +161,20 @@ async function loadProfile(userId: string): Promise<Profile> {
   return toProfile(data as Record<string, unknown>);
 }
 
-async function loadProfileSafe(userId: string): Promise<Profile | null> {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', userId)
-    .maybeSingle();
+async function loadPublicProfileForConversation(userId: string): Promise<PublicProfile | null> {
+  try {
+    return await getPublicProfile(userId);
+  } catch (error) {
+    if (
+      isAppServiceError(error) &&
+      (error.appError.code === 'PROFILE_NOT_FOUND' || error.appError.code === 'RECORD_NOT_FOUND')
+    ) {
+      return null;
+    }
 
-  if (error) {
-    return null;
+    logConversationHydrationWarning('Conversation participant profile lookup failed.', error, { userId });
+    throw error;
   }
-
-  return data ? toProfile(data as Record<string, unknown>) : null;
 }
 
 async function requirePublicMessageRecipient(userId: string): Promise<void> {
@@ -233,12 +234,32 @@ function mapConversationRpcError(error: unknown): never {
   throwSupabaseError(error, 'We could not start this conversation.');
 }
 
-function deletedPublicProfile(userId: string) {
+function deletedPublicProfile(userId: string): PublicProfile {
   return {
     id: userId,
     account_type: 'regular' as const,
     display_name: 'Deleted User',
     username: 'deleted_user',
+    bio: undefined,
+    avatar_url: undefined,
+    city: undefined,
+    state: undefined,
+    buyer_rating: 0,
+    seller_rating: 0,
+    review_count: 0,
+    listings_count: 0,
+    completed_sales_count: 0,
+    is_verified: false,
+    created_at: new Date().toISOString(),
+  };
+}
+
+function unavailablePublicProfile(userId: string): PublicProfile {
+  return {
+    id: userId,
+    account_type: 'regular',
+    display_name: 'Profile unavailable',
+    username: 'profile_unavailable',
     bio: undefined,
     avatar_url: undefined,
     city: undefined,
@@ -391,9 +412,9 @@ function fallbackConversationSummary(row: ConversationRow, currentUserId: string
 
   return {
     ...normalized,
-    name: 'Deleted User',
+    name: 'Conversation unavailable',
     listing: listingSummary.title,
-    otherUser: deletedPublicProfile(otherUserId),
+    otherUser: unavailablePublicProfile(otherUserId),
     listingSummary,
     listingThumbnail: listingSummary.image,
     unreadCount: 0,
@@ -415,22 +436,24 @@ export async function buildConversationSummary(conversation: Conversation | Conv
         created_at: conversation.createdAt ?? conversation.lastMessageAt,
         updated_at: conversation.updatedAt ?? conversation.lastMessageAt,
         deleted_at: conversation.deletedAt,
-      };
+  };
   const currentProfile = await requireParticipant(row);
   const otherUserId = row.buyer_id === currentProfile.id ? row.seller_id : row.buyer_id;
-  const otherProfile = await loadProfileSafe(otherUserId);
-  const rescue = await loadRescueForConversation(row.rescue_id);
-  const loadedListing = row.listing_id ? await loadListingForConversation(row.listing_id) : null;
+  const [otherProfile, rescue, loadedListing, lastMessage, unreadCount, messagingBlocked] = await Promise.all([
+    loadPublicProfileForConversation(otherUserId),
+    loadRescueForConversation(row.rescue_id),
+    row.listing_id ? loadListingForConversation(row.listing_id) : Promise.resolve(null),
+    lastMessageFor(row.id),
+    unreadCountFor(row.id, currentProfile.id),
+    isEitherUserBlocked(row.buyer_id, row.seller_id),
+  ]);
   const listingSummary = loadedListing
     ? loadedListing.listing
     : row.rescue_id
       ? rescueConversationListing(rescue, row.rescue_id)
       : unavailableListing(row.listing_id ?? row.report_id ?? '');
   const images = loadedListing?.images ?? [];
-  const lastMessage = await lastMessageFor(row.id);
-  const unreadCount = await unreadCountFor(row.id, currentProfile.id);
   const normalized = toConversation(row, listingSummary.title);
-  const messagingBlocked = await isEitherUserBlocked(row.buyer_id, row.seller_id);
 
   return {
     ...normalized,
@@ -439,7 +462,7 @@ export async function buildConversationSummary(conversation: Conversation | Conv
     preview: messagePreview(lastMessage, normalized.preview),
     unread: unreadCount > 0,
     time: formatConversationTime(lastMessage?.created_at ?? normalized.lastMessageAt),
-    otherUser: otherProfile ? toPublicProfile(otherProfile) : deletedPublicProfile(otherUserId),
+    otherUser: otherProfile ?? deletedPublicProfile(otherUserId),
     listingSummary,
     listingThumbnail: images[0]?.thumbnail_url ?? images[0]?.image_url ?? listingSummary.image,
     lastMessage,
@@ -607,11 +630,9 @@ export async function getUserConversations(userId: string, params: ConversationS
     throwSupabaseError(error, 'We could not load conversations.');
   }
 
-  const summaries: ConversationSummary[] = [];
-
-  for (const conversation of data ?? []) {
-    summaries.push(await buildConversationSummarySafe(conversation as ConversationRow, profile.id));
-  }
+  const summaries = await Promise.all(
+    (data ?? []).map((conversation) => buildConversationSummarySafe(conversation as ConversationRow, profile.id))
+  );
 
   return summaries.filter((conversation) => {
     if (!search) {

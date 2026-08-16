@@ -10,7 +10,7 @@ Stripe protected checkout is disabled. The app may explain future protected chec
 
 ## Shipping
 
-EasyPost shipping rates, labels, and tracking are pending external account verification before live postage is enabled. Shipping insurance and automated return-label workflows are not launch-ready. Buyers and sellers should use transaction support for missing packages, shipping exceptions, damaged items, cancellations, refunds, and return questions.
+ShipStation shipping rates and tracking are in beta integration. Real label purchase must remain gated until provider mode and postage-safety checks are explicitly approved. Shipping insurance and automated return-label workflows are not launch-ready. Buyers and sellers should use transaction support for missing packages, shipping exceptions, damaged items, cancellations, refunds, and return questions.
 
 ## Push Delivery
 

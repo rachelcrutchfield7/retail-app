@@ -12,6 +12,7 @@ import { createStripeConnectAccountSession } from '../services/stripeConnectServ
 
 type StripeProviderProps = ComponentProps<typeof NativeStripeProvider> & {
   children: ReactNode;
+  connectPublishableKey?: string;
 };
 
 const connectAppearance: StripeConnectInitParams['appearance'] = {
@@ -21,21 +22,28 @@ const connectAppearance: StripeConnectInitParams['appearance'] = {
   },
 };
 
-export function StripeProvider({ children, publishableKey, ...props }: StripeProviderProps) {
+export function StripeProvider({
+  children,
+  publishableKey,
+  connectPublishableKey,
+  ...props
+}: StripeProviderProps) {
   const connectInstance = useMemo(() => {
-    if (!publishableKey) {
+    const stripeConnectPublishableKey = connectPublishableKey ?? publishableKey;
+
+    if (!stripeConnectPublishableKey) {
       return null;
     }
 
     return loadConnectAndInitialize({
-      publishableKey,
+      publishableKey: stripeConnectPublishableKey,
       appearance: connectAppearance,
       fetchClientSecret: async () => {
         const session = await createStripeConnectAccountSession();
         return session.clientSecret;
       },
     });
-  }, [publishableKey]);
+  }, [connectPublishableKey, publishableKey]);
 
   return (
     <NativeStripeProvider publishableKey={publishableKey} {...props}>

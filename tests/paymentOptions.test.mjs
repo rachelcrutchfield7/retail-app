@@ -103,14 +103,15 @@ test('shipping rate states block duplicate purchase and never default failed shi
   assert.doesNotMatch(checkoutScreen, /catch \(error\)[^]*shippingDisplay[^]*'\$0\.00'/);
 });
 
-test('shipping guidance avoids carrier choices and explains tracking timing', () => {
+test('shipping guidance explains tracked rate selection and tracking timing', () => {
   const checkoutScreen = sprint4CheckoutSource();
 
-  assert.match(checkoutScreen, /ReTail automatically selects the lowest-cost eligible tracked shipping service for this order/);
+  assert.match(checkoutScreen, /Select a tracked shipping option, then review the final total/);
+  assert.match(checkoutScreen, /Shipping options/);
   assert.match(checkoutScreen, /Tracking will be added automatically when your seller ships\./);
   assert.match(checkoutScreen, /Sellers have up to 5 calendar days to get shipped orders accepted by the carrier\./);
   assert.match(checkoutScreen, /Tracking will appear here once the carrier accepts the package\./);
-  assert.doesNotMatch(checkoutScreen, /USPS|UPS|FedEx|shippingService|shippingCarrier/);
+  assert.doesNotMatch(checkoutScreen, /USPS|UPS|FedEx/);
 });
 
 test('checkout privacy and mobile summary layout stay constrained', () => {

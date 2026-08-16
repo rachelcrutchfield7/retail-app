@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import { FlatList, StyleSheet, View } from 'react-native';
 import { spacing } from '../../constants/theme';
 import type { ConversationSummary } from '../../services/types';
@@ -12,15 +13,26 @@ type ConversationListProps = {
 };
 
 export function ConversationList({ conversations, onOpenConversation, onBrowse }: ConversationListProps) {
+  const keyExtractor = useCallback((conversation: ConversationSummary) => conversation.id, []);
+  const renderItem = useCallback(
+    ({ item }: { item: ConversationSummary }) => (
+      <ConversationCard conversation={item} onPress={() => onOpenConversation(item.id)} />
+    ),
+    [onOpenConversation]
+  );
+  const renderSeparator = useCallback(() => <View style={styles.separator} />, []);
+
   return (
     <FlatList
       data={conversations}
-      keyExtractor={(conversation) => conversation.id}
+      keyExtractor={keyExtractor}
       contentContainerStyle={styles.content}
-      renderItem={({ item }) => (
-        <ConversationCard conversation={item} onPress={() => onOpenConversation(item.id)} />
-      )}
-      ItemSeparatorComponent={() => <View style={styles.separator} />}
+      renderItem={renderItem}
+      ItemSeparatorComponent={renderSeparator}
+      initialNumToRender={10}
+      maxToRenderPerBatch={8}
+      windowSize={7}
+      removeClippedSubviews
       ListEmptyComponent={
         <EmptyState
           title="No conversations yet"

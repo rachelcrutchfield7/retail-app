@@ -83,6 +83,7 @@ export async function startProtectedCheckout(context: PaymentOptionContext): Pro
       listingId: context.listing.id,
       fulfillmentMethod: context.fulfillmentMethod ?? (context.listing.shipping && !context.listing.pickup ? 'shipping' : 'pickup'),
       shippingAddress: context.shippingAddress,
+      shippingRateQuoteId: context.shippingRateQuoteId,
     },
   });
 

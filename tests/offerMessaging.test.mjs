@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
-import { hasOfferResponse, normalizeOfferAmount, parseOfferMessage } from '../src/services/offerService.ts';
+import { canRespondToOffer, hasOfferResponse, normalizeOfferAmount, parseOfferMessage } from '../src/services/offerService.ts';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 
@@ -35,6 +35,24 @@ test('offer system messages can be parsed and matched to seller responses', () =
   assert.equal(parsed?.kind, 'offer');
   assert.equal(parsed?.amount, '$25');
   assert.equal(hasOfferResponse([offerMessage, response], 'offer-1'), true);
+});
+
+test('offer response controls are available to the recipient of offers and counter offers', () => {
+  const initialOffer = parseOfferMessage(offerMessage);
+  const counterOffer = parseOfferMessage({
+    ...offerMessage,
+    id: 'counter-1',
+    sender_id: 'seller-1',
+    body: 'RETAIL_OFFER::{"kind":"counter_offer","amount":"$30","status":"countered","respondsTo":"offer-1"}',
+  });
+
+  assert.ok(initialOffer);
+  assert.ok(counterOffer);
+  assert.equal(canRespondToOffer(initialOffer, 'seller-1', { isSeller: true, responded: false }), true);
+  assert.equal(canRespondToOffer(initialOffer, 'buyer-1', { isSeller: false, responded: false }), false);
+  assert.equal(canRespondToOffer(counterOffer, 'buyer-1', { isSeller: false, responded: false }), true);
+  assert.equal(canRespondToOffer(counterOffer, 'seller-1', { isSeller: true, responded: false }), false);
+  assert.equal(canRespondToOffer(counterOffer, 'buyer-1', { isSeller: false, responded: true }), false);
 });
 
 test('conversation UI exposes make offer and seller response controls', () => {

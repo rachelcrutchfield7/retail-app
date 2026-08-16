@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "430195721076",
+    "project_id": "retail-da2ad",
+    "storage_bucket": "retail-da2ad.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:430195721076:android:58a3f1a51ee82fae3ba221",
+        "android_client_info": {
+          "package_name": "com.raecrutchfield.retail"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB8Towl7_MZfmkewamGwVBS1xyd2qMKgcs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

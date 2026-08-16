@@ -90,6 +90,26 @@ export function hasOfferResponse(messages: Message[], offerMessageId: string): b
   return messages.some((message) => parseOfferMessage(message)?.respondsTo === offerMessageId);
 }
 
+export function canRespondToOffer(
+  offer: OfferEvent,
+  currentUserId: string | undefined,
+  options: { isSeller: boolean; responded: boolean }
+): boolean {
+  if (!currentUserId || options.responded || offer.senderId === currentUserId) {
+    return false;
+  }
+
+  if (offer.kind === 'offer') {
+    return options.isSeller;
+  }
+
+  if (offer.kind === 'counter_offer') {
+    return !options.isSeller;
+  }
+
+  return false;
+}
+
 export function latestPendingOffer(messages: Message[]): OfferEvent | null {
   return [...messages]
     .reverse()

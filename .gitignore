@@ -17,7 +17,6 @@ coverage/
 *.keystore
 *.p8
 *.p12
-google-services.json
 GoogleService-Info.plist
 credentials.json
 service-account*.json

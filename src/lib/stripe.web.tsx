@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 type StripeProviderProps = {
   children: ReactNode;
   publishableKey?: string;
+  connectPublishableKey?: string;
   merchantIdentifier?: string;
   urlScheme?: string;
 };

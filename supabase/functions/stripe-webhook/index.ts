@@ -1,6 +1,7 @@
 import Stripe from 'npm:stripe@^22';
 import { handleCors, jsonResponse } from '../_shared/cors.ts';
 import { createSupabaseAdmin } from '../_shared/supabase.ts';
+import { purchaseShippingLabelForPaidTransaction } from '../_shared/shipping-label.ts';
 import { getStripe } from '../_shared/stripe.ts';
 
 const cryptoProvider = Stripe.createSubtleCryptoProvider();
@@ -411,6 +412,8 @@ async function handlePaymentIntentEvent(supabaseAdmin: SupabaseAdmin, event: Str
     data: { listingId: updatedTransaction.listing_id, transactionId: updatedTransaction.id, route: `/listing/${updatedTransaction.listing_id}` },
     dedupe_key: `stripe:${event.id}:seller`,
   });
+
+  await purchaseShippingLabelForPaidTransaction(supabaseAdmin, updatedTransaction.id);
 }
 
 async function handleChargeRefunded(supabaseAdmin: SupabaseAdmin, event: Stripe.Event): Promise<void> {

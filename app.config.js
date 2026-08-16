@@ -52,6 +52,7 @@ module.exports = {
     },
     android: {
       package: 'com.raecrutchfield.retail',
+      googleServicesFile: './google-services.json',
       softwareKeyboardLayoutMode: 'resize',
       intentFilters: [
         {
@@ -87,6 +88,12 @@ module.exports = {
     plugins: [
       'expo-status-bar',
       'expo-notifications',
+      [
+        'expo-location',
+        {
+          locationWhenInUsePermission: 'ReTail uses approximate location to show nearby pet supply listings and make local pickup easier.',
+        },
+      ],
       [
         'expo-image-picker',
         {

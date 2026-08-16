@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import type { GestureResponderEvent } from 'react-native';
 import { MapPin } from 'lucide-react-native';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -18,7 +19,7 @@ type ListingCardProps = {
   variant?: 'list' | 'grid';
 };
 
-export function ListingCard({ listing, isFavorite, onOpen, onFavorite, variant = 'list' }: ListingCardProps) {
+function ListingCardComponent({ listing, isFavorite, onOpen, onFavorite, variant = 'list' }: ListingCardProps) {
   const themeColors = useThemeColors();
   const grid = variant === 'grid';
   const handleFavorite = (event: GestureResponderEvent) => {
@@ -76,6 +77,8 @@ export function ListingCard({ listing, isFavorite, onOpen, onFavorite, variant =
     </Pressable>
   );
 }
+
+export const ListingCard = memo(ListingCardComponent);
 
 const styles = StyleSheet.create({
   listingCard: {

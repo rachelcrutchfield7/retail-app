@@ -12,7 +12,7 @@ Current branch: `codex/easypost-shipping-checkout`
 
 Current baseline commit before consolidation: `14b715fea8d44f6659fefda03fdb846c1d3e873d`
 
-This update verified the current app/backend state for the next Rachel-only beta candidate build, excluding EasyPost provider activation. The beta baseline has no unfinished EasyPost runtime implementation.
+This update verified the app/backend state for that Rachel-only beta candidate build, before ShipStation replaced EasyPost as the active shipping provider.
 
 ### Verification Summary
 
@@ -27,11 +27,11 @@ This update verified the current app/backend state for the next Rachel-only beta
 - Expo/dependency health: `npx expo install --check` reported dependencies up to date using the local offline dependency map; `npx expo-doctor` passed 20/20.
 - Typecheck, lint, deprecated backend usage check, and working-tree secret scan passed.
 
-### EasyPost Status
+### Shipping Provider Status
 
-EasyPost remains **PENDING EXTERNAL ACCOUNT VERIFICATION**.
+ShipStation is the active/current ReTail shipping provider for beta shipping-rate testing.
 
-Rachel is waiting for EasyPost account verification/API-key access. This update did not deploy EasyPost Edge Functions, add EasyPost secrets, create EasyPost webhooks, run live rate tests, buy labels, or apply EasyPost migrations to the normal ReTail backend.
+EasyPost is not the active provider. Any remaining EasyPost fallback code is retained only as an inactive rollback/provider-abstraction hook and should not be documented as canonical.
 
 ### Seller Payout Publish Guard
 

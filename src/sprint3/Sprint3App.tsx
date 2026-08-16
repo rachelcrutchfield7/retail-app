@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { LayoutChangeEvent } from 'react-native';
 import {
@@ -163,6 +163,16 @@ type Notice = {
   title: string;
   body: string;
 };
+
+const listingKeyExtractor = (item: Listing) => item.id;
+const renderGridSeparator = () => <View style={styles.gridSeparator} />;
+const gridListPerformanceProps = {
+  initialNumToRender: 8,
+  maxToRenderPerBatch: 6,
+  updateCellsBatchingPeriod: 50,
+  windowSize: 5,
+  removeClippedSubviews: Platform.OS !== 'web',
+} as const;
 
 const tabs: Array<{ key: SprintTab; label: string; icon: typeof Home }> = [
   { key: 'home', label: 'Home', icon: Home },
@@ -448,22 +458,20 @@ export function HomeScreen({
   const listings = useListings(params);
   const myListings = useMyListings();
 
-  const ownActiveListings = (myListings.data ?? []).filter((listing) => listing.status === 'Active');
-  const ownFilteredListings = ownActiveListings.filter((listing) =>
-    listingMatchesFeedFilters(listing, {
+  const sortedItems = useMemo(() => {
+    const filter = {
       search,
       categorySlug: categoryId,
-    })
-  );
-  const filteredMarketplaceListings = (listings.data?.items ?? []).filter((listing) =>
-    listingMatchesFeedFilters(listing, {
-      search,
-      categorySlug: categoryId,
-    })
-  );
-  const items = mergeFeedListings(ownFilteredListings, filteredMarketplaceListings);
-  const sortedItems = sortHomeListings(items, sort);
-  const favoriteIds = (favorites.data ?? []).map((listing) => listing.id);
+    };
+    const ownActiveListings = (myListings.data ?? []).filter((listing) => listing.status === 'Active');
+    const ownFilteredListings = ownActiveListings.filter((listing) => listingMatchesFeedFilters(listing, filter));
+    const filteredMarketplaceListings = (listings.data?.items ?? []).filter((listing) =>
+      listingMatchesFeedFilters(listing, filter)
+    );
+
+    return sortHomeListings(mergeFeedListings(ownFilteredListings, filteredMarketplaceListings), sort);
+  }, [categoryId, listings.data?.items, myListings.data, search, sort]);
+  const favoriteIdSet = useMemo(() => new Set((favorites.data ?? []).map((listing) => listing.id)), [favorites.data]);
   const unreadNotificationTotal = notifications.unreadCount ?? 0;
   const locationLabel = [location.city, location.state].filter(Boolean).join(', ');
   const rescueHubStats = useMemo(() => {
@@ -474,11 +482,11 @@ export function HomeScreen({
       urgentNeedCount: rescues.reduce((total, rescue) => total + rescue.urgentNeeds.length, 0),
     };
   }, [rescueSummary.data]);
-  const expandHomeDistance = () => {
+  const expandHomeDistance = useCallback(() => {
     setRadiusMiles(Math.min(location.radiusMiles === 100 ? 100 : location.radiusMiles + 25, 100));
-  };
+  }, [location.radiusMiles, setRadiusMiles]);
 
-  const handleFavorite = async (listing: Listing) => {
+  const handleFavorite = useCallback(async (listing: Listing) => {
     if (auth.isGuest) {
       setNotice({ title: 'Create an account to save listings.', body: 'Log in or create an account to keep favorite items.' });
       return;
@@ -494,14 +502,29 @@ export function HomeScreen({
     } catch (error) {
       setNotice({ title: 'Favorite was not updated', body: handleAppError(error).userMessage });
     }
-  };
+  }, [auth.isGuest, favorites]);
+
+  const renderListing = useCallback(
+    ({ item, index }: { item: Listing; index: number }) => (
+      <View style={[styles.marketplaceGridItem, index % 2 === 0 ? styles.marketplaceGridItemLeft : styles.marketplaceGridItemRight]}>
+        <ListingCard
+          listing={item}
+          variant="grid"
+          isFavorite={favoriteIdSet.has(item.id)}
+          onOpen={() => onOpenListing(item.id)}
+          onFavorite={() => void handleFavorite(item)}
+        />
+      </View>
+    ),
+    [favoriteIdSet, handleFavorite, onOpenListing]
+  );
 
   return (
     <FlatList
       style={styles.listScreen}
       contentContainerStyle={styles.listContent}
       data={sortedItems}
-      keyExtractor={(item) => item.id}
+      keyExtractor={listingKeyExtractor}
       ListHeaderComponent={
         <View style={styles.stackLarge}>
           <View style={styles.headerBlock}>
@@ -609,18 +632,9 @@ export function HomeScreen({
       }
       numColumns={2}
       columnWrapperStyle={styles.marketplaceGridRow}
-      renderItem={({ item, index }) => (
-        <View style={[styles.marketplaceGridItem, index % 2 === 0 ? styles.marketplaceGridItemLeft : styles.marketplaceGridItemRight]}>
-          <ListingCard
-            listing={item}
-            variant="grid"
-            isFavorite={favoriteIds.includes(item.id)}
-            onOpen={() => onOpenListing(item.id)}
-            onFavorite={() => void handleFavorite(item)}
-          />
-        </View>
-      )}
-      ItemSeparatorComponent={() => <View style={styles.gridSeparator} />}
+      renderItem={renderListing}
+      ItemSeparatorComponent={renderGridSeparator}
+      {...gridListPerformanceProps}
       ListEmptyComponent={
         !listings.isLoading && !listings.isError ? (
           <EmptyState
@@ -681,13 +695,17 @@ export function SearchScreen({
     [condition, listingType, location.radiusMiles, parsedMaxPrice, parsedMinPrice, search]
   );
   const listings = useListings(params);
-  const filteredItems = (listings.data?.items ?? []).filter((listing) =>
-    listingMatchesFeedFilters(listing, {
-      search,
-      categorySlug: categoryId,
-    })
+  const filteredItems = useMemo(
+    () =>
+      (listings.data?.items ?? []).filter((listing) =>
+        listingMatchesFeedFilters(listing, {
+          search,
+          categorySlug: categoryId,
+        })
+      ),
+    [categoryId, listings.data?.items, search]
   );
-  const favoriteIds = (favorites.data ?? []).map((listing) => listing.id);
+  const favoriteIdSet = useMemo(() => new Set((favorites.data ?? []).map((listing) => listing.id)), [favorites.data]);
 
   const buildSavedSearchInput = (): CreateSavedSearchInput => ({
     name: savedSearchName({
@@ -765,7 +783,7 @@ export function SearchScreen({
     }
   };
 
-  const clearSearchFilters = () => {
+  const clearSearchFilters = useCallback(() => {
     setSearch('');
     setCategoryId(undefined);
     setCondition(undefined);
@@ -773,9 +791,9 @@ export function SearchScreen({
     setMinPrice('');
     setMaxPrice('');
     setRadiusMiles(50);
-  };
+  }, [setRadiusMiles]);
 
-  const handleFavorite = async (listing: Listing) => {
+  const handleFavorite = useCallback(async (listing: Listing) => {
     if (auth.isGuest) {
       setNotice({ title: 'Create an account to save listings.', body: 'Saved listings live in your Favorites tab.' });
       return;
@@ -791,14 +809,29 @@ export function SearchScreen({
     } catch (error) {
       setNotice({ title: 'Favorite was not updated', body: handleAppError(error).userMessage });
     }
-  };
+  }, [auth.isGuest, favorites]);
+
+  const renderListing = useCallback(
+    ({ item, index }: { item: Listing; index: number }) => (
+      <View style={[styles.marketplaceGridItem, index % 2 === 0 ? styles.marketplaceGridItemLeft : styles.marketplaceGridItemRight]}>
+        <ListingCard
+          listing={item}
+          variant="grid"
+          isFavorite={favoriteIdSet.has(item.id)}
+          onOpen={() => onOpenListing(item.id)}
+          onFavorite={() => void handleFavorite(item)}
+        />
+      </View>
+    ),
+    [favoriteIdSet, handleFavorite, onOpenListing]
+  );
 
   return (
     <FlatList
       style={styles.listScreen}
       contentContainerStyle={styles.listContent}
       data={filteredItems}
-      keyExtractor={(item) => item.id}
+      keyExtractor={listingKeyExtractor}
       ListHeaderComponent={
         <View style={styles.stackLarge}>
           <View style={styles.headerBlock}>
@@ -884,18 +917,9 @@ export function SearchScreen({
       }
       numColumns={2}
       columnWrapperStyle={styles.marketplaceGridRow}
-      renderItem={({ item, index }) => (
-        <View style={[styles.marketplaceGridItem, index % 2 === 0 ? styles.marketplaceGridItemLeft : styles.marketplaceGridItemRight]}>
-          <ListingCard
-            listing={item}
-            variant="grid"
-            isFavorite={favoriteIds.includes(item.id)}
-            onOpen={() => onOpenListing(item.id)}
-            onFavorite={() => void handleFavorite(item)}
-          />
-        </View>
-      )}
-      ItemSeparatorComponent={() => <View style={styles.gridSeparator} />}
+      renderItem={renderListing}
+      ItemSeparatorComponent={renderGridSeparator}
+      {...gridListPerformanceProps}
       ListEmptyComponent={
         !listings.isLoading && !listings.isError ? (
           <EmptyState
@@ -1100,7 +1124,7 @@ export function FavoritesScreen({
 }) {
   const auth = useAuth();
   const favorites = useFavorites(Boolean(auth.user));
-  const favoriteIds = (favorites.data ?? []).map((listing) => listing.id);
+  const favoriteIdSet = useMemo(() => new Set((favorites.data ?? []).map((listing) => listing.id)), [favorites.data]);
   const [notice, setNotice] = useState<Notice | null>(null);
 
   if (auth.isGuest) {
@@ -1118,20 +1142,35 @@ export function FavoritesScreen({
     );
   }
 
-  const removeFavorite = async (listingId: string) => {
+  const removeFavorite = useCallback(async (listingId: string) => {
     try {
       await favorites.removeFavorite(listingId);
     } catch (error) {
       setNotice({ title: 'Favorite was not removed', body: handleAppError(error).userMessage });
     }
-  };
+  }, [favorites]);
+
+  const renderFavoriteListing = useCallback(
+    ({ item, index }: { item: Listing; index: number }) => (
+      <View style={[styles.marketplaceGridItem, index % 2 === 0 ? styles.marketplaceGridItemLeft : styles.marketplaceGridItemRight]}>
+        <ListingCard
+          listing={item}
+          variant="grid"
+          isFavorite={favoriteIdSet.has(item.id)}
+          onOpen={() => onOpenListing(item.id)}
+          onFavorite={() => void removeFavorite(item.id)}
+        />
+      </View>
+    ),
+    [favoriteIdSet, onOpenListing, removeFavorite]
+  );
 
   return (
     <FlatList
       style={styles.listScreen}
       contentContainerStyle={styles.listContent}
       data={favorites.data ?? []}
-      keyExtractor={(item) => item.id}
+      keyExtractor={listingKeyExtractor}
       ListHeaderComponent={
         <View style={styles.stackLarge}>
           <View style={styles.headerBlock}>
@@ -1146,18 +1185,9 @@ export function FavoritesScreen({
       }
       numColumns={2}
       columnWrapperStyle={styles.marketplaceGridRow}
-      renderItem={({ item, index }) => (
-        <View style={[styles.marketplaceGridItem, index % 2 === 0 ? styles.marketplaceGridItemLeft : styles.marketplaceGridItemRight]}>
-          <ListingCard
-            listing={item}
-            variant="grid"
-            isFavorite={favoriteIds.includes(item.id)}
-            onOpen={() => onOpenListing(item.id)}
-            onFavorite={() => void removeFavorite(item.id)}
-          />
-        </View>
-      )}
-      ItemSeparatorComponent={() => <View style={styles.gridSeparator} />}
+      renderItem={renderFavoriteListing}
+      ItemSeparatorComponent={renderGridSeparator}
+      {...gridListPerformanceProps}
       ListEmptyComponent={
         !favorites.isLoading && !favorites.isError ? (
           <EmptyState

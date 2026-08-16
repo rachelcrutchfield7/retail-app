@@ -218,6 +218,8 @@ test('Stripe Connect account sessions enable only embedded account onboarding', 
 
 test('embedded payout screen uses currently-due requirements and hosted fallback', () => {
   const onboardingScreen = read('src/components/payments/StripeConnectOnboardingScreen.tsx');
+  const app = read('App.tsx');
+  const stripeProvider = read('src/lib/stripe.tsx');
 
   assert.match(onboardingScreen, /ConnectAccountOnboarding/);
   assert.match(onboardingScreen, /fields: 'currently_due'/);
@@ -227,6 +229,9 @@ test('embedded payout screen uses currently-due requirements and hosted fallback
   assert.match(onboardingScreen, /startStripeConnectOnboarding/);
   assert.match(onboardingScreen, /refreshStripeConnectStatus/);
   assert.match(onboardingScreen, /onLoadError=\{handleLoadError\}/);
+  assert.match(app, /connectPublishableKey=\{config\.stripeConnectPublishableKey\}/);
+  assert.match(stripeProvider, /connectPublishableKey \?\? publishableKey/);
+  assert.match(stripeProvider, /publishableKey: stripeConnectPublishableKey/);
 });
 
 test('Stripe Connect account links use HTTPS return and refresh defaults', () => {

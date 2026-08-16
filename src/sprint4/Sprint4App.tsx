@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Alert, BackHandler, FlatList, Image, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -72,9 +73,15 @@ import { useNotifications } from '../hooks/useNotifications';
 import { useCreateReview } from '../hooks/useReviews';
 import { useReports } from '../hooks/useReports';
 import { useSettings } from '../hooks/useSettings';
+import { getForegroundLocationPermissionStatus, useLocation } from '../hooks/useLocation';
 import { useAdminSupportCases, useAdminUpdateSupportCase, useCreateSupportCase, useMySupportCases } from '../hooks/useSupportCases';
 import { QueryClientProvider } from '../lib/queryClient';
 import { useStripe } from '../lib/stripe';
+import {
+  getNativePushPermissionStatus,
+  registerNativePushTokenForCurrentUser,
+  removeRegisteredNativePushTokenForCurrentUser,
+} from '../lib/nativePushNotifications';
 import { useThemeColors, useThemePreference } from '../lib/themePreference';
 import {
   CreateListingScreen,
@@ -99,6 +106,13 @@ import {
   startProtectedCheckout,
 } from '../services/paymentService';
 import {
+  getDefaultSellerShippingOrigin,
+  getShippingRates,
+  saveDefaultSellerShippingOrigin,
+  type SellerShippingOrigin,
+  type ShippingRateOption,
+} from '../services/shippingService';
+import {
   getStripeConnectPayoutState,
   getStripeConnectPrimaryActionLabel,
   getStripeConnectStatusNotice,
@@ -109,6 +123,7 @@ import {
 import type { StripeConnectStatus } from '../services/stripeConnectService';
 import {
   acceptOffer,
+  canRespondToOffer,
   counterOffer,
   declineOffer,
   formatOfferBodyPreview,
@@ -123,12 +138,15 @@ import {
   supportStatusLabels,
 } from '../services/supportCaseService';
 import { reportReasons } from '../services/reportService';
+import { updateNotificationPreferences } from '../services/notificationService';
 import { useListing } from '../hooks/useListing';
+import { useNativePushNotifications } from '../hooks/useNativePushNotifications';
 import type {
   AdminListingReport,
   AdminReportModerationAction,
   Message,
   Notification,
+  NotificationPreferences,
   ReportReason,
   RescueProfile,
   ReportStatus,
@@ -138,6 +156,7 @@ import type {
   Transaction,
   TransactionSupportCase,
 } from '../services/types';
+import type { PushNavigationTarget } from '../lib/nativePushNotifications';
 import type { RescueOrganization } from '../types';
 import type { ProtectedCheckoutSetup } from '../types/payment';
 import { handleAppError } from '../utils/errorHandler';
@@ -254,6 +273,31 @@ function Sprint4Experience() {
     setRoute({ name: 'support-case', transactionId, requesterRole, conversationId });
   const openReview = (listingId: string, revieweeId: string, transactionId?: string) =>
     setRoute({ name: 'review', listingId, revieweeId, transactionId });
+  const navigateFromPush = useCallback((target: PushNavigationTarget) => {
+    if (target.name === 'conversation') {
+      setRoute({ name: 'conversation', conversationId: target.conversationId });
+      return;
+    }
+
+    if (target.name === 'support-case') {
+      setRoute({
+        name: 'support-case',
+        transactionId: target.transactionId,
+        requesterRole: target.requesterRole,
+        conversationId: target.conversationId,
+      });
+      return;
+    }
+
+    if (target.name === 'listing') {
+      setRoute({ name: 'listing-detail', listingId: target.listingId });
+      return;
+    }
+
+    setRoute({ name: 'notifications' });
+  }, []);
+
+  useNativePushNotifications(auth.user?.id, navigateFromPush);
 
   useEffect(() => {
     let mounted = true;
@@ -515,44 +559,189 @@ function Sprint4Experience() {
   }
 
   return (
-    <TabsShell activeTab={route.tab} onChangeTab={openTab}>
-      {route.tab === 'home' ? (
-        <HomeScreen
-          onOpenListing={openListing}
-          onOpenProfile={() => openTab('profile')}
-          onFavorites={openFavorites}
-          onNotifications={openNotifications}
-          onOpenRescueHub={openRescueHub}
-          onOpenSearch={() => openTab('search')}
-        />
-      ) : null}
-      {route.tab === 'search' ? <SearchScreen onOpenListing={openListing} onOpenProfile={() => openTab('profile')} /> : null}
-      {route.tab === 'sell' ? <SellScreen onCreateListing={openCreateListing} onOpenProfile={() => openTab('profile')} /> : null}
-      {route.tab === 'messages' ? (
-        <MessagesScreen
-          onBack={() => openTab('home')}
-          onOpenConversation={openConversation}
-          onOpenProfile={() => openTab('profile')}
-          onBrowse={() => openTab('home')}
-          showBack={false}
-        />
-      ) : null}
-      {route.tab === 'profile' ? (
-        <ProfileScreen
-          onEditProfile={() => setRoute({ name: 'edit-profile' })}
-          onMyListings={() => setRoute({ name: 'my-listings' })}
-          onOpenListing={openListing}
-          onMessages={openMessages}
-          onNotifications={openNotifications}
-          onSettings={openSettings}
-          onPreferences={openPreferences}
-          onSafetyCenter={openSafetyCenter}
-          onFAQ={openFAQ}
-          onAdmin={openAdmin}
-          onReviewTransaction={openReview}
-        />
-      ) : null}
-    </TabsShell>
+    <>
+      <TabsShell activeTab={route.tab} onChangeTab={openTab}>
+        {route.tab === 'home' ? (
+          <HomeScreen
+            onOpenListing={openListing}
+            onOpenProfile={() => openTab('profile')}
+            onFavorites={openFavorites}
+            onNotifications={openNotifications}
+            onOpenRescueHub={openRescueHub}
+            onOpenSearch={() => openTab('search')}
+          />
+        ) : null}
+        {route.tab === 'search' ? <SearchScreen onOpenListing={openListing} onOpenProfile={() => openTab('profile')} /> : null}
+        {route.tab === 'sell' ? <SellScreen onCreateListing={openCreateListing} onOpenProfile={() => openTab('profile')} /> : null}
+        {route.tab === 'messages' ? (
+          <MessagesScreen
+            onBack={() => openTab('home')}
+            onOpenConversation={openConversation}
+            onOpenProfile={() => openTab('profile')}
+            onBrowse={() => openTab('home')}
+            showBack={false}
+          />
+        ) : null}
+        {route.tab === 'profile' ? (
+          <ProfileScreen
+            onEditProfile={() => setRoute({ name: 'edit-profile' })}
+            onMyListings={() => setRoute({ name: 'my-listings' })}
+            onOpenListing={openListing}
+            onMessages={openMessages}
+            onNotifications={openNotifications}
+            onSettings={openSettings}
+            onPreferences={openPreferences}
+            onSafetyCenter={openSafetyCenter}
+            onFAQ={openFAQ}
+            onAdmin={openAdmin}
+            onReviewTransaction={openReview}
+          />
+        ) : null}
+      </TabsShell>
+      <PermissionSetupPrompt userId={auth.user?.id} route={route} />
+    </>
+  );
+}
+
+type PermissionPromptKind = 'notifications' | 'location';
+
+function permissionPromptStorageKey(kind: PermissionPromptKind, userId: string): string {
+  return `retail.permissionPrompt.${kind}.${userId}`;
+}
+
+function routePermissionKey(route: SprintRoute): string {
+  return route.name === 'tabs' ? `tabs:${route.tab}` : route.name;
+}
+
+function PermissionSetupPrompt({ userId, route }: { userId?: string; route: SprintRoute }) {
+  const [prompt, setPrompt] = useState<PermissionPromptKind | null>(null);
+  const [busy, setBusy] = useState(false);
+  const location = useLocation();
+  const routeKey = routePermissionKey(route);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const resolvePrompt = async () => {
+      if (!userId || route.name !== 'tabs') {
+        if (mounted) setPrompt(null);
+        return;
+      }
+
+      const notificationsKey = permissionPromptStorageKey('notifications', userId);
+      const notificationsHandled = await AsyncStorage.getItem(notificationsKey);
+
+      if (!notificationsHandled) {
+        const status = await getNativePushPermissionStatus().catch(() => 'unsupported' as const);
+
+        if (!mounted) return;
+
+        if (status === 'undetermined') {
+          setPrompt('notifications');
+          return;
+        }
+
+        await AsyncStorage.setItem(notificationsKey, status);
+      }
+
+      const locationRelevant = route.tab === 'search';
+
+      if (locationRelevant) {
+        const locationKey = permissionPromptStorageKey('location', userId);
+        const locationHandled = await AsyncStorage.getItem(locationKey);
+
+        if (!locationHandled) {
+          const status = await getForegroundLocationPermissionStatus().catch(() => 'unsupported' as const);
+
+          if (!mounted) return;
+
+          if (status === 'undetermined') {
+            setPrompt('location');
+            return;
+          }
+
+          await AsyncStorage.setItem(locationKey, status);
+        }
+      }
+
+      if (mounted) setPrompt(null);
+    };
+
+    void resolvePrompt();
+
+    return () => {
+      mounted = false;
+    };
+  }, [route.name, routeKey, userId]);
+
+  const dismissPrompt = async () => {
+    if (!userId || !prompt) return;
+    await AsyncStorage.setItem(permissionPromptStorageKey(prompt, userId), 'not_now');
+    setPrompt(null);
+  };
+
+  const enableNotifications = async () => {
+    if (!userId) return;
+
+    try {
+      setBusy(true);
+      const result = await registerNativePushTokenForCurrentUser(userId, { force: true });
+      await AsyncStorage.setItem(permissionPromptStorageKey('notifications', userId), result.status);
+
+      if (result.status === 'registered') {
+        await updateNotificationPreferences({
+          pushMessages: true,
+          pushFavorites: true,
+          pushReviews: true,
+          pushMarketplaceUpdates: true,
+        });
+      } else if (result.status === 'permission-denied') {
+        Alert.alert('Notifications are off', 'You can turn on ReTail notifications later in Settings.');
+      }
+
+      setPrompt(null);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const useCurrentLocation = async () => {
+    if (!userId) return;
+
+    try {
+      setBusy(true);
+      const result = await location.requestCurrentLocation();
+      await AsyncStorage.setItem(permissionPromptStorageKey('location', userId), result.permissionStatus);
+      setPrompt(null);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!prompt) {
+    return null;
+  }
+
+  const title = prompt === 'notifications' ? 'Stay updated' : 'Find items near you';
+  const body = prompt === 'notifications'
+    ? 'Get notified when someone messages you, makes an offer, buys your item, or updates an order.'
+    : 'Allow location access so ReTail can show nearby listings and make local pickup easier.';
+  const action = prompt === 'notifications' ? 'Enable Notifications' : 'Use My Location';
+  const onAction = prompt === 'notifications' ? enableNotifications : useCurrentLocation;
+
+  return (
+    <View pointerEvents="box-none" style={styles.permissionPromptOverlay}>
+      <Card style={styles.permissionPromptCard}>
+        <View style={styles.stack}>
+          <Text style={styles.cardTitle}>{title}</Text>
+          <Text style={styles.body}>{body}</Text>
+          <View style={styles.permissionPromptActions}>
+            <Button title="Not Now" variant="outline" onPress={() => void dismissPrompt()} fullWidth />
+            <Button title={action} onPress={() => void onAction()} loading={busy} fullWidth />
+          </View>
+        </View>
+      </Card>
+    </View>
   );
 }
 
@@ -1138,7 +1327,7 @@ export function ConversationScreen({
 
             if (offer) {
               const responded = hasOfferResponse(messages.data ?? [], offer.messageId);
-              const canRespond = isSeller && offer.kind === 'offer' && item.message.sender_id !== auth.user?.id && !responded;
+              const canRespond = canRespondToOffer(offer, auth.user?.id, { isSeller, responded });
               return (
                 <OfferMessageCard
                   offer={offer}
@@ -1183,6 +1372,11 @@ export function ConversationScreen({
               />
             );
           }}
+          initialNumToRender={16}
+          maxToRenderPerBatch={10}
+          updateCellsBatchingPeriod={50}
+          windowSize={7}
+          removeClippedSubviews={Platform.OS !== 'web'}
           ListHeaderComponent={messageListHeader}
           ListEmptyComponent={
             <EmptyState title="No messages yet" body="Send the first message to coordinate pickup, meetup, or shipping." icon={MessageCircle} />
@@ -1359,6 +1553,9 @@ export function PaymentOptionsScreen({
   const [checkoutBusy, setCheckoutBusy] = useState(false);
   const [checkoutSummary, setCheckoutSummary] = useState<ProtectedCheckoutSetup | null>(null);
   const [fulfillmentMethod, setFulfillmentMethod] = useState<'pickup' | 'shipping'>('pickup');
+  const [shippingRates, setShippingRates] = useState<ShippingRateOption[]>([]);
+  const [selectedShippingQuoteId, setSelectedShippingQuoteId] = useState<string | null>(null);
+  const [shippingRateExpiresAt, setShippingRateExpiresAt] = useState<string | null>(null);
   const [shippingAddress, setShippingAddress] = useState({
     name: auth.profile?.display_name ?? '',
     street1: '',
@@ -1394,6 +1591,9 @@ export function PaymentOptionsScreen({
   const canShip = item.shipping;
   const canPickup = item.pickup || item.porchPickup || item.meetup;
   const selectedFulfillmentMethod = canShip && !canPickup ? 'shipping' : fulfillmentMethod;
+  const selectedShippingRate = selectedShippingQuoteId
+    ? shippingRates.find((rate) => rate.quoteId === selectedShippingQuoteId) ?? null
+    : null;
   const checkoutItemCents = checkoutSummary?.itemAmountCents ?? listingPriceToCents(checkoutAmount) ?? 0;
   const sellerOffersFreeShipping = item.shippingPayer === 'seller';
   const shippingDisplay = selectedFulfillmentMethod === 'pickup'
@@ -1402,6 +1602,10 @@ export function PaymentOptionsScreen({
       ? checkoutSummary.shippingPayer === 'seller' || (checkoutSummary.shippingCollectedCents ?? 0) === 0
         ? 'Free'
         : formatCheckoutCents(checkoutSummary.shippingCollectedCents)
+      : selectedShippingRate
+        ? sellerOffersFreeShipping
+          ? 'Free'
+          : formatCheckoutCents(selectedShippingRate.amountCents)
       : sellerOffersFreeShipping
         ? 'Free'
         : checkoutBusy
@@ -1427,13 +1631,24 @@ export function PaymentOptionsScreen({
     : checkoutBusy
       ? 'Calculating tax...'
       : 'Calculated before payment';
-  const checkoutActionTitle = checkoutSummary ? 'Pay with Stripe' : 'Review Total';
+  const checkoutActionTitle = checkoutSummary
+    ? 'Pay with Stripe'
+    : selectedFulfillmentMethod === 'shipping' && shippingRates.length === 0
+      ? 'Calculate Shipping'
+      : 'Review Total';
+  const clearShippingRates = () => {
+    setShippingRates([]);
+    setSelectedShippingQuoteId(null);
+    setShippingRateExpiresAt(null);
+  };
   const updateShippingAddress = (field: keyof typeof shippingAddress, value: string) => {
     setCheckoutSummary(null);
+    clearShippingRates();
     setShippingAddress((current) => ({ ...current, [field]: value }));
   };
   const selectFulfillmentMethod = (method: 'pickup' | 'shipping') => {
     setCheckoutSummary(null);
+    clearShippingRates();
     setNotice(null);
     setFulfillmentMethod(method);
   };
@@ -1501,10 +1716,24 @@ export function PaymentOptionsScreen({
       }
 
       if (selectedFulfillmentMethod === 'shipping') {
-        setNotice({
-          title: 'Calculating tracked shipping...',
-          body: 'ReTail is confirming the lowest-cost eligible tracked shipping service for this order before payment.',
-        });
+        if (shippingRates.length === 0 || !selectedShippingQuoteId) {
+          setNotice({
+            title: 'Calculating tracked shipping...',
+            body: 'ReTail is checking eligible tracked shipping options for this order.',
+          });
+          const rateResponse = await getShippingRates({
+            listingId: item.id,
+            shippingAddress,
+          });
+          setShippingRates(rateResponse.rates);
+          setSelectedShippingQuoteId(rateResponse.selectedQuoteId ?? rateResponse.rates[0]?.quoteId ?? null);
+          setShippingRateExpiresAt(rateResponse.expiresAt);
+          setNotice({
+            title: 'Choose shipping',
+            body: 'Select a tracked shipping option, then review the final total.',
+          });
+          return;
+        }
       }
       const checkout = await startProtectedCheckout({
         listing: item,
@@ -1513,6 +1742,7 @@ export function PaymentOptionsScreen({
         agreedAmount: checkoutAmount,
         fulfillmentMethod: selectedFulfillmentMethod,
         shippingAddress: selectedFulfillmentMethod === 'shipping' ? shippingAddress : undefined,
+        shippingRateQuoteId: selectedFulfillmentMethod === 'shipping' ? selectedShippingQuoteId ?? undefined : undefined,
       });
       setCheckoutSummary(checkout);
       setNotice({
@@ -1573,7 +1803,7 @@ export function PaymentOptionsScreen({
                   {selectedFulfillmentMethod === 'shipping' ? (
                     <>
                       <Text style={styles.body}>
-                        Standard tracked shipping. ReTail automatically selects the lowest-cost eligible tracked shipping service for this order.
+                        Standard tracked shipping. ReTail shows eligible tracked shipping options before payment.
                       </Text>
                       <Text style={styles.metaText}>Tracking will be added automatically when your seller ships.</Text>
                       <Text style={styles.metaText}>Sellers have up to 5 calendar days to get shipped orders accepted by the carrier.</Text>
@@ -1585,6 +1815,37 @@ export function PaymentOptionsScreen({
                       <TextInput label="State" value={shippingAddress.state} onChangeText={(value) => updateShippingAddress('state', value.toUpperCase().slice(0, 2))} />
                       <TextInput label="ZIP code" value={shippingAddress.zipCode} onChangeText={(value) => updateShippingAddress('zipCode', value)} keyboardType="number-pad" />
                       <TextInput label="Phone for carrier" value={shippingAddress.phone} onChangeText={(value) => updateShippingAddress('phone', value)} keyboardType="phone-pad" />
+                      {shippingRates.length > 0 ? (
+                        <View style={styles.stack}>
+                          <Text style={styles.cardTitle}>Shipping options</Text>
+                          {shippingRates.map((rate) => (
+                            <Pressable
+                              key={rate.quoteId}
+                              accessibilityRole="button"
+                              accessibilityState={{ selected: selectedShippingQuoteId === rate.quoteId }}
+                              onPress={() => {
+                                setCheckoutSummary(null);
+                                setSelectedShippingQuoteId(rate.quoteId);
+                              }}
+                              style={[
+                                styles.rateOption,
+                                selectedShippingQuoteId === rate.quoteId && styles.rateOptionSelected,
+                              ]}
+                            >
+                              <View style={styles.checkoutSummaryLabel}>
+                                <Text style={styles.body}>{rate.carrier} {rate.service}</Text>
+                                <Text style={styles.metaText}>
+                                  {rate.deliveryDays ? `${rate.deliveryDays} day${rate.deliveryDays === 1 ? '' : 's'}` : 'Tracked shipping'}
+                                </Text>
+                              </View>
+                              <Text style={styles.checkoutSummaryValue}>{formatCheckoutCents(rate.amountCents)}</Text>
+                            </Pressable>
+                          ))}
+                          {shippingRateExpiresAt ? (
+                            <Text style={styles.metaText}>Rates expire before checkout if the order is not completed soon.</Text>
+                          ) : null}
+                        </View>
+                      ) : null}
                     </>
                   ) : (
                     <Text style={styles.body}>Payment still stays on ReTail. Arrange pickup details through ReTail messaging.</Text>
@@ -2006,6 +2267,7 @@ export function SettingsScreen({
 }) {
   const auth = useAuth();
   const settings = useSettings(Boolean(auth.user));
+  const location = useLocation();
   const theme = useThemePreference();
   const blockedAccounts = useBlockUser();
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -2016,6 +2278,18 @@ export function SettingsScreen({
   const [stripeBusy, setStripeBusy] = useState(false);
   const [latestStripeStatus, setLatestStripeStatus] = useState<StripeConnectStatus | null>(null);
   const [payoutOnboardingVisible, setPayoutOnboardingVisible] = useState(false);
+  const [shippingOrigin, setShippingOrigin] = useState<SellerShippingOrigin>({
+    name: '',
+    addressLine1: '',
+    addressLine2: '',
+    city: '',
+    state: '',
+    postalCode: '',
+    country: 'US',
+    phone: '',
+  });
+  const [shippingOriginLoading, setShippingOriginLoading] = useState(false);
+  const [shippingOriginSaving, setShippingOriginSaving] = useState(false);
   const version = '1.0.0';
   const profileStripeStatus = {
     accountId: auth.profile?.stripe_connect_account_id,
@@ -2043,6 +2317,45 @@ export function SettingsScreen({
       setEmail(settings.data.account.email);
     }
   }, [settings.data?.account.email]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    if (auth.isGuest || !settings.data) {
+      return () => {
+        mounted = false;
+      };
+    }
+
+    setShippingOriginLoading(true);
+    void getDefaultSellerShippingOrigin()
+      .then((origin) => {
+        if (!mounted) return;
+        setShippingOrigin(origin ?? {
+          name: auth.profile?.display_name ?? '',
+          addressLine1: '',
+          addressLine2: '',
+          city: auth.profile?.city ?? '',
+          state: auth.profile?.state ?? '',
+          postalCode: auth.profile?.zip_code ?? '',
+          country: 'US',
+          phone: '',
+        });
+      })
+      .catch((error) => {
+        if (!mounted) return;
+        setSettingsNotice({ title: 'Shipping address was not loaded', body: handleAppError(error).userMessage });
+      })
+      .finally(() => {
+        if (mounted) {
+          setShippingOriginLoading(false);
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [auth.isGuest, auth.profile?.city, auth.profile?.display_name, auth.profile?.state, auth.profile?.zip_code, settings.data]);
 
   const changeEmail = async () => {
     try {
@@ -2136,6 +2449,89 @@ export function SettingsScreen({
     }
   };
 
+  const updatePushPreference = async (input: Partial<NotificationPreferences>) => {
+    try {
+      await settings.updateNotifications(input);
+
+      const enablingPush = Object.entries(input).some(([key, value]) => key.startsWith('push') && value === true);
+
+      if (enablingPush && auth.user?.id) {
+        const result = await registerNativePushTokenForCurrentUser(auth.user.id, { force: true });
+
+        if (result.status === 'permission-denied') {
+          setSettingsNotice({
+            title: 'Phone alerts need permission',
+            body: 'Turn on notifications for ReTail in your phone settings to receive push alerts.',
+          });
+        } else if (result.status === 'registered') {
+          setSettingsNotice({
+            title: 'Phone alerts enabled',
+            body: 'ReTail can now send this device the push alerts you selected.',
+          });
+        }
+      }
+
+      const currentNotifications = settings.data?.notifications;
+
+      if (!currentNotifications) {
+        return;
+      }
+
+      const updatedPushValues = {
+        pushMessages: input.pushMessages ?? currentNotifications.pushMessages,
+        pushFavorites: input.pushFavorites ?? currentNotifications.pushFavorites,
+        pushReviews: input.pushReviews ?? currentNotifications.pushReviews,
+        pushMarketplaceUpdates: input.pushMarketplaceUpdates ?? currentNotifications.pushMarketplaceUpdates,
+      };
+
+      if (!Object.values(updatedPushValues).some(Boolean)) {
+        await removeRegisteredNativePushTokenForCurrentUser().catch(() => undefined);
+      }
+    } catch (error) {
+      setSettingsNotice({ title: 'Phone alerts were not updated', body: handleAppError(error).userMessage });
+    }
+  };
+
+  const requestLocationFromSettings = async () => {
+    const result = await location.requestCurrentLocation();
+
+    if (result.permissionStatus === 'granted') {
+      setSettingsNotice({
+        title: 'Location enabled',
+        body: 'ReTail can use your approximate area for nearby marketplace results.',
+      });
+      return;
+    }
+
+    setSettingsNotice({
+      title: 'Location is optional',
+      body: 'You can keep using ReTail with a manually selected marketplace area.',
+    });
+  };
+
+  const updateShippingOrigin = (field: keyof SellerShippingOrigin, value: string) => {
+    setShippingOrigin((current) => ({
+      ...current,
+      [field]: field === 'state' || field === 'country' ? value.toUpperCase().slice(0, 2) : value,
+    }));
+  };
+
+  const saveShippingOrigin = async () => {
+    try {
+      setShippingOriginSaving(true);
+      const saved = await saveDefaultSellerShippingOrigin(shippingOrigin);
+      setShippingOrigin(saved);
+      setSettingsNotice({
+        title: 'Shipping address saved',
+        body: 'ReTail will use this private address to calculate shipping and create labels.',
+      });
+    } catch (error) {
+      setSettingsNotice({ title: 'Shipping address was not saved', body: handleAppError(error).userMessage });
+    } finally {
+      setShippingOriginSaving(false);
+    }
+  };
+
   if (auth.isGuest) {
     return (
       <ScreenFrame>
@@ -2184,15 +2580,31 @@ export function SettingsScreen({
         <ToggleSwitch label="Reviews" value={settings.data.notifications.reviews} onValueChange={(reviews) => void settings.updateNotifications({ reviews })} />
         <ToggleSwitch label="Listing updates" value={settings.data.notifications.listingUpdates} onValueChange={(listingUpdates) => void settings.updateNotifications({ listingUpdates })} />
         <ToggleSwitch label="System notices" value={settings.data.notifications.system} onValueChange={(system) => void settings.updateNotifications({ system })} />
+      </SectionCard>
+
+      <SectionCard title="Phone Push Alerts">
+        <Text style={styles.body}>Choose which ReTail updates can appear on this phone.</Text>
+        <ToggleSwitch label="New messages" value={settings.data.notifications.pushMessages ?? false} onValueChange={(pushMessages) => void updatePushPreference({ pushMessages })} />
+        <ToggleSwitch label="Favorites" value={settings.data.notifications.pushFavorites ?? false} onValueChange={(pushFavorites) => void updatePushPreference({ pushFavorites })} />
+        <ToggleSwitch label="Reviews" value={settings.data.notifications.pushReviews ?? false} onValueChange={(pushReviews) => void updatePushPreference({ pushReviews })} />
+        <ToggleSwitch label="Listing, support, and safety updates" value={settings.data.notifications.pushMarketplaceUpdates ?? false} onValueChange={(pushMarketplaceUpdates) => void updatePushPreference({ pushMarketplaceUpdates })} />
         <View style={styles.comingSoonPanel}>
           <View style={styles.comingSoonIcon}>
             <Bell size={18} color={colors.primary} />
           </View>
           <View style={styles.notificationText}>
-            <Text style={styles.bodyStrong}>Phone push alerts coming soon</Text>
-            <Text style={styles.body}>These switches control in-app notifications for now. Phone alerts will be added after the Android notification setup is complete.</Text>
+            <Text style={styles.bodyStrong}>Phone permission may be required</Text>
+            <Text style={styles.body}>If your phone blocks notifications, ReTail will keep in-app notifications available here.</Text>
           </View>
         </View>
+        <Button title="Open Phone Settings" variant="outline" onPress={() => void Linking.openSettings()} fullWidth />
+      </SectionCard>
+
+      <SectionCard title="Location">
+        <Text style={styles.body}>Use approximate location for nearby listings, or choose your marketplace area manually.</Text>
+        {location.error ? <Text style={styles.inlineError}>{location.error}</Text> : null}
+        <Button title="Use My Location" variant="outline" onPress={() => void requestLocationFromSettings()} loading={location.loading} fullWidth />
+        <Button title="Choose Area Manually" variant="ghost" onPress={onPreferences} fullWidth />
       </SectionCard>
 
       <SectionCard title="Email Alerts">
@@ -2281,6 +2693,21 @@ export function SettingsScreen({
         {stripeStatus.accountId && payoutStatus !== 'ready' ? (
           <Button title="Open Stripe Dashboard" icon={Wallet} variant="outline" onPress={() => void openStripeDashboard()} disabled={stripeBusy} fullWidth />
         ) : null}
+      </SectionCard>
+
+      <SectionCard title="Shipping Address">
+        <Text style={styles.body}>
+          This address is used to calculate shipping and create labels. It is not shown publicly on your listings.
+        </Text>
+        {shippingOriginLoading ? <LoadingSpinner /> : null}
+        <TextInput label="Full name" value={shippingOrigin.name} onChangeText={(value) => updateShippingOrigin('name', value)} />
+        <TextInput label="Address line 1" value={shippingOrigin.addressLine1} onChangeText={(value) => updateShippingOrigin('addressLine1', value)} />
+        <TextInput label="Address line 2" value={shippingOrigin.addressLine2 ?? ''} onChangeText={(value) => updateShippingOrigin('addressLine2', value)} />
+        <TextInput label="City" value={shippingOrigin.city} onChangeText={(value) => updateShippingOrigin('city', value)} />
+        <TextInput label="State" value={shippingOrigin.state} onChangeText={(value) => updateShippingOrigin('state', value)} />
+        <TextInput label="ZIP code" value={shippingOrigin.postalCode} onChangeText={(value) => updateShippingOrigin('postalCode', value)} keyboardType="number-pad" />
+        <TextInput label="Phone for carrier" value={shippingOrigin.phone ?? ''} onChangeText={(value) => updateShippingOrigin('phone', value)} keyboardType="phone-pad" />
+        <Button title="Save Shipping Address" icon={MapPin} onPress={() => void saveShippingOrigin()} loading={shippingOriginSaving} fullWidth />
       </SectionCard>
 
       <SectionCard title="Account Settings">
@@ -3379,6 +3806,21 @@ function createSprint4Styles(themeColors: ThemeColors) {
   tabLabelActive: {
     color: colors.textPrimary,
   },
+  permissionPromptOverlay: {
+    position: 'absolute',
+    left: spacing.md,
+    right: spacing.md,
+    bottom: sizes.tabBarHeight + spacing.lg,
+    zIndex: 20,
+  },
+  permissionPromptCard: {
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  permissionPromptActions: {
+    gap: spacing.sm,
+  },
   listScreen: {
     flex: 1,
   },
@@ -3468,6 +3910,22 @@ function createSprint4Styles(themeColors: ThemeColors) {
   checkoutSummaryDivider: {
     height: 1,
     backgroundColor: themeColors.border,
+  },
+  rateOption: {
+    minHeight: 58,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.medium,
+    backgroundColor: colors.surface,
+  },
+  rateOptionSelected: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primarySoft,
   },
   backInline: {
     minHeight: sizes.touchTarget,

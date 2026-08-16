@@ -12,7 +12,7 @@ const stripeShared = read('supabase/functions/_shared/stripe.ts');
 const paymentService = read('src/services/paymentService.ts');
 const paymentCard = read('src/components/payments/PaymentChoiceCard.tsx');
 const sprint4 = read('src/sprint4/Sprint4App.tsx');
-const migration = read('supabase/migrations/20260812120000_authoritative_checkout_stripe_tax.sql');
+const migration = read('supabase/migrations/20260812152900_prelaunch_current_schema_baseline_created_20260813.sql');
 
 function paymentOptionsSource() {
   return sprint4.slice(
@@ -48,13 +48,13 @@ test('checkout taxes item, ReTail fee, and shipping with explicit tax-exclusive 
   assert.match(stripeCreate, /tax_liability: 'platform'/);
 });
 
-test('tax calculation requires buyer location and blocks unsupported buyer-paid shipping', () => {
-  assert.match(stripeCreate, /taxAddressFromShippingAddress\(body\.shippingAddress\)/);
+test('tax calculation requires buyer location and uses server-selected shipping quote for buyer-paid shipping', () => {
+  assert.match(stripeCreate, /taxAddressFromShippingQuote\(shippingQuote as ShippingRateQuote\)/);
   assert.match(stripeCreate, /taxAddressFromBuyerProfile\(buyerProfileTaxAddress as BuyerProfileTaxAddress\)/);
   assert.match(stripeCreate, /select\('city,state,zip_code'\)/);
   assert.match(stripeCreate, /TAX_CALCULATION_FAILURE/);
-  assert.match(stripeCreate, /Shipping checkout is not available until ReTail finishes live shipping-rate setup/);
-  assert.doesNotMatch(stripeCreate, /EasyPost|easypost|EASYPOST/);
+  assert.match(stripeCreate, /Select a shipping rate before starting checkout/);
+  assert.doesNotMatch(stripeCreate, /shippingAmountCents\?:|shippingCollectedCents\?:/);
 });
 
 test('application fee withholds ReTail fee, tax, and collected shipping from connected seller proceeds', () => {
@@ -93,15 +93,15 @@ test('transaction persistence stores authoritative tax and accounting breakdown'
     assert.match(stripeCreate, new RegExp(field.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   }
 
-  assert.match(migration, /add column if not exists tax_amount_cents integer/);
-  assert.match(migration, /add column if not exists stripe_tax_calculation_id text/);
-  assert.match(migration, /seller_amount_cents \+ platform_fee_cents \+ shipping_collected_cents \+ tax_amount_cents = amount_cents/);
+  assert.match(migration, /"tax_amount_cents" integer/);
+  assert.match(migration, /"stripe_tax_calculation_id" "text"/);
+  assert.match(migration, /transactions_authoritative_checkout_amounts_balance/);
 });
 
 test('mobile checkout displays authoritative tax and total before presenting Stripe payment sheet', () => {
   const checkoutScreen = paymentOptionsSource();
 
-  assert.match(checkoutScreen, /const checkoutActionTitle = checkoutSummary \? 'Pay with Stripe' : 'Review Total'/);
+  assert.match(checkoutScreen, /checkoutActionTitle = checkoutSummary[\s\S]*'Pay with Stripe'[\s\S]*'Review Total'/);
   assert.match(checkoutScreen, /setCheckoutSummary\(checkout\)/);
   assert.match(checkoutScreen, /Review your total/);
   assert.match(checkoutScreen, /presentStripePaymentSheet\(checkoutSummary\)/);

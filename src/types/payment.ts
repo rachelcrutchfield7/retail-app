@@ -37,4 +37,5 @@ export type PaymentOptionContext = {
   agreedAmount?: string;
   fulfillmentMethod?: FulfillmentMethod;
   shippingAddress?: BuyerShippingAddressInput;
+  shippingRateQuoteId?: string;
 };

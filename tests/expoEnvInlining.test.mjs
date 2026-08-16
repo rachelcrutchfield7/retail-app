@@ -25,6 +25,7 @@ test('Expo public config uses direct static process.env references for mobile in
     'EXPO_PUBLIC_POSTHOG_KEY',
     'EXPO_PUBLIC_SENTRY_DSN',
     'EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY',
+    'EXPO_PUBLIC_STRIPE_CONNECT_PUBLISHABLE_KEY',
     'EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED',
   ]) {
     assert.match(source, new RegExp(`process\\.env\\.${name}`));
@@ -48,6 +49,7 @@ test('readConfigFromEnv remains mockable and preserves valid public values', () 
     EXPO_PUBLIC_POSTHOG_KEY: 'posthog-key',
     EXPO_PUBLIC_SENTRY_DSN: 'https://example.com/sentry',
     EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY: 'pk_test_public',
+    EXPO_PUBLIC_STRIPE_CONNECT_PUBLISHABLE_KEY: 'pk_live_connect_public',
     EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED: 'true',
   });
 
@@ -58,6 +60,7 @@ test('readConfigFromEnv remains mockable and preserves valid public values', () 
   assert.equal(parsed.posthogKey, 'posthog-key');
   assert.equal(parsed.sentryDsn, 'https://example.com/sentry');
   assert.equal(parsed.stripePublishableKey, 'pk_test_public');
+  assert.equal(parsed.stripeConnectPublishableKey, 'pk_live_connect_public');
   assert.equal(parsed.stripePaymentsEnabled, true);
 });
 

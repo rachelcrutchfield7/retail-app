@@ -21,6 +21,7 @@ import { clearAllQueryData, clearQueryData } from '../lib/queryClient';
 import { createSupabaseClient } from '../lib/supabase';
 import { resetAnalyticsUser } from '../lib/analytics';
 import { logger } from '../lib/logger';
+import { removeRegisteredNativePushTokenForCurrentUser } from '../lib/nativePushNotifications';
 import { removeAllRealtimeSubscriptions } from '../services/realtimeService';
 import { colors, radius, spacing, typography } from '../constants/theme';
 
@@ -245,6 +246,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (input: SignInInput) => {
       setLoading(true);
       try {
+        await removeRegisteredNativePushTokenForCurrentUser().catch((error) => {
+          logAuthLoadError(error, 'Could not remove push token before email sign-in.');
+        });
         await clearPrivateAuthState();
         const nextSession = await signInWithEmail(input.email, input.password);
         await refreshProfile();
@@ -284,6 +288,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithGoogle = useCallback(async (input: GoogleSignInInput = { mode: 'login' }) => {
     setLoading(true);
     try {
+      await removeRegisteredNativePushTokenForCurrentUser().catch((error) => {
+        logAuthLoadError(error, 'Could not remove push token before Google sign-in.');
+      });
       await clearPrivateAuthState();
       const nextSession = await signInWithGoogleAccount({
         platform: Platform.OS,
@@ -304,6 +311,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(async () => {
     setLoading(true);
     try {
+      await removeRegisteredNativePushTokenForCurrentUser().catch((error) => {
+        logAuthLoadError(error, 'Could not remove push token before sign-out.');
+      });
       await clearAuthSession();
       await clearGoogleSignInSelection();
       await clearPrivateAuthState();

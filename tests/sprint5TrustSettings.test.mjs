@@ -60,6 +60,7 @@ test('settings exposes account safety, blocked accounts, and confirmed deletion'
   assert.match(settingsScreen, /Type DELETE to confirm/);
   assert.match(settingsScreen, /Update Email/);
   assert.match(settingsScreen, /Change Password/);
-  assert.match(settingsScreen, /These switches control in-app notifications for now/);
+  assert.match(settingsScreen, /Phone Push Alerts/);
+  assert.match(settingsScreen, /Choose which ReTail updates can appear on this phone/);
   assert.match(settingsScreen, /Marketing emails/);
 });

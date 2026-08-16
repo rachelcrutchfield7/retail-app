@@ -566,6 +566,7 @@ CANONICAL RPC:
 - `delete_my_notification`
 - `register_my_device_token`
 - `remove_my_device_token`
+- `remove_invalid_device_token_from_push_delivery` (service-role only)
 - `get_my_notification_preferences`
 - `update_my_notification_preferences`
 - `create_user_notification` only where server authorization permits
@@ -585,10 +586,11 @@ ACTIVE POLICIES:
 
 - User read own notifications
 - `device_tokens` and `notification_preferences` are intentionally RPC-only with no direct public policies
+- `notification_push_deliveries` is service-role only; no mobile direct access
 
 EDGE FUNCTIONS:
 
-- `send-notification`
+- `send-notification` (email + Expo push delivery)
 
 DEPRECATED OBJECTS: none verified
 
@@ -599,6 +601,8 @@ DO NOT USE:
 NOTES:
 
 - `send-notification` has JWT disabled intentionally only when trusted shared-secret or related authenticated-user checks remain present.
+- Native push uses Expo Push Service from the backend only. The mobile app registers Expo push tokens through `register_my_device_token`; it never sends arbitrary push payloads.
+- `notification_push_deliveries` dedupes one push attempt per in-app notification and device token hash.
 
 ## Stripe Checkout
 
@@ -649,15 +653,21 @@ NOTES:
 
 FEATURE: Shipping checkout
 
-STATUS: PENDING EXTERNAL PROVIDER SETUP
+STATUS: SHIPSTATION ACTIVE FOR BETA RATE TESTING
 
 CANONICAL RPC:
 
-- Pending. Do not treat EasyPost RPCs as live canonical backend objects until EasyPost account verification, API keys, migrations, and Edge Functions are approved and deployed.
+- `shipping-rate`
+- `shipping-label-create`
+- `shipping-label-void`
+- `shipping-tracking-webhook`
 
 CANONICAL PRIVATE HELPERS:
 
-- Pending.
+- `supabase/functions/_shared/shipping.ts`
+- `supabase/functions/_shared/shippingProvider.ts`
+- `supabase/functions/_shared/shipstation.ts`
+- `supabase/functions/_shared/shipping-label.ts`
 
 ACTIVE TRIGGERS:
 
@@ -666,27 +676,33 @@ ACTIVE TRIGGERS:
 ACTIVE POLICIES:
 
 - Transaction participant read policy
-- Shipping-specific EasyPost policies are pending and not live in the normal beta backend.
+- ShipStation shipping policies introduced by `20260815120000_shipstation_shipping_provider`.
 
 EDGE FUNCTIONS:
 
-- Pending. Do not deploy `shipping-rate`, `shipping-label-create`, `shipping-tracking-webhook`, or `shipping-label-refund` until EasyPost account verification is complete.
+- `shipping-rate`
+- `shipping-label-create`
+- `shipping-label-void`
+- `shipping-tracking-webhook`
 
-DEPRECATED OBJECTS: none verified
+DEPRECATED OBJECTS:
+
+- EasyPost is not the active provider. The fallback abstraction may remain temporarily for rollback/provider abstraction only.
 
 DO NOT USE:
 
 - Client-submitted shipping prices.
-- EasyPost keys in `EXPO_PUBLIC_*` or mobile source.
+- ShipStation or EasyPost keys in `EXPO_PUBLIC_*` or mobile source.
 - Public listing/profile fields for buyer delivery addresses or seller origin addresses.
 - Label purchase before Stripe payment succeeds.
 
 NOTES:
 
-- Product decision: EasyPost is the intended provider for rates, labels, tracking, and carrier events.
-- Current beta state: EasyPost integration is pending external account verification/API-key access and is not part of the normal beta build.
+- Product decision: ShipStation is the active/current provider for rates, labels, tracking, and carrier events.
+- Current beta state: ShipStation integration is active for beta shipping-rate testing. Label purchase remains gated by provider-mode/postage-safety approval.
+- EasyPost fallback code is retained only as an inactive provider abstraction/rollback hook and is not canonical.
 - ReTail should automatically select the lowest-cost eligible tracked service once provider integration is live.
-- Local pickup does not use EasyPost.
+- Local pickup does not use ShipStation.
 - Return-label creation is deferred until an approved support workflow is specified.
 
 ## Stripe Connect

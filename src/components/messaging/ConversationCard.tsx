@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, radius, sizes, spacing, typography } from '../../constants/theme';
 import { useThemeColors } from '../../lib/themePreference';
@@ -19,7 +20,7 @@ type ConversationCardProps = {
   listingThumbnail?: string;
 };
 
-export function ConversationCard({
+function ConversationCardComponent({
   conversation,
   onPress,
   name,
@@ -66,6 +67,8 @@ export function ConversationCard({
     </Pressable>
   );
 }
+
+export const ConversationCard = memo(ConversationCardComponent);
 
 const styles = StyleSheet.create({
   conversationRow: {

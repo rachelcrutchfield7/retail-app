@@ -420,6 +420,10 @@ export type Transaction = {
   buyer_tax_postal_code?: string;
   fulfillment_method?: FulfillmentMethod;
   shipping_method?: string;
+  shipping_provider?: 'shipstation' | 'easypost';
+  shipping_rate_id?: string;
+  shipping_shipment_id?: string;
+  shipping_label_id?: string;
   shipping_payer?: 'buyer' | 'seller';
   shipping_amount_cents?: number;
   shipping_collected_cents?: number;

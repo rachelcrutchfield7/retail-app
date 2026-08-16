@@ -7,6 +7,7 @@ import { requireCurrentPolicyAcceptance } from './consentService';
 import { readLocalImageFile } from './localImageFile';
 import {
   getConversationById,
+  getConversationParticipantIds,
   getConversations,
   getOrCreateConversation,
   requireCanSendInConversation,
@@ -176,7 +177,7 @@ export async function getMessages(conversationId: string, params: MessageQueryPa
 
 export async function getPaginatedMessages(conversationId: string, params: MessageQueryParams = {}): Promise<PaginatedMessages> {
   const profile = await ensureCurrentProfile();
-  await getConversationById(conversationId);
+  await getConversationParticipantIds(conversationId);
   const limit = Math.min(Math.max(params.limit ?? cachePolicy.messages.pageSize, 1), 100);
   let query = supabase
     .from('messages')
@@ -316,7 +317,7 @@ export async function uploadMessageImage(fileUri: string, conversationId: string
 
 export async function markMessagesRead(conversationId: string): Promise<void> {
   await ensureCurrentProfile();
-  await getConversationById(conversationId);
+  await getConversationParticipantIds(conversationId);
   const { error } = await supabase.rpc('mark_conversation_read', {
     target_conversation_id: conversationId,
   });

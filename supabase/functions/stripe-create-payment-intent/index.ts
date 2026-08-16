@@ -15,6 +15,7 @@ type CheckoutRequest = {
   listingId?: string;
   fulfillmentMethod?: 'pickup' | 'shipping';
   shippingAddress?: BuyerTaxAddressInput;
+  shippingRateQuoteId?: string;
 };
 
 type BuyerTaxAddressInput = {
@@ -78,10 +79,39 @@ type TransactionCheckoutBreakdown = {
   shipping_payer: string | null;
   shipping_amount_cents: number | null;
   shipping_collected_cents: number | null;
+  shipping_provider: string | null;
+  shipping_rate_id: string | null;
+  shipping_shipment_id: string | null;
   shipping_carrier: string | null;
   shipping_service: string | null;
   tax_amount_cents: number | null;
   stripe_tax_calculation_id: string | null;
+};
+
+type ShippingRateQuote = {
+  id: string;
+  provider: 'shipstation' | 'easypost';
+  provider_rate_id: string;
+  provider_shipment_id: string | null;
+  buyer_id: string;
+  seller_id: string;
+  listing_id: string;
+  carrier: string;
+  carrier_code: string | null;
+  service: string;
+  service_code: string | null;
+  amount_cents: number;
+  currency: string;
+  expires_at: string;
+  used_at: string | null;
+  seller_origin_id: string | null;
+  buyer_name: string | null;
+  buyer_address_line1: string;
+  buyer_address_line2: string | null;
+  buyer_city: string;
+  buyer_state: string;
+  buyer_zip_code: string;
+  buyer_phone: string | null;
 };
 
 const RESERVED_MESSAGE = 'This item is currently being purchased by another buyer. Please try again shortly.';
@@ -221,6 +251,9 @@ async function loadTransactionCheckoutBreakdown(
       'shipping_payer',
       'shipping_amount_cents',
       'shipping_collected_cents',
+      'shipping_provider',
+      'shipping_rate_id',
+      'shipping_shipment_id',
       'shipping_carrier',
       'shipping_service',
       'tax_amount_cents',
@@ -269,6 +302,7 @@ function checkoutResponseFromBreakdown(
     shippingCollectedCents: transaction.shipping_collected_cents ?? 0,
     shippingCarrier: transaction.shipping_carrier ?? undefined,
     shippingService: transaction.shipping_service ?? undefined,
+    shippingRateQuoteId: undefined,
     currency: paymentIntent.currency,
   };
 }
@@ -323,18 +357,23 @@ function resolveFulfillmentMethod(
 function resolveShippingAmountCents(
   fulfillmentMethod: 'pickup' | 'shipping',
   reservation: CheckoutReservation,
+  quote: ShippingRateQuote | null,
 ): { shippingAmountCents: number; shippingCollectedCents: number; shippingPayer: 'buyer' | 'seller' } {
   if (fulfillmentMethod === 'pickup') {
     return { shippingAmountCents: 0, shippingCollectedCents: 0, shippingPayer: 'buyer' };
   }
 
+  if (!quote) {
+    throw new CheckoutControlledError('Select a shipping rate before starting checkout.');
+  }
+
   const shippingPayer = reservation.shipping_payer === 'seller' ? 'seller' : 'buyer';
 
   if (shippingPayer === 'seller') {
-    return { shippingAmountCents: 0, shippingCollectedCents: 0, shippingPayer };
+    return { shippingAmountCents: quote.amount_cents, shippingCollectedCents: 0, shippingPayer };
   }
 
-  throw new CheckoutControlledError('Shipping checkout is not available until ReTail finishes live shipping-rate setup.');
+  return { shippingAmountCents: quote.amount_cents, shippingCollectedCents: quote.amount_cents, shippingPayer };
 }
 
 function taxAddressFromShippingAddress(input: BuyerTaxAddressInput | undefined): TaxAddress {
@@ -359,6 +398,85 @@ function taxAddressFromShippingAddress(input: BuyerTaxAddressInput | undefined):
     },
     source: 'shipping',
   };
+}
+
+function taxAddressFromShippingQuote(quote: ShippingRateQuote): TaxAddress {
+  return taxAddressFromShippingAddress({
+    street1: quote.buyer_address_line1,
+    street2: quote.buyer_address_line2 ?? undefined,
+    city: quote.buyer_city,
+    state: quote.buyer_state,
+    zipCode: quote.buyer_zip_code,
+    country: 'US',
+  });
+}
+
+async function loadShippingRateQuote(
+  supabaseAdmin: SupabaseAdmin,
+  quoteId: string | undefined,
+  reservation: CheckoutReservation,
+  buyerId: string,
+): Promise<ShippingRateQuote | null> {
+  if (!quoteId) {
+    return null;
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from('shipping_rate_quotes')
+    .select([
+      'id',
+      'provider',
+      'provider_rate_id',
+      'provider_shipment_id',
+      'buyer_id',
+      'seller_id',
+      'listing_id',
+      'carrier',
+      'carrier_code',
+      'service',
+      'service_code',
+      'amount_cents',
+      'currency',
+      'expires_at',
+      'used_at',
+      'seller_origin_id',
+      'buyer_name',
+      'buyer_address_line1',
+      'buyer_address_line2',
+      'buyer_city',
+      'buyer_state',
+      'buyer_zip_code',
+      'buyer_phone',
+    ].join(','))
+    .eq('id', quoteId)
+    .eq('listing_id', reservation.listing_id)
+    .eq('buyer_id', buyerId)
+    .eq('seller_id', reservation.seller_id)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  const quote = data as ShippingRateQuote | null;
+
+  if (!quote) {
+    throw new CheckoutControlledError('Select a valid shipping rate before starting checkout.');
+  }
+
+  if (quote.used_at) {
+    throw new CheckoutControlledError('This shipping rate has already been used. Please recalculate shipping.');
+  }
+
+  if (Date.parse(quote.expires_at) <= Date.now()) {
+    throw new CheckoutControlledError('This shipping rate expired. Please recalculate shipping.');
+  }
+
+  if (quote.currency !== 'usd') {
+    throw new CheckoutControlledError('This shipping rate uses an unsupported currency.');
+  }
+
+  return quote;
 }
 
 function taxAddressFromBuyerProfile(profile: BuyerProfileTaxAddress): TaxAddress {
@@ -553,12 +671,15 @@ Deno.serve(async (request) => {
     }
 
     const fulfillmentMethod = resolveFulfillmentMethod(body.fulfillmentMethod, reservation);
-    const shipping = resolveShippingAmountCents(fulfillmentMethod, reservation);
+    const shippingQuote = fulfillmentMethod === 'shipping'
+      ? await loadShippingRateQuote(supabaseAdmin, body.shippingRateQuoteId, reservation, user.id)
+      : null;
+    const shipping = resolveShippingAmountCents(fulfillmentMethod, reservation, shippingQuote);
     const buyerProfileTaxAddress = fulfillmentMethod === 'pickup'
       ? await loadBuyerProfileTaxAddress(supabaseAdmin, user.id)
       : null;
     const taxAddress = fulfillmentMethod === 'shipping'
-      ? taxAddressFromShippingAddress(body.shippingAddress)
+      ? taxAddressFromShippingQuote(shippingQuote as ShippingRateQuote)
       : taxAddressFromBuyerProfile(buyerProfileTaxAddress as BuyerProfileTaxAddress);
     const itemAmountCents = reservation.amount_cents;
     const platformFeeCents = calculatePlatformFeeCents(itemAmountCents);
@@ -598,6 +719,8 @@ Deno.serve(async (request) => {
         retail_tax_amount_cents: String(taxAmountCents),
         retail_tax_calculation_id: String(taxCalculation.id),
         retail_application_fee_withheld_cents: String(stripeApplicationFeeWithheldCents),
+        retail_shipping_provider: shippingQuote?.provider ?? '',
+        retail_shipping_rate_id: shippingQuote?.provider_rate_id ?? '',
       },
       description: `ReTail purchase: ${String(reservation.listing_title).slice(0, 120)}`,
     } as Stripe.PaymentIntentCreateParams);
@@ -619,6 +742,13 @@ Deno.serve(async (request) => {
       shipping_payer: shipping.shippingPayer,
       shipping_amount_cents: shipping.shippingAmountCents,
       shipping_collected_cents: shipping.shippingCollectedCents,
+      shipping_provider: shippingQuote?.provider ?? null,
+      shipping_rate_id: shippingQuote?.provider_rate_id ?? null,
+      shipping_shipment_id: shippingQuote?.provider_shipment_id ?? null,
+      shipping_carrier: shippingQuote?.carrier ?? null,
+      shipping_service: shippingQuote?.service ?? null,
+      shipping_status: fulfillmentMethod === 'shipping' ? 'pending' : null,
+      label_refund_status: fulfillmentMethod === 'shipping' ? 'not_requested' : 'not_requested',
       tax_amount_cents: taxAmountCents,
       currency: paymentIntent.currency,
       stripe_payment_intent_id: paymentIntent.id,
@@ -648,6 +778,50 @@ Deno.serve(async (request) => {
       reservationToRelease = null;
 
       return jsonResponse({ error: 'Payment was created, but ReTail could not save the transaction.' }, 500);
+    }
+
+    if (shippingQuote) {
+      const { error: quoteUpdateError } = await supabaseAdmin
+        .from('shipping_rate_quotes')
+        .update({
+          transaction_id: transaction.id,
+          used_at: new Date().toISOString(),
+        })
+        .eq('id', shippingQuote.id)
+        .is('used_at', null);
+
+      if (quoteUpdateError) {
+        await getStripe().paymentIntents.cancel(paymentIntent.id, { cancellation_reason: 'abandoned' });
+        await releaseCheckoutReservation(supabaseAdmin, reservation, user.id, null);
+        reservationToRelease = null;
+
+        return jsonResponse({ error: 'Payment was created, but ReTail could not lock the shipping rate.' }, 500);
+      }
+
+      const { error: shippingDetailError } = await supabaseAdmin
+        .from('transaction_shipping_details')
+        .upsert({
+          transaction_id: transaction.id,
+          buyer_id: user.id,
+          seller_id: reservation.seller_id,
+          buyer_name: shippingQuote.buyer_name,
+          buyer_address_line1: shippingQuote.buyer_address_line1,
+          buyer_address_line2: shippingQuote.buyer_address_line2,
+          buyer_city: shippingQuote.buyer_city,
+          buyer_state: shippingQuote.buyer_state,
+          buyer_zip_code: shippingQuote.buyer_zip_code,
+          buyer_phone: shippingQuote.buyer_phone,
+          seller_origin_id: shippingQuote.seller_origin_id,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'transaction_id' });
+
+      if (shippingDetailError) {
+        await getStripe().paymentIntents.cancel(paymentIntent.id, { cancellation_reason: 'abandoned' });
+        await releaseCheckoutReservation(supabaseAdmin, reservation, user.id, null);
+        reservationToRelease = null;
+
+        return jsonResponse({ error: 'Payment was created, but ReTail could not save shipping details.' }, 500);
+      }
     }
 
     const { error: attachError } = await supabaseAdmin.rpc('attach_stripe_checkout_reservation', {
@@ -683,6 +857,9 @@ Deno.serve(async (request) => {
       shippingPayer: shipping.shippingPayer,
       shippingAmountCents: shipping.shippingAmountCents,
       shippingCollectedCents: shipping.shippingCollectedCents,
+      shippingCarrier: shippingQuote?.carrier,
+      shippingService: shippingQuote?.service,
+      estimatedDelivery: shippingQuote?.estimated_delivery_date,
       currency: paymentIntent.currency,
     });
   } catch (error) {
