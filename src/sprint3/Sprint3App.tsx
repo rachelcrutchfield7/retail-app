@@ -123,6 +123,7 @@ import {
   refreshStripeConnectStatus,
 } from '../services/stripeConnectService';
 import type { StripeConnectStatus } from '../services/stripeConnectService';
+import { splitPackageWeightOz, totalPackageWeightOzFromParts } from '../services/shippingRules';
 import type {
   CreateListingInput,
   CreateSavedSearchInput,
@@ -3956,15 +3957,14 @@ function ListingForm({
             helperText="Publicly shown as a zip code only, not your exact address."
             error={errors.ship_from_zip_code}
           />
-          <TextInput
-            label="Package weight"
-            value={String(form.package_weight_oz ?? '')}
-            onChangeText={(value) => onChange('package_weight_oz', value)}
-            placeholder="16"
-            keyboardType="decimal-pad"
-            helperText="Ounces. Seller is responsible for accurate package weight."
+          <PackageWeightInputs
+            value={form.package_weight_oz}
+            onChange={(value) => onChange('package_weight_oz', value)}
             error={errors.package_weight_oz}
           />
+          <Text style={styles.body}>
+            Enter the weight of the item after it is packed for shipping, including the box and packing materials.
+          </Text>
           <View style={styles.gridTwo}>
             <TextInput
               label="Length"
@@ -3990,7 +3990,7 @@ function ListingForm({
               onChangeText={(value) => onChange('package_height_in', value)}
               placeholder="4"
               keyboardType="decimal-pad"
-              helperText="Inches"
+              helperText="Measure the packed box in inches."
               error={errors.package_height_in}
             />
           </View>
@@ -4005,6 +4005,51 @@ function ListingForm({
       />
       {errors.safety_confirmation ? <Text style={styles.errorText}>{errors.safety_confirmation}</Text> : null}
     </>
+  );
+}
+
+function PackageWeightInputs({
+  value,
+  onChange,
+  error,
+}: {
+  value: CreateListingInput['package_weight_oz'];
+  onChange: (value: CreateListingInput['package_weight_oz']) => void;
+  error?: string;
+}) {
+  const parts = splitPackageWeightOz(value);
+  const poundsValue = parts ? String(parts.pounds) : '';
+  const ouncesValue = parts ? String(parts.ounces) : '';
+
+  const updateWeight = (pounds: string, ounces: string) => {
+    const totalOunces = totalPackageWeightOzFromParts(pounds, ounces);
+    onChange(totalOunces ?? '');
+  };
+
+  return (
+    <Field label="Package Weight">
+      <View style={styles.gridTwo}>
+        <View style={styles.weightInput}>
+          <TextInput
+            label="Pounds"
+            value={poundsValue}
+            onChangeText={(nextPounds) => updateWeight(nextPounds, ouncesValue)}
+            placeholder="2"
+            keyboardType="number-pad"
+            error={error}
+          />
+        </View>
+        <View style={styles.weightInput}>
+          <TextInput
+            label="Ounces"
+            value={ouncesValue}
+            onChangeText={(nextOunces) => updateWeight(poundsValue, nextOunces)}
+            placeholder="11"
+            keyboardType="number-pad"
+          />
+        </View>
+      </View>
+    </Field>
   );
 }
 
@@ -4948,6 +4993,10 @@ function createSprint3Styles(themeColors: ThemeColors) {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.md,
+  },
+  weightInput: {
+    flex: 1,
+    minWidth: 130,
   },
   gettingOptionList: {
     gap: spacing.sm,

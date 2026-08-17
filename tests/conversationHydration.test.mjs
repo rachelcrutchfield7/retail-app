@@ -12,9 +12,25 @@ test('conversation participant hydration uses public profile lookup before delet
 
   assert.match(service, /loadPublicProfileForConversation/);
   assert.match(service, /getPublicProfile\(userId\)/);
+  assert.match(service, /loadPublicProfilesForConversationList/);
   assert.match(service, /PROFILE_NOT_FOUND/);
   assert.match(service, /deletedPublicProfile\(otherUserId\)/);
   assert.doesNotMatch(service, /function loadProfileSafe/);
+});
+
+test('conversation list hydration batches related profile and message lookups', () => {
+  const service = read('src/services/conversationService.ts');
+  const listStart = service.indexOf('export async function getUserConversations');
+  const listEnd = service.indexOf('export async function getConversations');
+  const listImplementation = service.slice(listStart, listEnd);
+
+  assert.match(service, /function buildConversationSummaryFromBatch/);
+  assert.match(service, /loadConversationSummaryBatch\(rows, profile\)/);
+  assert.match(service, /loadPublicProfilesForConversationList\(otherUserIds\)/);
+  assert.match(service, /loadLastMessagesForConversationList\(conversationIds, currentProfile\.id\)/);
+  assert.match(service, /loadUnreadCountsForConversationList\(conversationIds, currentProfile\.id\)/);
+  assert.match(listImplementation, /summaries = rows\.map\(\(conversation\) => buildConversationSummaryFromBatch/);
+  assert.match(listImplementation, /Conversation list batch hydration failed; using per-conversation fallback/);
 });
 
 test('conversation fallback for hydration errors is not labeled as a deleted user', () => {

@@ -24,6 +24,7 @@ export const RETAIL_PUSH_CHANNEL_ID = 'default';
 export const RETAIL_PUSH_CHANNEL_NAME = 'ReTail Notifications';
 
 let activeRegistration: { userId: string; token: string } | null = null;
+let registrationInFlight: Promise<NativePushRegistrationResult> | null = null;
 
 try {
   Notifications.setNotificationHandler({
@@ -122,6 +123,34 @@ export async function registerNativePushTokenForCurrentUser(
     return { status: 'unsupported' };
   }
 
+  if (!options.force && activeRegistration?.userId === userId) {
+    return { status: 'registered', token: activeRegistration.token };
+  }
+
+  if (!options.force && registrationInFlight) {
+    return registrationInFlight;
+  }
+
+  const registration = registerNativePushToken(userId, platform, options);
+
+  if (!options.force) {
+    registrationInFlight = registration;
+  }
+
+  try {
+    return await registration;
+  } finally {
+    if (registrationInFlight === registration) {
+      registrationInFlight = null;
+    }
+  }
+}
+
+async function registerNativePushToken(
+  userId: string,
+  platform: 'ios' | 'android',
+  options: { force?: boolean }
+): Promise<NativePushRegistrationResult> {
   if (!options.force) {
     const preferences = await getNotificationPreferences();
 
@@ -161,8 +190,11 @@ export async function registerNativePushTokenForCurrentUser(
       });
     }
 
-    await registerDeviceToken(token, platform);
-    activeRegistration = { userId, token };
+    if (!activeRegistration || activeRegistration.userId !== userId || activeRegistration.token !== token) {
+      await registerDeviceToken(token, platform);
+      activeRegistration = { userId, token };
+    }
+
     return { status: 'registered', token };
   } catch (error) {
     logger.warning('Expo push token registration failed.', {

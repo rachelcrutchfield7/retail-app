@@ -8,9 +8,13 @@ import { logger } from '../lib/logger';
 import { getListingById } from './listingService';
 import {
   ensureCurrentProfile,
+  listingRelationsSelect,
   throwSupabaseError,
   toMessage,
+  toListing,
+  toListingImage,
   toProfile,
+  toPublicProfile,
 } from './supabaseData';
 import type { Listing } from '../types';
 import type { ListingImage } from './types';
@@ -39,6 +43,16 @@ type RescueConversationRow = {
   is_verified?: boolean | null;
   verification_status?: string | null;
   deleted_at?: string | null;
+};
+
+type ConversationSummaryBatch = {
+  currentProfile: Profile;
+  publicProfilesById: Map<string, PublicProfile>;
+  rescueById: Map<string, RescueConversationRow>;
+  listingById: Map<string, { listing: Listing; images: ListingImage[] }>;
+  lastMessageByConversationId: Map<string, Message>;
+  unreadCountByConversationId: Map<string, number>;
+  blockedPairs: Set<string>;
 };
 
 const offerPrefix = 'RETAIL_OFFER::';
@@ -338,6 +352,18 @@ function logConversationHydrationWarning(context: string, error: unknown, detail
   });
 }
 
+function uniqueStrings(values: Array<string | null | undefined>): string[] {
+  return [...new Set(values.filter((value): value is string => Boolean(value)))];
+}
+
+function conversationOtherUserId(row: ConversationRow, currentUserId: string): string {
+  return row.buyer_id === currentUserId ? row.seller_id : row.buyer_id;
+}
+
+function blockPairKey(firstUserId: string, secondUserId: string): string {
+  return [firstUserId, secondUserId].sort().join(':');
+}
+
 async function loadRescueForConversation(rescueId?: string | null): Promise<RescueConversationRow | null> {
   if (!rescueId) {
     return null;
@@ -368,6 +394,224 @@ async function loadListingForConversation(listingId?: string | null): Promise<{ 
     logConversationHydrationWarning('Listing detail unavailable during conversation hydration.', error, { listingId });
     return { listing: unavailableListing(listingId), images: [] };
   }
+}
+
+async function loadPublicProfilesForConversationList(userIds: string[]): Promise<Map<string, PublicProfile>> {
+  const profiles = new Map<string, PublicProfile>();
+
+  if (userIds.length === 0) {
+    return profiles;
+  }
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id,account_type,display_name,username,bio,avatar_url,city,state,buyer_rating,seller_rating,review_count,listings_count,completed_sales_count,is_verified,created_at')
+    .in('id', userIds)
+    .is('deleted_at', null);
+
+  if (error) {
+    logConversationHydrationWarning('Conversation participant batch profile lookup failed.', error, {
+      profileCount: userIds.length,
+    });
+    return profiles;
+  }
+
+  for (const row of data ?? []) {
+    const profile = toPublicProfile(row as Record<string, unknown>);
+    profiles.set(profile.id, profile);
+  }
+
+  return profiles;
+}
+
+async function loadListingsForConversationList(listingIds: string[]): Promise<Map<string, { listing: Listing; images: ListingImage[] }>> {
+  const listings = new Map<string, { listing: Listing; images: ListingImage[] }>();
+
+  if (listingIds.length === 0) {
+    return listings;
+  }
+
+  const { data, error } = await supabase
+    .from('listings')
+    .select(listingRelationsSelect)
+    .in('id', listingIds);
+
+  if (error) {
+    logConversationHydrationWarning('Conversation listing batch lookup failed.', error, {
+      listingCount: listingIds.length,
+    });
+    return listings;
+  }
+
+  for (const row of data ?? []) {
+    const rawRow = row as Record<string, unknown>;
+    const listing = toListing(row as Record<string, unknown>);
+    listings.set(listing.id, {
+      listing,
+      images: Array.isArray(rawRow.images)
+        ? (rawRow.images as Array<Record<string, unknown>>).map((image) => toListingImage(image)).sort((first, second) => first.sort_order - second.sort_order)
+        : [],
+    });
+  }
+
+  return listings;
+}
+
+async function loadRescuesForConversationList(rescueIds: string[]): Promise<Map<string, RescueConversationRow>> {
+  const rescues = new Map<string, RescueConversationRow>();
+
+  if (rescueIds.length === 0) {
+    return rescues;
+  }
+
+  const { data, error } = await supabase
+    .from('rescue_profiles')
+    .select('id,owner_id,name,summary,city,state,is_active,is_verified,verification_status,deleted_at')
+    .in('id', rescueIds);
+
+  if (error) {
+    logConversationHydrationWarning('Conversation rescue batch lookup failed.', error, {
+      rescueCount: rescueIds.length,
+    });
+    return rescues;
+  }
+
+  for (const rescue of data ?? []) {
+    const row = rescue as RescueConversationRow;
+    rescues.set(row.id, row);
+  }
+
+  return rescues;
+}
+
+async function loadLastMessagesForConversationList(conversationIds: string[], currentUserId: string): Promise<Map<string, Message>> {
+  const messages = new Map<string, Message>();
+
+  if (conversationIds.length === 0) {
+    return messages;
+  }
+
+  const { data, error } = await supabase
+    .from('messages')
+    .select('*')
+    .in('conversation_id', conversationIds)
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false })
+    .limit(Math.max(conversationIds.length * 5, 50));
+
+  if (error) {
+    logConversationHydrationWarning('Conversation latest-message batch lookup failed.', error, {
+      conversationCount: conversationIds.length,
+    });
+    return messages;
+  }
+
+  for (const row of data ?? []) {
+    const message = toMessage(row as Record<string, unknown>, currentUserId);
+
+    if (!messages.has(message.conversation_id)) {
+      messages.set(message.conversation_id, message);
+    }
+  }
+
+  return messages;
+}
+
+async function loadUnreadCountsForConversationList(conversationIds: string[], currentUserId: string): Promise<Map<string, number>> {
+  const counts = new Map<string, number>();
+
+  if (conversationIds.length === 0) {
+    return counts;
+  }
+
+  const { data, error } = await supabase
+    .from('messages')
+    .select('conversation_id')
+    .in('conversation_id', conversationIds)
+    .eq('is_read', false)
+    .neq('sender_id', currentUserId)
+    .is('deleted_at', null);
+
+  if (error) {
+    logConversationHydrationWarning('Conversation unread-count batch lookup failed.', error, {
+      conversationCount: conversationIds.length,
+    });
+    return counts;
+  }
+
+  for (const row of data ?? []) {
+    const conversationId = String((row as Record<string, unknown>).conversation_id);
+    counts.set(conversationId, (counts.get(conversationId) ?? 0) + 1);
+  }
+
+  return counts;
+}
+
+async function loadBlockedPairsForConversationList(rows: ConversationRow[], currentUserId: string): Promise<Set<string>> {
+  const blockedPairs = new Set<string>();
+  const otherUserIds = uniqueStrings(rows.map((row) => conversationOtherUserId(row, currentUserId)));
+
+  if (otherUserIds.length === 0) {
+    return blockedPairs;
+  }
+
+  const { data, error } = await supabase
+    .from('blocks')
+    .select('blocker_id,blocked_id')
+    .or(`blocker_id.eq.${currentUserId},blocked_id.eq.${currentUserId}`);
+
+  if (error) {
+    logConversationHydrationWarning('Conversation block-state batch lookup failed.', error, {
+      otherUserCount: otherUserIds.length,
+    });
+    return blockedPairs;
+  }
+
+  const otherUsers = new Set(otherUserIds);
+
+  for (const row of data ?? []) {
+    const block = row as Record<string, unknown>;
+    const blockerId = String(block.blocker_id);
+    const blockedId = String(block.blocked_id);
+
+    if (otherUsers.has(blockerId) || otherUsers.has(blockedId)) {
+      blockedPairs.add(blockPairKey(blockerId, blockedId));
+    }
+  }
+
+  return blockedPairs;
+}
+
+async function loadConversationSummaryBatch(rows: ConversationRow[], currentProfile: Profile): Promise<ConversationSummaryBatch> {
+  const otherUserIds = uniqueStrings(rows.map((row) => conversationOtherUserId(row, currentProfile.id)));
+  const listingIds = uniqueStrings(rows.map((row) => row.listing_id));
+  const rescueIds = uniqueStrings(rows.map((row) => row.rescue_id));
+  const conversationIds = rows.map((row) => row.id);
+  const [
+    publicProfilesById,
+    rescueById,
+    listingById,
+    lastMessageByConversationId,
+    unreadCountByConversationId,
+    blockedPairs,
+  ] = await Promise.all([
+    loadPublicProfilesForConversationList(otherUserIds),
+    loadRescuesForConversationList(rescueIds),
+    loadListingsForConversationList(listingIds),
+    loadLastMessagesForConversationList(conversationIds, currentProfile.id),
+    loadUnreadCountsForConversationList(conversationIds, currentProfile.id),
+    loadBlockedPairsForConversationList(rows, currentProfile.id),
+  ]);
+
+  return {
+    currentProfile,
+    publicProfilesById,
+    rescueById,
+    listingById,
+    lastMessageByConversationId,
+    unreadCountByConversationId,
+    blockedPairs,
+  };
 }
 
 async function lastMessageFor(conversationId: string): Promise<Message | undefined> {
@@ -454,6 +698,38 @@ export async function buildConversationSummary(conversation: Conversation | Conv
       : unavailableListing(row.listing_id ?? row.report_id ?? '');
   const images = loadedListing?.images ?? [];
   const normalized = toConversation(row, listingSummary.title);
+
+  return {
+    ...normalized,
+    name: otherProfile?.display_name ?? 'Deleted User',
+    listing: listingSummary.title,
+    preview: messagePreview(lastMessage, normalized.preview),
+    unread: unreadCount > 0,
+    time: formatConversationTime(lastMessage?.created_at ?? normalized.lastMessageAt),
+    otherUser: otherProfile ?? deletedPublicProfile(otherUserId),
+    listingSummary,
+    listingThumbnail: images[0]?.thumbnail_url ?? images[0]?.image_url ?? listingSummary.image,
+    lastMessage,
+    unreadCount,
+    messagingBlocked,
+  };
+}
+
+function buildConversationSummaryFromBatch(row: ConversationRow, batch: ConversationSummaryBatch): ConversationSummary {
+  const otherUserId = conversationOtherUserId(row, batch.currentProfile.id);
+  const otherProfile = batch.publicProfilesById.get(otherUserId);
+  const rescue = row.rescue_id ? batch.rescueById.get(row.rescue_id) ?? null : null;
+  const loadedListing = row.listing_id ? batch.listingById.get(row.listing_id) ?? null : null;
+  const listingSummary = loadedListing
+    ? loadedListing.listing
+    : row.rescue_id
+      ? rescueConversationListing(rescue, row.rescue_id)
+      : unavailableListing(row.listing_id ?? row.report_id ?? '');
+  const images = loadedListing?.images ?? [];
+  const normalized = toConversation(row, listingSummary.title);
+  const lastMessage = batch.lastMessageByConversationId.get(row.id);
+  const unreadCount = batch.unreadCountByConversationId.get(row.id) ?? 0;
+  const messagingBlocked = batch.blockedPairs.has(blockPairKey(row.buyer_id, row.seller_id));
 
   return {
     ...normalized,
@@ -630,9 +906,20 @@ export async function getUserConversations(userId: string, params: ConversationS
     throwSupabaseError(error, 'We could not load conversations.');
   }
 
-  const summaries = await Promise.all(
-    (data ?? []).map((conversation) => buildConversationSummarySafe(conversation as ConversationRow, profile.id))
-  );
+  const rows = (data ?? []) as ConversationRow[];
+  let summaries: ConversationSummary[];
+
+  try {
+    const batch = await loadConversationSummaryBatch(rows, profile);
+    summaries = rows.map((conversation) => buildConversationSummaryFromBatch(conversation, batch));
+  } catch (error) {
+    logConversationHydrationWarning('Conversation list batch hydration failed; using per-conversation fallback.', error, {
+      conversationCount: rows.length,
+    });
+    summaries = await Promise.all(
+      rows.map((conversation) => buildConversationSummarySafe(conversation, profile.id))
+    );
+  }
 
   return summaries.filter((conversation) => {
     if (!search) {

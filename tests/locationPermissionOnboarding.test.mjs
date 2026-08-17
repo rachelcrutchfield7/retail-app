@@ -11,7 +11,7 @@ test('Expo location dependency and native foreground config are present', () => 
   const packageJson = read('package.json');
   const config = read('app.config.js');
 
-  assert.match(packageJson, /"expo-location":\s*"~57\.0\.10"/);
+  assert.match(packageJson, /"expo-location":\s*"~57\.0\.11"/);
   assert.match(config, /'expo-location'/);
   assert.match(config, /NSLocationWhenInUseUsageDescription/);
   assert.match(config, /ACCESS_COARSE_LOCATION/);

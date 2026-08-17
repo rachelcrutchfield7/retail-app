@@ -141,6 +141,10 @@ test('Sprint 2 create listing validation accepts shipping details', () => {
     shipping_cost_estimate: '$9',
     handling_time: 'Ships within 2 days',
     ship_from_zip_code: '78701',
+    package_weight_oz: 43,
+    package_length_in: 12,
+    package_width_in: 8,
+    package_height_in: 4,
     safety_confirmed: true,
   });
 

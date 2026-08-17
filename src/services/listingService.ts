@@ -23,7 +23,7 @@ import type {
   ListingQueryParams,
   UpdateListingInput,
 } from './types';
-import { normalizePositiveDecimal, validateShippingPackage } from './shippingRules';
+import { normalizePackageWeightOz, normalizePositiveDecimal, validateShippingPackage } from './shippingRules';
 
 const allowedSorts = new Set(['recent', 'price_asc', 'price_desc', 'distance', 'favorites']);
 
@@ -519,7 +519,7 @@ export async function createListing(input: CreateListingInput): Promise<Listing>
     requested_shipping_cost_estimate: input.shipping_available ? priceNumber(input.shipping_cost_estimate) : null,
     requested_handling_time: input.shipping_available ? input.handling_time?.trim() || null : null,
     requested_ship_from_zip_code: input.shipping_available ? input.ship_from_zip_code?.trim() || input.zip_code?.trim() || null : null,
-    requested_package_weight_oz: input.shipping_available ? normalizePositiveDecimal(input.package_weight_oz) : null,
+    requested_package_weight_oz: input.shipping_available ? normalizePackageWeightOz(input.package_weight_oz) : null,
     requested_package_length_in: input.shipping_available ? normalizePositiveDecimal(input.package_length_in) : null,
     requested_package_width_in: input.shipping_available ? normalizePositiveDecimal(input.package_width_in) : null,
     requested_package_height_in: input.shipping_available ? normalizePositiveDecimal(input.package_height_in) : null,
@@ -594,7 +594,7 @@ export async function updateListing(listingId: string, input: UpdateListingInput
     requested_shipping_cost_estimate: input.shipping_cost_estimate !== undefined ? priceNumber(input.shipping_cost_estimate) : null,
     requested_handling_time: input.handling_time !== undefined ? input.handling_time?.trim() || '' : null,
     requested_ship_from_zip_code: input.ship_from_zip_code !== undefined ? input.ship_from_zip_code?.trim() || '' : null,
-    requested_package_weight_oz: input.package_weight_oz !== undefined ? normalizePositiveDecimal(input.package_weight_oz) : null,
+    requested_package_weight_oz: input.package_weight_oz !== undefined ? normalizePackageWeightOz(input.package_weight_oz) : null,
     requested_package_length_in: input.package_length_in !== undefined ? normalizePositiveDecimal(input.package_length_in) : null,
     requested_package_width_in: input.package_width_in !== undefined ? normalizePositiveDecimal(input.package_width_in) : null,
     requested_package_height_in: input.package_height_in !== undefined ? normalizePositiveDecimal(input.package_height_in) : null,
