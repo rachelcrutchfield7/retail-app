@@ -310,16 +310,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     setLoading(true);
+
+    setSession(null);
+    setUser(null);
+    setProfile(null);
+    removeAllRealtimeSubscriptions();
+    resetAnalyticsUser();
+    clearQueryData();
+
     try {
-      await removeRegisteredNativePushTokenForCurrentUser().catch((error) => {
-        logAuthLoadError(error, 'Could not remove push token before sign-out.');
-      });
-      await clearAuthSession();
-      await clearGoogleSignInSelection();
-      await clearPrivateAuthState();
-      setSession(null);
-      setUser(null);
-      setProfile(null);
+      const results = await Promise.allSettled([
+        removeRegisteredNativePushTokenForCurrentUser(),
+        clearAuthSession(),
+        clearGoogleSignInSelection(),
+        clearPrivateAuthState(),
+      ]);
+
+      const pushTokenCleanup = results[0];
+      if (pushTokenCleanup.status === 'rejected') {
+        logAuthLoadError(pushTokenCleanup.reason, 'Could not remove push token before sign-out.');
+      }
+
+      const sessionCleanup = results[1];
+      if (sessionCleanup.status === 'rejected') {
+        throw sessionCleanup.reason;
+      }
     } finally {
       setLoading(false);
     }

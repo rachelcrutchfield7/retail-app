@@ -10,6 +10,8 @@ export const appLinks = {
   contactMailto: 'mailto:contact@retailpetapp.com',
   supportEmail: 'support@retailpetapp.com',
   supportPhone: '(877) 514-3697',
+  supportTel: 'tel:+18775143697',
+  supportSms: 'sms:+18775143697',
   supportMailto: 'mailto:support@retailpetapp.com',
   paymentSupportMailto: 'mailto:support@retailpetapp.com?subject=ReTail%20payment%20support',
   reportingSupportMailto: 'mailto:support@retailpetapp.com?subject=ReTail%20safety%20or%20reporting%20issue',

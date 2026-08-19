@@ -10,6 +10,7 @@ import {
   getOrCreateRescueConversation,
 } from '../services/conversationService';
 import {
+  getMessageById,
   getPaginatedMessages,
   getUnreadMessageCount,
   markMessagesRead,
@@ -81,6 +82,54 @@ function appendMessageToCache(
       },
       ...restPages,
     ],
+  };
+}
+
+function upsertMessageInCache(
+  cache: InfiniteData<PaginatedMessages> | undefined,
+  message: Message
+): InfiniteData<PaginatedMessages> | undefined {
+  if (!cache) {
+    return cache;
+  }
+
+  let replaced = false;
+  const pages = cache.pages.map((page) => ({
+    ...page,
+    items: page.items.map((item) => {
+      if (item.id !== message.id) {
+        return item;
+      }
+
+      replaced = true;
+      return message;
+    }),
+  }));
+
+  if (replaced) {
+    return {
+      ...cache,
+      pages,
+    };
+  }
+
+  return appendMessageToCache(cache, message);
+}
+
+function removeMessageFromCache(
+  cache: InfiniteData<PaginatedMessages> | undefined,
+  messageId: string
+): InfiniteData<PaginatedMessages> | undefined {
+  if (!cache) {
+    return cache;
+  }
+
+  return {
+    ...cache,
+    pages: cache.pages.map((page) => ({
+      ...page,
+      items: page.items.filter((item) => item.id !== messageId),
+    })),
   };
 }
 
@@ -160,22 +209,8 @@ export function useConversation(conversationId: string, markReadOnOpen = true) {
     void markMessagesRead(conversationId).then(() => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.unreadMessages(user.id) });
       void queryClient.invalidateQueries({ queryKey: queryKeys.conversations(user.id) });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.messages(conversationId) });
     });
   }, [conversationId, markReadOnOpen, queryClient, user]);
-
-  useEffect(() => {
-    if (!conversationId || !user) {
-      return undefined;
-    }
-
-    return subscribeToConversationMessages(conversationId, () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.conversation(conversationId) });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.messages(conversationId) });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.conversations(user.id) });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.unreadMessages(user.id) });
-    });
-  }, [conversationId, queryClient, user]);
 
   return {
     data: query.data ?? null,
@@ -213,8 +248,32 @@ export function useMessages(conversationId: string) {
       return undefined;
     }
 
-    return subscribeToConversationMessages(conversationId, () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.messages(conversationId) });
+    return subscribeToConversationMessages(conversationId, (event) => {
+      if (event.type === 'conversation_updated' || event.type === 'messages_read') {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.conversation(conversationId) });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.conversations(user.id) });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.unreadMessages(user.id) });
+        return;
+      }
+
+      if (event.type === 'message_deleted') {
+        queryClient.setQueryData<InfiniteData<PaginatedMessages>>(
+          queryKeys.messages(conversationId),
+          (cache) => removeMessageFromCache(cache, event.messageId)
+        );
+      } else if ('messageId' in event && event.messageId) {
+        void getMessageById(conversationId, event.messageId)
+          .then((message) => {
+            queryClient.setQueryData<InfiniteData<PaginatedMessages>>(
+              queryKeys.messages(conversationId),
+              (cache) => upsertMessageInCache(cache, message)
+            );
+          })
+          .catch(() => {
+            void queryClient.invalidateQueries({ queryKey: queryKeys.messages(conversationId) });
+          });
+      }
+
       void queryClient.invalidateQueries({ queryKey: queryKeys.conversation(conversationId) });
       void queryClient.invalidateQueries({ queryKey: queryKeys.conversations(user.id) });
       void queryClient.invalidateQueries({ queryKey: queryKeys.unreadMessages(user.id) });

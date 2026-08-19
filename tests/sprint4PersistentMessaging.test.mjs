@@ -43,6 +43,18 @@ test('message service validates text and prevents sender impersonation', () => {
   assert.match(messageService, /softDeleteOwnMessage/);
 });
 
+test('unread message badge uses lightweight counts instead of full conversation hydration', () => {
+  const unreadStart = messageService.indexOf('export async function getUnreadMessageCount');
+  const unreadEnd = messageService.indexOf('export { getConversationById');
+  const unreadImplementation = messageService.slice(unreadStart, unreadEnd);
+
+  assert.match(unreadImplementation, /\.from\('conversations'\)/);
+  assert.match(unreadImplementation, /\.select\('id'\)/);
+  assert.match(unreadImplementation, /\.from\('messages'\)/);
+  assert.match(unreadImplementation, /\.select\('conversation_id'\)/);
+  assert.doesNotMatch(unreadImplementation, /getConversations\(\)/);
+});
+
 test('blocking service manages blocks through typed service functions', () => {
   assert.match(blockService, /isEitherUserBlocked/);
   assert.match(blockService, /blockUser/);
@@ -73,11 +85,26 @@ test('message mapping from database rows preserves read status and timestamps', 
 test('messaging hooks use React Query pagination and safe realtime cache updates', () => {
   assert.match(messagingHooks, /useInfiniteQuery/);
   assert.match(messagingHooks, /getPaginatedMessages/);
+  assert.match(messagingHooks, /getMessageById/);
   assert.match(messagingHooks, /appendMessageToCache/);
+  assert.match(messagingHooks, /upsertMessageInCache/);
+  assert.match(messagingHooks, /removeMessageFromCache/);
   assert.match(messagingHooks, /alreadyExists/);
   assert.match(messagingHooks, /subscribeToConversationMessages/);
   assert.match(messagingHooks, /subscribeToKnownConversationMessages/);
   assert.match(messagingHooks, /removeQueries/);
+});
+
+test('conversation open marks messages read without refetching the visible message page', () => {
+  const hookStart = messagingHooks.indexOf('export function useConversation');
+  const hookEnd = messagingHooks.indexOf('export function useMessages');
+  const useConversationHook = messagingHooks.slice(hookStart, hookEnd);
+
+  assert.match(useConversationHook, /markMessagesRead\(conversationId\)/);
+  assert.match(useConversationHook, /queryKeys\.unreadMessages\(user\.id\)/);
+  assert.match(useConversationHook, /queryKeys\.conversations\(user\.id\)/);
+  assert.doesNotMatch(useConversationHook, /queryKeys\.messages\(conversationId\)/);
+  assert.doesNotMatch(useConversationHook, /subscribeToConversationMessages/);
 });
 
 test('realtime subscriptions are scoped instead of globally unfiltered', () => {
@@ -94,8 +121,16 @@ test('conversation UI exposes blocked state and keeps AppShell out of messaging 
   assert.doesNotMatch(sprint4App, /supabase\./);
 });
 
-test('sign out clears user-specific query caches', () => {
+test('sign out clears user-specific query caches before waiting on network cleanup', () => {
+  const signOutStart = authContext.indexOf('const signOut = useCallback');
+  const signOutEnd = authContext.indexOf('const resetPassword = useCallback');
+  const signOut = authContext.slice(signOutStart, signOutEnd);
+
   assert.match(authContext, /clearQueryData\(\)/);
+  assert.ok(signOut.indexOf('setSession(null)') < signOut.indexOf('Promise.allSettled'));
+  assert.ok(signOut.indexOf('setUser(null)') < signOut.indexOf('Promise.allSettled'));
+  assert.ok(signOut.indexOf('setProfile(null)') < signOut.indexOf('Promise.allSettled'));
+  assert.match(signOut, /clearPrivateAuthState\(\)/);
 });
 
 test('messaging SQL patch tightens RLS and realtime support', () => {

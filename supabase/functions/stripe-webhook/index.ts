@@ -188,6 +188,33 @@ async function releaseCheckoutReservation(
   }
 }
 
+async function applyFoundingSellerBenefit(supabaseAdmin: SupabaseAdmin, transactionId: string): Promise<void> {
+  const { error } = await supabaseAdmin.rpc('apply_founding_seller_checkout_benefit', {
+    p_transaction_id: transactionId,
+  });
+
+  if (error) {
+    throw error;
+  }
+}
+
+async function releaseFoundingSellerBenefit(
+  supabaseAdmin: SupabaseAdmin,
+  transactionId: string,
+  paymentIntentId: string,
+  reason: string,
+): Promise<void> {
+  const { error } = await supabaseAdmin.rpc('release_founding_seller_checkout_benefit', {
+    p_transaction_id: transactionId,
+    p_payment_intent_id: paymentIntentId,
+    p_reason: reason,
+  });
+
+  if (error) {
+    throw error;
+  }
+}
+
 async function insertNotificationIfMissing(
   supabaseAdmin: SupabaseAdmin,
   notification: {
@@ -362,6 +389,7 @@ async function handlePaymentIntentEvent(supabaseAdmin: SupabaseAdmin, event: Str
   });
 
   if (event.type === 'payment_intent.payment_failed' || event.type === 'payment_intent.canceled') {
+    await releaseFoundingSellerBenefit(supabaseAdmin, transaction.id, intent.id, event.type);
     await releaseCheckoutReservation(supabaseAdmin, transaction, intent.id);
     return;
   }
@@ -394,6 +422,8 @@ async function handlePaymentIntentEvent(supabaseAdmin: SupabaseAdmin, event: Str
   if (!soldListing) {
     throw new Error('Stripe PaymentIntent does not match the current ReTail checkout reservation.');
   }
+
+  await applyFoundingSellerBenefit(supabaseAdmin, transaction.id);
 
   await insertNotificationIfMissing(supabaseAdmin, {
     user_id: updatedTransaction.buyer_id,

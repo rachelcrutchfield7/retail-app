@@ -114,6 +114,14 @@ type ShippingRateQuote = {
   buyer_phone: string | null;
 };
 
+type FoundingSellerBenefit = {
+  benefitUseId: string | null;
+  benefitApplied: boolean;
+  platformFeeCents: number;
+  waivedPlatformFeeCents: number;
+  benefitOrdinal: number | null;
+};
+
 const RESERVED_MESSAGE = 'This item is currently being purchased by another buyer. Please try again shortly.';
 const TAX_CALCULATION_FAILURE = "We couldn't calculate tax for this order. Please check your delivery/billing address and try again.";
 const reusablePaymentIntentStatuses = new Set([
@@ -479,6 +487,94 @@ async function loadShippingRateQuote(
   return quote;
 }
 
+function normalizeFoundingSellerBenefit(
+  row: Record<string, unknown> | null | undefined,
+  normalPlatformFeeCents: number,
+): FoundingSellerBenefit {
+  if (!row || row.benefit_applied !== true) {
+    return {
+      benefitUseId: null,
+      benefitApplied: false,
+      platformFeeCents: normalPlatformFeeCents,
+      waivedPlatformFeeCents: 0,
+      benefitOrdinal: null,
+    };
+  }
+
+  return {
+    benefitUseId: typeof row.benefit_use_id === 'string' ? row.benefit_use_id : null,
+    benefitApplied: true,
+    platformFeeCents: typeof row.platform_fee_cents === 'number' ? row.platform_fee_cents : 0,
+    waivedPlatformFeeCents: typeof row.waived_platform_fee_cents === 'number' ? row.waived_platform_fee_cents : normalPlatformFeeCents,
+    benefitOrdinal: typeof row.benefit_ordinal === 'number' ? row.benefit_ordinal : null,
+  };
+}
+
+async function reserveFoundingSellerBenefit(
+  supabaseAdmin: SupabaseAdmin,
+  checkoutToken: string,
+  sellerId: string,
+  normalPlatformFeeCents: number,
+): Promise<FoundingSellerBenefit> {
+  if (normalPlatformFeeCents <= 0) {
+    return normalizeFoundingSellerBenefit(null, 0);
+  }
+
+  const { data, error } = await supabaseAdmin.rpc('reserve_founding_seller_checkout_benefit', {
+    p_checkout_token: checkoutToken,
+    p_seller_id: sellerId,
+    p_normal_platform_fee_cents: normalPlatformFeeCents,
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  const row = Array.isArray(data) ? data[0] : null;
+  return normalizeFoundingSellerBenefit(row as Record<string, unknown> | null, normalPlatformFeeCents);
+}
+
+async function attachFoundingSellerBenefit(
+  supabaseAdmin: SupabaseAdmin,
+  checkoutToken: string,
+  transactionId: string,
+  paymentIntentId: string,
+  benefit: FoundingSellerBenefit,
+): Promise<void> {
+  if (!benefit.benefitUseId) {
+    return;
+  }
+
+  const { error } = await supabaseAdmin.rpc('attach_founding_seller_checkout_benefit', {
+    p_checkout_token: checkoutToken,
+    p_transaction_id: transactionId,
+    p_payment_intent_id: paymentIntentId,
+  });
+
+  if (error) {
+    throw error;
+  }
+}
+
+async function releaseFoundingSellerBenefitToken(
+  supabaseAdmin: SupabaseAdmin,
+  checkoutToken: string | null,
+  reason: string,
+): Promise<void> {
+  if (!checkoutToken) {
+    return;
+  }
+
+  const { error } = await supabaseAdmin.rpc('release_founding_seller_checkout_token', {
+    p_checkout_token: checkoutToken,
+    p_reason: reason,
+  });
+
+  if (error) {
+    throw error;
+  }
+}
+
 function taxAddressFromBuyerProfile(profile: BuyerProfileTaxAddress): TaxAddress {
   const postalCode = normalizePostalCode(profile.zip_code);
 
@@ -606,6 +702,8 @@ Deno.serve(async (request) => {
   let reservationToRelease: CheckoutReservation | null = null;
   let createdPaymentIntentId: string | null = null;
   let reservationAttachedToPaymentIntent = false;
+  let foundingSellerCheckoutToken: string | null = null;
+  let foundingSellerBenefitAttached = false;
 
   try {
     const { supabaseAdmin, user } = await requireAuthenticatedRequest(request);
@@ -682,7 +780,15 @@ Deno.serve(async (request) => {
       ? taxAddressFromShippingQuote(shippingQuote as ShippingRateQuote)
       : taxAddressFromBuyerProfile(buyerProfileTaxAddress as BuyerProfileTaxAddress);
     const itemAmountCents = reservation.amount_cents;
-    const platformFeeCents = calculatePlatformFeeCents(itemAmountCents);
+    const normalPlatformFeeCents = calculatePlatformFeeCents(itemAmountCents);
+    foundingSellerCheckoutToken = crypto.randomUUID();
+    const foundingSellerBenefit = await reserveFoundingSellerBenefit(
+      supabaseAdmin,
+      foundingSellerCheckoutToken,
+      reservation.seller_id,
+      normalPlatformFeeCents,
+    );
+    const platformFeeCents = foundingSellerBenefit.platformFeeCents;
     const taxCalculation = await createCheckoutTaxCalculation({
       reservation,
       itemAmountCents,
@@ -715,6 +821,9 @@ Deno.serve(async (request) => {
         retail_buyer_id: user.id,
         retail_seller_id: String(reservation.seller_id),
         retail_platform_fee_cents: String(platformFeeCents),
+        retail_platform_fee_before_founding_seller_cents: String(normalPlatformFeeCents),
+        retail_founding_seller_benefit_applied: String(foundingSellerBenefit.benefitApplied),
+        retail_founding_seller_fee_waived_cents: String(foundingSellerBenefit.waivedPlatformFeeCents),
         retail_shipping_collected_cents: String(shipping.shippingCollectedCents),
         retail_tax_amount_cents: String(taxAmountCents),
         retail_tax_calculation_id: String(taxCalculation.id),
@@ -738,6 +847,9 @@ Deno.serve(async (request) => {
       item_amount_cents: itemAmountCents,
       platform_fee_cents: platformFeeCents,
       seller_amount_cents: sellerAmountCents,
+      founding_seller_benefit_use_id: foundingSellerBenefit.benefitUseId,
+      founding_seller_fee_waived_cents: foundingSellerBenefit.waivedPlatformFeeCents,
+      founding_seller_benefit_ordinal: foundingSellerBenefit.benefitOrdinal,
       fulfillment_method: fulfillmentMethod,
       shipping_payer: shipping.shippingPayer,
       shipping_amount_cents: shipping.shippingAmountCents,
@@ -774,6 +886,7 @@ Deno.serve(async (request) => {
 
     if (transactionError || !transaction) {
       await getStripe().paymentIntents.cancel(paymentIntent.id, { cancellation_reason: 'abandoned' });
+      await releaseFoundingSellerBenefitToken(supabaseAdmin, foundingSellerCheckoutToken, 'transaction_save_failed');
       await releaseCheckoutReservation(supabaseAdmin, reservation, user.id, null);
       reservationToRelease = null;
 
@@ -792,6 +905,7 @@ Deno.serve(async (request) => {
 
       if (quoteUpdateError) {
         await getStripe().paymentIntents.cancel(paymentIntent.id, { cancellation_reason: 'abandoned' });
+        await releaseFoundingSellerBenefitToken(supabaseAdmin, foundingSellerCheckoutToken, 'shipping_rate_lock_failed');
         await releaseCheckoutReservation(supabaseAdmin, reservation, user.id, null);
         reservationToRelease = null;
 
@@ -817,11 +931,30 @@ Deno.serve(async (request) => {
 
       if (shippingDetailError) {
         await getStripe().paymentIntents.cancel(paymentIntent.id, { cancellation_reason: 'abandoned' });
+        await releaseFoundingSellerBenefitToken(supabaseAdmin, foundingSellerCheckoutToken, 'shipping_detail_save_failed');
         await releaseCheckoutReservation(supabaseAdmin, reservation, user.id, null);
         reservationToRelease = null;
 
         return jsonResponse({ error: 'Payment was created, but ReTail could not save shipping details.' }, 500);
       }
+    }
+
+    try {
+      await attachFoundingSellerBenefit(
+        supabaseAdmin,
+        foundingSellerCheckoutToken,
+        transaction.id,
+        paymentIntent.id,
+        foundingSellerBenefit,
+      );
+      foundingSellerBenefitAttached = Boolean(foundingSellerBenefit.benefitUseId);
+    } catch {
+      await getStripe().paymentIntents.cancel(paymentIntent.id, { cancellation_reason: 'abandoned' });
+      await releaseFoundingSellerBenefitToken(supabaseAdmin, foundingSellerCheckoutToken, 'benefit_attach_failed');
+      await releaseCheckoutReservation(supabaseAdmin, reservation, user.id, null);
+      reservationToRelease = null;
+
+      return jsonResponse({ error: 'Payment was created, but ReTail could not save the seller benefit.' }, 500);
     }
 
     const { error: attachError } = await supabaseAdmin.rpc('attach_stripe_checkout_reservation', {
@@ -833,6 +966,7 @@ Deno.serve(async (request) => {
 
     if (attachError) {
       await getStripe().paymentIntents.cancel(paymentIntent.id, { cancellation_reason: 'abandoned' });
+      await releaseFoundingSellerBenefitToken(supabaseAdmin, foundingSellerCheckoutToken, 'reservation_attach_failed');
       await releaseCheckoutReservation(supabaseAdmin, reservation, user.id, null);
       reservationToRelease = null;
 
@@ -850,6 +984,8 @@ Deno.serve(async (request) => {
       amountCents: checkoutTotalCents,
       itemAmountCents,
       platformFeeCents,
+      foundingSellerFeeWaivedCents: foundingSellerBenefit.waivedPlatformFeeCents,
+      foundingSellerBenefitOrdinal: foundingSellerBenefit.benefitOrdinal,
       sellerAmountCents,
       taxAmountCents,
       taxCalculationId: taxCalculation.id,
@@ -876,6 +1012,18 @@ Deno.serve(async (request) => {
           listingId: reservationToRelease.listing_id,
           paymentIntentId: createdPaymentIntentId,
           error: releaseError instanceof Error ? releaseError.message : 'Unknown reservation release error.',
+        });
+      }
+    }
+
+    if (supabaseAdminForRelease && foundingSellerCheckoutToken && !foundingSellerBenefitAttached) {
+      try {
+        await releaseFoundingSellerBenefitToken(supabaseAdminForRelease, foundingSellerCheckoutToken, 'checkout_error');
+      } catch (benefitReleaseError) {
+        console.error('Founding Seller benefit release failed after checkout error.', {
+          checkoutTokenPresent: true,
+          paymentIntentId: createdPaymentIntentId,
+          error: benefitReleaseError instanceof Error ? benefitReleaseError.message : 'Unknown benefit release error.',
         });
       }
     }

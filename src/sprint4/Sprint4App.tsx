@@ -2793,9 +2793,12 @@ export function SettingsScreen({
         <Text style={styles.body}>{appLinks.supportPhone}</Text>
         <Text style={styles.body}>
           ReTail support can help with account access, listings, messages, safety reports, orders, payments, refunds,
-          returns, shipping, seller payouts, and rescue support.
+          returns, shipping, seller payouts, and rescue support.{' '}
+          Call or text ReTail Support at {appLinks.supportPhone}.
         </Text>
         <Button title="Email Support" icon={HelpCircle} variant="outline" onPress={() => void openAppLink(appLinks.supportMailto)} fullWidth />
+        <Button title="Call Support" variant="outline" onPress={() => void openAppLink(appLinks.supportTel)} fullWidth />
+        <Button title="Text Support" variant="outline" onPress={() => void openAppLink(appLinks.supportSms)} fullWidth />
       </SectionCard>
 
       <SectionCard title="Legal & Safety">
@@ -2842,6 +2845,8 @@ export function SettingsScreen({
         <Button title="FAQ" icon={HelpCircle} variant="outline" onPress={onFAQ} fullWidth />
         <Button title="Email General Contact" variant="outline" onPress={() => void openAppLink(appLinks.contactMailto)} fullWidth />
         <Button title="Email Support" variant="outline" onPress={() => void openAppLink(appLinks.supportMailto)} fullWidth />
+        <Button title="Call Support" variant="outline" onPress={() => void openAppLink(appLinks.supportTel)} fullWidth />
+        <Button title="Text Support" variant="outline" onPress={() => void openAppLink(appLinks.supportSms)} fullWidth />
       </SectionCard>
       <StripeConnectOnboardingScreen
         visible={payoutOnboardingVisible}

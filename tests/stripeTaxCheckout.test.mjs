@@ -58,7 +58,8 @@ test('tax calculation requires buyer location and uses server-selected shipping 
 });
 
 test('application fee withholds ReTail fee, tax, and collected shipping from connected seller proceeds', () => {
-  assert.match(stripeCreate, /const platformFeeCents = calculatePlatformFeeCents\(itemAmountCents\)/);
+  assert.match(stripeCreate, /const normalPlatformFeeCents = calculatePlatformFeeCents\(itemAmountCents\)/);
+  assert.match(stripeCreate, /const platformFeeCents = foundingSellerBenefit\.platformFeeCents/);
   assert.match(stripeCreate, /const sellerAmountCents = itemAmountCents/);
   assert.match(
     stripeCreate,
@@ -70,6 +71,7 @@ test('application fee withholds ReTail fee, tax, and collected shipping from con
 
 test('collected tax is separated from ReTail marketplace revenue in transaction and metadata fields', () => {
   assert.match(stripeCreate, /retail_platform_fee_cents: String\(platformFeeCents\)/);
+  assert.match(stripeCreate, /retail_platform_fee_before_founding_seller_cents: String\(normalPlatformFeeCents\)/);
   assert.match(stripeCreate, /retail_tax_amount_cents: String\(taxAmountCents\)/);
   assert.match(stripeCreate, /retail_application_fee_withheld_cents: String\(stripeApplicationFeeWithheldCents\)/);
   assert.match(stripeCreate, /platform_fee_cents: platformFeeCents/);

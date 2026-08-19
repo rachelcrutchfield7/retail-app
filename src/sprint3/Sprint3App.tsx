@@ -93,6 +93,7 @@ import { useCompleteTransaction, useEligibleTransactionParticipants } from '../h
 import { useCreateListing } from '../hooks/useCreateListing';
 import { useFavorites } from '../hooks/useFavorites';
 import { useFavoriteStatus } from '../hooks/useFavoriteStatus';
+import { useMyFoundingSellerBenefit } from '../hooks/useFoundingSeller';
 import { useListing } from '../hooks/useListing';
 import { useListings } from '../hooks/useListings';
 import { useLocation } from '../hooks/useLocation';
@@ -1835,6 +1836,7 @@ export function ProfileScreen({
   const reviews = useReviews(auth.profile?.id ?? '');
   const reviewSummary = useReviewSummary(auth.profile?.id ?? '', Boolean(auth.profile));
   const pendingReviews = usePendingReviews(Boolean(auth.profile));
+  const foundingSellerBenefit = useMyFoundingSellerBenefit(Boolean(auth.profile && auth.profile.account_type === 'regular'));
   const googleSignInAvailability = getGoogleSignInAvailability(Platform.OS);
   warnIfGoogleSignInUnavailable(Platform.OS);
 
@@ -2161,6 +2163,16 @@ export function ProfileScreen({
           }}
           actionLabel="Complete Profile"
           onAction={onEditProfile}
+        />
+      ) : null}
+      {foundingSellerBenefit.data?.active ? (
+        <NoticeCard
+          notice={{
+            title: 'Founding Seller',
+            body: foundingSellerBenefit.data.remainingFeeFreeSales > 0
+              ? `${foundingSellerBenefit.data.remainingFeeFreeSales} of ${foundingSellerBenefit.data.freeSalesLimit} fee-free ReTail sales remaining. Stripe processing, tax, and shipping are not waived.`
+              : `Your first ${foundingSellerBenefit.data.freeSalesLimit} Founding Seller fee-free ReTail sales have been used. Normal ReTail seller fees now apply.`,
+          }}
         />
       ) : null}
       <View style={styles.actionGrid}>

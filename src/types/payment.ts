@@ -16,6 +16,8 @@ export type ProtectedCheckoutSetup = {
   merchantDisplayName: string;
   amountCents: number;
   platformFeeCents: number;
+  foundingSellerFeeWaivedCents?: number;
+  foundingSellerBenefitOrdinal?: number | null;
   sellerAmountCents: number;
   itemAmountCents?: number;
   taxAmountCents?: number;

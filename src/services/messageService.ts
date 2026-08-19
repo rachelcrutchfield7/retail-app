@@ -211,6 +211,25 @@ export async function getPaginatedMessages(conversationId: string, params: Messa
   };
 }
 
+export async function getMessageById(conversationId: string, messageId: string): Promise<Message> {
+  const profile = await ensureCurrentProfile();
+  await getConversationParticipantIds(conversationId);
+
+  const { data, error } = await supabase
+    .from('messages')
+    .select('*')
+    .eq('conversation_id', conversationId)
+    .eq('id', messageId)
+    .is('deleted_at', null)
+    .maybeSingle();
+
+  if (error || !data) {
+    throwSupabaseError(error ?? { message: 'Message not found.' }, 'We could not load that message.');
+  }
+
+  return withSignedAttachmentUrl(toMessage(data as Record<string, unknown>, profile.id));
+}
+
 export async function sendMessage(input: SendMessageInput): Promise<Message> {
   await requireCurrentPolicyAcceptance();
   const profile = await ensureCurrentProfile();
@@ -387,14 +406,38 @@ export async function softDeleteOwnMessage(messageId: string, currentUserId: str
 }
 
 export async function getUnreadMessageCount(): Promise<UnreadMessages> {
-  const conversations = await getConversations();
+  const profile = await ensureCurrentProfile();
   const byConversation: Record<string, number> = {};
+  const { data: conversations, error: conversationError } = await supabase
+    .from('conversations')
+    .select('id')
+    .or(`buyer_id.eq.${profile.id},seller_id.eq.${profile.id}`)
+    .is('deleted_at', null);
 
-  conversations.forEach((conversation) => {
-    if (conversation.unreadCount > 0) {
-      byConversation[conversation.id] = conversation.unreadCount;
+  if (conversationError) {
+    throwSupabaseError(conversationError, 'We could not load unread messages.');
+  }
+
+  const conversationIds = (conversations ?? []).map((conversation) => String((conversation as Record<string, unknown>).id));
+
+  if (conversationIds.length > 0) {
+    const { data: unreadRows, error: unreadError } = await supabase
+      .from('messages')
+      .select('conversation_id')
+      .in('conversation_id', conversationIds)
+      .eq('is_read', false)
+      .neq('sender_id', profile.id)
+      .is('deleted_at', null);
+
+    if (unreadError) {
+      throwSupabaseError(unreadError, 'We could not load unread messages.');
     }
-  });
+
+    for (const row of unreadRows ?? []) {
+      const conversationId = String((row as Record<string, unknown>).conversation_id);
+      byConversation[conversationId] = (byConversation[conversationId] ?? 0) + 1;
+    }
+  }
 
   return {
     total: Object.values(byConversation).reduce((total, count) => total + count, 0),

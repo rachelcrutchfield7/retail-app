@@ -248,26 +248,6 @@ function mapConversationRpcError(error: unknown): never {
   throwSupabaseError(error, 'We could not start this conversation.');
 }
 
-function deletedPublicProfile(userId: string): PublicProfile {
-  return {
-    id: userId,
-    account_type: 'regular' as const,
-    display_name: 'Deleted User',
-    username: 'deleted_user',
-    bio: undefined,
-    avatar_url: undefined,
-    city: undefined,
-    state: undefined,
-    buyer_rating: 0,
-    seller_rating: 0,
-    review_count: 0,
-    listings_count: 0,
-    completed_sales_count: 0,
-    is_verified: false,
-    created_at: new Date().toISOString(),
-  };
-}
-
 function unavailablePublicProfile(userId: string): PublicProfile {
   return {
     id: userId,
@@ -701,12 +681,12 @@ export async function buildConversationSummary(conversation: Conversation | Conv
 
   return {
     ...normalized,
-    name: otherProfile?.display_name ?? 'Deleted User',
+    name: otherProfile?.display_name ?? 'Profile unavailable',
     listing: listingSummary.title,
     preview: messagePreview(lastMessage, normalized.preview),
     unread: unreadCount > 0,
     time: formatConversationTime(lastMessage?.created_at ?? normalized.lastMessageAt),
-    otherUser: otherProfile ?? deletedPublicProfile(otherUserId),
+    otherUser: otherProfile ?? unavailablePublicProfile(otherUserId),
     listingSummary,
     listingThumbnail: images[0]?.thumbnail_url ?? images[0]?.image_url ?? listingSummary.image,
     lastMessage,
@@ -733,12 +713,12 @@ function buildConversationSummaryFromBatch(row: ConversationRow, batch: Conversa
 
   return {
     ...normalized,
-    name: otherProfile?.display_name ?? 'Deleted User',
+    name: otherProfile?.display_name ?? 'Profile unavailable',
     listing: listingSummary.title,
     preview: messagePreview(lastMessage, normalized.preview),
     unread: unreadCount > 0,
     time: formatConversationTime(lastMessage?.created_at ?? normalized.lastMessageAt),
-    otherUser: otherProfile ?? deletedPublicProfile(otherUserId),
+    otherUser: otherProfile ?? unavailablePublicProfile(otherUserId),
     listingSummary,
     listingThumbnail: images[0]?.thumbnail_url ?? images[0]?.image_url ?? listingSummary.image,
     lastMessage,

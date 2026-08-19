@@ -112,6 +112,8 @@ export async function startProtectedCheckout(context: PaymentOptionContext): Pro
     merchantDisplayName: checkout.merchantDisplayName ?? 'ReTail',
     amountCents: checkout.amountCents ?? amountCents,
     platformFeeCents: checkout.platformFeeCents ?? calculatePlatformFeeCents(amountCents),
+    foundingSellerFeeWaivedCents: checkout.foundingSellerFeeWaivedCents,
+    foundingSellerBenefitOrdinal: checkout.foundingSellerBenefitOrdinal,
     sellerAmountCents: checkout.sellerAmountCents ?? amountCents - calculatePlatformFeeCents(amountCents),
     itemAmountCents: checkout.itemAmountCents ?? amountCents,
     taxAmountCents: checkout.taxAmountCents ?? 0,

@@ -45,18 +45,20 @@ test('permission decline or disabled preferences do not block the app', () => {
   assert.match(helper, /logger\.warning\('Expo push token registration failed\.'/);
 });
 
-test('logout and account switching remove previous native push token before session changes', () => {
+test('account switching removes previous native push token and logout clears local state immediately', () => {
   const authContext = read('src/auth/AuthContext.tsx');
+  const signOutStart = authContext.indexOf('const signOut = useCallback');
+  const signOutEnd = authContext.indexOf('const resetPassword = useCallback');
+  const signOut = authContext.slice(signOutStart, signOutEnd);
 
   assert.match(authContext, /removeRegisteredNativePushTokenForCurrentUser/);
   assert.match(authContext, /Could not remove push token before email sign-in/);
   assert.match(authContext, /Could not remove push token before Google sign-in/);
   assert.match(authContext, /Could not remove push token before sign-out/);
-  assert.ok(
-    authContext.indexOf('await removeRegisteredNativePushTokenForCurrentUser()') <
-      authContext.indexOf('await clearAuthSession()'),
-    'sign-out should remove the registered token before clearing the Supabase session'
-  );
+  assert.match(signOut, /Promise\.allSettled/);
+  assert.ok(signOut.indexOf('setSession(null)') < signOut.indexOf('removeRegisteredNativePushTokenForCurrentUser()'));
+  assert.ok(signOut.indexOf('setUser(null)') < signOut.indexOf('removeRegisteredNativePushTokenForCurrentUser()'));
+  assert.ok(signOut.indexOf('clearQueryData()') < signOut.indexOf('removeRegisteredNativePushTokenForCurrentUser()'));
 });
 
 test('settings exposes real push alert toggles instead of the old coming-soon copy', () => {

@@ -21,6 +21,8 @@ test('ReTail public domain links are centralized for app usage', () => {
   assert.equal(appLinks.contactMailto, 'mailto:contact@retailpetapp.com');
   assert.equal(appLinks.supportEmail, 'support@retailpetapp.com');
   assert.equal(appLinks.supportPhone, '(877) 514-3697');
+  assert.equal(appLinks.supportTel, 'tel:+18775143697');
+  assert.equal(appLinks.supportSms, 'sms:+18775143697');
   assert.equal(appLinks.supportMailto, 'mailto:support@retailpetapp.com');
   assert.equal(appLinks.paymentSupportMailto, 'mailto:support@retailpetapp.com?subject=ReTail%20payment%20support');
   assert.equal(
@@ -48,6 +50,8 @@ test('mobile app metadata is ready for the ReTail domain', () => {
   assert.match(settings, /appLinks\.communityGuidelinesUrl/);
   assert.match(settings, /appLinks\.contactMailto/);
   assert.match(settings, /appLinks\.supportMailto/);
+  assert.match(settings, /appLinks\.supportTel/);
+  assert.match(settings, /appLinks\.supportSms/);
 });
 
 test('Cloudflare Pages static site includes launch, beta, legal, and support pages', () => {

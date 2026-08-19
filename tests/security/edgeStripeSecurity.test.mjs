@@ -12,6 +12,7 @@ const stripeWebhook = read('supabase/functions/stripe-webhook/index.ts');
 const stripeConnect = read('supabase/functions/stripe-connect-account/index.ts');
 const stripeStatus = read('supabase/functions/stripe-account-status/index.ts');
 const stripeLogin = read('supabase/functions/stripe-connect-login-link/index.ts');
+const stripeConnectShared = read('supabase/functions/_shared/stripeConnect.ts');
 const sendNotification = read('supabase/functions/send-notification/index.ts');
 const deleteAccount = read('supabase/functions/delete-account/index.ts');
 const stripeShared = read('supabase/functions/_shared/stripe.ts');
@@ -56,10 +57,13 @@ test('Stripe fee defaults remain server-side and unchanged by this audit', () =>
 test('Stripe Connect account operations use the authenticated caller profile', () => {
   for (const source of [stripeConnect, stripeStatus, stripeLogin]) {
     assert.match(source, /requireAuthenticatedRequest\(request\)/);
-    assert.match(source, /\.eq\('id', user\.id\)/);
     assert.doesNotMatch(source, /request\.json\(\)/);
     assert.doesNotMatch(source, /acct_\.\.\.|connectedAccountId|sellerStripeAccountId/);
   }
+
+  assert.match(stripeConnectShared, /\.eq\('id', user\.id\)/);
+  assert.match(stripeConnectShared, /idempotencyKey: `retail-connect-account-\$\{user\.id\}`/);
+  assert.match(stripeConnectShared, /business_type: 'individual'/);
 });
 
 test('Stripe webhook rejects missing or invalid signatures before service-role writes', () => {
