@@ -6,6 +6,27 @@ import type { AdminListingReport, ReportReason, ReportStatus, RescueOrgTypeDb, R
 
 type Row = Record<string, unknown>;
 export type AdminReportAction = 'none' | 'remove_listing' | 'remove_message' | 'delete_user';
+export type FoundingSellerAdminStatus = 'not_enrolled' | 'active' | 'paused' | 'revoked';
+
+export type AdminFoundingSellerSearchResult = {
+  profileId: string;
+  displayName: string;
+  username: string;
+  email?: string;
+  accountType: string;
+  status: FoundingSellerAdminStatus;
+};
+
+export type AdminFoundingSellerStatus = AdminFoundingSellerSearchResult & {
+  benefitId?: string;
+  freeSalesLimit: number;
+  feeFreeSalesUsed: number;
+  currentlyReserved: number;
+  feeFreeSalesRemaining: number;
+  grantedAt?: string;
+  source?: string;
+  notes?: string;
+};
 
 const reportReasonLabels: Record<string, ReportReason> = {
   spam: 'Spam',
@@ -110,6 +131,72 @@ export async function moderateListingReport(
 
   const [report] = await hydrateListingReports([toAdminListingReport(data as Row)]);
   return report;
+}
+
+export async function searchAdminFoundingSellerProfiles(searchText: string): Promise<AdminFoundingSellerSearchResult[]> {
+  await requireAdminProfile();
+
+  const { data, error } = await supabase.rpc('search_admin_founding_seller_profiles', {
+    search_text: searchText.trim(),
+  });
+
+  if (error) {
+    throwSupabaseError(error, 'We could not search sellers.');
+  }
+
+  return ((data ?? []) as Row[]).map(toAdminFoundingSellerSearchResult);
+}
+
+export async function getAdminFoundingSellerStatus(profileId: string): Promise<AdminFoundingSellerStatus> {
+  await requireAdminProfile();
+
+  const { data, error } = await supabase.rpc('get_admin_founding_seller_status', {
+    target_user_id: profileId,
+  });
+
+  if (error) {
+    throwSupabaseError(error, 'We could not load Founding Seller status.');
+  }
+
+  const row = Array.isArray(data) ? data[0] : null;
+  if (!row) {
+    throw createServiceError(
+      'FOUNDING_SELLER_TARGET_NOT_FOUND',
+      'Admin Founding Seller status lookup returned no profile',
+      'We could not find that seller.'
+    );
+  }
+
+  return toAdminFoundingSellerStatus(row as Row);
+}
+
+export async function setAdminFoundingSellerStatus(
+  profileId: string,
+  status: Exclude<FoundingSellerAdminStatus, 'not_enrolled'>,
+  notes?: string
+): Promise<AdminFoundingSellerStatus> {
+  await requireAdminProfile();
+
+  const { data, error } = await supabase.rpc('admin_set_founding_seller_status', {
+    target_user_id: profileId,
+    requested_status: status,
+    requested_notes: notes?.trim() || null,
+  });
+
+  if (error) {
+    throwSupabaseError(error, 'We could not update Founding Seller status.');
+  }
+
+  const row = Array.isArray(data) ? data[0] : null;
+  if (!row) {
+    throw createServiceError(
+      'FOUNDING_SELLER_UPDATE_EMPTY',
+      'Admin Founding Seller status update returned no row',
+      'Founding Seller status changed, but ReTail could not refresh it.'
+    );
+  }
+
+  return toAdminFoundingSellerStatus(row as Row);
 }
 
 async function requireAdminProfile() {
@@ -289,6 +376,39 @@ function toAdminListingReport(row: Row): AdminListingReport {
   };
 }
 
+function toAdminFoundingSellerSearchResult(row: Row): AdminFoundingSellerSearchResult {
+  return {
+    profileId: stringValue(row.profile_id),
+    displayName: stringValue(row.display_name, 'ReTail seller'),
+    username: stringValue(row.username, 'unknown'),
+    email: optionalString(row.email),
+    accountType: stringValue(row.account_type, 'regular'),
+    status: foundingSellerAdminStatusValue(row.status),
+  };
+}
+
+function toAdminFoundingSellerStatus(row: Row): AdminFoundingSellerStatus {
+  return {
+    ...toAdminFoundingSellerSearchResult(row),
+    benefitId: optionalString(row.benefit_id),
+    freeSalesLimit: numberValue(row.free_sales_limit, 3),
+    feeFreeSalesUsed: numberValue(row.fee_free_sales_used, 0),
+    currentlyReserved: numberValue(row.currently_reserved, 0),
+    feeFreeSalesRemaining: numberValue(row.fee_free_sales_remaining, 0),
+    grantedAt: optionalString(row.granted_at),
+    source: optionalString(row.source),
+    notes: optionalString(row.notes),
+  };
+}
+
+function foundingSellerAdminStatusValue(value: unknown): FoundingSellerAdminStatus {
+  if (value === 'active' || value === 'paused' || value === 'revoked') {
+    return value;
+  }
+
+  return 'not_enrolled';
+}
+
 function reportTypeValue(value: unknown): AdminListingReport['report_type'] {
   if (value === 'message' || value === 'user') {
     return value;
@@ -437,4 +557,8 @@ function optionalString(value: unknown): string | undefined {
 
 function optionalNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function numberValue(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 }

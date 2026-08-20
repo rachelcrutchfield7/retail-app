@@ -57,6 +57,7 @@ import { appLinks } from '../constants/links';
 import { colors, radius, sizes, spacing, typography } from '../constants/theme';
 import type { ThemeColors } from '../constants/theme';
 import { useAdminListingReports } from '../hooks/useAdminListingReports';
+import { useAdminFoundingSellers } from '../hooks/useAdminFoundingSellers';
 import { useAdminRescueApprovals } from '../hooks/useAdminRescueApprovals';
 import { useAuth } from '../hooks/useAuth';
 import { useBlockUser } from '../hooks/useBlockUser';
@@ -112,6 +113,7 @@ import {
   type SellerShippingOrigin,
   type ShippingRateOption,
 } from '../services/shippingService';
+import { getListingIdFromSharedUrl } from '../services/listingShareService';
 import {
   getStripeConnectPayoutState,
   getStripeConnectPrimaryActionLabel,
@@ -121,6 +123,7 @@ import {
   refreshStripeConnectStatus,
 } from '../services/stripeConnectService';
 import type { StripeConnectStatus } from '../services/stripeConnectService';
+import type { AdminFoundingSellerSearchResult, AdminFoundingSellerStatus, FoundingSellerAdminStatus } from '../services/adminService';
 import {
   acceptOffer,
   canRespondToOffer,
@@ -303,19 +306,27 @@ function Sprint4Experience() {
     let mounted = true;
     const shouldHandleStripeConnectCallback = (url?: string | null) =>
       Boolean(url && (url.includes('stripe-connect-return') || url.includes('stripe-connect-refresh')));
-    const handleStripeConnectCallback = (url?: string | null) => {
-      if (!mounted || !shouldHandleStripeConnectCallback(url)) {
+    const handleIncomingUrl = (url?: string | null) => {
+      if (!mounted || !url) {
         return;
       }
 
-      setRoute({ name: 'settings' });
-      void refreshStripeConnectStatus()
-        .then(() => auth.refreshProfile())
-        .catch(() => auth.refreshProfile());
+      if (shouldHandleStripeConnectCallback(url)) {
+        setRoute({ name: 'settings' });
+        void refreshStripeConnectStatus()
+          .then(() => auth.refreshProfile())
+          .catch(() => auth.refreshProfile());
+        return;
+      }
+
+      const sharedListingId = getListingIdFromSharedUrl(url);
+      if (sharedListingId) {
+        setRoute({ name: 'listing-detail', listingId: sharedListingId });
+      }
     };
 
-    void Linking.getInitialURL().then(handleStripeConnectCallback);
-    const subscription = Linking.addEventListener('url', ({ url }) => handleStripeConnectCallback(url));
+    void Linking.getInitialURL().then(handleIncomingUrl);
+    const subscription = Linking.addEventListener('url', ({ url }) => handleIncomingUrl(url));
 
     return () => {
       mounted = false;
@@ -3013,10 +3024,14 @@ export function AdminReviewScreen({ onBack, onOpenListing }: { onBack: () => voi
   const supportCases = useAdminSupportCases(Boolean(auth.profile?.is_admin), reportTab);
   const supportUpdater = useAdminUpdateSupportCase(reportTab);
   const [notice, setNotice] = useState<{ title: string; body: string } | null>(null);
+  const [foundingSellerSearch, setFoundingSellerSearch] = useState('');
+  const [selectedFoundingSellerId, setSelectedFoundingSellerId] = useState<string | null>(null);
+  const [foundingSellerNotes, setFoundingSellerNotes] = useState('Founding Seller beta grant');
   const [reportNotes, setReportNotes] = useState<Record<string, string>>({});
   const [reportMessages, setReportMessages] = useState<Record<string, string>>({});
   const [supportNotes, setSupportNotes] = useState<Record<string, string>>({});
   const [supportMessages, setSupportMessages] = useState<Record<string, string>>({});
+  const foundingSellers = useAdminFoundingSellers(Boolean(auth.profile?.is_admin), selectedFoundingSellerId);
   const pendingCount = approvals.data?.filter((rescue) => rescue.verification_status === 'pending').length ?? 0;
   const reportCount = listingReports.data?.length ?? 0;
   const supportCaseCount = supportCases.data?.length ?? 0;
@@ -3041,6 +3056,62 @@ export function AdminReviewScreen({ onBack, onOpenListing }: { onBack: () => voi
 
   const updateSupportMessage = (caseId: string, message: string) => {
     setSupportMessages((current) => ({ ...current, [caseId]: message }));
+  };
+
+  const searchFoundingSellers = async () => {
+    try {
+      const results = await foundingSellers.search(foundingSellerSearch);
+      setNotice({
+        title: 'Seller search complete',
+        body: results.length ? `${results.length} seller${results.length === 1 ? '' : 's'} found.` : 'No sellers matched that search.',
+      });
+    } catch (error) {
+      setNotice({ title: 'Seller search failed', body: handleAppError(error).userMessage });
+    }
+  };
+
+  const selectFoundingSeller = (seller: AdminFoundingSellerSearchResult) => {
+    setSelectedFoundingSellerId(seller.profileId);
+    setFoundingSellerNotes('Founding Seller beta grant');
+  };
+
+  const updateFoundingSellerStatus = async (
+    status: Exclude<FoundingSellerAdminStatus, 'not_enrolled'>,
+    title: string,
+    body: string
+  ) => {
+    const runAction = async () => {
+      if (!selectedFoundingSellerId) {
+        setNotice({ title: 'Select a seller', body: 'Choose a seller before changing Founding Seller status.' });
+        return;
+      }
+
+      try {
+        const updatedStatus = await foundingSellers.updateStatus({
+          profileId: selectedFoundingSellerId,
+          status,
+          notes: foundingSellerNotes,
+        });
+        setNotice({
+          title: 'Founding Seller updated',
+          body: `${updatedStatus.displayName} is now ${adminFoundingSellerStatusLabel(updatedStatus.status).toLowerCase()}.`,
+        });
+      } catch (error) {
+        setNotice({ title: 'Founding Seller update failed', body: handleAppError(error).userMessage });
+      }
+    };
+
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      if (window.confirm(`${title}\n\n${body}`)) {
+        await runAction();
+      }
+      return;
+    }
+
+    Alert.alert(title, body, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: title, style: status === 'revoked' ? 'destructive' : 'default', onPress: () => void runAction() },
+    ]);
   };
 
   const approve = async (rescue: RescueProfile) => {
@@ -3161,6 +3232,73 @@ export function AdminReviewScreen({ onBack, onOpenListing }: { onBack: () => voi
         <Text style={styles.body}>
           Support cases are for order, payment, refund, cancellation, return, shipping, and seller payout questions. Creating or updating a case does not automatically issue a refund.
         </Text>
+      </SectionCard>
+
+      <SectionCard title="Founding Seller">
+        <View style={styles.stack}>
+          <Text style={styles.body}>
+            Search by display name, email, username, or profile ID. Founding Seller status is enforced server-side during checkout.
+          </Text>
+          <TextInput
+            label="Seller search"
+            value={foundingSellerSearch}
+            onChangeText={setFoundingSellerSearch}
+            placeholder="Email, username, name, or profile ID"
+            autoCapitalize="none"
+          />
+          <Button
+            title="Search Sellers"
+            icon={Search}
+            variant="outline"
+            onPress={() => void searchFoundingSellers()}
+            loading={foundingSellers.searchLoading}
+            fullWidth
+          />
+          {foundingSellers.searchError ? <NoticeCard title="Seller search failed" body={foundingSellers.searchError} /> : null}
+          {foundingSellers.searchResults.length ? (
+            <View style={styles.stack}>
+              {foundingSellers.searchResults.map((seller) => (
+                <AdminFoundingSellerSearchCard
+                  key={seller.profileId}
+                  seller={seller}
+                  selected={seller.profileId === selectedFoundingSellerId}
+                  onSelect={() => selectFoundingSeller(seller)}
+                />
+              ))}
+            </View>
+          ) : null}
+          {foundingSellers.statusLoading ? <LoadingSpinner /> : null}
+          {foundingSellers.statusError ? <NoticeCard title="Founding Seller status unavailable" body={foundingSellers.statusError} /> : null}
+          {foundingSellers.actionError ? <NoticeCard title="Founding Seller action failed" body={foundingSellers.actionError} /> : null}
+          {foundingSellers.status ? (
+            <AdminFoundingSellerStatusCard
+              status={foundingSellers.status}
+              loading={foundingSellers.actionLoading}
+              notes={foundingSellerNotes}
+              onNotes={setFoundingSellerNotes}
+              onGrant={() => void updateFoundingSellerStatus(
+                'active',
+                'Grant Founding Seller',
+                'This gives the selected seller up to 3 qualifying ReTail sales with no ReTail platform fee. Existing usage is not reset.'
+              )}
+              onPause={() => void updateFoundingSellerStatus(
+                'paused',
+                'Pause Benefit',
+                'This keeps Founding Seller history but prevents new fee-free sale benefits while paused.'
+              )}
+              onResume={() => void updateFoundingSellerStatus(
+                'active',
+                'Resume Benefit',
+                'This reactivates remaining unused Founding Seller benefits without resetting previous usage.'
+              )}
+              onRevoke={() => void updateFoundingSellerStatus(
+                'revoked',
+                'Revoke Benefit',
+                'This stops future Founding Seller fee-free benefits. Historical usage and transaction records remain intact.'
+              )}
+            />
+          ) : null}
+        </View>
       </SectionCard>
 
       {notice ? <NoticeCard title={notice.title} body={notice.body} /> : null}
@@ -3374,6 +3512,106 @@ function AdminListingReportCard({
             {canRemoveMessage ? <Button title="Remove Message" icon={Trash2} variant="danger" onPress={onRemoveMessage} disabled={archived || loading} loading={loading} fullWidth /> : null}
             {canRemoveListing ? <Button title="Remove Listing" icon={Trash2} variant="danger" onPress={onRemoveListing} disabled={archived || loading} loading={loading} fullWidth /> : null}
             {canDeleteUser ? <Button title="Delete Account" icon={Trash2} variant="danger" onPress={onDeleteUser} disabled={archived || loading} loading={loading} fullWidth /> : null}
+          </View>
+        </View>
+      </View>
+    </Card>
+  );
+}
+
+function AdminFoundingSellerSearchCard({
+  seller,
+  selected,
+  onSelect,
+}: {
+  seller: AdminFoundingSellerSearchResult;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <Card>
+      <View style={styles.stack}>
+        <View style={styles.notificationRow}>
+          <View style={styles.notificationText}>
+            <Text style={styles.cardTitle}>{seller.displayName}</Text>
+            <Text style={styles.body}>{seller.email ?? seller.username}</Text>
+          </View>
+          <Badge label={adminFoundingSellerStatusLabel(seller.status)} tone={seller.status === 'active' ? 'success' : 'info'} />
+        </View>
+        <Text style={styles.metaText}>Username: {seller.username}</Text>
+        <Text style={styles.metaText}>Profile: {seller.profileId}</Text>
+        <Text style={styles.metaText}>Account: {seller.accountType}</Text>
+        <Button
+          title={selected ? 'Selected' : 'Select Seller'}
+          variant={selected ? 'primary' : 'outline'}
+          onPress={onSelect}
+          fullWidth
+        />
+      </View>
+    </Card>
+  );
+}
+
+function AdminFoundingSellerStatusCard({
+  status,
+  loading,
+  notes,
+  onNotes,
+  onGrant,
+  onPause,
+  onResume,
+  onRevoke,
+}: {
+  status: AdminFoundingSellerStatus;
+  loading: boolean;
+  notes: string;
+  onNotes: (notes: string) => void;
+  onGrant: () => void;
+  onPause: () => void;
+  onResume: () => void;
+  onRevoke: () => void;
+}) {
+  const enrolled = status.status !== 'not_enrolled';
+  const active = status.status === 'active';
+  const paused = status.status === 'paused';
+  const revoked = status.status === 'revoked';
+
+  return (
+    <Card>
+      <View style={styles.stack}>
+        <View style={styles.notificationRow}>
+          <View style={styles.notificationText}>
+            <Text style={styles.cardTitle}>{status.displayName}</Text>
+            <Text style={styles.body}>{status.email ?? status.username}</Text>
+          </View>
+          <Badge label={adminFoundingSellerStatusLabel(status.status)} tone={active ? 'success' : 'info'} />
+        </View>
+
+        <Text style={styles.bodyStrong}>Current status: {adminFoundingSellerStatusLabel(status.status)}</Text>
+        <Text style={styles.body}>Fee-free sales limit: {status.freeSalesLimit}</Text>
+        <Text style={styles.body}>Fee-free sales used: {status.feeFreeSalesUsed}</Text>
+        <Text style={styles.body}>Currently reserved: {status.currentlyReserved}</Text>
+        <Text style={styles.body}>Fee-free sales remaining: {status.feeFreeSalesRemaining}</Text>
+        {status.grantedAt ? <Text style={styles.metaText}>Granted: {formatAdminDate(status.grantedAt)}</Text> : null}
+        {status.source ? <Text style={styles.metaText}>Source: {status.source}</Text> : null}
+        {status.notes ? <Text style={styles.body}>Internal notes: {status.notes}</Text> : null}
+
+        <TextArea
+          label="Internal note"
+          value={notes}
+          onChangeText={onNotes}
+          placeholder="Optional admin note for this Founding Seller change."
+        />
+
+        <View style={styles.adminActionGroup}>
+          <Text style={styles.bodyStrong}>Founding Seller Actions</Text>
+          <Text style={styles.metaText}>These actions do not reset previous fee-free sale usage.</Text>
+          <View style={styles.conversationOptionGrid}>
+            {!enrolled ? <Button title="Grant Founding Seller" icon={HeartHandshake} onPress={onGrant} loading={loading} fullWidth /> : null}
+            {active ? <Button title="Pause Benefit" variant="outline" onPress={onPause} loading={loading} fullWidth /> : null}
+            {active || paused ? <Button title="Revoke Benefit" variant="danger" onPress={onRevoke} loading={loading} fullWidth /> : null}
+            {paused ? <Button title="Resume Benefit" icon={CheckCheck} onPress={onResume} loading={loading} fullWidth /> : null}
+            {revoked ? <Button title="Reactivate Benefit" icon={HeartHandshake} variant="outline" onPress={onResume} loading={loading} fullWidth /> : null}
           </View>
         </View>
       </View>
@@ -3599,6 +3837,19 @@ function adminReportTypeLabel(type: AdminListingReport['report_type']): string {
   }
 
   return 'Listing report';
+}
+
+function adminFoundingSellerStatusLabel(status: FoundingSellerAdminStatus): string {
+  switch (status) {
+    case 'active':
+      return 'Active';
+    case 'paused':
+      return 'Paused';
+    case 'revoked':
+      return 'Revoked';
+    default:
+      return 'Not enrolled';
+  }
 }
 
 function adminReportStatusNotice(report: AdminListingReport, status: ReportStatus): string {

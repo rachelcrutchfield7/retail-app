@@ -16,6 +16,7 @@ export const queryKeys = {
   transactionParticipants: (listingId: string) => ['transaction-participants', listingId] as const,
   mySupportCases: (userId: string) => ['my-support-cases', userId] as const,
   adminSupportCases: (view: string) => ['admin-support-cases', view] as const,
+  adminFoundingSellerStatus: (profileId: string) => ['admin-founding-seller-status', profileId] as const,
   notifications: (userId: string) => ['notifications', userId] as const,
   savedSearches: (userId: string) => ['saved-searches', userId] as const,
   marketplaceSearchAreas: ['marketplace-search-areas'] as const,

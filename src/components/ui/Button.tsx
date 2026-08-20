@@ -9,6 +9,7 @@ export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'dan
 type ButtonProps = {
   title: string;
   onPress: () => void;
+  accessibilityLabel?: string;
   variant?: ButtonVariant;
   disabled?: boolean;
   loading?: boolean;
@@ -19,6 +20,7 @@ type ButtonProps = {
 export function Button({
   title,
   onPress,
+  accessibilityLabel,
   variant = 'primary',
   disabled = false,
   loading = false,
@@ -34,7 +36,7 @@ export function Button({
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={title}
+      accessibilityLabel={accessibilityLabel ?? title}
       disabled={inactive}
       onPress={onPress}
       style={[styles.button, variantStyles[variant], variantStyle, fullWidth && styles.fullWidth, inactive && styles.disabled]}

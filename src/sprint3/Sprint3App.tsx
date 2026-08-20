@@ -39,6 +39,7 @@ import {
   Plus,
   Search,
   Settings,
+  Share2,
   ShieldCheck,
   Sparkles,
   Trash2,
@@ -125,6 +126,7 @@ import {
 } from '../services/stripeConnectService';
 import type { StripeConnectStatus } from '../services/stripeConnectService';
 import { splitPackageWeightOz, totalPackageWeightOzFromParts } from '../services/shippingRules';
+import { isListingShareable, shareListing } from '../services/listingShareService';
 import type {
   CreateListingInput,
   CreateSavedSearchInput,
@@ -1315,7 +1317,32 @@ export function CreateListingScreen({
       const listing = await mutation.createListing(form);
       setProgress(100);
       setForm(emptyCreateListing);
-      onCreated(listing.id);
+      let completed = false;
+      const continueToListing = () => {
+        if (completed) {
+          return;
+        }
+
+        completed = true;
+        onCreated(listing.id);
+      };
+
+      Alert.alert(
+        'Your listing is live!',
+        'Share it with friends to help it sell faster.',
+        [
+          { text: 'Not Now', style: 'cancel', onPress: continueToListing },
+          {
+            text: 'Share Listing',
+            onPress: () => {
+              void shareListing(listing, 'post_publish')
+                .catch(() => undefined)
+                .finally(continueToListing);
+            },
+          },
+        ],
+        { cancelable: true, onDismiss: continueToListing }
+      );
     } catch {
       return;
     } finally {
@@ -1479,6 +1506,7 @@ function ListingDetailContent({
   const completionDisabled = ['Sold', 'Donated', 'Archived', 'Removed'].includes(item.status);
   const archiveDisabled = ['Sold', 'Donated', 'Archived', 'Removed'].includes(item.status);
   const deleteDisabled = item.status === 'Removed';
+  const shareDisabled = !isListingShareable(item);
 
   const toggleFavorite = async () => {
     if (isGuest) {
@@ -1495,6 +1523,14 @@ function ListingDetailContent({
       await favorite.toggleFavorite();
     } catch (error) {
       setNotice({ title: 'Favorite was not updated', body: handleAppError(error).userMessage });
+    }
+  };
+
+  const shareCurrentListing = async () => {
+    try {
+      await shareListing(item, 'listing_detail');
+    } catch (error) {
+      setNotice({ title: 'Listing was not shared', body: handleAppError(error).userMessage });
     }
   };
 
@@ -1552,12 +1588,22 @@ function ListingDetailContent({
         <View style={styles.detailHeader}>
           <View style={styles.priceFavoriteRow}>
             <PriceTag value={item.price} />
-            <FavoriteButton
-              selected={favorite.isFavorited}
-              count={favorite.favoriteCount}
-              disabled={owner}
-              onPress={() => void toggleFavorite()}
-            />
+            <View style={styles.detailHeaderActions}>
+              <Button
+                title="Share"
+                accessibilityLabel="Share listing"
+                icon={Share2}
+                variant="outline"
+                disabled={shareDisabled}
+                onPress={() => void shareCurrentListing()}
+              />
+              <FavoriteButton
+                selected={favorite.isFavorited}
+                count={favorite.favoriteCount}
+                disabled={owner}
+                onPress={() => void toggleFavorite()}
+              />
+            </View>
           </View>
           <Text style={styles.detailTitle}>{item.title}</Text>
           <View style={styles.locationRow}>
@@ -5109,6 +5155,11 @@ function createSprint3Styles(themeColors: ThemeColors) {
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: spacing.md,
+  },
+  detailHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
   },
   actionGrid: {
     gap: spacing.sm,
