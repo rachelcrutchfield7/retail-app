@@ -30,15 +30,28 @@ test('listing share content avoids private seller data and does not mutate listi
 test('only active public listings are normal-share eligible', () => {
   assert.match(shareService, /const publicListingStatuses = new Set\(\['Active'\]\)/);
   assert.match(shareService, /LISTING_NOT_SHAREABLE/);
-  assert.match(sprint3, /const shareDisabled = !isListingShareable\(item\)/);
+  assert.match(sprint3, /const shareable = isListingShareable\(item\)/);
+  assert.match(sprint3, /\{shareable \? <ListingShareActionButton onPress=\{\(\) => void shareCurrentListing\(\)\} \/> : null\}/);
 });
 
-test('listing detail has an accessible share action and sellers get an optional post-publish prompt', () => {
-  assert.match(sprint3, /title="Share"/);
-  assert.match(sprint3, /icon=\{Share2\}/);
+test('active listing detail renders a visible accessible share action beside favorite', () => {
+  assert.match(sprint4, /if \(route\.name === 'listing-detail'\)/);
+  assert.match(sprint4, /<ListingDetailScreen/);
+  assert.match(sprint3, /function ListingShareActionButton/);
+  assert.match(sprint3, /accessibilityLabel="Share listing"/);
+  assert.match(sprint3, /<Share2 size=\{18\}/);
+  assert.match(sprint3, /<Text style=\{\[styles\.listingShareActionLabel/);
+  assert.match(sprint3, />Share<\/Text>/);
+  assert.match(sprint3, /styles\.detailHeaderActions/);
+  assert.match(sprint3, /listingShareActionButton:\s*\{\s*width: sizes\.touchTarget,\s*height: sizes\.touchTarget/s);
+  assert.match(sprint3, /detailPriceWrap:\s*\{\s*flexShrink: 1,\s*minWidth: 0/s);
+  assert.match(sprint3, /detailHeaderActions:\s*\{[\s\S]*flexShrink: 0/);
   assert.match(sprint3, /shareCurrentListing/);
   assert.match(sprint3, /shareListing\(item, 'listing_detail'\)/);
-  assert.match(sprint3, /accessibilityLabel="Share listing"/);
+  assert.match(sprint3, /disabled=\{owner\}/);
+});
+
+test('sellers get an optional post-publish share prompt', () => {
   assert.match(sprint3, /Your listing is live!/);
   assert.match(sprint3, /Share Listing/);
   assert.match(sprint3, /shareListing\(listing, 'post_publish'\)/);

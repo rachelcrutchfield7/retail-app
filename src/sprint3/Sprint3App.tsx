@@ -1506,7 +1506,7 @@ function ListingDetailContent({
   const completionDisabled = ['Sold', 'Donated', 'Archived', 'Removed'].includes(item.status);
   const archiveDisabled = ['Sold', 'Donated', 'Archived', 'Removed'].includes(item.status);
   const deleteDisabled = item.status === 'Removed';
-  const shareDisabled = !isListingShareable(item);
+  const shareable = isListingShareable(item);
 
   const toggleFavorite = async () => {
     if (isGuest) {
@@ -1587,16 +1587,11 @@ function ListingDetailContent({
 
         <View style={styles.detailHeader}>
           <View style={styles.priceFavoriteRow}>
-            <PriceTag value={item.price} />
+            <View style={styles.detailPriceWrap}>
+              <PriceTag value={item.price} />
+            </View>
             <View style={styles.detailHeaderActions}>
-              <Button
-                title="Share"
-                accessibilityLabel="Share listing"
-                icon={Share2}
-                variant="outline"
-                disabled={shareDisabled}
-                onPress={() => void shareCurrentListing()}
-              />
+              {shareable ? <ListingShareActionButton onPress={() => void shareCurrentListing()} /> : null}
               <FavoriteButton
                 selected={favorite.isFavorited}
                 count={favorite.favoriteCount}
@@ -1818,6 +1813,28 @@ function ListingDetailContent({
         onConfirm={() => void runOwnerAction()}
       />
     </ScreenContainer>
+  );
+}
+
+function ListingShareActionButton({ onPress }: { onPress: () => void }) {
+  const themeColors = useThemeColors();
+
+  return (
+    <View style={styles.listingShareActionWrap}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Share listing"
+        onPress={onPress}
+        hitSlop={spacing.xs}
+        style={[
+          styles.listingShareActionButton,
+          { backgroundColor: themeColors.surface, borderColor: themeColors.border },
+        ]}
+      >
+        <Share2 size={18} color={themeColors.textPrimary} />
+      </Pressable>
+      <Text style={[styles.listingShareActionLabel, { color: themeColors.textSecondary }]}>Share</Text>
+    </View>
   );
 }
 
@@ -5156,10 +5173,32 @@ function createSprint3Styles(themeColors: ThemeColors) {
     justifyContent: 'space-between',
     gap: spacing.md,
   },
+  detailPriceWrap: {
+    flexShrink: 1,
+    minWidth: 0,
+  },
   detailHeaderActions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
+    flexShrink: 0,
+  },
+  listingShareActionWrap: {
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  listingShareActionButton: {
+    width: sizes.touchTarget,
+    height: sizes.touchTarget,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.medium,
+    borderWidth: 1,
+    padding: spacing.xs,
+  },
+  listingShareActionLabel: {
+    color: colors.textSecondary,
+    ...typography.caption,
   },
   actionGrid: {
     gap: spacing.sm,
