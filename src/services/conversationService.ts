@@ -8,7 +8,6 @@ import { logger } from '../lib/logger';
 import { getListingById } from './listingService';
 import {
   ensureCurrentProfile,
-  listingRelationsSelect,
   throwSupabaseError,
   toMessage,
   toListing,
@@ -383,11 +382,9 @@ async function loadPublicProfilesForConversationList(userIds: string[]): Promise
     return profiles;
   }
 
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('id,account_type,display_name,username,bio,avatar_url,city,state,buyer_rating,seller_rating,review_count,listings_count,completed_sales_count,is_verified,created_at')
-    .in('id', userIds)
-    .is('deleted_at', null);
+  const { data, error } = await supabase.rpc('get_public_profiles_by_ids', {
+    target_user_ids: userIds,
+  });
 
   if (error) {
     logConversationHydrationWarning('Conversation participant batch profile lookup failed.', error, {
@@ -411,10 +408,9 @@ async function loadListingsForConversationList(listingIds: string[]): Promise<Ma
     return listings;
   }
 
-  const { data, error } = await supabase
-    .from('listings')
-    .select(listingRelationsSelect)
-    .in('id', listingIds);
+  const { data, error } = await supabase.rpc('get_conversation_listings_by_ids', {
+    target_listing_ids: listingIds,
+  });
 
   if (error) {
     logConversationHydrationWarning('Conversation listing batch lookup failed.', error, {

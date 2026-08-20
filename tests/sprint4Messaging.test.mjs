@@ -122,17 +122,17 @@ test('Sprint 4 app is active and messaging UI uses reusable components', () => {
   assert.doesNotMatch(sprintApp, /#[0-9A-Fa-f]{3,8}/, 'Sprint 4 screens should use theme color tokens');
 });
 
-test('conversation summaries use canonical listing detail retrieval and survive broken enrichment', () => {
+test('conversation summaries use safe batched listing hydration and survive broken enrichment', () => {
   const conversationService = readFileSync(join(root, 'src/services/conversationService.ts'), 'utf8');
 
   assert.match(conversationService, /import \{ getListingById \} from '\.\/listingService'/);
   assert.match(conversationService, /getListingById\(listingId\)/);
+  assert.match(conversationService, /rpc\('get_conversation_listings_by_ids'/);
   assert.doesNotMatch(conversationService, /listingRelationsSelect/);
   assert.doesNotMatch(conversationService, /\.from\('listings'\)[\s\S]{0,220}\.select\(/);
   assert.match(conversationService, /Listing detail unavailable during conversation hydration/);
   assert.match(conversationService, /Listing unavailable/);
   assert.match(conversationService, /buildConversationSummarySafe/);
-  assert.match(conversationService, /for \(const conversation of data \?\? \[\]\)/);
   assert.doesNotMatch(conversationService, /Promise\.all\(\(data \?\? \[\]\)\.map\(\(conversation\) => buildConversationSummary/);
 });
 

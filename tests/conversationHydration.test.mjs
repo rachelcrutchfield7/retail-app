@@ -13,6 +13,8 @@ test('conversation participant hydration uses public profile lookup before unava
   assert.match(service, /loadPublicProfileForConversation/);
   assert.match(service, /getPublicProfile\(userId\)/);
   assert.match(service, /loadPublicProfilesForConversationList/);
+  assert.match(service, /rpc\('get_public_profiles_by_ids'/);
+  assert.doesNotMatch(service, /loadPublicProfilesForConversationList[^]*\.from\('profiles'\)/);
   assert.match(service, /PROFILE_NOT_FOUND/);
   assert.match(service, /unavailablePublicProfile\(otherUserId\)/);
   assert.doesNotMatch(service, /deletedPublicProfile\(otherUserId\)/);
@@ -28,6 +30,8 @@ test('conversation list hydration batches related profile and message lookups', 
   assert.match(service, /function buildConversationSummaryFromBatch/);
   assert.match(service, /loadConversationSummaryBatch\(rows, profile\)/);
   assert.match(service, /loadPublicProfilesForConversationList\(otherUserIds\)/);
+  assert.match(service, /loadListingsForConversationList\(listingIds\)/);
+  assert.match(service, /rpc\('get_conversation_listings_by_ids'/);
   assert.match(service, /loadLastMessagesForConversationList\(conversationIds, currentProfile\.id\)/);
   assert.match(service, /loadUnreadCountsForConversationList\(conversationIds, currentProfile\.id\)/);
   assert.match(listImplementation, /summaries = rows\.map\(\(conversation\) => buildConversationSummaryFromBatch/);
@@ -58,4 +62,26 @@ test('missing participant profiles are not falsely labeled as deleted users', ()
   assert.match(batch, /otherUser: otherProfile \?\? unavailablePublicProfile\(otherUserId\)/);
   assert.doesNotMatch(summary, /Deleted User/);
   assert.doesNotMatch(batch, /Deleted User/);
+});
+
+test('conversation batch RPC migration preserves public privacy contracts', () => {
+  const migration = read('supabase/migrations/20260820163024_conversation_public_batch_hydration.sql');
+
+  assert.match(migration, /create or replace function public\.get_public_profiles_by_ids\(target_user_ids uuid\[\]\)/i);
+  assert.match(migration, /case when coalesce\(ps\.show_city_state, true\) then p\.city else null end as city/i);
+  assert.match(migration, /coalesce\(ps\.profile_discoverable, true\) = true/i);
+  assert.match(migration, /grant execute on function public\.get_public_profiles_by_ids\(uuid\[\]\) to anon, authenticated/i);
+  assert.doesNotMatch(migration, /\bp\.email\b|\bp\.phone\b|\bp\.zip_code\b|stripe_connect|is_admin/);
+});
+
+test('conversation listing batch RPC is participant-scoped and excludes private shipping/payment data', () => {
+  const migration = read('supabase/migrations/20260820163024_conversation_public_batch_hydration.sql');
+
+  assert.match(migration, /create or replace function public\.get_conversation_listings_by_ids\(target_listing_ids uuid\[\]\)/i);
+  assert.match(migration, /caller_id uuid := private\.require_active_account\(\)/i);
+  assert.match(migration, /caller_id in \(conv\.buyer_id, conv\.seller_id\)/i);
+  assert.match(migration, /l\.status in \('active', 'pending', 'sold', 'donated', 'archived'\)/i);
+  assert.match(migration, /grant execute on function public\.get_conversation_listings_by_ids\(uuid\[\]\) to authenticated/i);
+  assert.doesNotMatch(migration, /grant execute on function public\.get_conversation_listings_by_ids\(uuid\[\]\) to anon/i);
+  assert.doesNotMatch(migration, /ship_from|package_weight|package_length|package_width|package_height|stripe|payment|address_line/);
 });
