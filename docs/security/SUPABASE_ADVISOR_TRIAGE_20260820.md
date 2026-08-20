@@ -298,3 +298,40 @@ Public-launch performance status:
 
 - Real performance work should focus on messaging and listing/notification hot paths.
 - Unused-index and multiple-policy warnings should remain deferred until real traffic or measured query plans justify changes.
+
+## Follow-Up Applied: Hot-Path RLS Initplan Optimization
+
+Migration:
+
+- `supabase/migrations/20260820224215_hot_path_rls_initplan_optimization.sql`
+
+Applied to `ycwgsdigvpmprqreoqiz` on 2026-08-20.
+
+Scope:
+
+- `public.blocks`
+- `public.conversations`
+- `public.favorites`
+- `public.listings`
+- `public.messages`
+- `public.notifications`
+- `public.profiles`
+
+The migration preserves policy names, commands, and roles by using `ALTER POLICY`. It only rewrites stable auth/session calls such as `auth.uid()` and helper default arguments into initplan-safe `(select auth.uid())` equivalents.
+
+Performance Advisor result:
+
+- Auth RLS initplan findings before: 33
+- Auth RLS initplan findings after: 19
+
+Cleared target findings:
+
+- `messages`
+- `conversations`
+- `notifications`
+- `profiles`
+- `listings`
+- `favorites`
+- `blocks`
+
+Remaining auth initplan findings are outside the scoped hot-path migration and should be handled only through separate focused migrations.

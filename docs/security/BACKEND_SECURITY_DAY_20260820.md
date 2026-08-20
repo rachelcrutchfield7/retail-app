@@ -99,6 +99,7 @@ Performance Advisor:
 Classification:
 
 - Highest-value performance follow-up is targeted RLS initplan optimization for messaging, conversations, notifications, listings, profiles, favorites, and seller shipping origins.
+- Hot-path RLS initplan optimization was applied in `20260820224215_hot_path_rls_initplan_optimization.sql`; auth initplan findings dropped from 33 to 19 and cleared the targeted findings for messages, conversations, notifications, profiles, listings, favorites, and blocks.
 - Additive indexes for ShipStation shipping quote/detail and notification delivery foreign keys are useful pre-launch candidates.
 - Performance optimization, not a private-beta blocker unless tied to measured beta latency or launch-scale risk.
 - Handle via focused forward-only migration tasks, not broad advisor cleanup.
