@@ -60,10 +60,12 @@ Known non-backend full-suite noise:
 
 Dependency audit:
 
-- `pnpm security:audit` completed with network access and failed the High/Critical gate.
-- Current advisory counts: low 3, moderate 6, high 12, critical 0.
-- High advisories are transitive through Expo/Metro tooling and the marketing-site Astro dependency chain.
-- No dependency upgrade was performed in this task.
+- Dependency advisory triage is documented in `docs/security/DEPENDENCY_ADVISORY_TRIAGE_20260820.md`.
+- `pnpm audit --prod` before safe overrides: low 3, moderate 6, high 12, critical 0.
+- Safe transitive patch overrides were applied for `brace-expansion`, `fast-uri`, `js-yaml`, `nanoid`, and `postcss`.
+- `pnpm audit --prod` after safe overrides: low 3, moderate 5, high 5, critical 0.
+- Remaining High advisories are Expo/Metro `image-size` build-tooling advisories and Astro/sharp static marketing-site toolchain advisories. No remaining High advisory is classified as mobile installed-app runtime, Supabase Edge Function runtime, or active payment/shipping backend runtime.
+- Expo SDK, React Native, and Astro major versions were not changed.
 
 ## Supabase Advisors
 
