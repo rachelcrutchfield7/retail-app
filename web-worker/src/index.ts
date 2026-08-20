@@ -53,6 +53,10 @@ export default {
 
     const listingId = decodeURIComponent(match[1]);
 
+    if (!isPublicListingId(listingId)) {
+      return html(unavailablePage(), 404);
+    }
+
     try {
       const listing = await getListing(env, listingId);
 
@@ -79,11 +83,7 @@ async function getListing(env: Env, listingId: string) {
 
   const response = await fetch(endpoint, {
     method: "POST",
-    headers: {
-      apikey: env.SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${env.SUPABASE_ANON_KEY}`,
-      "Content-Type": "application/json"
-    },
+    headers: supabasePublicHeaders(env.SUPABASE_ANON_KEY),
     body: JSON.stringify({
       target_listing_id: listingId
     })
@@ -98,6 +98,23 @@ async function getListing(env: Env, listingId: string) {
   return Array.isArray(rows) && rows.length > 0
     ? rows[0]
     : null;
+}
+
+function supabasePublicHeaders(publicKey: string) {
+  const headers: Record<string, string> = {
+    apikey: publicKey,
+    "Content-Type": "application/json"
+  };
+
+  if (publicKey.trim().startsWith("eyJ")) {
+    headers.Authorization = `Bearer ${publicKey}`;
+  }
+
+  return headers;
+}
+
+function isPublicListingId(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
 function listingPage(listing: any, listingId: string) {
