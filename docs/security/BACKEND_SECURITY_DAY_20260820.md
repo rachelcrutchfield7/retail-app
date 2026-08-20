@@ -69,6 +69,8 @@ Dependency audit:
 
 ## Supabase Advisors
 
+Focused advisor triage is documented in `docs/security/SUPABASE_ADVISOR_TRIAGE_20260820.md`.
+
 Security Advisor:
 
 - Total findings: 96
@@ -79,7 +81,10 @@ Security Advisor:
 
 Classification:
 
-- `spatial_ref_sys` / PostGIS / citext: pre-launch hardening review; do not blindly alter extension-owned objects.
+- No public-launch security blocker was proven by advisor triage.
+- Security Definer warnings are mostly intentional ReTail RPC architecture; admin functions are not anon-callable, use fixed `search_path`, and call `private.is_admin`.
+- RLS-enabled/no-policy server tables have no anon/authenticated table privileges and remain intentionally server/RPC-owned.
+- `spatial_ref_sys` / PostGIS / citext: deferred/accepted unless a focused extension migration is separately rehearsed.
 - RLS-enabled/no-policy server tables: intentional/accepted where access is RPC or service-role controlled; review table-by-table before changing.
 - SECURITY DEFINER execute advisories: mixed intentional and review-required; public discovery/profile RPCs are intentionally exposed, admin/server functions require focused review before public launch.
 - Leaked Password Protection: deferred until Supabase plan upgrade before public launch.
@@ -93,6 +98,8 @@ Performance Advisor:
 
 Classification:
 
+- Highest-value performance follow-up is targeted RLS initplan optimization for messaging, conversations, notifications, listings, profiles, favorites, and seller shipping origins.
+- Additive indexes for ShipStation shipping quote/detail and notification delivery foreign keys are useful pre-launch candidates.
 - Performance optimization, not a private-beta blocker unless tied to measured beta latency or launch-scale risk.
 - Handle via focused forward-only migration tasks, not broad advisor cleanup.
 
