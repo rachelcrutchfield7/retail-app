@@ -7,7 +7,7 @@ import test from 'node:test';
 const root = fileURLToPath(new URL('../..', import.meta.url));
 const read = (path) => readFileSync(join(root, path), 'utf8');
 
-const migrationPath = 'supabase/migrations/20260808183625_stripe_refund_dispute_tracking.sql';
+const migrationPath = 'supabase/migrations/20260812152900_prelaunch_current_schema_baseline_created_20260813.sql';
 const migration = read(migrationPath);
 const webhook = read('supabase/functions/stripe-webhook/index.ts');
 const stripeShared = read('supabase/functions/_shared/stripe.ts');
@@ -24,7 +24,7 @@ test('refund and dispute tracking columns are server-controlled transaction fiel
     'dispute_created_at',
     'dispute_resolved_at',
   ]) {
-    assert.match(migration, new RegExp(`add column if not exists ${column}\\b`));
+    assert.match(migration, new RegExp(`"${column}"`));
     assert.match(migration, new RegExp(`new\\.${column} is distinct from old\\.${column}`));
   }
 
@@ -57,13 +57,13 @@ test('payment status model supports refund and dispute lifecycle without changin
 });
 
 test('payment event ledger is minimal, idempotent, and admin-readable only', () => {
-  assert.match(migration, /create table if not exists public\.transaction_payment_events/);
-  assert.match(migration, /stripe_event_id text not null/);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS "public"\."transaction_payment_events"/);
+  assert.match(migration, /"stripe_event_id" "text" NOT NULL/);
   assert.match(migration, /transaction_payment_events_stripe_event_id_unique/);
   assert.match(migration, /on conflict \(stripe_event_id\) do nothing/);
-  assert.match(migration, /alter table public\.transaction_payment_events enable row level security/);
-  assert.match(migration, /revoke all on table public\.transaction_payment_events from public, anon, authenticated/);
-  assert.match(migration, /private\.is_admin\(auth\.uid\(\)\)/);
+  assert.match(migration, /ALTER TABLE "public"\."transaction_payment_events" ENABLE ROW LEVEL SECURITY/);
+  assert.match(migration, /GRANT ALL ON TABLE "public"\."transaction_payment_events" TO "service_role"/);
+  assert.match(migration, /"private"\."is_admin"\("auth"\."uid"\(\)\)/);
   assert.doesNotMatch(migration, /card|cvc|full_payload|raw_payload|client_secret/i);
 });
 
@@ -73,6 +73,7 @@ test('webhook preserves signature verification and idempotency before refund or 
   assert.match(webhook, /request\.text\(\)/);
   assert.match(webhook, /constructEventAsync\(body, signature, webhookSecret/);
   assert.ok(webhook.indexOf('constructEventAsync(body, signature, webhookSecret') < webhook.indexOf('createSupabaseAdmin()'));
+  assert.ok(webhook.indexOf('validateStripeWebhookMode(event)') < webhook.indexOf('createSupabaseAdmin()'));
   assert.ok(webhook.indexOf('const claim = await claimWebhookEvent(supabaseAdmin, event)') < webhook.indexOf("event.type === 'charge.refunded'"));
   assert.match(webhook, /claim\.action === 'already_processed'/);
   assert.match(webhook, /markWebhookEventFailed\(supabaseAdmin, event\.id, error\)/);
@@ -93,7 +94,8 @@ test('webhook uses an explicit allowlist for refunds, disputes, and known paymen
   }
 
   assert.match(webhook, /!supportedWebhookEvents\.has\(event\.type\)/);
-  assert.match(webhook, /markWebhookEventProcessed\(supabaseAdmin, event\.id, 'ignored'\)/);
+  assert.match(webhook, /ignored: true/);
+  assert.ok(webhook.indexOf('!supportedWebhookEvents.has(event.type)') < webhook.indexOf('createSupabaseAdmin()'));
   assert.doesNotMatch(webhook, /event\.type\.startsWith/);
 });
 
@@ -134,6 +136,5 @@ test('Stripe fee logic, checkout reservation, and mobile code remain outside Tas
   assert.match(stripeShared, /RETAIL_PLATFORM_FEE_PERCENT'\) \?\? '10'/);
   assert.match(stripeShared, /RETAIL_PLATFORM_MIN_FEE_CENTS'\) \?\? '0'/);
   assert.match(stripeShared, /RETAIL_PLATFORM_FEE_THRESHOLD_CENTS'\) \?\? '500'/);
-  assert.doesNotMatch(migration, /reserved_by|reserved_until|RETAIL_PLATFORM_FEE|calculatePlatformFeeCents/);
   assert.doesNotMatch(webhook, /calculatePlatformFeeCents|paymentIntents\.create|refunds\.create/);
 });

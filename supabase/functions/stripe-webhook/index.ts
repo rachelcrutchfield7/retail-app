@@ -3,17 +3,17 @@ import { handleCors, jsonResponse } from '../_shared/cors.ts';
 import { createSupabaseAdmin } from '../_shared/supabase.ts';
 import { purchaseShippingLabelForPaidTransaction } from '../_shared/shipping-label.ts';
 import { getStripe } from '../_shared/stripe.ts';
+import {
+  checkoutWebhookEventTypes,
+  connectWebhookEventTypes,
+  parseStripeWebhookExpectedLivemode,
+  stripeWebhookExpectedModeEnvName,
+} from './mode.ts';
 
 const cryptoProvider = Stripe.createSubtleCryptoProvider();
 const supportedWebhookEvents = new Set([
-  'account.updated',
-  'payment_intent.succeeded',
-  'payment_intent.payment_failed',
-  'payment_intent.canceled',
-  'charge.refunded',
-  'charge.dispute.created',
-  'charge.dispute.updated',
-  'charge.dispute.closed',
+  ...connectWebhookEventTypes,
+  ...checkoutWebhookEventTypes,
 ]);
 const finalDisputeStatuses = new Set(['won', 'lost', 'warning_closed', 'prevented']);
 
@@ -50,6 +50,42 @@ function safeErrorMessage(error: unknown): string {
   }
 
   return 'Stripe webhook processing failed.';
+}
+
+function validateStripeWebhookMode(event: Stripe.Event):
+  | { ok: true }
+  | { ok: false; status: number; message: string } {
+  const familyEnvName = stripeWebhookExpectedModeEnvName(event.type);
+  if (!familyEnvName) {
+    return { ok: true };
+  }
+
+  const fallbackEnvName = 'STRIPE_WEBHOOK_EXPECTED_LIVEMODE';
+  const expectedRaw = Deno.env.get(familyEnvName) ?? Deno.env.get(fallbackEnvName);
+  const expectedLivemode = parseStripeWebhookExpectedLivemode(expectedRaw);
+
+  if (expectedLivemode === null) {
+    console.error('Stripe webhook expected livemode is not configured.', {
+      eventId: event.id,
+      eventType: event.type,
+      expectedModeEnv: familyEnvName,
+      fallbackModeEnv: fallbackEnvName,
+    });
+    return { ok: false, status: 500, message: 'Stripe webhook mode configuration is missing.' };
+  }
+
+  if (event.livemode !== expectedLivemode) {
+    console.warn('Stripe webhook event mode mismatch.', {
+      eventId: event.id,
+      eventType: event.type,
+      eventLivemode: event.livemode,
+      expectedLivemode,
+      expectedModeEnv: Deno.env.get(familyEnvName) ? familyEnvName : fallbackEnvName,
+    });
+    return { ok: false, status: 400, message: 'Stripe webhook event mode mismatch.' };
+  }
+
+  return { ok: true };
 }
 
 function expandableStripeId(value: string | { id?: string } | null | undefined): string | null {
@@ -629,6 +665,15 @@ Deno.serve(async (request) => {
     return jsonResponse({ error: error instanceof Error ? error.message : 'Invalid Stripe webhook signature.' }, 400);
   }
 
+  if (!supportedWebhookEvents.has(event.type)) {
+    return jsonResponse({ received: true, ignored: true });
+  }
+
+  const modeValidation = validateStripeWebhookMode(event);
+  if (!modeValidation.ok) {
+    return jsonResponse({ error: modeValidation.message }, modeValidation.status);
+  }
+
   const supabaseAdmin = createSupabaseAdmin();
   const claim = await claimWebhookEvent(supabaseAdmin, event);
 
@@ -638,11 +683,6 @@ Deno.serve(async (request) => {
 
   if (claim.action === 'already_processing') {
     return jsonResponse({ error: 'Stripe webhook event is already processing.' }, 409);
-  }
-
-  if (!supportedWebhookEvents.has(event.type)) {
-    await markWebhookEventProcessed(supabaseAdmin, event.id, 'ignored');
-    return jsonResponse({ received: true, ignored: true });
   }
 
   try {

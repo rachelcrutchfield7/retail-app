@@ -35,6 +35,8 @@ These values belong only in Supabase Edge Function secrets for the matching back
 
 - `STRIPE_SECRET_KEY`
 - `STRIPE_WEBHOOK_SECRET`
+- `STRIPE_CHECKOUT_WEBHOOK_EXPECTED_LIVEMODE`
+- `STRIPE_CONNECT_WEBHOOK_EXPECTED_LIVEMODE`
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `RESEND_API_KEY`, only if the test flow intentionally sends email
 - Any webhook or notification signing secret
@@ -70,6 +72,15 @@ The test Stripe webhook must target the test deployment of the ReTail `stripe-we
 - `charge.dispute.closed`
 
 Do not subscribe the test webhook to broad unrelated event sets.
+
+Before deploying `stripe-webhook`, configure the expected Stripe event mode server-side.
+
+- Checkout/payment/refund/dispute events read `STRIPE_CHECKOUT_WEBHOOK_EXPECTED_LIVEMODE`.
+- Stripe Connect account events read `STRIPE_CONNECT_WEBHOOK_EXPECTED_LIVEMODE`.
+- Values may be `test`/`false` or `live`/`true`.
+- `STRIPE_WEBHOOK_EXPECTED_LIVEMODE` may be used only as a same-mode fallback when every supported event family is expected from the same Stripe environment.
+
+If checkout events and Connect events intentionally use different Stripe environments, configure each family explicitly and verify the configured `STRIPE_WEBHOOK_SECRET` belongs to the endpoint mode that is expected to call this function. Do not rely on mobile publishable-key mode as the security authority.
 
 ## Connect Redirect URLs
 
