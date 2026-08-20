@@ -23,3 +23,10 @@ service-account*.json
 credentials/
 *.mobileprovision
 *.cer
+
+# Local Cloudflare Worker secrets
+.dev.vars
+web-worker/.dev.vars
+
+# Wrangler local state
+web-worker/.wrangler/

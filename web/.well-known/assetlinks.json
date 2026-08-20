@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.raecrutchfield.retail",
+      "sha256_cert_fingerprints": [
+        "13:5D:FF:FF:10:D6:3F:58:36:1B:2B:15:ED:09:B3:3C:5F:40:56:4E:6A:EE:A5:D6:C1:54:18:DB:C7:3A:C8:11"
+      ]
+    }
+  }
+]

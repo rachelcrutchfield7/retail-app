@@ -1,0 +1,17 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": [
+          "9B32TBC7RK.com.raecrutchfield.retail"
+        ],
+        "components": [
+          {
+            "/": "/listing/*",
+            "comment": "Open public ReTail listing links in the ReTail app."
+          }
+        ]
+      }
+    ]
+  }
+}
