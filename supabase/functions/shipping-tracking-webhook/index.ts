@@ -1,8 +1,25 @@
 import { handleCors, jsonResponse } from '../_shared/cors.ts';
 import { createSupabaseAdmin } from '../_shared/supabase.ts';
 import { mapProviderTrackingStatus } from '../_shared/shipping.ts';
+import {
+  eventIdFromBody,
+  extractShipStationIdentifiers,
+  shouldIgnoreStatusTransition,
+  text,
+  timingSafeEqual,
+  type ShipStationWebhookIdentifiers,
+} from './helpers.ts';
 
-type ShipStationWebhookBody = Record<string, unknown>;
+type TransactionMatch = {
+  id: string;
+  shipping_status: string | null;
+  tracking_number: string | null;
+};
+
+type TransactionMatchResult =
+  | { status: 'matched'; transaction: TransactionMatch; matchedBy: string }
+  | { status: 'not_found'; reason: string }
+  | { status: 'ambiguous'; reason: string };
 
 function readWebhookSecret(): string {
   const secret = Deno.env.get('SHIPSTATION_WEBHOOK_SECRET')?.trim();
@@ -16,23 +33,59 @@ function verifyWebhookSecret(request: Request): void {
   const expected = readWebhookSecret();
   const received = request.headers.get('x-retail-shipstation-webhook-secret')?.trim();
 
-  if (!received || received !== expected) {
+  if (!received || !timingSafeEqual(expected, received)) {
     throw Object.assign(new Error('Invalid ShipStation webhook secret.'), { status: 401 });
   }
 }
 
-function text(value: unknown): string | null {
-  return typeof value === 'string' && value.trim() ? value.trim() : null;
+async function findMatchingTransaction(
+  supabaseAdmin: ReturnType<typeof createSupabaseAdmin>,
+  identifiers: ShipStationWebhookIdentifiers,
+): Promise<TransactionMatchResult> {
+  const attempts: Array<{ field: string; value: string | null; matchedBy: string }> = [
+    { field: 'shipping_shipment_id', value: identifiers.shipmentId, matchedBy: 'shipment_id' },
+    { field: 'shipping_label_id', value: identifiers.labelId, matchedBy: 'label_id' },
+    { field: 'tracking_number', value: identifiers.trackingNumber, matchedBy: 'tracking_number' },
+  ];
+
+  for (const attempt of attempts) {
+    if (!attempt.value) continue;
+
+    const { data, error } = await supabaseAdmin
+      .from('transactions')
+      .select('id, shipping_status, tracking_number')
+      .eq('shipping_provider', 'shipstation')
+      .eq(attempt.field, attempt.value)
+      .limit(2);
+
+    if (error) throw error;
+    const rows = (data ?? []) as TransactionMatch[];
+    if (rows.length > 1) {
+      return {
+        status: 'ambiguous',
+        reason: `Multiple ShipStation transactions matched by ${attempt.matchedBy}.`,
+      };
+    }
+    if (rows.length === 1) {
+      return { status: 'matched', transaction: rows[0], matchedBy: attempt.matchedBy };
+    }
+  }
+
+  return { status: 'not_found', reason: 'No matching ShipStation transaction found.' };
 }
 
-function eventIdFromBody(body: ShipStationWebhookBody): string {
-  return text(body.event_id ?? body.resource_url ?? body.label_id ?? body.tracking_number)
-    ?? crypto.randomUUID();
-}
-
-function trackingStatusFromBody(body: ShipStationWebhookBody): string {
-  const trackingStatus = body.tracking_status as Record<string, unknown> | undefined;
-  return text(trackingStatus?.status_code ?? trackingStatus?.status ?? body.status ?? body.event_type) ?? 'unknown';
+async function markEventProcessed(
+  supabaseAdmin: ReturnType<typeof createSupabaseAdmin>,
+  eventId: string,
+  processingStatus: 'processed' | 'ignored' | 'failed',
+  error: string | null,
+): Promise<void> {
+  await supabaseAdmin.rpc('mark_shipping_provider_event_processed', {
+    p_provider: 'shipstation',
+    p_event_id: eventId,
+    p_processing_status: processingStatus,
+    p_error: error,
+  });
 }
 
 Deno.serve(async (request) => {
@@ -41,20 +94,26 @@ Deno.serve(async (request) => {
 
   try {
     verifyWebhookSecret(request);
-    const body = await request.json() as ShipStationWebhookBody;
+    const parsedBody = await request.json().catch(() => {
+      throw Object.assign(new Error('Malformed ShipStation webhook payload.'), { status: 400 });
+    });
+
+    if (!parsedBody || typeof parsedBody !== 'object' || Array.isArray(parsedBody)) {
+      throw Object.assign(new Error('Malformed ShipStation webhook payload.'), { status: 400 });
+    }
+
+    const body = parsedBody as Record<string, unknown>;
     const supabaseAdmin = createSupabaseAdmin();
-    const eventId = eventIdFromBody(body);
-    const labelId = text(body.label_id);
-    const trackingNumber = text(body.tracking_number);
-    const providerStatus = trackingStatusFromBody(body);
-    const shippingStatus = mapProviderTrackingStatus(providerStatus);
+    const identifiers = extractShipStationIdentifiers(body);
+    const eventId = await eventIdFromBody(body);
+    const shippingStatus = mapProviderTrackingStatus(identifiers.providerStatus);
 
     const { data: claimRows, error: claimError } = await supabaseAdmin.rpc('claim_shipping_provider_event', {
       p_provider: 'shipstation',
       p_event_id: eventId,
-      p_event_type: text(body.event_type) ?? 'tracking',
-      p_label_id: labelId,
-      p_tracking_number: trackingNumber,
+      p_event_type: identifiers.eventType,
+      p_label_id: identifiers.labelId,
+      p_tracking_number: identifiers.trackingNumber,
       p_payload: body,
     });
 
@@ -65,23 +124,48 @@ Deno.serve(async (request) => {
       return jsonResponse({ ok: true, status: 'already_processed' });
     }
 
-    if (!labelId && !trackingNumber) {
-      await supabaseAdmin.rpc('mark_shipping_provider_event_processed', {
-        p_provider: 'shipstation',
-        p_event_id: eventId,
-        p_processing_status: 'ignored',
-        p_error: 'Missing label id and tracking number.',
+    if (!identifiers.shipmentId && !identifiers.labelId && !identifiers.trackingNumber) {
+      await markEventProcessed(
+        supabaseAdmin,
+        eventId,
+        'ignored',
+        'Missing shipment id, label id, and tracking number.',
+      );
+      return jsonResponse({ ok: true, status: 'ignored' });
+    }
+
+    const match = await findMatchingTransaction(supabaseAdmin, identifiers);
+    if (match.status !== 'matched') {
+      console.warn('ShipStation tracking webhook did not update a transaction.', {
+        status: match.status,
+        reason: match.reason,
+        hasShipmentId: Boolean(identifiers.shipmentId),
+        hasLabelId: Boolean(identifiers.labelId),
+        hasTrackingNumber: Boolean(identifiers.trackingNumber),
       });
+      await markEventProcessed(supabaseAdmin, eventId, 'ignored', match.reason);
+      return jsonResponse({ ok: true, status: 'ignored' });
+    }
+
+    if (shouldIgnoreStatusTransition(match.transaction.shipping_status, shippingStatus)) {
+      await markEventProcessed(
+        supabaseAdmin,
+        eventId,
+        'ignored',
+        'Regressive tracking status ignored.',
+      );
       return jsonResponse({ ok: true, status: 'ignored' });
     }
 
     const update: Record<string, unknown> = {
       shipping_status: shippingStatus,
-      tracking_number: trackingNumber,
-      tracking_url: text(body.tracking_url),
-      shipping_exception: shippingStatus === 'exception' ? text(body.message ?? body.description) : null,
+      tracking_number: identifiers.trackingNumber ?? match.transaction.tracking_number,
+      shipping_exception: shippingStatus === 'exception' ? identifiers.message ?? identifiers.description : null,
       updated_at: new Date().toISOString(),
     };
+    if (identifiers.trackingUrl) {
+      update.tracking_url = identifiers.trackingUrl;
+    }
 
     if (shippingStatus === 'in_transit') {
       update.carrier_accepted_at = new Date().toISOString();
@@ -95,20 +179,14 @@ Deno.serve(async (request) => {
       update.returned_to_sender_at = new Date().toISOString();
     }
 
-    let query = supabaseAdmin.from('transactions').update(update);
-    query = labelId
-      ? query.eq('shipping_label_id', labelId)
-      : query.eq('tracking_number', trackingNumber);
-
-    const { error: updateError } = await query;
+    const { error: updateError } = await supabaseAdmin
+      .from('transactions')
+      .update(update)
+      .eq('id', match.transaction.id)
+      .eq('shipping_provider', 'shipstation');
     if (updateError) throw updateError;
 
-    await supabaseAdmin.rpc('mark_shipping_provider_event_processed', {
-      p_provider: 'shipstation',
-      p_event_id: eventId,
-      p_processing_status: 'processed',
-      p_error: null,
-    });
+    await markEventProcessed(supabaseAdmin, eventId, 'processed', null);
 
     return jsonResponse({ ok: true });
   } catch (error) {

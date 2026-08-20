@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { eventIdFromBody, shouldIgnoreStatusTransition, timingSafeEqual } from '../supabase/functions/shipping-tracking-webhook/helpers.ts';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -13,6 +14,7 @@ const shippingRate = read('supabase/functions/shipping-rate/index.ts');
 const shippingLabel = read('supabase/functions/_shared/shipping-label.ts');
 const stripeCreate = read('supabase/functions/stripe-create-payment-intent/index.ts');
 const stripeWebhook = read('supabase/functions/stripe-webhook/index.ts');
+const trackingWebhook = read('supabase/functions/shipping-tracking-webhook/index.ts');
 const migration = read('supabase/migrations/20260815120000_shipstation_shipping_provider.sql');
 const paymentService = read('src/services/paymentService.ts');
 const shippingService = read('src/services/shippingService.ts');
@@ -61,11 +63,55 @@ test('paid shipping label creation is idempotent and invoked after successful pa
 });
 
 test('tracking webhook requires a server-configured shared secret and idempotency table', () => {
-  const webhook = read('supabase/functions/shipping-tracking-webhook/index.ts');
-  assert.match(webhook, /SHIPSTATION_WEBHOOK_SECRET/);
-  assert.match(webhook, /x-retail-shipstation-webhook-secret/);
-  assert.match(webhook, /claim_shipping_provider_event/);
+  assert.match(trackingWebhook, /SHIPSTATION_WEBHOOK_SECRET/);
+  assert.match(trackingWebhook, /x-retail-shipstation-webhook-secret/);
+  assert.match(trackingWebhook, /timingSafeEqual\(expected, received\)/);
+  assert.doesNotMatch(trackingWebhook, /received !== expected/);
+  assert.match(trackingWebhook, /claim_shipping_provider_event/);
   assert.match(migration, /create table if not exists public\.shipping_provider_events/);
+});
+
+test('tracking webhook uses constant-time shared-secret comparison behavior', () => {
+  assert.equal(timingSafeEqual('retail-secret', 'retail-secret'), true);
+  assert.equal(timingSafeEqual('retail-secret', 'wrong-secret'), false);
+  assert.equal(timingSafeEqual('retail-secret', 'retail-secret-extra'), false);
+  assert.equal(timingSafeEqual('retail-secret', ''), false);
+});
+
+test('tracking webhook creates deterministic fallback event ids', async () => {
+  const payload = {
+    event_type: 'track',
+    shipment_id: 'se-shipment-1',
+    label_id: 'se-label-1',
+    tracking_number: '9400111206213999999999',
+    tracking_status: { status_code: 'IT', carrier_status_date: '2026-08-20T15:30:00Z' },
+  };
+  const firstId = await eventIdFromBody(payload);
+  const secondId = await eventIdFromBody({ ...payload });
+  const differentId = await eventIdFromBody({
+    ...payload,
+    tracking_status: { status_code: 'DE', carrier_status_date: '2026-08-21T15:30:00Z' },
+  });
+
+  assert.equal(firstId, secondId);
+  assert.notEqual(firstId, differentId);
+  assert.match(firstId, /^fallback:[a-f0-9]{64}$/);
+});
+
+test('tracking webhook scopes transaction matching to ShipStation and avoids ambiguous updates', () => {
+  assert.match(trackingWebhook, /field: 'shipping_shipment_id'[\s\S]+field: 'shipping_label_id'[\s\S]+field: 'tracking_number'/);
+  assert.match(trackingWebhook, /\.eq\('shipping_provider', 'shipstation'\)/);
+  assert.match(trackingWebhook, /\.limit\(2\)/);
+  assert.match(trackingWebhook, /Multiple ShipStation transactions matched by/);
+  assert.doesNotMatch(trackingWebhook, /\.update\(update\)[\s\S]+\.eq\('tracking_number', trackingNumber\)/);
+});
+
+test('tracking webhook preserves privileged processing order and delivered status safety', () => {
+  assert.ok(trackingWebhook.indexOf('verifyWebhookSecret(request)') < trackingWebhook.indexOf('createSupabaseAdmin()'));
+  assert.equal(shouldIgnoreStatusTransition('delivered', 'in_transit'), true);
+  assert.equal(shouldIgnoreStatusTransition('delivered', 'delivered'), false);
+  assert.equal(shouldIgnoreStatusTransition('in_transit', 'delivered'), false);
+  assert.match(trackingWebhook, /Regressive tracking status ignored/);
 });
 
 test('migration keeps private addresses out of public listing fields and adds package data', () => {
