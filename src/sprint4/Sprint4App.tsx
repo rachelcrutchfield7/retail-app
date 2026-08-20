@@ -2399,7 +2399,31 @@ export function SettingsScreen({
     try {
       await settings.deleteAccount();
     } catch (error) {
-      setSettingsNotice({ title: 'Account was not deleted', body: handleAppError(error).userMessage });
+      const appError = handleAppError(error);
+
+      if (appError.code === 'RECENT_AUTH_REQUIRED') {
+        setConfirmDelete(false);
+        setDeleteConfirmation('');
+        setSettingsNotice({
+          title: 'Sign in again to delete',
+          body: appError.userMessage,
+        });
+        Alert.alert(
+          'Sign in again to delete',
+          appError.userMessage,
+          [
+            { text: 'Not now', style: 'cancel' },
+            {
+              text: 'Sign Out',
+              style: 'destructive',
+              onPress: () => void auth.signOut(),
+            },
+          ]
+        );
+        return;
+      }
+
+      setSettingsNotice({ title: 'Account was not deleted', body: appError.userMessage });
     }
   };
 

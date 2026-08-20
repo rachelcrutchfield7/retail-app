@@ -97,8 +97,17 @@ test('send-notification requires either trusted secret or related authenticated 
 
 test('delete-account constrains service-role work to the authenticated caller', () => {
   assert.match(deleteAccount, /userClient\.auth\.getUser\(\)/);
+  assert.match(deleteAccount, /hasRecentAuthentication\(accessToken, user\.id\)/);
+  assert.match(deleteAccount, /RECENT_AUTH_REQUIRED/);
   assert.match(deleteAccount, /target_user_id: user\.id/);
   assert.match(deleteAccount, /cleanupDisposableStorage\(supabaseAdmin, user\.id\)/);
   assert.match(deleteAccount, /deleteUser\(user\.id, true\)/);
   assert.doesNotMatch(deleteAccount, /request\.json\(\)/);
+
+  const verifiedIndex = deleteAccount.indexOf('userClient.auth.getUser()');
+  const recentAuthIndex = deleteAccount.indexOf('hasRecentAuthentication(accessToken, user.id)');
+  const adminClientIndex = deleteAccount.indexOf('const supabaseAdmin = createAdminClient(supabaseUrl, serviceRoleKey)');
+  assert.ok(verifiedIndex > -1);
+  assert.ok(recentAuthIndex > verifiedIndex);
+  assert.ok(adminClientIndex > recentAuthIndex);
 });

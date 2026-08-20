@@ -19,6 +19,28 @@ type SafeErrorResponse = {
   retryable: boolean;
 };
 
+type JwtClaims = {
+  sub?: unknown;
+  amr?: unknown;
+};
+
+type AuthMethodReference = {
+  method?: unknown;
+  timestamp?: unknown;
+};
+
+const recentAuthWindowSeconds = 10 * 60;
+const recentAuthClockSkewSeconds = 60;
+const recentAuthMethods = new Set([
+  'magiclink',
+  'oauth',
+  'otp',
+  'password',
+  'recovery',
+  'sso/saml',
+  'totp',
+]);
+
 const jsonHeaders = {
   'Content-Type': 'application/json',
   'Cache-Control': 'no-store',
@@ -43,6 +65,87 @@ function requiredEnv(name: string, fallbackName?: string): string {
   }
 
   return value;
+}
+
+function bearerTokenFromAuthorization(authorization: string): string | null {
+  const match = authorization.match(/^Bearer\s+(.+)$/i);
+  return match?.[1]?.trim() || null;
+}
+
+function decodeBase64Url(value: string): string {
+  const base64 = value.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=');
+  const bytes = Uint8Array.from(atob(padded), (character) => character.charCodeAt(0));
+
+  return new TextDecoder().decode(bytes);
+}
+
+function decodeJwtClaims(accessToken: string): JwtClaims | null {
+  const payload = accessToken.split('.')[1];
+
+  if (!payload) {
+    return null;
+  }
+
+  try {
+    const claims = JSON.parse(decodeBase64Url(payload));
+
+    return typeof claims === 'object' && claims !== null ? claims as JwtClaims : null;
+  } catch {
+    return null;
+  }
+}
+
+function authMethodTimestampSeconds(entry: AuthMethodReference): number | null {
+  if (typeof entry.method !== 'string' || !recentAuthMethods.has(entry.method)) {
+    return null;
+  }
+
+  if (typeof entry.timestamp !== 'number' || !Number.isFinite(entry.timestamp)) {
+    return null;
+  }
+
+  return Math.floor(entry.timestamp);
+}
+
+function latestTrustedAuthTimestampSeconds(amr: unknown): number | null {
+  if (!Array.isArray(amr)) {
+    return null;
+  }
+
+  let latestTimestamp: number | null = null;
+
+  for (const entry of amr) {
+    if (typeof entry !== 'object' || entry === null) {
+      continue;
+    }
+
+    const timestamp = authMethodTimestampSeconds(entry as AuthMethodReference);
+
+    if (timestamp === null) {
+      continue;
+    }
+
+    latestTimestamp = latestTimestamp === null ? timestamp : Math.max(latestTimestamp, timestamp);
+  }
+
+  return latestTimestamp;
+}
+
+function hasRecentAuthentication(accessToken: string, userId: string, nowSeconds = Math.floor(Date.now() / 1000)): boolean {
+  const claims = decodeJwtClaims(accessToken);
+
+  if (!claims || claims.sub !== userId) {
+    return false;
+  }
+
+  const authTimestamp = latestTrustedAuthTimestampSeconds(claims.amr);
+
+  if (authTimestamp === null || authTimestamp > nowSeconds + recentAuthClockSkewSeconds) {
+    return false;
+  }
+
+  return nowSeconds - authTimestamp <= recentAuthWindowSeconds;
 }
 
 function createUserClient(supabaseUrl: string, anonKey: string, authorization: string): SupabaseClient {
@@ -146,19 +249,18 @@ Deno.serve(async (request: Request) => {
   }
 
   const authorization = request.headers.get('Authorization') ?? '';
+  const accessToken = bearerTokenFromAuthorization(authorization);
 
-  if (!authorization.startsWith('Bearer ')) {
+  if (!accessToken) {
     return safeError(401, 'AUTH_REQUIRED', 'Sign in again before deleting your account.', true);
   }
 
   let supabaseUrl: string;
   let anonKey: string;
-  let serviceRoleKey: string;
 
   try {
     supabaseUrl = requiredEnv('SUPABASE_URL');
     anonKey = requiredEnv('SUPABASE_ANON_KEY', 'SUPABASE_PUBLISHABLE_KEY');
-    serviceRoleKey = requiredEnv('SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_SECRET_KEY');
   } catch {
     return safeError(500, 'SERVER_NOT_CONFIGURED', 'Account deletion is not configured yet.', false);
   }
@@ -169,6 +271,23 @@ Deno.serve(async (request: Request) => {
 
   if (userError || !user) {
     return safeError(401, 'AUTH_SESSION_INVALID', 'Sign in again before deleting your account.', true);
+  }
+
+  if (!hasRecentAuthentication(accessToken, user.id)) {
+    return safeError(
+      401,
+      'RECENT_AUTH_REQUIRED',
+      'For security, please sign in again before deleting your account.',
+      true
+    );
+  }
+
+  let serviceRoleKey: string;
+
+  try {
+    serviceRoleKey = requiredEnv('SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_SECRET_KEY');
+  } catch {
+    return safeError(500, 'SERVER_NOT_CONFIGURED', 'Account deletion is not configured yet.', false);
   }
 
   const supabaseAdmin = createAdminClient(supabaseUrl, serviceRoleKey);

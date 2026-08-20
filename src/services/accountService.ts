@@ -23,6 +23,32 @@ export type DeleteAccountResponse = {
   retryable?: boolean;
 };
 
+function isDeleteAccountErrorResponse(value: unknown): value is DeleteAccountResponse {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as DeleteAccountResponse).code === 'string' &&
+    typeof (value as DeleteAccountResponse).message === 'string'
+  );
+}
+
+async function readDeleteAccountFunctionError(error: unknown): Promise<DeleteAccountResponse | null> {
+  const context = typeof error === 'object' && error !== null
+    ? (error as { context?: unknown }).context
+    : null;
+
+  if (!(context instanceof Response)) {
+    return null;
+  }
+
+  try {
+    const body = await context.clone().json();
+    return isDeleteAccountErrorResponse(body) ? body : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function updateEmail(input: { email: string }): Promise<void> {
   const email = input.email.trim().toLowerCase();
 
@@ -81,6 +107,16 @@ export async function deleteAccount(): Promise<DeleteAccountResponse> {
   });
 
   if (error) {
+    const functionError = await readDeleteAccountFunctionError(error);
+
+    if (functionError) {
+      throw createServiceError(
+        functionError.code ?? 'ACCOUNT_DELETION_FAILED',
+        functionError.message ?? 'The account deletion endpoint returned a safe error.',
+        functionError.message ?? 'We could not delete your account. Please try again.'
+      );
+    }
+
     throwSupabaseError(error, 'We could not delete your account. Please try again.');
   }
 
