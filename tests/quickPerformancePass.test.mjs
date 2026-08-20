@@ -28,11 +28,29 @@ test('listing and conversation rows are memoized for smoother feed scrolling', (
 test('message loading uses lightweight access check and inbox hydration is parallelized', () => {
   const messageService = read('src/services/messageService.ts');
   const conversationService = read('src/services/conversationService.ts');
+  const supabaseData = read('src/services/supabaseData.ts');
 
-  assert.match(messageService, /getConversationParticipantIds\(conversationId\)/);
+  assert.match(supabaseData, /getHydratedAuthProfile/);
+  assert.match(supabaseData, /return hydratedProfile/);
+  assert.match(messageService, /getConversationParticipantIds\(conversationId, profile\)/);
   assert.doesNotMatch(messageService, /getPaginatedMessages[^]*await getConversationById\(conversationId\)/);
   assert.match(conversationService, /const \[otherProfile, rescue, loadedListing, lastMessage, unreadCount, messagingBlocked\] = await Promise\.all/);
-  assert.match(conversationService, /const summaries = await Promise\.all/);
+  assert.match(conversationService, /loadConversationSummaryBatch\(rows, profile\)/);
+  assert.match(conversationService, /return getUserConversations\(profile\.id, params, profile\)/);
+});
+
+test('listing detail can first-paint from cached feed data while refreshing full detail', () => {
+  const listingService = read('src/services/listingService.ts');
+  const listingHook = read('src/hooks/useListing.ts');
+  const asyncResource = read('src/hooks/useAsyncResource.ts');
+
+  assert.match(listingService, /const listingSummaryCache = new Map<string, Listing>/);
+  assert.match(listingService, /export function getCachedListingDetailPlaceholder/);
+  assert.match(listingService, /rememberListings\(rows\.map\(\(row\) => toListing\(row\)\)\)/);
+  assert.match(listingHook, /getCachedListingDetailPlaceholder\(listingId\)/);
+  assert.match(listingHook, /initialData/);
+  assert.match(asyncResource, /initialData\?: T \| null/);
+  assert.match(asyncResource, /isLoading: loading && data === null/);
 });
 
 test('embedded Stripe Connect can use a dedicated publishable key without changing checkout key', () => {

@@ -6,6 +6,7 @@ import type {
 import { CATEGORIES } from '../constants/categories';
 import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
+import { getAuthStoreState } from '../store/authStore';
 import type { Category, Listing, ListingCondition, ListingStatus, ListingType } from '../types';
 import { createServiceError } from './errors';
 import type {
@@ -359,8 +360,18 @@ export async function requireSupabaseAuthUser(): Promise<SupabaseAuthUser> {
   return user;
 }
 
-export async function getCurrentProfileRow(): Promise<Profile | null> {
-  const user = await getSupabaseAuthUser();
+function getHydratedAuthProfile(): Profile | null {
+  const auth = getAuthStoreState();
+
+  if (!auth.session || !auth.user || !auth.profile) {
+    return null;
+  }
+
+  return auth.profile.id === auth.user.id ? auth.profile : null;
+}
+
+export async function getCurrentProfileRow(authUser?: SupabaseAuthUser): Promise<Profile | null> {
+  const user = authUser ?? await getSupabaseAuthUser();
 
   if (!user) {
     return null;
@@ -384,13 +395,25 @@ export async function getCurrentProfileRow(): Promise<Profile | null> {
 }
 
 export async function ensureCurrentProfile(): Promise<Profile> {
+  const hydratedProfile = getHydratedAuthProfile();
+
+  if (hydratedProfile) {
+    return hydratedProfile;
+  }
+
   const result = await ensureCurrentProfileWithStatus();
   return result.profile;
 }
 
 export async function ensureCurrentProfileWithStatus(): Promise<{ profile: Profile; created: boolean }> {
+  const hydratedProfile = getHydratedAuthProfile();
+
+  if (hydratedProfile) {
+    return { profile: hydratedProfile, created: false };
+  }
+
   const user = await requireSupabaseAuthUser();
-  const existingProfile = await getCurrentProfileRow();
+  const existingProfile = await getCurrentProfileRow(user);
 
   if (existingProfile) {
     return { profile: existingProfile, created: false };

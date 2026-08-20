@@ -11,7 +11,7 @@ test('Expo native notification configuration is present for Android and iOS buil
   const config = read('app.config.js');
   const packageJson = read('package.json');
 
-  assert.match(packageJson, /"expo-notifications":\s*"~57\.0\.12"/);
+  assert.match(packageJson, /"expo-notifications":\s*"~57\.0\.13"/);
   assert.match(config, /'expo-notifications'/);
   assert.match(config, /projectId:\s*'288a25e1-5824-4f77-a3f4-0607df5f7d89'/);
   assert.match(config, /package:\s*'com\.raecrutchfield\.retail'/);

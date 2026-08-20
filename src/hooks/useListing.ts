@@ -1,11 +1,12 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { getQueryData, setQueryData } from '../lib/queryClient';
 import { queryKeys } from '../lib/queryKeys';
-import { getListingById } from '../services/listingService';
+import { getCachedListingDetailPlaceholder, getListingById } from '../services/listingService';
 import type { ListingDetail } from '../services/types';
 import { useAsyncResource } from './useAsyncResource';
 
 export function useListing(listingId: string) {
+  const initialData = useMemo(() => getCachedListingDetailPlaceholder(listingId), [listingId]);
   const loadListing = useCallback(async (): Promise<ListingDetail> => {
     const key = queryKeys.listing(listingId);
 
@@ -24,5 +25,8 @@ export function useListing(listingId: string) {
     }
   }, [listingId]);
 
-  return useAsyncResource(loadListing, Boolean(listingId));
+  return useAsyncResource(loadListing, Boolean(listingId), {
+    initialData,
+    resetKey: listingId,
+  });
 }

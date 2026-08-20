@@ -26,6 +26,44 @@ import type {
 import { normalizePackageWeightOz, normalizePositiveDecimal, validateShippingPackage } from './shippingRules';
 
 const allowedSorts = new Set(['recent', 'price_asc', 'price_desc', 'distance', 'favorites']);
+const listingSummaryCache = new Map<string, Listing>();
+
+function rememberListings(listings: Listing[]): Listing[] {
+  listings.forEach((listing) => listingSummaryCache.set(listing.id, listing));
+  return listings;
+}
+
+export function getCachedListingDetailPlaceholder(listingId: string): ListingDetail | null {
+  const listing = listingSummaryCache.get(listingId);
+
+  if (!listing) {
+    return null;
+  }
+
+  return {
+    listing,
+    images: [],
+    seller: {
+      id: listing.sellerId ?? '',
+      account_type: 'regular',
+      display_name: listing.seller || 'ReTail User',
+      username: 'retail_user',
+      bio: undefined,
+      avatar_url: undefined,
+      city: listing.city,
+      state: listing.state,
+      buyer_rating: 0,
+      seller_rating: listing.sellerRating,
+      review_count: listing.sellerReviews,
+      listings_count: 0,
+      completed_sales_count: 0,
+      is_verified: false,
+      created_at: listing.createdAt,
+    },
+    isFavorited: false,
+    relatedListings: [],
+  };
+}
 
 type ListingImageReconciliationDependencies = {
   uploadImage: (imageUri: string) => Promise<ListingImage>;
@@ -312,7 +350,7 @@ async function getNearbyListingsFromRpc({
       }
 
       const fallbackRows = (fallback.data ?? []) as Array<Record<string, unknown>>;
-      const fallbackItems = fallbackRows.map((row) => toListing(row));
+      const fallbackItems = rememberListings(fallbackRows.map((row) => toListing(row)));
 
       return {
         items: fallbackItems,
@@ -327,7 +365,7 @@ async function getNearbyListingsFromRpc({
   }
 
   const rows = (data ?? []) as Array<Record<string, unknown>>;
-  const items = rows.map((row) => toListing(row));
+  const items = rememberListings(rows.map((row) => toListing(row)));
 
   return {
     items,
@@ -396,7 +434,7 @@ async function getPublicListingFeedFromRpc({
       }
 
       const fallbackRows = (fallback.data ?? []) as Array<Record<string, unknown>>;
-      const fallbackItems = fallbackRows.map((row) => toListing(row));
+      const fallbackItems = rememberListings(fallbackRows.map((row) => toListing(row)));
 
       return {
         items: fallbackItems,
@@ -411,7 +449,7 @@ async function getPublicListingFeedFromRpc({
   }
 
   const rows = (data ?? []) as Array<Record<string, unknown>>;
-  const items = rows.map((row) => toListing(row));
+  const items = rememberListings(rows.map((row) => toListing(row)));
 
   return {
     items,
@@ -695,7 +733,7 @@ export async function getMyListings(): Promise<Listing[]> {
     throwSupabaseError(error, 'We could not load your listings.');
   }
 
-  return ((data ?? []) as Record<string, unknown>[]).map((row) => toListing(row));
+  return rememberListings(((data ?? []) as Record<string, unknown>[]).map((row) => toListing(row)));
 }
 
 export async function addImageToListing(fileUri: string, listingId: string) {

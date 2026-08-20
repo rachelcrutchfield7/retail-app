@@ -861,8 +861,12 @@ export async function getConversationById(conversationId: string, userId?: strin
   return buildConversationSummary(conversation);
 }
 
-export async function getUserConversations(userId: string, params: ConversationSearchParams = {}): Promise<ConversationSummary[]> {
-  const profile = await ensureCurrentProfile();
+export async function getUserConversations(
+  userId: string,
+  params: ConversationSearchParams = {},
+  knownProfile?: Profile
+): Promise<ConversationSummary[]> {
+  const profile = knownProfile ?? await ensureCurrentProfile();
 
   if (userId !== profile.id) {
     throw createServiceError(
@@ -913,12 +917,24 @@ export async function getUserConversations(userId: string, params: ConversationS
 
 export async function getConversations(params: ConversationSearchParams = {}): Promise<ConversationSummary[]> {
   const profile = await ensureCurrentProfile();
-  return getUserConversations(profile.id, params);
+  return getUserConversations(profile.id, params, profile);
 }
 
-export async function getConversationParticipantIds(conversationId: string): Promise<{ buyerId: string; sellerId: string }> {
+export async function getConversationParticipantIds(
+  conversationId: string,
+  knownProfile?: Profile
+): Promise<{ buyerId: string; sellerId: string }> {
   const conversation = await getConversation(conversationId);
-  await requireParticipant(conversation);
+  const profile = knownProfile ?? await requireParticipant(conversation);
+
+  if (conversation.buyer_id !== profile.id && conversation.seller_id !== profile.id) {
+    throw createServiceError(
+      'CONVERSATION_PERMISSION_DENIED',
+      `User ${profile.id} cannot access conversation ${conversation.id}`,
+      'You can only view conversations you belong to.'
+    );
+  }
+
   return { buyerId: conversation.buyer_id, sellerId: conversation.seller_id };
 }
 

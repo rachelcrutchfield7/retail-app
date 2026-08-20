@@ -11,9 +11,13 @@ export type AsyncResourceState<T> = {
   refetch: () => Promise<void>;
 };
 
-export function useAsyncResource<T>(loader: () => Promise<T>, autoLoad = true): AsyncResourceState<T> {
-  const [data, setData] = useState<T | null>(null);
-  const [loading, setLoading] = useState(autoLoad);
+export function useAsyncResource<T>(
+  loader: () => Promise<T>,
+  autoLoad = true,
+  options: { initialData?: T | null; resetKey?: unknown } = {}
+): AsyncResourceState<T> {
+  const [data, setData] = useState<T | null>(options.initialData ?? null);
+  const [loading, setLoading] = useState(autoLoad && !options.initialData);
   const [error, setError] = useState<Error | null>(null);
 
   const refresh = useCallback(async () => {
@@ -35,6 +39,16 @@ export function useAsyncResource<T>(loader: () => Promise<T>, autoLoad = true): 
       void refresh();
     }
   }, [autoLoad, refresh]);
+
+  useEffect(() => {
+    if (options.resetKey === undefined) {
+      return;
+    }
+
+    setData(options.initialData ?? null);
+    setLoading(autoLoad && !options.initialData);
+    setError(null);
+  }, [autoLoad, options.initialData, options.resetKey]);
 
   return {
     data,
