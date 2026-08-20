@@ -17,7 +17,7 @@ import {
   pendingSignupConsentMetadata,
   type SignupConsentInput,
 } from './consentService';
-import type { AccountType, RescueSignupInput, Session, User } from './types';
+import type { AccountType, Profile, RescueSignupInput, Session, User } from './types';
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const supportedAccountTypes: AccountType[] = ['regular', 'rescue'];
@@ -119,7 +119,7 @@ export async function signUpWithEmail(
   return user;
 }
 
-export async function signInWithEmail(email: string, password: string): Promise<Session> {
+export async function signInWithEmailAndProfile(email: string, password: string): Promise<{ session: Session; profile: Profile | null }> {
   assertValidEmail(email);
 
   if (!password.trim()) {
@@ -143,11 +143,16 @@ export async function signInWithEmail(email: string, password: string): Promise<
     const profile = await ensureCurrentProfile();
     identifyUser(data.session.user.id, { accountType: profile.account_type });
     trackEvent('Login', { accountType: profile.account_type });
-    return sessionFromSupabase(data.session, profile);
+    return { session: sessionFromSupabase(data.session, profile), profile };
   } catch (profileError) {
     logger.warning('Signed in, but profile setup needs attention.', { error: profileError });
-    return sessionFromSupabase(data.session, undefined);
+    return { session: sessionFromSupabase(data.session, undefined), profile: null };
   }
+}
+
+export async function signInWithEmail(email: string, password: string): Promise<Session> {
+  const result = await signInWithEmailAndProfile(email, password);
+  return result.session;
 }
 
 export async function getCurrentSession(): Promise<Session | null> {

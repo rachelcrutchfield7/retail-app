@@ -4,7 +4,7 @@ import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   getCurrentSession,
   resetPassword as resetPasswordWithEmail,
-  signInWithEmail,
+  signInWithEmailAndProfile,
   signOut as clearAuthSession,
   signUpWithEmail,
 } from '../services/authService';
@@ -94,9 +94,14 @@ function authStartupMessage(error: unknown): string {
   return 'ReTail could not finish secure startup. Please restart the app and try again.';
 }
 
-async function clearPrivateAuthState(): Promise<void> {
+function clearPrivateAuthStateNow(): void {
   removeAllRealtimeSubscriptions();
   resetAnalyticsUser();
+  clearQueryData();
+}
+
+async function clearPrivateAuthState(): Promise<void> {
+  clearPrivateAuthStateNow();
   await clearAllQueryData();
   clearQueryData();
 }
@@ -222,7 +227,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED' || event === 'PASSWORD_RECOVERY') {
+        if (event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED' || event === 'PASSWORD_RECOVERY') {
           void refreshProfile();
         }
       });
@@ -246,18 +251,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (input: SignInInput) => {
       setLoading(true);
       try {
-        await removeRegisteredNativePushTokenForCurrentUser().catch((error) => {
-          logAuthLoadError(error, 'Could not remove push token before email sign-in.');
+        if (session) {
+          await removeRegisteredNativePushTokenForCurrentUser().catch((error) => {
+            logAuthLoadError(error, 'Could not remove push token before email sign-in.');
+          });
+          await clearPrivateAuthState();
+        } else {
+          clearPrivateAuthStateNow();
+        }
+        const { session: nextSession, profile: nextProfile } = await signInWithEmailAndProfile(input.email, input.password);
+        setSession(nextSession);
+        setUser(nextSession.user);
+        setProfile(nextProfile);
+        setAuthStoreState({
+          user: nextSession.user,
+          profile: nextProfile,
+          session: nextSession,
+          loading: false,
+          isGuest: false,
         });
-        await clearPrivateAuthState();
-        const nextSession = await signInWithEmail(input.email, input.password);
-        await refreshProfile();
         return nextSession;
       } finally {
         setLoading(false);
       }
     },
-    [refreshProfile]
+    [session]
   );
 
   const signUp = useCallback(
@@ -288,10 +306,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithGoogle = useCallback(async (input: GoogleSignInInput = { mode: 'login' }) => {
     setLoading(true);
     try {
-      await removeRegisteredNativePushTokenForCurrentUser().catch((error) => {
-        logAuthLoadError(error, 'Could not remove push token before Google sign-in.');
-      });
-      await clearPrivateAuthState();
+      if (session) {
+        await removeRegisteredNativePushTokenForCurrentUser().catch((error) => {
+          logAuthLoadError(error, 'Could not remove push token before Google sign-in.');
+        });
+        await clearPrivateAuthState();
+      } else {
+        clearPrivateAuthStateNow();
+      }
       const nextSession = await signInWithGoogleAccount({
         platform: Platform.OS,
         signupConsent: input.mode === 'register'
@@ -301,12 +323,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
           : undefined,
       });
-      await refreshProfile();
+      if (nextSession) {
+        setSession(nextSession);
+        setUser(nextSession.user);
+        const activeProfile = await getCurrentProfile();
+        setProfile(activeProfile);
+        setAuthStoreState({
+          user: nextSession.user,
+          profile: activeProfile,
+          session: nextSession,
+          loading: false,
+          isGuest: false,
+        });
+      }
       return nextSession;
     } finally {
       setLoading(false);
     }
-  }, [refreshProfile]);
+  }, [session]);
 
   const signOut = useCallback(async () => {
     setLoading(true);
@@ -314,18 +348,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(null);
     setUser(null);
     setProfile(null);
-    removeAllRealtimeSubscriptions();
-    resetAnalyticsUser();
-    clearQueryData();
+    setAuthStoreState({
+      user: null,
+      profile: null,
+      session: null,
+      loading: false,
+      isGuest: true,
+    });
+    clearPrivateAuthStateNow();
+    setLoading(false);
 
-    try {
-      const results = await Promise.allSettled([
-        removeRegisteredNativePushTokenForCurrentUser(),
-        clearAuthSession(),
-        clearGoogleSignInSelection(),
-        clearPrivateAuthState(),
-      ]);
-
+    void Promise.allSettled([
+      removeRegisteredNativePushTokenForCurrentUser(),
+      clearAuthSession(),
+      clearGoogleSignInSelection(),
+    ]).then((results) => {
       const pushTokenCleanup = results[0];
       if (pushTokenCleanup.status === 'rejected') {
         logAuthLoadError(pushTokenCleanup.reason, 'Could not remove push token before sign-out.');
@@ -333,11 +370,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const sessionCleanup = results[1];
       if (sessionCleanup.status === 'rejected') {
-        throw sessionCleanup.reason;
+        logAuthLoadError(sessionCleanup.reason, 'Could not complete remote sign-out cleanup.');
       }
-    } finally {
-      setLoading(false);
-    }
+    });
   }, []);
 
   const resetPassword = useCallback(async (email: string) => {

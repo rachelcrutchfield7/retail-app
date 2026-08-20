@@ -19,7 +19,6 @@ import {
 } from '../services/messageService';
 import {
   subscribeToConversationMessages,
-  subscribeToKnownConversationMessages,
   subscribeToUserConversations,
 } from '../services/realtimeService';
 import type {
@@ -149,7 +148,6 @@ export function useConversations(params: ConversationSearchParams = {}, autoLoad
     queryFn: () => getConversations(params),
     enabled: autoLoad && Boolean(user),
   });
-  const conversationIds = useMemo(() => (query.data ?? []).map((conversation) => conversation.id), [query.data]);
 
   useEffect(() => {
     if (!user) {
@@ -162,22 +160,6 @@ export function useConversations(params: ConversationSearchParams = {}, autoLoad
       void queryClient.invalidateQueries({ queryKey: queryKeys.unreadMessages(user.id) });
     });
   }, [queryClient, user]);
-
-  useEffect(() => {
-    if (!user || conversationIds.length === 0) {
-      return undefined;
-    }
-
-    return subscribeToKnownConversationMessages(conversationIds, (event) => {
-      if ('conversationId' in event) {
-        void queryClient.invalidateQueries({ queryKey: queryKeys.messages(event.conversationId) });
-        void queryClient.invalidateQueries({ queryKey: queryKeys.conversation(event.conversationId) });
-      }
-
-      void queryClient.invalidateQueries({ queryKey: queryKeys.conversations(user.id) });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.unreadMessages(user.id) });
-    });
-  }, [conversationIds, queryClient, user]);
 
   return {
     data: query.data ?? null,
@@ -370,7 +352,6 @@ export function useUnreadMessages(autoLoad = true) {
     queryFn: getUnreadMessageCount,
     enabled: autoLoad && Boolean(user),
   });
-  const conversationIds = useMemo(() => Object.keys(query.data?.byConversation ?? {}), [query.data]);
 
   useEffect(() => {
     if (!user) {
@@ -383,17 +364,6 @@ export function useUnreadMessages(autoLoad = true) {
       void queryClient.invalidateQueries({ queryKey: queryKeys.conversations(user.id) });
     });
   }, [queryClient, user]);
-
-  useEffect(() => {
-    if (!user || conversationIds.length === 0) {
-      return undefined;
-    }
-
-    return subscribeToKnownConversationMessages(conversationIds, () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.unreadMessages(user.id) });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.conversations(user.id) });
-    });
-  }, [conversationIds, queryClient, user]);
 
   return {
     data: query.data ?? null,

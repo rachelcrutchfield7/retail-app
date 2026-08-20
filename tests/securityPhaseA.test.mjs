@@ -142,13 +142,16 @@ test('sign-out cache clearing prevents account-switch private data leakage', asy
 test('auth listener covers session changes and removes private realtime/cache state', () => {
   const authContext = read('src/auth/AuthContext.tsx');
   const realtimeService = read('src/services/realtimeService.ts');
+  const listenerStart = authContext.indexOf('const authListener = supabaseClient.auth.onAuthStateChange');
+  const listenerEnd = authContext.indexOf('subscription = authListener.data.subscription');
+  const listenerBody = authContext.slice(listenerStart, listenerEnd);
 
   assert.match(authContext, /onAuthStateChange/);
-  assert.match(authContext, /SIGNED_IN/);
   assert.match(authContext, /SIGNED_OUT/);
   assert.match(authContext, /TOKEN_REFRESHED/);
   assert.match(authContext, /USER_UPDATED/);
   assert.match(authContext, /PASSWORD_RECOVERY/);
+  assert.doesNotMatch(listenerBody, /event === 'SIGNED_IN'/);
   assert.match(authContext, /clearAllQueryData/);
   assert.match(authContext, /removeAllRealtimeSubscriptions/);
   assert.match(authContext, /subscription\.unsubscribe\(\)/);

@@ -64,3 +64,24 @@ test('embedded Stripe Connect can use a dedicated publishable key without changi
   assert.match(app, /connectPublishableKey=\{config\.stripeConnectPublishableKey\}/);
   assert.match(stripeProvider, /connectPublishableKey \?\? publishableKey/);
 });
+
+test('auth transitions avoid duplicate profile fetches and unblock logout UI before remote cleanup', () => {
+  const authContext = read('src/auth/AuthContext.tsx');
+  const authService = read('src/services/authService.ts');
+  const signInStart = authContext.indexOf('const signIn = useCallback');
+  const signUpStart = authContext.indexOf('const signUp = useCallback');
+  const googleStart = authContext.indexOf('const signInWithGoogle = useCallback');
+  const signOutStart = authContext.indexOf('const signOut = useCallback');
+  const resetPasswordStart = authContext.indexOf('const resetPassword = useCallback');
+  const signIn = authContext.slice(signInStart, signUpStart);
+  const googleSignIn = authContext.slice(googleStart, signOutStart);
+  const signOut = authContext.slice(signOutStart, resetPasswordStart);
+
+  assert.match(authService, /export async function signInWithEmailAndProfile/);
+  assert.match(signIn, /signInWithEmailAndProfile\(input\.email, input\.password\)/);
+  assert.doesNotMatch(signIn, /await refreshProfile\(\)/);
+  assert.match(signIn, /if \(session\)/);
+  assert.match(googleSignIn, /if \(session\)/);
+  assert.ok(signOut.indexOf('setAuthStoreState') < signOut.indexOf('Promise.allSettled'));
+  assert.ok(signOut.indexOf('setLoading(false)') < signOut.indexOf('Promise.allSettled'));
+});

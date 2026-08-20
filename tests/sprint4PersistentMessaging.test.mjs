@@ -91,8 +91,25 @@ test('messaging hooks use React Query pagination and safe realtime cache updates
   assert.match(messagingHooks, /removeMessageFromCache/);
   assert.match(messagingHooks, /alreadyExists/);
   assert.match(messagingHooks, /subscribeToConversationMessages/);
-  assert.match(messagingHooks, /subscribeToKnownConversationMessages/);
+  assert.match(messagingHooks, /subscribeToUserConversations/);
+  assert.doesNotMatch(messagingHooks, /subscribeToKnownConversationMessages/);
   assert.match(messagingHooks, /removeQueries/);
+});
+
+test('inbox and unread hooks avoid per-conversation realtime fan-out', () => {
+  const conversationsStart = messagingHooks.indexOf('export function useConversations');
+  const conversationStart = messagingHooks.indexOf('export function useConversation(');
+  const unreadStart = messagingHooks.indexOf('export function useUnreadMessages');
+  const startConversationStart = messagingHooks.indexOf('export function useStartConversation');
+  const useConversationsHook = messagingHooks.slice(conversationsStart, conversationStart);
+  const useUnreadHook = messagingHooks.slice(unreadStart, startConversationStart);
+
+  assert.match(useConversationsHook, /subscribeToUserConversations\(user\.id/);
+  assert.match(useUnreadHook, /subscribeToUserConversations\(user\.id/);
+  assert.doesNotMatch(useConversationsHook, /subscribeToConversationMessages/);
+  assert.doesNotMatch(useUnreadHook, /subscribeToConversationMessages/);
+  assert.doesNotMatch(useConversationsHook, /subscribeToKnownConversationMessages/);
+  assert.doesNotMatch(useUnreadHook, /subscribeToKnownConversationMessages/);
 });
 
 test('conversation open marks messages read without refetching the visible message page', () => {
@@ -130,7 +147,7 @@ test('sign out clears user-specific query caches before waiting on network clean
   assert.ok(signOut.indexOf('setSession(null)') < signOut.indexOf('Promise.allSettled'));
   assert.ok(signOut.indexOf('setUser(null)') < signOut.indexOf('Promise.allSettled'));
   assert.ok(signOut.indexOf('setProfile(null)') < signOut.indexOf('Promise.allSettled'));
-  assert.match(signOut, /clearPrivateAuthState\(\)/);
+  assert.match(signOut, /clearPrivateAuthStateNow\(\)/);
 });
 
 test('messaging SQL patch tightens RLS and realtime support', () => {
