@@ -125,6 +125,81 @@ begin
 end;
 $$;
 
+create or replace function public.list_admin_founding_sellers(
+  requested_status text default null
+)
+returns table (
+  profile_id uuid,
+  display_name text,
+  username text,
+  email text,
+  account_type text,
+  benefit_id uuid,
+  status text,
+  free_sales_limit integer,
+  fee_free_sales_used integer,
+  currently_reserved integer,
+  fee_free_sales_remaining integer,
+  granted_at timestamptz,
+  source text,
+  notes text
+)
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  caller_id uuid := private.require_active_account();
+  safe_status text := nullif(btrim(coalesce(requested_status, '')), '');
+begin
+  if not private.is_admin(caller_id) then
+    raise exception 'RETAIL_ADMIN_REQUIRED' using errcode = '42501';
+  end if;
+
+  if safe_status is not null and safe_status not in ('active', 'paused', 'revoked') then
+    raise exception 'RETAIL_FOUNDING_SELLER_STATUS_INVALID' using errcode = '22023';
+  end if;
+
+  return query
+  select
+    p.id as profile_id,
+    p.display_name,
+    p.username,
+    u.email::text,
+    p.account_type::text,
+    b.id as benefit_id,
+    b.status,
+    b.free_sales_limit,
+    coalesce(count(uses.id) filter (where uses.status = 'applied'), 0)::integer as fee_free_sales_used,
+    coalesce(count(uses.id) filter (where uses.status = 'reserved' and uses.expires_at >= now()), 0)::integer as currently_reserved,
+    greatest(
+      b.free_sales_limit
+        - coalesce(count(uses.id) filter (where uses.status = 'applied'), 0)::integer
+        - coalesce(count(uses.id) filter (where uses.status = 'reserved' and uses.expires_at >= now()), 0)::integer,
+      0
+    )::integer as fee_free_sales_remaining,
+    b.granted_at,
+    b.source,
+    b.notes
+  from public.founding_seller_benefits b
+  join public.profiles p on p.id = b.user_id
+  join auth.users u on u.id = p.id
+  left join public.founding_seller_benefit_uses uses on uses.benefit_id = b.id
+  where p.deleted_at is null
+    and (safe_status is null or b.status = safe_status)
+  group by p.id, p.display_name, p.username, u.email, p.account_type, b.id, b.status, b.free_sales_limit, b.granted_at, b.source, b.notes
+  order by
+    case b.status
+      when 'active' then 0
+      when 'paused' then 1
+      else 2
+    end,
+    p.display_name asc nulls last,
+    p.username asc nulls last;
+end;
+$$;
+
 create or replace function public.admin_set_founding_seller_status(
   target_user_id uuid,
   requested_status text,
@@ -229,6 +304,9 @@ grant execute on function public.get_admin_founding_seller_status(uuid) to authe
 
 revoke all on function public.search_admin_founding_seller_profiles(text) from public, anon;
 grant execute on function public.search_admin_founding_seller_profiles(text) to authenticated, service_role;
+
+revoke all on function public.list_admin_founding_sellers(text) from public, anon;
+grant execute on function public.list_admin_founding_sellers(text) to authenticated, service_role;
 
 revoke all on function public.admin_set_founding_seller_status(uuid, text, text) from public, anon;
 grant execute on function public.admin_set_founding_seller_status(uuid, text, text) to authenticated, service_role;

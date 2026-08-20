@@ -147,6 +147,20 @@ export async function searchAdminFoundingSellerProfiles(searchText: string): Pro
   return ((data ?? []) as Row[]).map(toAdminFoundingSellerSearchResult);
 }
 
+export async function listAdminFoundingSellers(): Promise<AdminFoundingSellerStatus[]> {
+  await requireAdminProfile();
+
+  const { data, error } = await supabase.rpc('list_admin_founding_sellers', {
+    requested_status: null,
+  });
+
+  if (error) {
+    throwSupabaseError(error, 'We could not load Founding Sellers.');
+  }
+
+  return ((data ?? []) as Row[]).map(toAdminFoundingSellerStatus);
+}
+
 export async function getAdminFoundingSellerStatus(profileId: string): Promise<AdminFoundingSellerStatus> {
   await requireAdminProfile();
 

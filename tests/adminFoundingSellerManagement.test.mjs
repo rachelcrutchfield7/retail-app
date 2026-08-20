@@ -16,6 +16,7 @@ const stripeWebhook = read('supabase/functions/stripe-webhook/index.ts');
 
 test('Founding Seller admin RPCs are server-authorized and do not expose direct table writes', () => {
   assert.match(migration, /create or replace function public\.search_admin_founding_seller_profiles/);
+  assert.match(migration, /create or replace function public\.list_admin_founding_sellers/);
   assert.match(migration, /create or replace function public\.get_admin_founding_seller_status/);
   assert.match(migration, /create or replace function public\.admin_set_founding_seller_status/);
   assert.match(migration, /private\.require_active_account\(\)/);
@@ -23,7 +24,9 @@ test('Founding Seller admin RPCs are server-authorized and do not expose direct 
   assert.match(migration, /raise exception 'RETAIL_ADMIN_REQUIRED'/);
   assert.match(migration, /join auth\.users u on u\.id = p\.id/);
   assert.match(migration, /grant execute on function public\.admin_set_founding_seller_status\(uuid, text, text\) to authenticated, service_role/);
+  assert.match(migration, /grant execute on function public\.list_admin_founding_sellers\(text\) to authenticated, service_role/);
   assert.doesNotMatch(migration, /grant execute on function public\.admin_set_founding_seller_status\(uuid, text, text\) to anon/);
+  assert.doesNotMatch(migration, /grant execute on function public\.list_admin_founding_sellers\(text\) to anon/);
   assert.doesNotMatch(adminService, /\.from\('founding_seller_benefits'\)\.insert/);
   assert.doesNotMatch(adminService, /\.from\('founding_seller_benefits'\)\.update/);
   assert.doesNotMatch(adminService, /SUPABASE_SERVICE_ROLE_KEY|service_role/);
@@ -41,8 +44,10 @@ test('Founding Seller admin grant is idempotent and preserves prior usage histor
 });
 
 test('Admin UI supports Not enrolled, Active, Paused, and Revoked Founding Seller states', () => {
-  assert.match(sprint4, /SectionCard title="Founding Seller"/);
+  assert.match(sprint4, /SectionCard title="Founding Sellers"/);
+  assert.match(sprint4, /currently enrolled/);
   assert.match(sprint4, /Search Sellers/);
+  assert.match(sprint4, /Manage Seller/);
   assert.match(sprint4, /Grant Founding Seller/);
   assert.match(sprint4, /Pause Benefit/);
   assert.match(sprint4, /Resume Benefit/);
@@ -58,10 +63,12 @@ test('Admin UI supports Not enrolled, Active, Paused, and Revoked Founding Selle
 
 test('Admin Founding Seller client paths call admin RPCs through guarded service helpers', () => {
   assert.match(adminService, /await requireAdminProfile\(\)/);
+  assert.match(adminService, /rpc\('list_admin_founding_sellers'/);
   assert.match(adminService, /rpc\('search_admin_founding_seller_profiles'/);
   assert.match(adminService, /rpc\('get_admin_founding_seller_status'/);
   assert.match(adminService, /rpc\('admin_set_founding_seller_status'/);
   assert.match(adminHook, /useAdminFoundingSellers/);
+  assert.match(adminHook, /queryKeys\.adminFoundingSellers/);
   assert.match(adminHook, /queryKeys\.adminFoundingSellerStatus/);
   assert.match(adminHook, /invalidateQueries/);
 });

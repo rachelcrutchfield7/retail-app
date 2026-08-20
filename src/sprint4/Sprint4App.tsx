@@ -3234,8 +3234,26 @@ export function AdminReviewScreen({ onBack, onOpenListing }: { onBack: () => voi
         </Text>
       </SectionCard>
 
-      <SectionCard title="Founding Seller">
+      <SectionCard title="Founding Sellers">
         <View style={styles.stack}>
+          <Text style={styles.bodyStrong}>{foundingSellers.list.length} currently enrolled</Text>
+          {foundingSellers.listLoading ? <LoadingSpinner /> : null}
+          {foundingSellers.listError ? <NoticeCard title="Founding Sellers unavailable" body={foundingSellers.listError} /> : null}
+          {!foundingSellers.listLoading && !foundingSellers.listError && foundingSellers.list.length === 0 ? (
+            <Text style={styles.body}>No Founding Sellers have been granted yet.</Text>
+          ) : null}
+          {foundingSellers.list.length ? (
+            <View style={styles.stack}>
+              {foundingSellers.list.map((seller) => (
+                <AdminFoundingSellerListCard
+                  key={seller.profileId}
+                  seller={seller}
+                  selected={seller.profileId === selectedFoundingSellerId}
+                  onSelect={() => selectFoundingSeller(seller)}
+                />
+              ))}
+            </View>
+          ) : null}
           <Text style={styles.body}>
             Search by display name, email, username, or profile ID. Founding Seller status is enforced server-side during checkout.
           </Text>
@@ -3543,6 +3561,41 @@ function AdminFoundingSellerSearchCard({
         <Text style={styles.metaText}>Account: {seller.accountType}</Text>
         <Button
           title={selected ? 'Selected' : 'Select Seller'}
+          variant={selected ? 'primary' : 'outline'}
+          onPress={onSelect}
+          fullWidth
+        />
+      </View>
+    </Card>
+  );
+}
+
+function AdminFoundingSellerListCard({
+  seller,
+  selected,
+  onSelect,
+}: {
+  seller: AdminFoundingSellerStatus;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <Card>
+      <View style={styles.stack}>
+        <View style={styles.notificationRow}>
+          <View style={styles.notificationText}>
+            <Text style={styles.cardTitle}>{seller.displayName}</Text>
+            <Text style={styles.body}>{seller.email ?? seller.username}</Text>
+          </View>
+          <Badge label={adminFoundingSellerStatusLabel(seller.status)} tone={seller.status === 'active' ? 'success' : 'info'} />
+        </View>
+        <Text style={styles.body}>
+          Fee-free sales used: {seller.feeFreeSalesUsed} of {seller.freeSalesLimit}
+        </Text>
+        <Text style={styles.body}>Fee-free sales remaining: {seller.feeFreeSalesRemaining}</Text>
+        <Text style={styles.metaText}>Currently reserved: {seller.currentlyReserved}</Text>
+        <Button
+          title={selected ? 'Selected' : 'Manage Seller'}
           variant={selected ? 'primary' : 'outline'}
           onPress={onSelect}
           fullWidth

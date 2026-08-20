@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../lib/queryKeys';
 import {
   getAdminFoundingSellerStatus,
+  listAdminFoundingSellers,
   searchAdminFoundingSellerProfiles,
   setAdminFoundingSellerStatus,
 } from '../services/adminService';
@@ -20,6 +21,12 @@ export function useAdminFoundingSellers(enabled: boolean, selectedProfileId: str
   const [searchResults, setSearchResults] = useState<AdminFoundingSellerSearchResult[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
+
+  const listQuery = useQuery<AdminFoundingSellerStatus[]>({
+    queryKey: queryKeys.adminFoundingSellers,
+    queryFn: listAdminFoundingSellers,
+    enabled,
+  });
 
   const statusQuery = useQuery<AdminFoundingSellerStatus>({
     queryKey: queryKeys.adminFoundingSellerStatus(selectedProfileId ?? 'none'),
@@ -63,6 +70,7 @@ export function useAdminFoundingSellers(enabled: boolean, selectedProfileId: str
         )
       );
       await queryClient.invalidateQueries({ queryKey: queryKeys.adminFoundingSellerStatus(result.profileId) });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.adminFoundingSellers });
     },
   });
 
@@ -71,6 +79,10 @@ export function useAdminFoundingSellers(enabled: boolean, selectedProfileId: str
     searchResults,
     searchLoading,
     searchError,
+    list: listQuery.data ?? [],
+    listLoading: listQuery.isLoading,
+    listError: listQuery.error ? handleAppError(listQuery.error).userMessage : null,
+    refreshList: listQuery.refetch,
     status: statusQuery.data ?? null,
     statusLoading: statusQuery.isLoading,
     statusError: statusQuery.error ? handleAppError(statusQuery.error).userMessage : null,
