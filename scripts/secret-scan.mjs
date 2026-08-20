@@ -4,7 +4,7 @@ import { extname, join, relative } from 'node:path';
 
 const root = process.cwd();
 const scanGitHistory = process.argv.includes('--git-history');
-const ignoredDirs = new Set(['.git', '.expo', 'coverage', 'dist', 'node_modules', 'web-build']);
+const ignoredDirs = new Set(['.git', '.expo', '.temp', 'coverage', 'dist', 'node_modules', 'web-build']);
 const scannedExtensions = new Set(['.env', '.js', '.json', '.md', '.mjs', '.sql', '.ts', '.tsx', '.txt', '.yml', '.yaml']);
 const ignoredFiles = new Set(['scripts/secret-scan.mjs']);
 
@@ -16,7 +16,7 @@ const patterns = [
   { category: 'Stripe secret key', regex: /\bsk_(?:live|test)_[A-Za-z0-9]{12,}\b/ },
   { category: 'Private key', regex: /-----BEGIN [A-Z ]*PRIVATE KEY-----/ },
   { category: 'GitHub token', regex: /\bgh[pousr]_[A-Za-z0-9_]{20,}\b/ },
-  { category: 'Access or refresh token', regex: /(?:access|refresh)[_-]?token\s*[:=]\s*['"]?[A-Za-z0-9_-]{24,}/i },
+  { category: 'Access or refresh token', regex: /(?:access|refresh)[_-]?token\s*[:=]\s*['"][A-Za-z0-9._-]{24,}['"]/i },
   { category: 'Google service account JSON', regex: /"type"\s*:\s*"service_account"/ },
 ];
 

@@ -106,7 +106,7 @@ test('guardrail scripts and pull request workflow are wired into the repository'
   const exceptions = read('docs/private-beta/GOLDEN_LAYOUT_EXCEPTIONS.md');
 
   assert.equal(packageJson.scripts['check:protected-ui'], 'node scripts/check-protected-ui-changes.mjs');
-  assert.equal(packageJson.scripts['check:beta-guardrails'], 'pnpm check:protected-ui && pnpm report:task-diff');
+  assert.equal(packageJson.scripts['check:beta-guardrails'], 'pnpm check:protected-ui && pnpm report:task-diff && pnpm check:deprecated-backend');
   assert.match(packageJson.scripts['build:preview:android'], /^pnpm check:beta-guardrails && eas build/);
   assert.match(workflow, /fetch-depth: 0/);
   assert.match(workflow, /check-protected-ui-changes\.mjs/);

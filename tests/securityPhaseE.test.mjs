@@ -3,10 +3,11 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import { readMigrationBySuffix } from './migrationTestUtils.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const read = (path) => readFileSync(join(root, path), 'utf8');
-const phaseESql = read('supabase/migrations/20260719120708_phase_e_transactions_reviews_reports_notifications_security.sql');
+const phaseESql = readMigrationBySuffix('_phase_e_transactions_reviews_reports_notifications_security.sql');
 
 function directWritePattern(tableName) {
   return new RegExp(`\\.from\\(['"]${tableName}['"]\\)[\\s\\S]{0,260}\\.(insert|update|upsert|delete)\\(`);

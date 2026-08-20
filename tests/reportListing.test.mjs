@@ -49,8 +49,8 @@ test('admin review panel surfaces listing, message, and user reports', () => {
   assert.match(sprint4, /Reports/);
   assert.match(sprint4, /AdminListingReportCard/);
   assert.match(sprint4, /useAdminListingReports/);
-  assert.match(adminService, /\.from\('reports'\)/);
-  assert.match(adminService, /\.in\('report_type', \['listing', 'message', 'user'\]\)/);
+  assert.match(adminService, /rpc\('get_admin_report_queue'/);
+  assert.match(adminService, /reportTypeValue\(row\.report_type\)/);
   assert.match(adminService, /Reported message/);
   assert.match(adminService, /Reported user/);
   assert.match(adminService, /updateListingReportStatus/);

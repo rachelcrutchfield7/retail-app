@@ -3,19 +3,15 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import {
+  listActiveMigrationFiles,
+  readMigrationBySuffix,
+} from './migrationTestUtils.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const read = (path) => readFileSync(join(root, path), 'utf8');
-const migrationName = readdirSync(join(root, 'supabase/migrations'))
-  .find((file) => /^\d{14}_private_beta_secure_account_deletion\.sql$/.test(file));
-const serverOnlyMigrationName = readdirSync(join(root, 'supabase/migrations'))
-  .find((file) => /^\d{14}_private_beta_account_deletion_server_only_preparation\.sql$/.test(file));
-
-assert.ok(migrationName, 'Expected generated private beta account deletion migration.');
-assert.ok(serverOnlyMigrationName, 'Expected server-only account deletion preparation migration.');
-
-const migrationSql = read(`supabase/migrations/${migrationName}`);
-const serverOnlyMigrationSql = read(`supabase/migrations/${serverOnlyMigrationName}`);
+const migrationSql = readMigrationBySuffix('_private_beta_secure_account_deletion.sql');
+const serverOnlyMigrationSql = readMigrationBySuffix('_private_beta_account_deletion_server_only_preparation.sql');
 
 function walkFiles(dir, files = []) {
   for (const entry of readdirSync(dir)) {
@@ -38,7 +34,7 @@ test('private beta account deletion migration supersedes the old insecure RPC', 
     migrationSql,
     serverOnlyMigrationSql,
     read('supabase/schema.sql'),
-    ...readdirSync(join(root, 'supabase/migrations')).map((file) => read(`supabase/migrations/${file}`)),
+    ...listActiveMigrationFiles().map((file) => read(`supabase/migrations/${file}`)),
   ].join('\n');
 
   assert.match(migrationSql, /drop function if exists public\.delete_current_account\(\)/);

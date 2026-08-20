@@ -3,10 +3,11 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import { readMigrationBySuffix } from './migrationTestUtils.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const read = (path) => readFileSync(join(root, path), 'utf8');
-const phaseFSql = read('supabase/migrations/20260719175607_phase_f_rate_limiting_abuse_prevention_and_beta_readiness.sql');
+const phaseFSql = readMigrationBySuffix('_phase_f_rate_limiting_abuse_prevention_and_beta_readiness.sql');
 
 test('Phase F migration makes rate-limit events internal only', () => {
   assert.match(phaseFSql, /alter table public\.rate_limit_events[\s\S]+drop column if exists ip_address/);

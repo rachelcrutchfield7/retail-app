@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import { readMigrationBySuffix } from './migrationTestUtils.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 
@@ -10,7 +11,8 @@ function read(path) {
   return readFileSync(join(root, path), 'utf8');
 }
 
-const migration = 'supabase/migrations/20260719011141_phase_d1_attachment_and_system_message_fixes.sql';
+const phaseD1Migration = readMigrationBySuffix('_phase_d1_attachment_and_system_message_fixes.sql');
+const phaseEMigration = readMigrationBySuffix('_phase_e_transactions_reviews_reports_notifications_security.sql');
 
 function isValidMessageAttachmentPath(path, conversationId, uploaderId) {
   return new RegExp(
@@ -49,7 +51,7 @@ test('Phase D.1 message attachment path validation accepts only canonical lowerc
 });
 
 test('Phase D.1 migration centralizes attachment regex behavior and removes over-escaped dots', () => {
-  const sql = read(migration);
+  const sql = phaseD1Migration;
 
   assert.match(sql, /create or replace function private\.is_valid_message_attachment_path/);
   assert.match(sql, /\[.\]\(jpg\|jpeg\|png\|webp\)\$/);
@@ -61,7 +63,7 @@ test('Phase D.1 migration centralizes attachment regex behavior and removes over
 });
 
 test('Phase D.1 public message path forbids user-created system messages', () => {
-  const sql = read(migration);
+  const sql = phaseD1Migration;
   const types = read('src/services/types.ts');
   const messageService = read('src/services/messageService.ts');
   const offerService = read('src/services/offerService.ts');
@@ -78,7 +80,7 @@ test('Phase D.1 public message path forbids user-created system messages', () =>
 });
 
 test('Phase D.1 storage policies preserve historical reads after blocks while blocking new writes', () => {
-  const sql = read(migration);
+  const sql = phaseD1Migration;
   const canAccessStart = sql.indexOf('create or replace function private.can_access_message_attachment');
   const canAccessEnd = sql.indexOf('-- ---------------------------------------------------------------------------\n-- System message lockdown');
   const canAccessFunction = sql.slice(canAccessStart, canAccessEnd);
@@ -103,7 +105,7 @@ test('Phase D.1 app cleans orphan uploads when image send fails', () => {
 });
 
 test('Phase D.1 offer payloads are not exposed in notification previews', () => {
-  const phaseESql = read('supabase/migrations/20260719120708_phase_e_transactions_reviews_reports_notifications_security.sql');
+  const phaseESql = phaseEMigration;
 
   assert.match(phaseESql, /requested_body like 'RETAIL_OFFER::%'/);
   assert.match(phaseESql, /You received a ReTail offer update\./);

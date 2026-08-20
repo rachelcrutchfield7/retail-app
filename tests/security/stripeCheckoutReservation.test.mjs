@@ -3,12 +3,12 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import { readMigrationBySuffix } from '../migrationTestUtils.mjs';
 
 const root = fileURLToPath(new URL('../..', import.meta.url));
 const read = (path) => readFileSync(join(root, path), 'utf8');
 
-const migrationPath = 'supabase/migrations/20260808234000_stripe_checkout_reservation.sql';
-const migration = read(migrationPath);
+const migration = readMigrationBySuffix('_stripe_checkout_reservation.sql');
 const stripeCreate = read('supabase/functions/stripe-create-payment-intent/index.ts');
 const stripeWebhook = read('supabase/functions/stripe-webhook/index.ts');
 const stripeShared = read('supabase/functions/_shared/stripe.ts');

@@ -1,18 +1,13 @@
 import assert from 'node:assert/strict';
-import { readdirSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import { readMigrationBySuffix } from './migrationTestUtils.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const read = (path) => readFileSync(join(root, path), 'utf8');
-const readMigrationByName = (suffix) => {
-  const fileName = readdirSync(join(root, 'supabase/migrations')).find((file) => file.endsWith(suffix));
-  assert.ok(fileName, `Missing migration ending with ${suffix}`);
-  return read(`supabase/migrations/${fileName}`);
-};
-
-const migration = readMigrationByName('_phase_b1_server_derived_nearby_origin.sql');
+const migration = readMigrationBySuffix('_phase_b1_server_derived_nearby_origin.sql');
 
 function extractFunction(source, functionName) {
   const start = source.indexOf(`create or replace function public.${functionName}`);

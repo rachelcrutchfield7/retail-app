@@ -3,16 +3,17 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import { readMigrationBySuffix } from './migrationTestUtils.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const read = (path) => readFileSync(join(root, path), 'utf8');
 
-const phaseC = read('supabase/migrations/20260717174159_phase_c_protected_fields_least_privilege.sql');
-const phaseD = read('supabase/migrations/20260719003237_phase_d_messaging_blocking_storage_security.sql');
-const phaseE = read('supabase/migrations/20260719120708_phase_e_transactions_reviews_reports_notifications_security.sql');
-const phaseF = read('supabase/migrations/20260719175607_phase_f_rate_limiting_abuse_prevention_and_beta_readiness.sql');
-const adminFix = read('supabase/migrations/20260802000000_fix_admin_report_moderation_actions.sql');
-const consent = read('supabase/migrations/20260808172854_signup_consent_and_marketing_preferences.sql');
+const phaseC = readMigrationBySuffix('_phase_c_protected_fields_least_privilege.sql');
+const phaseD = readMigrationBySuffix('_phase_d_messaging_blocking_storage_security.sql');
+const phaseE = readMigrationBySuffix('_phase_e_transactions_reviews_reports_notifications_security.sql');
+const phaseF = readMigrationBySuffix('_phase_f_rate_limiting_abuse_prevention_and_beta_readiness.sql');
+const adminFix = readMigrationBySuffix('_fix_admin_report_moderation_actions.sql');
+const consent = readMigrationBySuffix('_signup_consent_and_marketing_preferences.sql');
 const audit = read('docs/security/PRELAUNCH_SECURITY_AUDIT_01.md');
 const matrix = read('docs/security/AUTHORIZATION_MATRIX.md');
 const remediation = read('docs/security/PRELAUNCH_SECURITY_REMEDIATION_PLAN.md');

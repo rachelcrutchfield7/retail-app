@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import { readMigrationBySuffix } from './migrationTestUtils.mjs';
 
 import { getLogEntries } from '../src/lib/logger.ts';
 import { uploadAvatarImageBinary } from '../src/services/profileService.ts';
@@ -98,7 +99,7 @@ test('profile avatar upload failure keeps safe diagnostics and friendly user mes
 });
 
 test('avatar storage policy is authenticated, owner-folder scoped, and image-only', () => {
-  const migration = read('supabase/migrations/20260719003237_phase_d_messaging_blocking_storage_security.sql');
+  const migration = readMigrationBySuffix('_phase_d_messaging_blocking_storage_security.sql');
 
   assert.match(migration, /create policy "Phase D owner can manage avatar images"/);
   assert.match(migration, /on storage\.objects/);

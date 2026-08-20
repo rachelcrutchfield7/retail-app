@@ -1,17 +1,16 @@
 import assert from 'node:assert/strict';
-import { readdirSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import { readMigrationBySuffix } from './migrationTestUtils.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const read = (path) => readFileSync(join(root, path), 'utf8');
-const readMigrationByName = (suffix) => {
-  const fileName = readdirSync(join(root, 'supabase/migrations')).find((file) => file.endsWith(suffix));
-  assert.ok(fileName, `Missing migration ending with ${suffix}`);
-  return read(`supabase/migrations/${fileName}`);
-};
 const migration = readMigrationByName('_phase_b_public_location_privacy.sql');
+function readMigrationByName(suffix) {
+  return readMigrationBySuffix(suffix);
+}
 
 function extractBetween(source, start, end) {
   const startIndex = source.indexOf(start);
@@ -115,11 +114,12 @@ test('Phase B public services do not fall back to unsafe base-table reads', () =
   assert.doesNotMatch(rescueService, /filterMockRescues/);
 });
 
-test('Phase B mappers do not copy exact location fields into public listing or rescue models', () => {
+test('Phase B mappers keep listing locations coarse and rely on privacy-gated rescue fields', () => {
   const supabaseData = read('src/services/supabaseData.ts');
   const rescueService = read('src/services/rescueService.ts');
   const serviceTypes = read('src/services/types.ts');
   const settingsService = read('src/services/settingsService.ts');
+  const baseline = read('supabase/migrations/20260812152900_prelaunch_current_schema_baseline_created_20260813.sql');
 
   const listingMapper = extractBetween(supabaseData, 'export function toListing', 'function shippingPayerFromDb');
   const distanceMapper = extractBetween(supabaseData, 'function distanceFromRow', 'export function imagesFromListingRow');
@@ -130,14 +130,17 @@ test('Phase B mappers do not copy exact location fields into public listing or r
   assert.doesNotMatch(listingMapper, /latitude:/);
   assert.doesNotMatch(listingMapper, /longitude:/);
   assert.match(listingMapper, /distanceMiles:/);
-  assert.doesNotMatch(listingMapper, /shipFromZipCode:/);
+  const publicListingDetailContract = extractBetween(baseline, 'CREATE OR REPLACE FUNCTION "public"."get_public_listing_detail"', 'ALTER FUNCTION "public"."get_public_listing_detail"');
+  const publicListingFeedContract = extractBetween(baseline, 'CREATE OR REPLACE FUNCTION "public"."get_public_listing_feed_sorted"', 'ALTER FUNCTION "public"."get_public_listing_feed_sorted"');
+  assert.doesNotMatch(publicListingDetailContract, /ship_from_zip_code|package_weight_oz|package_length_in|package_width_in|package_height_in/);
+  assert.doesNotMatch(publicListingFeedContract, /ship_from_zip_code|package_weight_oz|package_length_in|package_width_in|package_height_in/);
   assert.match(rescueMapper, /distance_band/);
   assert.doesNotMatch(rescueMapper, /latitude:/);
   assert.doesNotMatch(rescueMapper, /longitude:/);
   assert.doesNotMatch(rescueMapper, /contactPerson:/);
-  assert.doesNotMatch(rescueMapper, /addressLine1:/);
-  assert.doesNotMatch(rescueMapper, /addressLine2:/);
-  assert.doesNotMatch(rescueMapper, /zipCode:/);
+  assert.match(baseline, /rescue_public_address_enabled/);
+  assert.match(baseline, /case when coalesce\(ps\.rescue_public_address_enabled, false\) then rp\.address_line1 else null end/);
+  assert.match(baseline, /case when coalesce\(ps\.rescue_public_address_enabled, false\) then rp\.zip_code else null end/);
   assert.match(serviceTypes, /export type PublicListing/);
   assert.match(serviceTypes, /export type OwnerListing/);
   assert.match(serviceTypes, /export type PublicRescue/);

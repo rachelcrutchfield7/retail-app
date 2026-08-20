@@ -6,7 +6,7 @@ These are known limitations for a small controlled private beta only. They are n
 
 ## Payments
 
-Stripe protected checkout is disabled. The app may explain future protected checkout, but it must not charge cards or create real payment obligations.
+Stripe protected checkout is enabled only through ReTail's reviewed backend. Beta checkout uses the approved beta-safe Stripe configuration, server-created PaymentIntents, Stripe Tax, destination charges, seller payout readiness checks, and Founding Seller fee logic. Do not switch payment modes or run broad payment tests without an explicit payment-task approval.
 
 ## Shipping
 

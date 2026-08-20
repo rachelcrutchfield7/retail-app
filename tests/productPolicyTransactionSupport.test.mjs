@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import { readMigrationBySuffix } from './migrationTestUtils.mjs';
 
 import {
   CURRENT_COMMUNITY_GUIDELINES_VERSION,
@@ -13,7 +14,7 @@ import {
 const root = fileURLToPath(new URL('..', import.meta.url));
 const read = (path) => readFileSync(join(root, path), 'utf8');
 
-const migration = read('supabase/migrations/20260810111020_product_policy_transaction_support.sql');
+const migration = readMigrationBySuffix('_product_policy_transaction_support.sql');
 const sprint4 = read('src/sprint4/Sprint4App.tsx');
 const supportService = read('src/services/supportCaseService.ts');
 const productPolicy = read('docs/product/PRODUCT_POLICY_DECISIONS.md');

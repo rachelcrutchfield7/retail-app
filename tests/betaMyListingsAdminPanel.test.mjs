@@ -3,11 +3,12 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import { readMigrationBySuffix } from './migrationTestUtils.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const read = (path) => readFileSync(join(root, path), 'utf8');
 
-const migration = read('supabase/migrations/20260810090000_beta_my_listings_admin_report_queue.sql');
+const migration = readMigrationBySuffix('_beta_my_listings_admin_report_queue.sql');
 const listingService = read('src/services/listingService.ts');
 const myListingsHook = read('src/hooks/useMyListings.ts');
 const adminService = read('src/services/adminService.ts');

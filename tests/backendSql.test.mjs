@@ -3,13 +3,14 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import { readMigrationBySuffix } from './migrationTestUtils.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const schema = readFileSync(join(root, 'supabase/schema.sql'), 'utf8');
 const policies = readFileSync(join(root, 'supabase/policies.sql'), 'utf8');
 const seed = readFileSync(join(root, 'supabase/seed.sql'), 'utf8');
 const storage = readFileSync(join(root, 'supabase/storage.sql'), 'utf8');
-const phaseESql = readFileSync(join(root, 'supabase/migrations/20260719120708_phase_e_transactions_reviews_reports_notifications_security.sql'), 'utf8');
+const phaseESql = readMigrationBySuffix('_phase_e_transactions_reviews_reports_notifications_security.sql');
 const distance = readFileSync(join(root, 'supabase/distance.sql'), 'utf8');
 const rescueAccounts = readFileSync(join(root, 'supabase/rescue_accounts.sql'), 'utf8');
 const backendSpecPaths = [

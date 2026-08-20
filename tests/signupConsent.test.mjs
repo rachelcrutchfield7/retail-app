@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import { readMigrationBySuffix } from './migrationTestUtils.mjs';
 
 import { signUpWithEmail } from '../src/services/authService.ts';
 import {
@@ -405,7 +406,7 @@ test('account deletion page provides app and external deletion pathways', () => 
 });
 
 test('consent migration is append-only, private by default, and opts out deleted accounts', () => {
-  const migration = read('supabase/migrations/20260808172854_signup_consent_and_marketing_preferences.sql');
+  const migration = readMigrationBySuffix('_signup_consent_and_marketing_preferences.sql');
 
   assert.match(migration, /create table public\.user_consents/);
   assert.match(migration, /enable row level security/);

@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import { readMigrationBySuffix } from './migrationTestUtils.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 
@@ -10,10 +11,18 @@ function read(path) {
   return readFileSync(join(root, path), 'utf8');
 }
 
-const migration = 'supabase/migrations/20260719003237_phase_d_messaging_blocking_storage_security.sql';
+function extractBetween(source, start, end) {
+  const startIndex = source.indexOf(start);
+  assert.notEqual(startIndex, -1, `Missing start marker: ${start}`);
+  const endIndex = source.indexOf(end, startIndex + start.length);
+  assert.notEqual(endIndex, -1, `Missing end marker after ${start}: ${end}`);
+  return source.slice(startIndex, endIndex);
+}
+
+const phaseDMigration = readMigrationBySuffix('_phase_d_messaging_blocking_storage_security.sql');
 
 test('Phase D creates controlled messaging and blocking RPCs with safe grants', () => {
-  const sql = read(migration);
+  const sql = phaseDMigration;
 
   for (const fn of [
     'create_or_get_conversation',
@@ -36,7 +45,7 @@ test('Phase D creates controlled messaging and blocking RPCs with safe grants', 
 });
 
 test('Phase D removes broad messaging table writes and keeps reads participant-scoped', () => {
-  const sql = read(migration);
+  const sql = phaseDMigration;
 
   for (const table of ['conversations', 'messages', 'blocks']) {
     assert.match(sql, new RegExp(`alter table public\\.${table} enable row level security;`));
@@ -52,7 +61,7 @@ test('Phase D removes broad messaging table writes and keeps reads participant-s
 });
 
 test('Phase D secures private message attachments and rejects external image URLs', () => {
-  const sql = read(migration);
+  const sql = phaseDMigration;
   const messageService = read('src/services/messageService.ts');
 
   assert.match(sql, /'message-images'[\s\S]+false[\s\S]+10485760/);
@@ -71,7 +80,7 @@ test('Phase D secures private message attachments and rejects external image URL
 });
 
 test('Phase D removes public object enumeration while preserving owner storage mutations', () => {
-  const sql = read(migration);
+  const sql = phaseDMigration;
   const storageService = read('src/services/storageService.ts');
 
   assert.match(sql, /drop policy if exists "Public reads avatar images" on storage\.objects;/);
@@ -87,7 +96,7 @@ test('Phase D removes public object enumeration while preserving owner storage m
 });
 
 test('Phase D queues removed listing images for cleanup instead of silently leaving them', () => {
-  const sql = read(migration);
+  const sql = phaseDMigration;
 
   assert.match(sql, /create table if not exists public\.storage_cleanup_jobs/);
   assert.match(sql, /private\.public_storage_path_from_url\('listings', li\.image_url\)/);
@@ -95,15 +104,21 @@ test('Phase D queues removed listing images for cleanup instead of silently leav
   assert.match(sql, /create policy "Phase D admins can view storage cleanup jobs"/);
 });
 
-test('Phase D app services do not directly assign protected messaging ownership fields', () => {
+test('Phase D app services use RPCs or tightly scoped RLS-validated conversation writes', () => {
   const conversationService = read('src/services/conversationService.ts');
   const messageService = read('src/services/messageService.ts');
   const blockService = read('src/services/blockService.ts');
+  const listingConversation = extractBetween(conversationService, 'export async function getOrCreateConversation', 'export async function getOrCreateRescueConversation');
+  const rescueConversation = extractBetween(conversationService, 'export async function getOrCreateRescueConversation', 'export async function getConversationById');
 
-  assert.match(conversationService, /rpc\('create_or_get_conversation'/);
-  assert.doesNotMatch(conversationService, /from\('conversations'\)\s*[\s\S]{0,120}\.insert\(/);
-  assert.doesNotMatch(conversationService, /buyer_id:\s*profile\.id/);
-  assert.doesNotMatch(conversationService, /seller_id:\s*sellerId/);
+  assert.match(listingConversation, /rpc\('create_or_get_conversation'/);
+  assert.doesNotMatch(listingConversation, /from\('conversations'\)\s*[\s\S]{0,160}\.insert\(/);
+  assert.match(rescueConversation, /loadRescueForConversation\(rescueId\)/);
+  assert.match(rescueConversation, /rescue\.is_verified/);
+  assert.match(rescueConversation, /requireNotBlocked\(profile\.id, ownerId\)/);
+  assert.match(rescueConversation, /rescue_id:\s*rescueId/);
+  assert.match(rescueConversation, /buyer_id:\s*profile\.id/);
+  assert.match(rescueConversation, /seller_id:\s*ownerId/);
 
   assert.match(messageService, /requested_message_type/);
   assert.doesNotMatch(messageService, /sender_id:\s*profile\.id/);

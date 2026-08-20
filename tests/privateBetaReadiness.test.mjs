@@ -65,34 +65,38 @@ test('private beta environment config fails safely for release-like builds', () 
 });
 
 test('release build configuration keeps private beta separate from production', () => {
-  const app = readJson('app.json').expo;
+  const appConfig = read('app.config.js');
   const eas = readJson('eas.json');
   const ciWorkflow = read('.github/workflows/ci.yml');
   const securityWorkflow = read('.github/workflows/security.yml');
 
-  assert.equal(app.name, 'ReTail');
-  assert.equal(app.slug, 'retail');
-  assert.equal(app.version, '1.0.0');
-  assert.equal(app.ios.bundleIdentifier, 'com.raecrutchfield.retail');
-  assert.equal(app.android.package, 'com.raecrutchfield.retail');
-  assert.ok(app.extra.eas.projectId);
+  assert.match(appConfig, /name: 'ReTail'/);
+  assert.match(appConfig, /slug: 'retail'/);
+  assert.match(appConfig, /version: '1\.0\.0'/);
+  assert.match(appConfig, /bundleIdentifier: 'com\.raecrutchfield\.retail'/);
+  assert.match(appConfig, /package: 'com\.raecrutchfield\.retail'/);
+  assert.match(appConfig, /projectId: '288a25e1-5824-4f77-a3f4-0607df5f7d89'/);
   assert.equal(eas.build.preview.env.EXPO_PUBLIC_APP_ENV, 'beta');
   assert.equal(eas.build.preview.environment, 'preview');
   assert.equal(eas.build.preview.distribution, 'internal');
   assert.equal(eas.build.production.env.EXPO_PUBLIC_APP_ENV, 'production');
-  assert.doesNotMatch(JSON.stringify({ app, eas }), /localhost|127\.0\.0\.1|example\.supabase\.co|ci-placeholder/);
+  assert.doesNotMatch(`${appConfig}\n${JSON.stringify(eas)}`, /localhost|127\.0\.0\.1|example\.supabase\.co|ci-placeholder/);
   assert.match(ciWorkflow, /private-beta-\*\*/);
   assert.match(securityWorkflow, /private-beta-\*\*/);
 });
 
-test('unfinished high-risk payment flow remains gated for private beta', () => {
+test('protected checkout remains server-gated for private beta', () => {
   const paymentService = read('src/services/paymentService.ts');
   const paymentCard = read('src/components/payments/PaymentChoiceCard.tsx');
+  const stripeCreate = read('supabase/functions/stripe-create-payment-intent/index.ts');
 
   assert.match(paymentService, /protectedCheckoutEnabled/);
-  assert.match(paymentService, /STRIPE_BACKEND_REQUIRED/);
-  assert.match(paymentCard, /disabled=\{disabled \|\| !protectedCheckoutReady\}/);
-  assert.match(read('docs/private-beta/KNOWN_BETA_LIMITATIONS.md'), /Stripe protected checkout is disabled/);
+  assert.match(paymentService, /STRIPE_NOT_READY/);
+  assert.match(paymentService, /supabase\.functions\.invoke\('stripe-create-payment-intent'/);
+  assert.match(stripeCreate, /requireAuthenticatedRequest\(request\)/);
+  assert.match(stripeCreate, /reserve_stripe_checkout_listing/);
+  assert.match(paymentCard, /disabled=\{disabled \|\| !protectedCheckoutReady \|\| checkoutLoading\}/);
+  assert.match(read('docs/private-beta/KNOWN_BETA_LIMITATIONS.md'), /Stripe protected checkout is enabled only through ReTail's reviewed backend/);
 });
 
 test('private beta legal, safety, and feedback access points are documented and visible', () => {
