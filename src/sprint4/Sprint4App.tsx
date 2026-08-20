@@ -57,6 +57,7 @@ import { appLinks } from '../constants/links';
 import { colors, radius, sizes, spacing, typography } from '../constants/theme';
 import type { ThemeColors } from '../constants/theme';
 import { useAdminListingReports } from '../hooks/useAdminListingReports';
+import { useAdminDashboardCounts } from '../hooks/useAdminDashboardCounts';
 import { useAdminFoundingSellers } from '../hooks/useAdminFoundingSellers';
 import { useAdminRescueApprovals } from '../hooks/useAdminRescueApprovals';
 import { useAuth } from '../hooks/useAuth';
@@ -203,6 +204,7 @@ const tabs: Array<{ key: SprintTab; label: string; icon: typeof Home }> = [
 ];
 
 type AdminReportTab = 'active' | 'archived';
+type AdminDashboardTab = 'overview' | 'users' | 'foundingSellers' | 'listings' | 'reports' | 'support';
 
 async function openAppLink(url: string): Promise<void> {
   const fallbackUrl = url.startsWith('https://retailpetapp.com')
@@ -3018,10 +3020,13 @@ function FAQScreen({ onBack }: { onBack: () => void }) {
 
 export function AdminReviewScreen({ onBack, onOpenListing }: { onBack: () => void; onOpenListing: (listingId: string) => void }) {
   const auth = useAuth();
+  const isAdmin = Boolean(auth.profile?.is_admin);
+  const [adminTab, setAdminTab] = useState<AdminDashboardTab>('overview');
   const [reportTab, setReportTab] = useState<AdminReportTab>('active');
-  const approvals = useAdminRescueApprovals(Boolean(auth.profile?.is_admin));
-  const listingReports = useAdminListingReports(Boolean(auth.profile?.is_admin), reportTab);
-  const supportCases = useAdminSupportCases(Boolean(auth.profile?.is_admin), reportTab);
+  const dashboardCounts = useAdminDashboardCounts(isAdmin);
+  const approvals = useAdminRescueApprovals(isAdmin && adminTab === 'users');
+  const listingReports = useAdminListingReports(isAdmin && adminTab === 'reports', reportTab);
+  const supportCases = useAdminSupportCases(isAdmin && adminTab === 'support', reportTab);
   const supportUpdater = useAdminUpdateSupportCase(reportTab);
   const [notice, setNotice] = useState<{ title: string; body: string } | null>(null);
   const [foundingSellerSearch, setFoundingSellerSearch] = useState('');
@@ -3031,11 +3036,20 @@ export function AdminReviewScreen({ onBack, onOpenListing }: { onBack: () => voi
   const [reportMessages, setReportMessages] = useState<Record<string, string>>({});
   const [supportNotes, setSupportNotes] = useState<Record<string, string>>({});
   const [supportMessages, setSupportMessages] = useState<Record<string, string>>({});
-  const foundingSellers = useAdminFoundingSellers(Boolean(auth.profile?.is_admin), selectedFoundingSellerId);
+  const foundingSellers = useAdminFoundingSellers(isAdmin && adminTab === 'foundingSellers', selectedFoundingSellerId);
   const pendingCount = approvals.data?.filter((rescue) => rescue.verification_status === 'pending').length ?? 0;
-  const reportCount = listingReports.data?.length ?? 0;
-  const supportCaseCount = supportCases.data?.length ?? 0;
+  const reportCount = listingReports.data?.length ?? dashboardCounts.data?.openReports ?? 0;
+  const supportCaseCount = supportCases.data?.length ?? dashboardCounts.data?.openSupportCases ?? 0;
+  const foundingSellerTotal = dashboardCounts.data?.foundingSellersTotal ?? foundingSellers.list.length;
   const activeReportsSelected = reportTab === 'active';
+  const adminTabs: Array<{ key: AdminDashboardTab; label: string; count?: number }> = [
+    { key: 'overview', label: 'Overview' },
+    { key: 'users', label: 'Users', count: dashboardCounts.data?.users },
+    { key: 'foundingSellers', label: 'Founding Sellers', count: foundingSellerTotal },
+    { key: 'listings', label: 'Listings', count: dashboardCounts.data?.activeListings },
+    { key: 'reports', label: 'Reports', count: dashboardCounts.data?.openReports },
+    { key: 'support', label: 'Support', count: dashboardCounts.data?.openSupportCases },
+  ];
 
   const noteForReport = (report: AdminListingReport) => reportNotes[report.id] ?? report.admin_notes ?? '';
   const messageForReport = (report: AdminListingReport) => reportMessages[report.id] ?? '';
@@ -3210,221 +3224,360 @@ export function AdminReviewScreen({ onBack, onOpenListing }: { onBack: () => voi
     <ScreenFrame>
       <BackButton onPress={onBack} />
       <View style={styles.headerBlock}>
-        <Text style={styles.title}>Admin Review</Text>
-        <Text style={styles.body}>Review active reports, take moderation actions, and keep archived report history available for reference.</Text>
+        <Text style={styles.title}>Admin</Text>
+        <Text style={styles.body}>Review sellers, listings, reports, support cases, and launch benefits from one organized workspace.</Text>
       </View>
 
-      <SectionCard title="Report Queue">
-        <View style={styles.wrapRow}>
-          <FilterChip label="Active" selected={activeReportsSelected} onPress={() => setReportTab('active')} />
-          <FilterChip label="Archived" selected={!activeReportsSelected} onPress={() => setReportTab('archived')} />
-        </View>
-        <Text style={styles.bodyStrong}>{reportCount} {activeReportsSelected ? 'active' : 'archived'}</Text>
-        <Text style={styles.body}>
-          {activeReportsSelected
-            ? 'Open and reviewing reports need action. Removing a listing, message, or account will automatically mark the report resolved.'
-            : 'Resolved and dismissed reports stay here so you can refer back to moderation decisions later.'}
-        </Text>
-      </SectionCard>
+      <AdminDashboardTabs tabs={adminTabs} selectedTab={adminTab} onSelect={setAdminTab} />
+      {notice ? <NoticeCard title={notice.title} body={notice.body} /> : null}
 
-      <SectionCard title="Transaction Support Queue">
-        <Text style={styles.bodyStrong}>{supportCaseCount} {activeReportsSelected ? 'active' : 'archived'}</Text>
-        <Text style={styles.body}>
-          Support cases are for order, payment, refund, cancellation, return, shipping, and seller payout questions. Creating or updating a case does not automatically issue a refund.
-        </Text>
-      </SectionCard>
+      {adminTab === 'overview' ? (
+        <SectionCard title="Overview">
+          <View style={styles.stack}>
+            {dashboardCounts.isLoading ? <LoadingSpinner /> : null}
+            {dashboardCounts.error ? <NoticeCard title="Admin counts unavailable" body={dashboardCounts.error} /> : null}
+            <View style={styles.adminOverviewGrid}>
+              <AdminOverviewCard
+                title="Users"
+                count={dashboardCounts.data?.users}
+                body="Profiles and rescue approvals"
+                onPress={() => setAdminTab('users')}
+              />
+              <AdminOverviewCard
+                title="Founding Sellers"
+                count={dashboardCounts.data?.foundingSellersTotal}
+                body={`${dashboardCounts.data?.foundingSellersActive ?? 0} active`}
+                onPress={() => setAdminTab('foundingSellers')}
+              />
+              <AdminOverviewCard
+                title="Active Listings"
+                count={dashboardCounts.data?.activeListings}
+                body="Public marketplace listings"
+                onPress={() => setAdminTab('listings')}
+              />
+              <AdminOverviewCard
+                title="Open Reports"
+                count={dashboardCounts.data?.openReports}
+                body="Needs moderation review"
+                onPress={() => setAdminTab('reports')}
+              />
+              <AdminOverviewCard
+                title="Open Support"
+                count={dashboardCounts.data?.openSupportCases}
+                body="Transaction help queue"
+                onPress={() => setAdminTab('support')}
+              />
+            </View>
+          </View>
+        </SectionCard>
+      ) : null}
 
-      <SectionCard title="Founding Sellers">
+      {adminTab === 'users' ? (
         <View style={styles.stack}>
-          <Text style={styles.bodyStrong}>{foundingSellers.list.length} currently enrolled</Text>
-          {foundingSellers.listLoading ? <LoadingSpinner /> : null}
-          {foundingSellers.listError ? <NoticeCard title="Founding Sellers unavailable" body={foundingSellers.listError} /> : null}
-          {!foundingSellers.listLoading && !foundingSellers.listError && foundingSellers.list.length === 0 ? (
-            <Text style={styles.body}>No Founding Sellers have been granted yet.</Text>
-          ) : null}
-          {foundingSellers.list.length ? (
+          <SectionCard title="Users">
             <View style={styles.stack}>
-              {foundingSellers.list.map((seller) => (
-                <AdminFoundingSellerListCard
-                  key={seller.profileId}
-                  seller={seller}
-                  selected={seller.profileId === selectedFoundingSellerId}
-                  onSelect={() => selectFoundingSeller(seller)}
-                />
-              ))}
+              <Text style={styles.bodyStrong}>{dashboardCounts.data?.users ?? '...'} user profiles</Text>
+              <Text style={styles.body}>
+                General user administration stays limited to safe existing tools. Rescue account approvals are managed here, and user/content moderation remains report-driven.
+              </Text>
             </View>
-          ) : null}
-          <Text style={styles.body}>
-            Search by display name, email, username, or profile ID. Founding Seller status is enforced server-side during checkout.
-          </Text>
-          <TextInput
-            label="Seller search"
-            value={foundingSellerSearch}
-            onChangeText={setFoundingSellerSearch}
-            placeholder="Email, username, name, or profile ID"
-            autoCapitalize="none"
-          />
-          <Button
-            title="Search Sellers"
-            icon={Search}
-            variant="outline"
-            onPress={() => void searchFoundingSellers()}
-            loading={foundingSellers.searchLoading}
-            fullWidth
-          />
-          {foundingSellers.searchError ? <NoticeCard title="Seller search failed" body={foundingSellers.searchError} /> : null}
-          {foundingSellers.searchResults.length ? (
-            <View style={styles.stack}>
-              {foundingSellers.searchResults.map((seller) => (
-                <AdminFoundingSellerSearchCard
-                  key={seller.profileId}
-                  seller={seller}
-                  selected={seller.profileId === selectedFoundingSellerId}
-                  onSelect={() => selectFoundingSeller(seller)}
-                />
-              ))}
-            </View>
-          ) : null}
-          {foundingSellers.statusLoading ? <LoadingSpinner /> : null}
-          {foundingSellers.statusError ? <NoticeCard title="Founding Seller status unavailable" body={foundingSellers.statusError} /> : null}
-          {foundingSellers.actionError ? <NoticeCard title="Founding Seller action failed" body={foundingSellers.actionError} /> : null}
-          {foundingSellers.status ? (
-            <AdminFoundingSellerStatusCard
-              status={foundingSellers.status}
-              loading={foundingSellers.actionLoading}
-              notes={foundingSellerNotes}
-              onNotes={setFoundingSellerNotes}
-              onGrant={() => void updateFoundingSellerStatus(
-                'active',
-                'Grant Founding Seller',
-                'This gives the selected seller up to 3 qualifying ReTail sales with no ReTail platform fee. Existing usage is not reset.'
-              )}
-              onPause={() => void updateFoundingSellerStatus(
-                'paused',
-                'Pause Benefit',
-                'This keeps Founding Seller history but prevents new fee-free sale benefits while paused.'
-              )}
-              onResume={() => void updateFoundingSellerStatus(
-                'active',
-                'Resume Benefit',
-                'This reactivates remaining unused Founding Seller benefits without resetting previous usage.'
-              )}
-              onRevoke={() => void updateFoundingSellerStatus(
-                'revoked',
-                'Revoke Benefit',
-                'This stops future Founding Seller fee-free benefits. Historical usage and transaction records remain intact.'
-              )}
+          </SectionCard>
+
+          <SectionCard title="Rescue Approvals">
+            <Text style={styles.bodyStrong}>{pendingCount} pending</Text>
+            <Text style={styles.body}>Review the organization details before approving. Approved rescues become visible to nearby users.</Text>
+          </SectionCard>
+
+          {approvals.actionError ? <NoticeCard title="Admin action failed" body={approvals.actionError} /> : null}
+          {approvals.isLoading ? <LoadingSpinner /> : null}
+          {approvals.isError ? <ErrorState message={handleAppError(approvals.error).userMessage} onRetry={approvals.refetch} /> : null}
+          {!approvals.isLoading && !approvals.isError && (approvals.data ?? []).length === 0 ? (
+            <EmptyState
+              title="No rescue approvals waiting"
+              body="New rescue signups will appear here when organizations submit their details."
+              icon={ShieldCheck}
+              actionTitle="Refresh Approvals"
+              onAction={() => void approvals.refetch()}
             />
           ) : null}
+          {(approvals.data ?? []).map((rescue) => (
+            <AdminRescueReviewCard
+              key={rescue.id}
+              rescue={rescue}
+              loading={approvals.actionLoading}
+              onApprove={() => void approve(rescue)}
+              onReject={() => void reject(rescue)}
+            />
+          ))}
         </View>
-      </SectionCard>
-
-      {notice ? <NoticeCard title={notice.title} body={notice.body} /> : null}
-      {listingReports.actionError ? <NoticeCard title="Report action failed" body={listingReports.actionError} /> : null}
-      {listingReports.isLoading ? <LoadingSpinner /> : null}
-      {listingReports.isError ? <ErrorState message={handleAppError(listingReports.error).userMessage} onRetry={listingReports.refetch} /> : null}
-
-      {!listingReports.isLoading && !listingReports.isError && (listingReports.data ?? []).length === 0 ? (
-        <EmptyState
-          title={activeReportsSelected ? 'No active reports waiting' : 'No archived reports yet'}
-          body={activeReportsSelected
-            ? 'Listings, users, and messages reported by the community will appear here for review.'
-            : 'Resolved and dismissed reports will appear here once moderation actions are complete.'}
-          icon={Flag}
-          actionTitle="Refresh Reports"
-          onAction={() => void listingReports.refetch()}
-        />
       ) : null}
 
-      {(listingReports.data ?? []).map((report) => (
-        <AdminListingReportCard
-          key={report.id}
-          report={report}
-          loading={listingReports.actionLoading}
-          adminNote={noteForReport(report)}
-          publicMessage={messageForReport(report)}
-          onAdminNote={(note) => updateReportNote(report.id, note)}
-          onPublicMessage={(message) => updateReportMessage(report.id, message)}
-          onOpenListing={() => report.listing_id ? onOpenListing(report.listing_id) : undefined}
-          onReviewing={() => void updateReport(report, report.status === 'resolved' || report.status === 'dismissed' ? 'open' : 'reviewing')}
-          onResolve={() => void updateReport(report, 'resolved')}
-          onDismiss={() => void updateReport(report, 'dismissed')}
-          onRemoveMessage={() => void moderateReport(
-            report,
-            'remove_message',
-            'Remove Message',
-            'This removes the reported message from the conversation and notifies both people involved.'
-          )}
-          onRemoveListing={() => void moderateReport(
-            report,
-            'remove_listing',
-            'Remove Listing',
-            'This removes the reported listing from public view and notifies both the reporter and the listing owner.'
-          )}
-          onDeleteUser={() => void moderateReport(
-            report,
-            'delete_user',
-            'Delete Account',
-            'This soft-deletes the reported account in ReTail, removes their active listings, and notifies both the reporter and reported user.'
-          )}
-        />
-      ))}
-
-      {supportCases.isLoading ? <LoadingSpinner /> : null}
-      {supportCases.isError ? <ErrorState message={handleAppError(supportCases.error).userMessage} onRetry={supportCases.refetch} /> : null}
-      {supportUpdater.error ? <NoticeCard title="Support action failed" body={supportUpdater.error} /> : null}
-      {!supportCases.isLoading && !supportCases.isError && (supportCases.data ?? []).length === 0 ? (
-        <EmptyState
-          title={activeReportsSelected ? 'No active support cases' : 'No archived support cases yet'}
-          body={activeReportsSelected
-            ? 'Order, payment, refund, cancellation, return, shipping, and payout cases will appear here.'
-            : 'Resolved and closed support cases will appear here for reference.'}
-          icon={HelpCircle}
-        />
+      {adminTab === 'foundingSellers' ? (
+        <SectionCard title="Founding Sellers">
+          <View style={styles.stack}>
+            <View style={styles.metricRow}>
+              <Metric label="Active" value={String(dashboardCounts.data?.foundingSellersActive ?? 0)} />
+              <Metric label="Paused" value={String(dashboardCounts.data?.foundingSellersPaused ?? 0)} />
+              <Metric label="Revoked" value={String(dashboardCounts.data?.foundingSellersRevoked ?? 0)} />
+              <Metric label="Total" value={String(foundingSellerTotal)} />
+            </View>
+            <Text style={styles.bodyStrong}>{foundingSellers.list.length} currently enrolled</Text>
+            {foundingSellers.listLoading ? <LoadingSpinner /> : null}
+            {foundingSellers.listError ? <NoticeCard title="Founding Sellers unavailable" body={foundingSellers.listError} /> : null}
+            {!foundingSellers.listLoading && !foundingSellers.listError && foundingSellers.list.length === 0 ? (
+              <Text style={styles.body}>No Founding Sellers have been granted yet.</Text>
+            ) : null}
+            {foundingSellers.list.length ? (
+              <View style={styles.stack}>
+                {foundingSellers.list.map((seller) => (
+                  <AdminFoundingSellerListCard
+                    key={seller.profileId}
+                    seller={seller}
+                    selected={seller.profileId === selectedFoundingSellerId}
+                    onSelect={() => selectFoundingSeller(seller)}
+                  />
+                ))}
+              </View>
+            ) : null}
+            <Text style={styles.body}>
+              Search by display name, email, username, or profile ID. Founding Seller status is enforced server-side during checkout.
+            </Text>
+            <TextInput
+              label="Seller search"
+              value={foundingSellerSearch}
+              onChangeText={setFoundingSellerSearch}
+              placeholder="Email, username, name, or profile ID"
+              autoCapitalize="none"
+            />
+            <Button
+              title="Search Sellers"
+              icon={Search}
+              variant="outline"
+              onPress={() => void searchFoundingSellers()}
+              loading={foundingSellers.searchLoading}
+              fullWidth
+            />
+            {foundingSellers.searchError ? <NoticeCard title="Seller search failed" body={foundingSellers.searchError} /> : null}
+            {foundingSellers.searchResults.length ? (
+              <View style={styles.stack}>
+                {foundingSellers.searchResults.map((seller) => (
+                  <AdminFoundingSellerSearchCard
+                    key={seller.profileId}
+                    seller={seller}
+                    selected={seller.profileId === selectedFoundingSellerId}
+                    onSelect={() => selectFoundingSeller(seller)}
+                  />
+                ))}
+              </View>
+            ) : null}
+            {foundingSellers.statusLoading ? <LoadingSpinner /> : null}
+            {foundingSellers.statusError ? <NoticeCard title="Founding Seller status unavailable" body={foundingSellers.statusError} /> : null}
+            {foundingSellers.actionError ? <NoticeCard title="Founding Seller action failed" body={foundingSellers.actionError} /> : null}
+            {foundingSellers.status ? (
+              <AdminFoundingSellerStatusCard
+                status={foundingSellers.status}
+                loading={foundingSellers.actionLoading}
+                notes={foundingSellerNotes}
+                onNotes={setFoundingSellerNotes}
+                onGrant={() => void updateFoundingSellerStatus(
+                  'active',
+                  'Grant Founding Seller',
+                  'This gives the selected seller up to 3 qualifying ReTail sales with no ReTail platform fee. Existing usage is not reset.'
+                )}
+                onPause={() => void updateFoundingSellerStatus(
+                  'paused',
+                  'Pause Benefit',
+                  'This keeps Founding Seller history but prevents new fee-free sale benefits while paused.'
+                )}
+                onResume={() => void updateFoundingSellerStatus(
+                  'active',
+                  'Resume Benefit',
+                  'This reactivates remaining unused Founding Seller benefits without resetting previous usage.'
+                )}
+                onRevoke={() => void updateFoundingSellerStatus(
+                  'revoked',
+                  'Revoke Benefit',
+                  'This stops future Founding Seller fee-free benefits. Historical usage and transaction records remain intact.'
+                )}
+              />
+            ) : null}
+          </View>
+        </SectionCard>
       ) : null}
-      {(supportCases.data ?? []).map((supportCase) => (
-        <AdminSupportCaseCard
-          key={supportCase.id}
-          supportCase={supportCase}
-          loading={supportUpdater.loading}
-          adminNote={noteForSupportCase(supportCase)}
-          customerMessage={messageForSupportCase(supportCase)}
-          onAdminNote={(note) => updateSupportNote(supportCase.id, note)}
-          onCustomerMessage={(message) => updateSupportMessage(supportCase.id, message)}
-          onStatus={(status) => void updateSupportCase(supportCase, status)}
-        />
-      ))}
 
-      <SectionCard title="Rescue Approvals">
-        <Text style={styles.bodyStrong}>{pendingCount} pending</Text>
-        <Text style={styles.body}>Review the organization details before approving. Approved rescues become visible to nearby users.</Text>
-      </SectionCard>
-
-      {approvals.actionError ? <NoticeCard title="Admin action failed" body={approvals.actionError} /> : null}
-
-      {approvals.isLoading ? <LoadingSpinner /> : null}
-      {approvals.isError ? <ErrorState message={handleAppError(approvals.error).userMessage} onRetry={approvals.refetch} /> : null}
-
-      {!approvals.isLoading && !approvals.isError && (approvals.data ?? []).length === 0 ? (
-        <EmptyState
-          title="No rescue approvals waiting"
-          body="New rescue signups will appear here when organizations submit their details."
-          icon={ShieldCheck}
-          actionTitle="Refresh Approvals"
-          onAction={() => void approvals.refetch()}
-        />
+      {adminTab === 'listings' ? (
+        <SectionCard title="Listings">
+          <View style={styles.stack}>
+            <Text style={styles.bodyStrong}>Active listings: {dashboardCounts.data?.activeListings ?? '...'}</Text>
+            <Text style={styles.body}>Listing moderation currently happens through the Reports tab so admins can act from the original community report context.</Text>
+            <Button title="Review Listing Reports" icon={Flag} variant="outline" onPress={() => setAdminTab('reports')} fullWidth />
+          </View>
+        </SectionCard>
       ) : null}
 
-      {(approvals.data ?? []).map((rescue) => (
-        <AdminRescueReviewCard
-          key={rescue.id}
-          rescue={rescue}
-          loading={approvals.actionLoading}
-          onApprove={() => void approve(rescue)}
-          onReject={() => void reject(rescue)}
-        />
-      ))}
+      {adminTab === 'reports' ? (
+        <View style={styles.stack}>
+          <SectionCard title="Reports">
+            <View style={styles.stack}>
+              <View style={styles.wrapRow}>
+                <FilterChip label="Active" selected={activeReportsSelected} onPress={() => setReportTab('active')} />
+                <FilterChip label="Archived" selected={!activeReportsSelected} onPress={() => setReportTab('archived')} />
+              </View>
+              <Text style={styles.bodyStrong}>{reportCount} {activeReportsSelected ? 'active' : 'archived'}</Text>
+              <Text style={styles.body}>
+                {activeReportsSelected
+                  ? 'Open and reviewing reports need action. Removing a listing, message, or account will automatically mark the report resolved.'
+                  : 'Resolved and dismissed reports stay here so you can refer back to moderation decisions later.'}
+              </Text>
+            </View>
+          </SectionCard>
+          {listingReports.actionError ? <NoticeCard title="Report action failed" body={listingReports.actionError} /> : null}
+          {listingReports.isLoading ? <LoadingSpinner /> : null}
+          {listingReports.isError ? <ErrorState message={handleAppError(listingReports.error).userMessage} onRetry={listingReports.refetch} /> : null}
+          {!listingReports.isLoading && !listingReports.isError && (listingReports.data ?? []).length === 0 ? (
+            <EmptyState
+              title={activeReportsSelected ? 'No active reports waiting' : 'No archived reports yet'}
+              body={activeReportsSelected
+                ? 'Listings, users, and messages reported by the community will appear here for review.'
+                : 'Resolved and dismissed reports will appear here once moderation actions are complete.'}
+              icon={Flag}
+              actionTitle="Refresh Reports"
+              onAction={() => void listingReports.refetch()}
+            />
+          ) : null}
+          {(listingReports.data ?? []).map((report) => (
+            <AdminListingReportCard
+              key={report.id}
+              report={report}
+              loading={listingReports.actionLoading}
+              adminNote={noteForReport(report)}
+              publicMessage={messageForReport(report)}
+              onAdminNote={(note) => updateReportNote(report.id, note)}
+              onPublicMessage={(message) => updateReportMessage(report.id, message)}
+              onOpenListing={() => report.listing_id ? onOpenListing(report.listing_id) : undefined}
+              onReviewing={() => void updateReport(report, report.status === 'resolved' || report.status === 'dismissed' ? 'open' : 'reviewing')}
+              onResolve={() => void updateReport(report, 'resolved')}
+              onDismiss={() => void updateReport(report, 'dismissed')}
+              onRemoveMessage={() => void moderateReport(
+                report,
+                'remove_message',
+                'Remove Message',
+                'This removes the reported message from the conversation and notifies both people involved.'
+              )}
+              onRemoveListing={() => void moderateReport(
+                report,
+                'remove_listing',
+                'Remove Listing',
+                'This removes the reported listing from public view and notifies both the reporter and the listing owner.'
+              )}
+              onDeleteUser={() => void moderateReport(
+                report,
+                'delete_user',
+                'Delete Account',
+                'This soft-deletes the reported account in ReTail, removes their active listings, and notifies both the reporter and reported user.'
+              )}
+            />
+          ))}
+        </View>
+      ) : null}
+
+      {adminTab === 'support' ? (
+        <View style={styles.stack}>
+          <SectionCard title="Support">
+            <View style={styles.stack}>
+              <View style={styles.wrapRow}>
+                <FilterChip label="Active" selected={activeReportsSelected} onPress={() => setReportTab('active')} />
+                <FilterChip label="Archived" selected={!activeReportsSelected} onPress={() => setReportTab('archived')} />
+              </View>
+              <Text style={styles.bodyStrong}>{supportCaseCount} {activeReportsSelected ? 'active' : 'archived'}</Text>
+              <Text style={styles.body}>
+                Support cases are for order, payment, refund, cancellation, return, shipping, and seller payout questions. Creating or updating a case does not automatically issue a refund.
+              </Text>
+            </View>
+          </SectionCard>
+          {supportCases.isLoading ? <LoadingSpinner /> : null}
+          {supportCases.isError ? <ErrorState message={handleAppError(supportCases.error).userMessage} onRetry={supportCases.refetch} /> : null}
+          {supportUpdater.error ? <NoticeCard title="Support action failed" body={supportUpdater.error} /> : null}
+          {!supportCases.isLoading && !supportCases.isError && (supportCases.data ?? []).length === 0 ? (
+            <EmptyState
+              title={activeReportsSelected ? 'No active support cases' : 'No archived support cases yet'}
+              body={activeReportsSelected
+                ? 'Order, payment, refund, cancellation, return, shipping, and payout cases will appear here.'
+                : 'Resolved and closed support cases will appear here for reference.'}
+              icon={HelpCircle}
+            />
+          ) : null}
+          {(supportCases.data ?? []).map((supportCase) => (
+            <AdminSupportCaseCard
+              key={supportCase.id}
+              supportCase={supportCase}
+              loading={supportUpdater.loading}
+              adminNote={noteForSupportCase(supportCase)}
+              customerMessage={messageForSupportCase(supportCase)}
+              onAdminNote={(note) => updateSupportNote(supportCase.id, note)}
+              onCustomerMessage={(message) => updateSupportMessage(supportCase.id, message)}
+              onStatus={(status) => void updateSupportCase(supportCase, status)}
+            />
+          ))}
+        </View>
+      ) : null}
     </ScreenFrame>
+  );
+}
+
+function AdminDashboardTabs({
+  tabs,
+  selectedTab,
+  onSelect,
+}: {
+  tabs: Array<{ key: AdminDashboardTab; label: string; count?: number }>;
+  selectedTab: AdminDashboardTab;
+  onSelect: (tab: AdminDashboardTab) => void;
+}) {
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.adminTabBar}
+      accessibilityRole="tablist"
+    >
+      {tabs.map((tab) => {
+        const selected = tab.key === selectedTab;
+        const label = typeof tab.count === 'number' ? `${tab.label} (${tab.count})` : tab.label;
+
+        return (
+          <Pressable
+            key={tab.key}
+            accessibilityRole="tab"
+            accessibilityState={{ selected }}
+            onPress={() => onSelect(tab.key)}
+            style={[styles.adminTabPill, selected ? styles.adminTabPillActive : null]}
+          >
+            <Text style={[styles.adminTabText, selected ? styles.adminTabTextActive : null]}>{label}</Text>
+          </Pressable>
+        );
+      })}
+    </ScrollView>
+  );
+}
+
+function AdminOverviewCard({
+  title,
+  count,
+  body,
+  onPress,
+}: {
+  title: string;
+  count?: number;
+  body: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable accessibilityRole="button" onPress={onPress} style={styles.adminOverviewCard}>
+      <Text style={styles.adminOverviewCount}>{typeof count === 'number' ? count : '...'}</Text>
+      <Text style={styles.bodyStrong}>{title}</Text>
+      <Text style={styles.metaText}>{body}</Text>
+    </Pressable>
   );
 }
 
@@ -4279,6 +4432,53 @@ function createSprint4Styles(themeColors: ThemeColors) {
     borderTopWidth: 1,
     borderTopColor: colors.border,
     paddingTop: spacing.md,
+  },
+  adminTabBar: {
+    gap: spacing.sm,
+    paddingRight: spacing.lg,
+  },
+  adminTabPill: {
+    minHeight: sizes.touchTarget,
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.surface,
+  },
+  adminTabPillActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primarySoft,
+  },
+  adminTabText: {
+    color: colors.textSecondary,
+    ...typography.caption,
+    fontWeight: '700',
+  },
+  adminTabTextActive: {
+    color: colors.primary,
+  },
+  adminOverviewGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  adminOverviewCard: {
+    minWidth: 140,
+    flexGrow: 1,
+    flexBasis: '45%',
+    minHeight: 112,
+    justifyContent: 'center',
+    gap: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.medium,
+    backgroundColor: colors.surface,
+    padding: spacing.md,
+  },
+  adminOverviewCount: {
+    color: colors.primary,
+    ...typography.title,
   },
   noticeInline: {
     gap: spacing.xs,

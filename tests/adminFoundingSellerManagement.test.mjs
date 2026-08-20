@@ -7,8 +7,12 @@ const root = process.cwd();
 const read = (path) => readFileSync(join(root, path), 'utf8');
 
 const migration = read('supabase/migrations/20260819133000_admin_founding_seller_management.sql');
+const statusTextMigration = read('supabase/migrations/20260820092055_fix_admin_founding_seller_status_text.sql');
+const usernameTextMigration = read('supabase/migrations/20260820092708_fix_admin_founding_seller_username_text.sql');
 const adminService = read('src/services/adminService.ts');
 const adminHook = read('src/hooks/useAdminFoundingSellers.ts');
+const adminCountsHook = read('src/hooks/useAdminDashboardCounts.ts');
+const queryKeys = read('src/lib/queryKeys.ts');
 const sprint4 = read('src/sprint4/Sprint4App.tsx');
 const foundingMigration = read('supabase/migrations/20260819120000_founding_seller_platform_fee_benefits.sql');
 const stripeCreate = read('supabase/functions/stripe-create-payment-intent/index.ts');
@@ -44,7 +48,19 @@ test('Founding Seller admin grant is idempotent and preserves prior usage histor
 });
 
 test('Admin UI supports Not enrolled, Active, Paused, and Revoked Founding Seller states', () => {
+  assert.match(sprint4, /type AdminDashboardTab = 'overview' \| 'users' \| 'foundingSellers' \| 'listings' \| 'reports' \| 'support'/);
+  assert.match(sprint4, /AdminDashboardTabs/);
+  assert.match(sprint4, /selectedTab=\{adminTab\}/);
+  assert.match(sprint4, /\{ key: 'overview', label: 'Overview' \}/);
+  assert.match(sprint4, /\{ key: 'users', label: 'Users'/);
+  assert.match(sprint4, /\{ key: 'foundingSellers', label: 'Founding Sellers'/);
+  assert.match(sprint4, /\{ key: 'listings', label: 'Listings'/);
+  assert.match(sprint4, /\{ key: 'reports', label: 'Reports'/);
+  assert.match(sprint4, /\{ key: 'support', label: 'Support'/);
   assert.match(sprint4, /SectionCard title="Founding Sellers"/);
+  assert.match(sprint4, /dashboardCounts\.data\?\.foundingSellersActive/);
+  assert.match(sprint4, /dashboardCounts\.data\?\.foundingSellersPaused/);
+  assert.match(sprint4, /dashboardCounts\.data\?\.foundingSellersRevoked/);
   assert.match(sprint4, /currently enrolled/);
   assert.match(sprint4, /Search Sellers/);
   assert.match(sprint4, /Manage Seller/);
@@ -61,6 +77,25 @@ test('Admin UI supports Not enrolled, Active, Paused, and Revoked Founding Selle
   assert.match(sprint4, /Alert\.alert/);
 });
 
+test('Admin dashboard counts use backend count queries and lazy-load tab data', () => {
+  assert.match(queryKeys, /adminDashboardCounts: \['admin-dashboard-counts'\] as const/);
+  assert.match(adminCountsHook, /queryKey: queryKeys\.adminDashboardCounts/);
+  assert.match(adminCountsHook, /queryFn: getAdminDashboardCounts/);
+  assert.match(adminService, /export async function getAdminDashboardCounts/);
+  assert.match(adminService, /select\('id', \{ count: 'exact', head: true \}\)/);
+  assert.match(adminService, /\.from\('profiles'\)/);
+  assert.match(adminService, /\.from\('founding_seller_benefits'\)/);
+  assert.match(adminService, /\.from\('listings'\)/);
+  assert.match(adminService, /\.from\('reports'\)/);
+  assert.match(adminService, /\.from\('support_cases'\)/);
+  assert.match(sprint4, /useAdminDashboardCounts\(isAdmin\)/);
+  assert.match(sprint4, /useAdminRescueApprovals\(isAdmin && adminTab === 'users'\)/);
+  assert.match(sprint4, /useAdminListingReports\(isAdmin && adminTab === 'reports', reportTab\)/);
+  assert.match(sprint4, /useAdminSupportCases\(isAdmin && adminTab === 'support', reportTab\)/);
+  assert.match(sprint4, /useAdminFoundingSellers\(isAdmin && adminTab === 'foundingSellers', selectedFoundingSellerId\)/);
+  assert.doesNotMatch(sprint4, /useAdminListingReports\(Boolean\(auth\.profile\?\.is_admin\), reportTab\)/);
+});
+
 test('Admin Founding Seller client paths call admin RPCs through guarded service helpers', () => {
   assert.match(adminService, /await requireAdminProfile\(\)/);
   assert.match(adminService, /rpc\('list_admin_founding_sellers'/);
@@ -71,6 +106,18 @@ test('Admin Founding Seller client paths call admin RPCs through guarded service
   assert.match(adminHook, /queryKeys\.adminFoundingSellers/);
   assert.match(adminHook, /queryKeys\.adminFoundingSellerStatus/);
   assert.match(adminHook, /invalidateQueries/);
+});
+
+test('Admin Founding Seller read RPCs return text status values for React Native clients', () => {
+  assert.match(statusTextMigration, /coalesce\(b\.status::text, 'not_enrolled'\) as status/);
+  assert.match(statusTextMigration, /b\.status::text as status/);
+  assert.match(statusTextMigration, /b\.status::text = safe_status/);
+  assert.match(statusTextMigration, /case b\.status::text/);
+  assert.match(usernameTextMigration, /p\.username::text/);
+  assert.match(usernameTextMigration, /coalesce\(b\.status::text, 'not_enrolled'\) as status/);
+  assert.match(usernameTextMigration, /b\.status::text as status/);
+  assert.match(statusTextMigration, /grant execute on function public\.list_admin_founding_sellers\(text\) to authenticated, service_role/);
+  assert.doesNotMatch(statusTextMigration, /grant execute on function public\.list_admin_founding_sellers\(text\) to anon/);
 });
 
 test('Founding Seller checkout, Stripe Tax, ShipStation, and payout logic remain isolated', () => {

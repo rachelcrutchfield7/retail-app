@@ -1820,21 +1820,19 @@ function ListingShareActionButton({ onPress }: { onPress: () => void }) {
   const themeColors = useThemeColors();
 
   return (
-    <View style={styles.listingShareActionWrap}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Share listing"
-        onPress={onPress}
-        hitSlop={spacing.xs}
-        style={[
-          styles.listingShareActionButton,
-          { backgroundColor: themeColors.surface, borderColor: themeColors.border },
-        ]}
-      >
-        <Share2 size={18} color={themeColors.textPrimary} />
-      </Pressable>
-      <Text style={[styles.listingShareActionLabel, { color: themeColors.textSecondary }]}>Share</Text>
-    </View>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Share listing"
+      onPress={onPress}
+      hitSlop={spacing.xs}
+      style={[
+        styles.listingShareActionButton,
+        { backgroundColor: themeColors.surface, borderColor: themeColors.border },
+      ]}
+    >
+      <Share2 size={18} color={themeColors.textPrimary} />
+      <Text style={[styles.listingShareActionLabel, { color: themeColors.textPrimary }]}>Share</Text>
+    </Pressable>
   );
 }
 
@@ -5183,22 +5181,20 @@ function createSprint3Styles(themeColors: ThemeColors) {
     gap: spacing.sm,
     flexShrink: 0,
   },
-  listingShareActionWrap: {
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
   listingShareActionButton: {
-    width: sizes.touchTarget,
+    minWidth: 82,
     height: sizes.touchTarget,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: spacing.xs,
     borderRadius: radius.medium,
     borderWidth: 1,
-    padding: spacing.xs,
+    paddingHorizontal: spacing.sm,
   },
   listingShareActionLabel: {
-    color: colors.textSecondary,
-    ...typography.caption,
+    color: colors.textPrimary,
+    ...typography.button,
   },
   actionGrid: {
     gap: spacing.sm,

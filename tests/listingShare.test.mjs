@@ -43,12 +43,13 @@ test('active listing detail renders a visible accessible share action beside fav
   assert.match(sprint3, /<Text style=\{\[styles\.listingShareActionLabel/);
   assert.match(sprint3, />Share<\/Text>/);
   assert.match(sprint3, /styles\.detailHeaderActions/);
-  assert.match(sprint3, /listingShareActionButton:\s*\{\s*width: sizes\.touchTarget,\s*height: sizes\.touchTarget/s);
+  assert.match(sprint3, /listingShareActionButton:\s*\{\s*minWidth: 82,\s*height: sizes\.touchTarget,\s*flexDirection: 'row'/s);
   assert.match(sprint3, /detailPriceWrap:\s*\{\s*flexShrink: 1,\s*minWidth: 0/s);
   assert.match(sprint3, /detailHeaderActions:\s*\{[\s\S]*flexShrink: 0/);
   assert.match(sprint3, /shareCurrentListing/);
   assert.match(sprint3, /shareListing\(item, 'listing_detail'\)/);
   assert.match(sprint3, /disabled=\{owner\}/);
+  assert.match(sprint3, /<View style=\{styles\.detailHeaderActions\}>\s*\{shareable \? <ListingShareActionButton[\s\S]*<FavoriteButton/);
 });
 
 test('sellers get an optional post-publish share prompt', () => {

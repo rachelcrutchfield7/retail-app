@@ -28,6 +28,17 @@ export type AdminFoundingSellerStatus = AdminFoundingSellerSearchResult & {
   notes?: string;
 };
 
+export type AdminDashboardCounts = {
+  users: number;
+  foundingSellersTotal: number;
+  foundingSellersActive: number;
+  foundingSellersPaused: number;
+  foundingSellersRevoked: number;
+  activeListings: number;
+  openReports: number;
+  openSupportCases: number;
+};
+
 const reportReasonLabels: Record<string, ReportReason> = {
   spam: 'Spam',
   fraud: 'Fraud',
@@ -213,6 +224,69 @@ export async function setAdminFoundingSellerStatus(
   return toAdminFoundingSellerStatus(row as Row);
 }
 
+export async function getAdminDashboardCounts(): Promise<AdminDashboardCounts> {
+  await requireAdminProfile();
+
+  const [
+    users,
+    foundingSellersTotal,
+    foundingSellersActive,
+    foundingSellersPaused,
+    foundingSellersRevoked,
+    activeListings,
+    openReports,
+    openSupportCases,
+  ] = await Promise.all([
+    countAdminRows(
+      supabase.from('profiles').select('id', { count: 'exact', head: true }).is('deleted_at', null),
+      'users'
+    ),
+    countAdminRows(
+      supabase.from('founding_seller_benefits').select('id', { count: 'exact', head: true }),
+      'founding sellers'
+    ),
+    countAdminRows(
+      supabase.from('founding_seller_benefits').select('id', { count: 'exact', head: true }).eq('status', 'active'),
+      'active founding sellers'
+    ),
+    countAdminRows(
+      supabase.from('founding_seller_benefits').select('id', { count: 'exact', head: true }).eq('status', 'paused'),
+      'paused founding sellers'
+    ),
+    countAdminRows(
+      supabase.from('founding_seller_benefits').select('id', { count: 'exact', head: true }).eq('status', 'revoked'),
+      'revoked founding sellers'
+    ),
+    countAdminRows(
+      supabase.from('listings').select('id', { count: 'exact', head: true }).eq('status', 'active').is('deleted_at', null),
+      'active listings'
+    ),
+    countAdminRows(
+      supabase.from('reports').select('id', { count: 'exact', head: true }).in('status', ['open', 'reviewing']),
+      'open reports'
+    ),
+    countAdminRows(
+      supabase
+        .from('support_cases')
+        .select('id', { count: 'exact', head: true })
+        .in('status', ['open', 'reviewing', 'waiting_on_buyer', 'waiting_on_seller'])
+        .is('deleted_at', null),
+      'open support cases'
+    ),
+  ]);
+
+  return {
+    users,
+    foundingSellersTotal,
+    foundingSellersActive,
+    foundingSellersPaused,
+    foundingSellersRevoked,
+    activeListings,
+    openReports,
+    openSupportCases,
+  };
+}
+
 async function requireAdminProfile() {
   const authResult = await supabase.auth.getUser();
 
@@ -249,6 +323,16 @@ async function requireAdminProfile() {
   }
 
   return profile;
+}
+
+async function countAdminRows(query: PromiseLike<{ count: number | null; error: unknown }>, label: string): Promise<number> {
+  const { count, error } = await query;
+
+  if (error) {
+    throwSupabaseError(error, `We could not load the ${label} count.`);
+  }
+
+  return count ?? 0;
 }
 
 function adminHydrationRows(result: { data: unknown[] | null; error: unknown }, source: string): Row[] {
