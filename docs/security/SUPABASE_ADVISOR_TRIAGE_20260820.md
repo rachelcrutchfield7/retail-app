@@ -335,3 +335,47 @@ Cleared target findings:
 - `blocks`
 
 Remaining auth initplan findings are outside the scoped hot-path migration and should be handled only through separate focused migrations.
+
+## Follow-Up Applied: Shipping + Notification FK Indexes
+
+Migration:
+
+- `supabase/migrations/20260820225547_shipping_notification_fk_indexes.sql`
+
+Applied to `ycwgsdigvpmprqreoqiz` on 2026-08-20.
+
+Scope:
+
+- `public.shipping_rate_quotes.listing_id`
+- `public.shipping_rate_quotes.seller_id`
+- `public.shipping_rate_quotes.seller_origin_id`
+- `public.shipping_rate_quotes.transaction_id`
+- `public.transaction_shipping_details.buyer_id`
+- `public.transaction_shipping_details.seller_id`
+- `public.transaction_shipping_details.seller_origin_id`
+- `public.notification_push_deliveries.device_token_id`
+- `public.listings.reserved_by`
+- `public.listings.reservation_transaction_id`
+
+The migration is additive only and uses `CREATE INDEX IF NOT EXISTS`. It does not alter RLS, policies, grants, columns, foreign keys, payment behavior, shipping behavior, notification behavior, or application code.
+
+Performance Advisor result:
+
+- Unindexed foreign-key findings before: 20
+- Unindexed foreign-key findings after: 10
+- Total advisor findings remain 156 because the newly added indexes are immediately flagged as unused on the low-traffic beta dataset. This is expected and should not trigger index removal before real production traffic is available.
+
+Cleared target findings:
+
+- `listings_reservation_transaction_id_fkey`
+- `listings_reserved_by_fkey`
+- `notification_push_deliveries_device_token_id_fkey`
+- `shipping_rate_quotes_listing_id_fkey`
+- `shipping_rate_quotes_seller_id_fkey`
+- `shipping_rate_quotes_seller_origin_id_fkey`
+- `shipping_rate_quotes_transaction_id_fkey`
+- `transaction_shipping_details_buyer_id_fkey`
+- `transaction_shipping_details_seller_id_fkey`
+- `transaction_shipping_details_seller_origin_id_fkey`
+
+Remaining unindexed foreign-key findings are lower-value or admin/support/reporting paths and should be handled only through separate focused migrations if query patterns justify them.

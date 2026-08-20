@@ -100,7 +100,8 @@ Classification:
 
 - Highest-value performance follow-up is targeted RLS initplan optimization for messaging, conversations, notifications, listings, profiles, favorites, and seller shipping origins.
 - Hot-path RLS initplan optimization was applied in `20260820224215_hot_path_rls_initplan_optimization.sql`; auth initplan findings dropped from 33 to 19 and cleared the targeted findings for messages, conversations, notifications, profiles, listings, favorites, and blocks.
-- Additive indexes for ShipStation shipping quote/detail and notification delivery foreign keys are useful pre-launch candidates.
+- Additive FK indexes were applied in `20260820225547_shipping_notification_fk_indexes.sql` for ShipStation shipping quote/detail, notification delivery, and listing reservation hot paths; unindexed foreign-key findings dropped from 20 to 10.
+- The newly added indexes are flagged as unused on the low-traffic beta dataset, which is expected and should not trigger removal before real traffic.
 - Performance optimization, not a private-beta blocker unless tied to measured beta latency or launch-scale risk.
 - Handle via focused forward-only migration tasks, not broad advisor cleanup.
 
@@ -108,5 +109,5 @@ Classification:
 
 - Review/triage dependency audit High advisories before public launch; decide whether Expo/Metro and marketing-site dependency alignment can be safely upgraded.
 - Keep ShipStation live webhook smoke test deferred until normal device/setup access is available.
-- Revisit Supabase advisor findings in focused tickets, especially `spatial_ref_sys`, extension placement, SECURITY DEFINER exposure classification, and high-impact missing indexes.
+- Revisit Supabase advisor findings in focused tickets, especially `spatial_ref_sys`, extension placement, SECURITY DEFINER exposure classification, and lower-priority report/support/review/Founding Seller FK indexes where query patterns justify them.
 - Enable leaked-password protection after Supabase plan upgrade if required.
