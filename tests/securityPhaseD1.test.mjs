@@ -75,8 +75,10 @@ test('Phase D.1 public message path forbids user-created system messages', () =>
   assert.match(types, /messageType\?: SendableMessageType/);
   assert.doesNotMatch(messageService, /messageType === 'text' \|\| messageType === 'system'/);
   assert.match(messageService, /RETAIL_SYSTEM_MESSAGE_FORBIDDEN/);
-  assert.match(offerService, /messageType: 'text'/);
+  assert.match(offerService, /rpc\('create_marketplace_offer'/);
+  assert.match(offerService, /rpc\('respond_to_marketplace_offer'/);
   assert.doesNotMatch(offerService, /messageType: 'system'/);
+  assert.doesNotMatch(offerService, /sendMessage\(/);
 });
 
 test('Phase D.1 storage policies preserve historical reads after blocks while blocking new writes', () => {

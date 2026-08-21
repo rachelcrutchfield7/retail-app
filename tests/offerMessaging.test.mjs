@@ -12,7 +12,7 @@ const offerMessage = {
   conversation_id: 'conversation-1',
   sender_id: 'buyer-1',
   message_type: 'system',
-  body: 'RETAIL_OFFER::{"kind":"offer","amount":"$25","status":"pending"}',
+  body: 'RETAIL_OFFER::{"offerId":"11111111-1111-4111-8111-111111111111","kind":"offer","amount":"$25","status":"pending"}',
   is_read: false,
   created_at: '2026-07-10T12:00:00.000Z',
 };
@@ -43,7 +43,7 @@ test('offer response controls are available to the recipient of offers and count
     ...offerMessage,
     id: 'counter-1',
     sender_id: 'seller-1',
-    body: 'RETAIL_OFFER::{"kind":"counter_offer","amount":"$30","status":"countered","respondsTo":"offer-1"}',
+    body: 'RETAIL_OFFER::{"offerId":"22222222-2222-4222-8222-222222222222","parentOfferId":"11111111-1111-4111-8111-111111111111","kind":"counter_offer","amount":"$30","status":"pending"}',
   });
 
   assert.ok(initialOffer);

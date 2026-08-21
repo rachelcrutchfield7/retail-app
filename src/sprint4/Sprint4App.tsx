@@ -181,7 +181,7 @@ type SprintRoute =
   | { name: 'my-listings' }
   | { name: 'messages' }
   | { name: 'conversation'; conversationId: string }
-  | { name: 'payment-options'; listingId: string; conversationId?: string; agreedAmount?: string }
+  | { name: 'payment-options'; listingId: string; conversationId?: string; acceptedOfferId?: string; offerDisplayAmount?: string }
   | { name: 'favorites' }
   | { name: 'notifications' }
   | { name: 'rescue-hub' }
@@ -261,8 +261,19 @@ function Sprint4Experience() {
   const openPublicProfile = (userId: string) => setRoute({ name: 'public-profile', userId });
   const openMessages = () => setRoute({ name: 'messages' });
   const openConversation = (conversationId: string) => setRoute({ name: 'conversation', conversationId });
-  const openPaymentOptions = (listingId: string, conversationId?: string, agreedAmount?: string) =>
-    setRoute({ name: 'payment-options', listingId, conversationId, agreedAmount });
+  const openPaymentOptions = (
+    listingId: string,
+    conversationId?: string,
+    acceptedOfferId?: string,
+    offerDisplayAmount?: string
+  ) =>
+    setRoute({
+      name: 'payment-options',
+      listingId,
+      conversationId,
+      acceptedOfferId,
+      offerDisplayAmount,
+    });
   const openFavorites = () => setRoute({ name: 'favorites' });
   const openNotifications = () => setRoute({ name: 'notifications' });
   const openRescueHub = () => setRoute({ name: 'rescue-hub' });
@@ -465,7 +476,14 @@ function Sprint4Experience() {
         conversationId={route.conversationId}
         onBack={openMessages}
         onOpenListing={openListing}
-        onPaymentOptions={(listingId, agreedAmount) => openPaymentOptions(listingId, route.conversationId, agreedAmount)}
+        onPaymentOptions={(listingId, acceptedOfferId, offerDisplayAmount) =>
+          openPaymentOptions(
+            listingId,
+            route.conversationId,
+            acceptedOfferId,
+            offerDisplayAmount
+          )
+        }
         onSupportCase={(transactionId, requesterRole) => openSupportCase(transactionId, requesterRole, route.conversationId)}
         onReportMessage={(messageId) => openReport('message', messageId, 'Report message')}
         onReview={openReview}
@@ -477,7 +495,8 @@ function Sprint4Experience() {
     return (
       <PaymentOptionsScreen
         listingId={route.listingId}
-        agreedAmount={route.agreedAmount}
+        acceptedOfferId={route.acceptedOfferId}
+        offerDisplayAmount={route.offerDisplayAmount}
         onBack={() => route.conversationId ? openConversation(route.conversationId) : openListing(route.listingId)}
       />
     );
@@ -1011,7 +1030,11 @@ export function ConversationScreen({
   conversationId: string;
   onBack: () => void;
   onOpenListing: (listingId: string) => void;
-  onPaymentOptions?: (listingId: string, agreedAmount?: string) => void;
+  onPaymentOptions?: (
+    listingId: string,
+    acceptedOfferId?: string,
+    offerDisplayAmount?: string
+  ) => void;
   onSupportCase?: (transactionId: string, requesterRole: SupportCaseRequesterRole) => void;
   onReportMessage?: (messageId: string) => void;
   onReview?: (listingId: string, revieweeId: string) => void;
@@ -1033,6 +1056,11 @@ export function ConversationScreen({
   const [offerOpen, setOfferOpen] = useState(false);
   const [counterOfferFor, setCounterOfferFor] = useState<string | null>(null);
   const [counterAmount, setCounterAmount] = useState('');
+  const [pendingOfferAction, setPendingOfferAction] = useState<{
+    messageId: string;
+    action: 'accept' | 'decline' | 'counter';
+  } | null>(null);
+  const [offerActionErrors, setOfferActionErrors] = useState<Record<string, string>>({});
   const messageListRef = useRef<FlatList<MessageListItem>>(null);
   const messageItems = useMemo(() => buildMessageList(messages.data ?? []), [messages.data]);
   const lastMessageKey = messageItems.at(-1)?.key ?? 'empty';
@@ -1201,7 +1229,13 @@ export function ConversationScreen({
                   <Button
                     title="Place Order with ReTail"
                     icon={CreditCard}
-                    onPress={() => onPaymentOptions(conversationDetail.listingId, acceptedAmount)}
+                    onPress={() =>
+                      onPaymentOptions(
+                        conversationDetail.listingId,
+                        acceptedOffer?.offerId,
+                        acceptedAmount
+                      )
+                    }
                     fullWidth
                   />
                 ) : null}
@@ -1293,7 +1327,13 @@ export function ConversationScreen({
                 <Button title="View Listing" variant="outline" onPress={() => onOpenListing(conversationDetail.listingId)} />
               ) : null}
               {acceptedAmount && onPaymentOptions && hasListing ? (
-                <Button title="Checkout" variant="outline" icon={CreditCard} onPress={() => onPaymentOptions(conversationDetail.listingId, acceptedAmount)} />
+                <Button title="Checkout" variant="outline" icon={CreditCard} onPress={() =>
+                      onPaymentOptions(
+                        conversationDetail.listingId,
+                        acceptedOffer?.offerId,
+                        acceptedAmount
+                      )
+                    } />
               ) : null}
               {canReview && onReview && hasListing ? (
                 <Button title="Review" variant="outline" icon={Star} onPress={() => onReview(conversationDetail.listingId, conversationDetail.otherUser.id)} />
@@ -1349,29 +1389,106 @@ export function ConversationScreen({
                   canRespond={canRespond}
                   showCounterInput={counterOfferFor === offer.messageId}
                   counterValue={counterAmount}
+                  pendingAction={
+                    pendingOfferAction?.messageId === offer.messageId
+                      ? pendingOfferAction.action
+                      : null
+                  }
+                  actionError={offerActionErrors[offer.messageId] ?? null}
                   onAccept={() => {
+                    if (pendingOfferAction) {
+                      return;
+                    }
+
+                    setPendingOfferAction({ messageId: offer.messageId, action: 'accept' });
+                    setOfferActionErrors((current) => ({
+                      ...current,
+                      [offer.messageId]: '',
+                    }));
+
                     void acceptOffer(conversationId, offer)
-                      .then(() => messages.refetch())
-                      .catch((error) => setNotice(handleAppError(error).userMessage));
+                      .then(async () => {
+                        setNotice(null);
+                        await messages.refetch();
+                      })
+                      .catch((error) => {
+                        setOfferActionErrors((current) => ({
+                          ...current,
+                          [offer.messageId]: handleAppError(error).userMessage,
+                        }));
+                      })
+                      .finally(() => {
+                        setPendingOfferAction(null);
+                      });
                   }}
                   onDecline={() => {
+                    if (pendingOfferAction) {
+                      return;
+                    }
+
+                    setPendingOfferAction({ messageId: offer.messageId, action: 'decline' });
+                    setOfferActionErrors((current) => ({
+                      ...current,
+                      [offer.messageId]: '',
+                    }));
+
                     void declineOffer(conversationId, offer)
-                      .then(() => messages.refetch())
-                      .catch((error) => setNotice(handleAppError(error).userMessage));
+                      .then(async () => {
+                        setNotice(null);
+                        await messages.refetch();
+                      })
+                      .catch((error) => {
+                        setOfferActionErrors((current) => ({
+                          ...current,
+                          [offer.messageId]: handleAppError(error).userMessage,
+                        }));
+                      })
+                      .finally(() => {
+                        setPendingOfferAction(null);
+                      });
                   }}
                   onToggleCounter={() => {
-                    setCounterOfferFor((current) => current === offer.messageId ? null : offer.messageId);
+                    if (pendingOfferAction) {
+                      return;
+                    }
+
+                    setOfferActionErrors((current) => ({
+                      ...current,
+                      [offer.messageId]: '',
+                    }));
+                    setCounterOfferFor((current) =>
+                      current === offer.messageId ? null : offer.messageId
+                    );
                     setCounterAmount('');
                   }}
                   onCounterChange={setCounterAmount}
                   onSubmitCounter={() => {
+                    if (pendingOfferAction) {
+                      return;
+                    }
+
+                    setPendingOfferAction({ messageId: offer.messageId, action: 'counter' });
+                    setOfferActionErrors((current) => ({
+                      ...current,
+                      [offer.messageId]: '',
+                    }));
+
                     void counterOffer(conversationId, offer, counterAmount)
-                      .then(() => {
+                      .then(async () => {
                         setCounterOfferFor(null);
                         setCounterAmount('');
-                        return messages.refetch();
+                        setNotice(null);
+                        await messages.refetch();
                       })
-                      .catch((error) => setNotice(handleAppError(error).userMessage));
+                      .catch((error) => {
+                        setOfferActionErrors((current) => ({
+                          ...current,
+                          [offer.messageId]: handleAppError(error).userMessage,
+                        }));
+                      })
+                      .finally(() => {
+                        setPendingOfferAction(null);
+                      });
                   }}
                 />
               );
@@ -1552,11 +1669,13 @@ function CheckoutSummaryRow({
 
 export function PaymentOptionsScreen({
   listingId,
-  agreedAmount,
+  acceptedOfferId,
+  offerDisplayAmount,
   onBack,
 }: {
   listingId: string;
-  agreedAmount?: string;
+  acceptedOfferId?: string;
+  offerDisplayAmount?: string;
   onBack: () => void;
 }) {
   const auth = useAuth();
@@ -1600,7 +1719,9 @@ export function PaymentOptionsScreen({
   const seller = listing.data.seller;
   const owner = seller.id === auth.user?.id;
   const paidListing = isPaidListing(item);
-  const checkoutAmount = agreedAmount ?? item.price;
+  // offerDisplayAmount is presentation only. The payment backend derives
+  // an accepted-offer price from acceptedOfferId.
+  const checkoutAmount = offerDisplayAmount ?? item.price;
   const canShip = item.shipping;
   const canPickup = item.pickup || item.porchPickup || item.meetup;
   const selectedFulfillmentMethod = canShip && !canPickup ? 'shipping' : fulfillmentMethod;
@@ -1752,7 +1873,8 @@ export function PaymentOptionsScreen({
         listing: item,
         sellerName: seller.display_name,
         buyerId: auth.user?.id,
-        agreedAmount: checkoutAmount,
+        acceptedOfferId,
+        offerDisplayAmount: checkoutAmount,
         fulfillmentMethod: selectedFulfillmentMethod,
         shippingAddress: selectedFulfillmentMethod === 'shipping' ? shippingAddress : undefined,
         shippingRateQuoteId: selectedFulfillmentMethod === 'shipping' ? selectedShippingQuoteId ?? undefined : undefined,
@@ -4022,7 +4144,13 @@ function findLatestAcceptedOffer(messages: Message[]) {
   return [...messages]
     .reverse()
     .map(parseOfferMessage)
-    .find((offer) => offer?.kind === 'offer_response' && offer.status === 'accepted') ?? null;
+    .find(
+      (offer) =>
+        offer?.kind === 'offer_response'
+        && offer.status === 'accepted'
+        && Boolean(offer.offerId)
+        && !offer.legacy
+    ) ?? null;
 }
 
 function adminStatusLabel(rescue: RescueProfile): string {

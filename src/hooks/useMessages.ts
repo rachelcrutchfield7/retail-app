@@ -250,6 +250,20 @@ export function useMessages(conversationId: string) {
               queryKeys.messages(conversationId),
               (cache) => upsertMessageInCache(cache, message)
             );
+
+            // This hook only subscribes while the conversation is actively open.
+            // If a new message arrives from the other participant and is already
+            // visible here, mark it read without refetching the entire thread.
+            if (message.sender_id !== user.id && !message.is_read) {
+              void markMessagesRead(conversationId).then(() => {
+                void queryClient.invalidateQueries({
+                  queryKey: queryKeys.unreadMessages(user.id),
+                });
+                void queryClient.invalidateQueries({
+                  queryKey: queryKeys.conversations(user.id),
+                });
+              });
+            }
           })
           .catch(() => {
             void queryClient.invalidateQueries({ queryKey: queryKeys.messages(conversationId) });

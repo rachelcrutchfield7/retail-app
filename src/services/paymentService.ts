@@ -60,7 +60,9 @@ export async function startProtectedCheckout(context: PaymentOptionContext): Pro
     );
   }
 
-  const amountCents = listingPriceToCents(context.agreedAmount ?? context.listing.price);
+  // Displayed negotiated offer amounts are never payment authority.
+  // The backend derives accepted-offer checkout amount from acceptedOfferId.
+  const amountCents = listingPriceToCents(context.listing.price);
 
   if (!amountCents) {
     throw createServiceError(
@@ -81,6 +83,7 @@ export async function startProtectedCheckout(context: PaymentOptionContext): Pro
   const { data, error } = await supabase.functions.invoke('stripe-create-payment-intent', {
     body: {
       listingId: context.listing.id,
+      acceptedOfferId: context.acceptedOfferId ?? null,
       fulfillmentMethod: context.fulfillmentMethod ?? (context.listing.shipping && !context.listing.pickup ? 'shipping' : 'pickup'),
       shippingAddress: context.shippingAddress,
       shippingRateQuoteId: context.shippingRateQuoteId,
@@ -137,7 +140,8 @@ function trackPaymentChoice(method: PaymentMethodChoice, context: PaymentOptionC
   trackEvent('Payment Option Selected', {
     method,
     listingId: context.listing.id,
-    price: context.agreedAmount ?? context.listing.price,
+    price: context.offerDisplayAmount ?? context.listing.price,
+    acceptedOfferId: context.acceptedOfferId ?? '',
     sellerName: context.sellerName,
   });
 }

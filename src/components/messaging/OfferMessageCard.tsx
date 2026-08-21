@@ -6,6 +6,8 @@ import { useThemeColors } from '../../lib/themePreference';
 import type { OfferEvent } from '../../services/offerService';
 import { Button } from '../ui/Button';
 
+type OfferPendingAction = 'accept' | 'decline' | 'counter' | null;
+
 type OfferMessageCardProps = {
   offer: OfferEvent;
   outgoing: boolean;
@@ -13,6 +15,8 @@ type OfferMessageCardProps = {
   responded: boolean;
   showCounterInput: boolean;
   counterValue: string;
+  pendingAction?: OfferPendingAction;
+  actionError?: string | null;
   onAccept: () => void;
   onDecline: () => void;
   onToggleCounter: () => void;
@@ -27,6 +31,8 @@ export function OfferMessageCard({
   responded,
   showCounterInput,
   counterValue,
+  pendingAction = null,
+  actionError = null,
   onAccept,
   onDecline,
   onToggleCounter,
@@ -34,6 +40,8 @@ export function OfferMessageCard({
   onSubmitCounter,
 }: OfferMessageCardProps) {
   const themeColors = useThemeColors();
+  const busy = pendingAction !== null;
+
   const title = offer.kind === 'counter_offer'
     ? 'Counter offer'
     : offer.kind === 'offer_response'
@@ -45,10 +53,10 @@ export function OfferMessageCard({
   const body = offer.kind === 'offer'
     ? `Buyer offered ${offer.amount}.`
     : offer.kind === 'counter_offer'
-      ? `Seller countered at ${offer.amount}.`
+      ? `Counteroffer: ${offer.amount}.`
       : offer.status === 'accepted'
-        ? `Seller accepted ${offer.amount}.`
-        : `Seller declined ${offer.amount}.`;
+        ? `Offer accepted at ${offer.amount}.`
+        : `Offer declined at ${offer.amount}.`;
 
   return (
     <View style={[styles.row, outgoing ? styles.outgoingRow : styles.incomingRow]}>
@@ -65,22 +73,60 @@ export function OfferMessageCard({
           <Text style={[styles.title, { color: themeColors.textPrimary }]}>{title}</Text>
           <Text style={[styles.amount, { color: themeColors.primary }]}>{offer.amount}</Text>
         </View>
+
         <Text style={[styles.body, { color: themeColors.textSecondary }]}>{body}</Text>
-        {responded ? <Text style={[styles.status, { color: themeColors.textSecondary }]}>Seller responded</Text> : null}
+
+        {offer.legacy ? (
+          <Text style={[styles.status, { color: themeColors.textSecondary }]}>
+            Older beta offer — send a new offer to continue.
+          </Text>
+        ) : null}
+
+        {responded ? (
+          <Text style={[styles.status, { color: themeColors.textSecondary }]}>
+            This offer has been responded to.
+          </Text>
+        ) : null}
+
+        {actionError ? (
+          <Text accessibilityRole="alert" style={styles.error}>
+            {actionError}
+          </Text>
+        ) : null}
 
         {canRespond ? (
           <View style={styles.actions}>
-            <Button title="Accept" icon={Check} onPress={onAccept} fullWidth />
-            <Button title="Decline" icon={X} variant="outline" onPress={onDecline} fullWidth />
+            <Button
+              title={pendingAction === 'accept' ? 'Accepting...' : 'Accept'}
+              icon={Check}
+              onPress={onAccept}
+              disabled={busy}
+              fullWidth
+            />
+
+            <Button
+              title={pendingAction === 'decline' ? 'Declining...' : 'Decline'}
+              icon={X}
+              variant="outline"
+              onPress={onDecline}
+              disabled={busy}
+              fullWidth
+            />
+
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Counter offer"
+              accessibilityState={{ disabled: busy }}
+              disabled={busy}
               onPress={onToggleCounter}
-              style={styles.counterToggle}
+              style={[styles.counterToggle, busy && styles.disabledAction]}
             >
               <RefreshCw size={18} color={themeColors.primary} />
-              <Text style={[styles.counterToggleText, { color: themeColors.primary }]}>Counter offer</Text>
+              <Text style={[styles.counterToggleText, { color: themeColors.primary }]}>
+                Counter offer
+              </Text>
             </Pressable>
+
             {showCounterInput ? (
               <View style={styles.counterBox}>
                 <TextInput
@@ -89,10 +135,25 @@ export function OfferMessageCard({
                   placeholder="$30"
                   placeholderTextColor={themeColors.textSecondary}
                   keyboardType="decimal-pad"
+                  editable={!busy}
                   accessibilityLabel="Counter offer amount"
-                  style={[styles.input, { backgroundColor: themeColors.surface, borderColor: themeColors.border, color: themeColors.textPrimary }]}
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: themeColors.surface,
+                      borderColor: themeColors.border,
+                      color: themeColors.textPrimary,
+                    },
+                  ]}
                 />
-                <Button title="Send Counter" variant="secondary" onPress={onSubmitCounter} fullWidth />
+
+                <Button
+                  title={pendingAction === 'counter' ? 'Sending Counter...' : 'Send Counter'}
+                  variant="secondary"
+                  onPress={onSubmitCounter}
+                  disabled={busy || !counterValue.trim()}
+                  fullWidth
+                />
               </View>
             ) : null}
           </View>
@@ -144,6 +205,10 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     ...typography.caption,
   },
+  error: {
+    color: colors.error,
+    ...typography.caption,
+  },
   actions: {
     gap: spacing.sm,
   },
@@ -154,6 +219,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing.sm,
     borderRadius: radius.medium,
+  },
+  disabledAction: {
+    opacity: 0.5,
   },
   counterToggleText: {
     color: colors.primary,

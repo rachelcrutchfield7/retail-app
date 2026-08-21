@@ -13,6 +13,7 @@ type SupabaseAdmin = Awaited<ReturnType<typeof requireAuthenticatedRequest>>['su
 
 type CheckoutRequest = {
   listingId?: string;
+  acceptedOfferId?: string | null;
   fulfillmentMethod?: 'pickup' | 'shipping';
   shippingAddress?: BuyerTaxAddressInput;
   shippingRateQuoteId?: string;
@@ -86,6 +87,7 @@ type TransactionCheckoutBreakdown = {
   shipping_service: string | null;
   tax_amount_cents: number | null;
   stripe_tax_calculation_id: string | null;
+  accepted_offer_id: string | null;
 };
 
 type ShippingRateQuote = {
@@ -162,6 +164,28 @@ function mapReservationError(error: { message?: string; code?: string }): Respon
 
   if (message.includes('RETAIL_CHECKOUT_AMOUNT_CHANGED')) {
     return checkoutFailure('The checkout amount no longer matches this listing.', 409);
+  }
+
+  if (
+    message.includes('RETAIL_ACCEPTED_OFFER_NOT_FOUND')
+    || message.includes('RETAIL_ACCEPTED_OFFER_MISMATCH')
+  ) {
+    return checkoutFailure('This accepted offer is not valid for this checkout.', 409);
+  }
+
+  if (
+    message.includes('RETAIL_ACCEPTED_OFFER_NOT_ACTIONABLE')
+    || message.includes('RETAIL_ACCEPTED_OFFER_EXPIRED')
+    || message.includes('RETAIL_ACCEPTED_OFFER_CONSUMED')
+  ) {
+    return checkoutFailure(
+      'This accepted offer is no longer available. Return to Messages and make a new offer.',
+      409
+    );
+  }
+
+  if (message.includes('RETAIL_ACCEPTED_OFFER_AMOUNT_INVALID')) {
+    return checkoutFailure('We could not confirm a valid amount for this accepted offer.', 409);
   }
 
   if (message.includes('RETAIL_SELLER_STRIPE_NOT_READY')) {
@@ -266,6 +290,7 @@ async function loadTransactionCheckoutBreakdown(
       'shipping_service',
       'tax_amount_cents',
       'stripe_tax_calculation_id',
+      'accepted_offer_id',
     ].join(','))
     .eq('id', transactionId)
     .maybeSingle();
@@ -717,7 +742,16 @@ Deno.serve(async (request) => {
       return jsonResponse({ error: 'A valid listing is required.' }, 400);
     }
 
-    const canonicalAmountCents = await loadCanonicalListingAmountCents(supabaseAdmin, listingId);
+    const acceptedOfferId =
+      typeof body.acceptedOfferId === 'string' && body.acceptedOfferId.trim()
+        ? body.acceptedOfferId.trim()
+        : null;
+
+    // Normal checkout still uses the canonical listing amount.
+    // Accepted-offer checkout passes the offer ID; the reservation RPC
+    // independently validates the offer and derives its authoritative cents.
+    const canonicalAmountCents =
+      await loadCanonicalListingAmountCents(supabaseAdmin, listingId);
 
     const { data: reservationRows, error: reservationError } = await supabaseAdmin.rpc(
       'reserve_stripe_checkout_listing',
@@ -725,6 +759,7 @@ Deno.serve(async (request) => {
         p_listing_id: listingId,
         p_buyer_id: user.id,
         p_requested_amount_cents: canonicalAmountCents,
+        p_accepted_offer_id: acceptedOfferId,
       },
     );
 
@@ -746,8 +781,21 @@ Deno.serve(async (request) => {
 
       if (isPaymentIntentReusable(existingPaymentIntent) && reservation.existing_transaction_id) {
         const existingBreakdown = await loadTransactionCheckoutBreakdown(supabaseAdmin, reservation.existing_transaction_id);
-        if (existingBreakdown && existingBreakdown.amount_cents === existingPaymentIntent.amount) {
-          return jsonResponse(checkoutResponseFromBreakdown(existingPaymentIntent, reservation, existingBreakdown));
+        const sameOfferAuthority =
+          (existingBreakdown?.accepted_offer_id ?? null) === acceptedOfferId;
+
+        if (
+          existingBreakdown
+          && sameOfferAuthority
+          && existingBreakdown.amount_cents === existingPaymentIntent.amount
+        ) {
+          return jsonResponse(
+            checkoutResponseFromBreakdown(
+              existingPaymentIntent,
+              reservation,
+              existingBreakdown
+            )
+          );
         }
       }
 
@@ -830,6 +878,7 @@ Deno.serve(async (request) => {
         retail_application_fee_withheld_cents: String(stripeApplicationFeeWithheldCents),
         retail_shipping_provider: shippingQuote?.provider ?? '',
         retail_shipping_rate_id: shippingQuote?.provider_rate_id ?? '',
+        retail_accepted_offer_id: acceptedOfferId ?? '',
       },
       description: `ReTail purchase: ${String(reservation.listing_title).slice(0, 120)}`,
     } as Stripe.PaymentIntentCreateParams);
@@ -876,6 +925,7 @@ Deno.serve(async (request) => {
       buyer_tax_state: taxAddress.address.state ?? null,
       buyer_tax_postal_code: taxAddress.address.postal_code,
       payment_error: null,
+      accepted_offer_id: acceptedOfferId,
     };
 
     const { data: transaction, error: transactionError } = await supabaseAdmin
