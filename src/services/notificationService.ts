@@ -170,17 +170,38 @@ export async function updateNotificationPreferences(input: Partial<NotificationP
   const profile = await ensureCurrentProfile();
   const current = await getNotificationPreferences();
   const next = { ...current, ...input };
-  const { data, error } = await supabase.rpc('update_my_notification_preferences', {
-    requested_in_app_messages: next.messages,
-    requested_in_app_favorites: next.favorites,
-    requested_in_app_reviews: next.reviews,
-    requested_in_app_marketplace_updates: next.listingUpdates,
-    requested_in_app_system: next.system,
-    requested_push_messages: next.pushMessages ?? false,
-    requested_push_favorites: next.pushFavorites ?? false,
-    requested_push_reviews: next.pushReviews ?? false,
-    requested_push_marketplace_updates: next.pushMarketplaceUpdates ?? false,
-  });
+
+  const emailKeys = [
+    'emailMessages',
+    'emailFavorites',
+    'emailReviews',
+    'emailMarketplaceUpdates',
+    'emailSystem',
+  ] as const;
+
+  const updatingEmailPreferences = emailKeys.some((key) =>
+    Object.prototype.hasOwnProperty.call(input, key)
+  );
+
+  const { data, error } = updatingEmailPreferences
+    ? await supabase.rpc('update_my_email_notification_preferences', {
+        requested_email_messages: next.emailMessages ?? true,
+        requested_email_favorites: next.emailFavorites ?? false,
+        requested_email_reviews: next.emailReviews ?? true,
+        requested_email_marketplace_updates: next.emailMarketplaceUpdates ?? true,
+        requested_email_system: next.emailSystem ?? true,
+      })
+    : await supabase.rpc('update_my_notification_preferences', {
+        requested_in_app_messages: next.messages,
+        requested_in_app_favorites: next.favorites,
+        requested_in_app_reviews: next.reviews,
+        requested_in_app_marketplace_updates: next.listingUpdates,
+        requested_in_app_system: next.system,
+        requested_push_messages: next.pushMessages ?? false,
+        requested_push_favorites: next.pushFavorites ?? false,
+        requested_push_reviews: next.pushReviews ?? false,
+        requested_push_marketplace_updates: next.pushMarketplaceUpdates ?? false,
+      });
 
   if (error) {
     throwSupabaseError(error, 'We could not save notification settings.');
@@ -189,6 +210,7 @@ export async function updateNotificationPreferences(input: Partial<NotificationP
   const row = Array.isArray(data)
     ? data[0] as Record<string, unknown> | undefined
     : data as Record<string, unknown> | undefined;
+
   const savedPreferences = toPreferences(row);
   preferenceOverrides.set(profile.id, savedPreferences);
   return savedPreferences;

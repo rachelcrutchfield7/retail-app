@@ -7,6 +7,7 @@ import type { AuthModalSubmission, AuthPrompt } from './components';
 import { colors } from './constants/theme';
 import { emptyListingForm } from './data/mockData';
 import { AuthProvider, useAuth } from './auth';
+import { PolicyConsentBoundary } from './auth/PolicyConsentBoundary';
 import { QueryClientProvider } from './lib/queryClient';
 import { useCreateListing } from './hooks/useCreateListing';
 import { useFavorites } from './hooks/useFavorites';
@@ -46,9 +47,28 @@ export function AppShell() {
   return (
     <QueryClientProvider>
       <AuthProvider>
-        <AppExperience />
+        <PolicyAwareApp />
       </AuthProvider>
     </QueryClientProvider>
+  );
+}
+
+function PolicyAwareApp() {
+  const auth = useAuth();
+
+  if (auth.loading || !auth.user || auth.isGuest) {
+    return <AppExperience />;
+  }
+
+  return (
+    <PolicyConsentBoundary
+      userId={auth.user.id}
+      source="legacy_user_gate"
+      pendingSignupConsent={auth.user.pendingSignupConsent}
+      onSignOut={auth.signOut}
+    >
+      <AppExperience />
+    </PolicyConsentBoundary>
   );
 }
 

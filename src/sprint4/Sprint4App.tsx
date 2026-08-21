@@ -2772,13 +2772,7 @@ export function SettingsScreen({
         <Button title="Choose Area Manually" variant="ghost" onPress={onPreferences} fullWidth />
       </SectionCard>
 
-      <SectionCard title="Email Alerts">
-        <Text style={styles.body}>Choose which ReTail updates can also be sent to your account email.</Text>
-        <ToggleSwitch label="New messages" value={settings.data.notifications.emailMessages ?? true} onValueChange={(emailMessages) => void settings.updateNotifications({ emailMessages })} />
-        <ToggleSwitch label="Favorites" value={settings.data.notifications.emailFavorites ?? false} onValueChange={(emailFavorites) => void settings.updateNotifications({ emailFavorites })} />
-        <ToggleSwitch label="Reviews" value={settings.data.notifications.emailReviews ?? true} onValueChange={(emailReviews) => void settings.updateNotifications({ emailReviews })} />
-        <ToggleSwitch label="Listing and saved search updates" value={settings.data.notifications.emailMarketplaceUpdates ?? true} onValueChange={(emailMarketplaceUpdates) => void settings.updateNotifications({ emailMarketplaceUpdates })} />
-        <ToggleSwitch label="System and safety notices" value={settings.data.notifications.emailSystem ?? true} onValueChange={(emailSystem) => void settings.updateNotifications({ emailSystem })} />
+      <SectionCard title="Email Preferences">
         <ToggleSwitch
           label="Marketing emails"
           helperText="Receive ReTail news, launch updates, tips, and promotions."
