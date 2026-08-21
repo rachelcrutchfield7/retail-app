@@ -177,7 +177,9 @@ export async function getMessages(conversationId: string, params: MessageQueryPa
 
 export async function getPaginatedMessages(conversationId: string, params: MessageQueryParams = {}): Promise<PaginatedMessages> {
   const profile = await ensureCurrentProfile();
-  await getConversationParticipantIds(conversationId, profile);
+
+  // Message SELECT RLS is participant-scoped, so avoid an additional
+  // conversation round trip before loading every message page.
   const limit = Math.min(Math.max(params.limit ?? cachePolicy.messages.pageSize, 1), 100);
   let query = supabase
     .from('messages')
@@ -335,8 +337,10 @@ export async function uploadMessageImage(fileUri: string, conversationId: string
 }
 
 export async function markMessagesRead(conversationId: string): Promise<void> {
-  const profile = await ensureCurrentProfile();
-  await getConversationParticipantIds(conversationId, profile);
+  await ensureCurrentProfile();
+
+  // mark_conversation_read authorizes the authenticated participant
+  // server-side, so do not fetch the conversation again first.
   const { error } = await supabase.rpc('mark_conversation_read', {
     target_conversation_id: conversationId,
   });

@@ -37,9 +37,31 @@ export function useSettings(autoLoad = true) {
 
   const updateNotifications = useCallback(
     async (input: Partial<NotificationPreferences>) => {
-      await updateNotificationPreferences(input);
-      clearQueryData(settingsKey);
-      await resource.refresh();
+      const previous = getQueryData<Awaited<ReturnType<typeof getSettings>>>(settingsKey);
+
+      if (previous) {
+        setQueryData(settingsKey, {
+          ...previous,
+          notifications: {
+            ...previous.notifications,
+            ...input,
+          },
+        });
+      }
+
+      try {
+        await updateNotificationPreferences(input);
+
+        const refreshed = await getSettings();
+        setQueryData(settingsKey, refreshed);
+        await resource.refresh();
+      } catch (error) {
+        if (previous) {
+          setQueryData(settingsKey, previous);
+        }
+
+        throw error;
+      }
     },
     [resource]
   );

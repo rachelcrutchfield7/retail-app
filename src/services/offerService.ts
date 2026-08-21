@@ -301,7 +301,13 @@ function mapOfferRpcError(error: unknown): never {
     );
   }
 
-  throwSupabaseError(error, 'We could not update that offer.');
+  throw createServiceError(
+    'OFFER_RPC_UNKNOWN',
+    `Offer RPC failed: ${details.code ?? 'unknown'} - ${message || 'No Supabase message'}`,
+    message
+      ? `Offer failed: ${message}`
+      : 'We could not update that offer.'
+  );
 }
 
 async function createAuthoritativeOffer(

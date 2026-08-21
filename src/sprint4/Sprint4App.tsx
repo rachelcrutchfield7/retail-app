@@ -1168,7 +1168,9 @@ export function ConversationScreen({
     return () => clearTimeout(timeout);
   }, [conversation.isLoading, conversationId, lastMessageKey, messageItems.length, messages.isLoading]);
 
-  if (conversation.isLoading || messages.isLoading) {
+  // Conversation detail is enough to render the thread shell.
+  // Do not block the entire screen while the first message page loads.
+  if (conversation.isLoading && !conversation.data) {
     return (
       <ScreenFrame>
         <LoadingSpinner />
@@ -1265,10 +1267,14 @@ export function ConversationScreen({
                   label="Offer Amount"
                   value={offerAmount}
                   onChangeText={setOfferAmount}
-                  placeholder="$25"
                   keyboardType="decimal-pad"
                 />
-                <Button title="Send Offer" onPress={() => void submitOffer()} fullWidth />
+                <Button
+                  title="Send Offer"
+                  onPress={() => void submitOffer()}
+                  disabled={!offerAmount.trim()}
+                  fullWidth
+                />
               </View>
             ) : null}
           </View>

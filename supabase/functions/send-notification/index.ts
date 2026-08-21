@@ -116,7 +116,14 @@ Deno.serve(async (request) => {
         status: 'failed',
         error: 'Missing RESEND_API_KEY Supabase secret.',
       });
-      return jsonResponse({ error: 'Email provider is not configured.', push }, 500);
+      return jsonResponse({
+        ok: true,
+        push,
+        email: {
+          status: 'failed',
+          reason: 'provider_not_configured',
+        },
+      });
     }
 
     const message = buildEmail(notification, recipient.displayName);
@@ -140,7 +147,15 @@ Deno.serve(async (request) => {
     if (!response.ok) {
       const error = typeof resendResult.message === 'string' ? resendResult.message : 'Resend rejected the email.';
       await updateDelivery(supabaseAdmin, notification.id, { status: 'failed', error });
-      return jsonResponse({ error, push }, 502);
+      return jsonResponse({
+        ok: true,
+        push,
+        email: {
+          status: 'failed',
+          reason: 'provider_rejected',
+          error,
+        },
+      });
     }
 
     await updateDelivery(supabaseAdmin, notification.id, {
@@ -150,7 +165,14 @@ Deno.serve(async (request) => {
       error: null,
     });
 
-    return jsonResponse({ ok: true, resendId: resendResult.id ?? null, push });
+    return jsonResponse({
+      ok: true,
+      push,
+      email: {
+        status: 'sent',
+        resendId: resendResult.id ?? null,
+      },
+    });
   } catch (error) {
     const status = typeof (error as { status?: unknown }).status === 'number' ? (error as { status: number }).status : 500;
     return jsonResponse({ error: error instanceof Error ? error.message : 'Notification email failed.' }, status);

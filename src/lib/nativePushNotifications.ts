@@ -177,7 +177,7 @@ async function registerNativePushToken(
   try {
     const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
 
-    if (!/^(Exponent|Expo)PushToken\[.+\]$/.test(token)) {
+    if (!/^(Exponent|Expo)PushToken\\[.+\\]$/.test(token)) {
       logger.warning('Expo returned an unexpected push token shape.', { platform });
       return { status: 'unavailable' };
     }
@@ -192,6 +192,7 @@ async function registerNativePushToken(
 
     if (!activeRegistration || activeRegistration.userId !== userId || activeRegistration.token !== token) {
       await registerDeviceToken(token, platform);
+
       activeRegistration = { userId, token };
     }
 
@@ -201,6 +202,7 @@ async function registerNativePushToken(
       platform,
       errorType: error instanceof Error ? error.name : typeof error,
     });
+
     return { status: 'unavailable' };
   }
 }
