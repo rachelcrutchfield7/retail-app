@@ -35,6 +35,8 @@ type AuthoritativeOfferRow = {
   amount_cents: number;
   currency: string;
   status: string;
+  accepted_expires_at?: string | null;
+  consumed_at?: string | null;
   created_at: string;
 };
 
@@ -367,6 +369,35 @@ export async function makeOffer(conversationId: string, amount: string): Promise
   });
 
   return message;
+}
+
+export async function assertAcceptedOfferCheckoutAvailable(offerId: string): Promise<void> {
+  const { data, error } = await supabase
+    .from('offers')
+    .select('id,status,accepted_expires_at,consumed_at')
+    .eq('id', offerId)
+    .maybeSingle();
+
+  if (error) {
+    throwSupabaseError(error, 'We could not confirm that offer before checkout.');
+  }
+
+  const offer = data as Pick<AuthoritativeOfferRow, 'id' | 'status' | 'accepted_expires_at' | 'consumed_at'> | null;
+  const acceptedExpiresAt = offer?.accepted_expires_at ? Date.parse(offer.accepted_expires_at) : Number.NaN;
+
+  if (
+    !offer
+    || offer.status !== 'accepted'
+    || offer.consumed_at
+    || !Number.isFinite(acceptedExpiresAt)
+    || acceptedExpiresAt <= Date.now()
+  ) {
+    throw createServiceError(
+      'OFFER_STALE',
+      `Offer ${offerId} is not currently checkout-actionable.`,
+      'This accepted offer is no longer available. Return to Messages and make a new offer.'
+    );
+  }
 }
 
 export async function acceptOffer(

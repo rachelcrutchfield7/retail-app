@@ -47,6 +47,27 @@ export function calculatePlatformFeeCents(amountCents: number): number {
   return Math.min(fee, Math.max(amountCents - 1, 0));
 }
 
+async function readFunctionErrorMessage(error: unknown): Promise<string | null> {
+  const context = typeof error === 'object' && error !== null
+    ? (error as { context?: unknown }).context
+    : undefined;
+
+  if (!context || typeof (context as { json?: unknown }).json !== 'function') {
+    return null;
+  }
+
+  try {
+    const body = await (context as { json: () => Promise<unknown> }).json();
+    return typeof body === 'object'
+      && body !== null
+      && typeof (body as { error?: unknown }).error === 'string'
+      ? (body as { error: string }).error
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function startProtectedCheckout(context: PaymentOptionContext): Promise<ProtectedCheckoutSetup> {
   const readiness = getPaymentReadiness();
 
@@ -91,10 +112,11 @@ export async function startProtectedCheckout(context: PaymentOptionContext): Pro
   });
 
   if (error) {
+    const serverMessage = await readFunctionErrorMessage(error);
     throw createServiceError(
       'STRIPE_CHECKOUT_FAILED',
-      error.message,
-      'Stripe checkout could not be started. Please try again in a moment.'
+      serverMessage ?? error.message,
+      serverMessage ?? 'Stripe checkout could not be started. Please try again in a moment.'
     );
   }
 

@@ -128,6 +128,7 @@ import type { StripeConnectStatus } from '../services/stripeConnectService';
 import type { AdminFoundingSellerSearchResult, AdminFoundingSellerStatus, FoundingSellerAdminStatus } from '../services/adminService';
 import {
   acceptOffer,
+  assertAcceptedOfferCheckoutAvailable,
   canRespondToOffer,
   counterOffer,
   declineOffer,
@@ -1895,6 +1896,10 @@ export function PaymentOptionsScreen({
 
     try {
       setCheckoutBusy(true);
+      if (acceptedOfferId) {
+        await assertAcceptedOfferCheckoutAvailable(acceptedOfferId);
+      }
+
       if (checkoutSummary) {
         await presentStripePaymentSheet(checkoutSummary);
         return;
@@ -1937,11 +1942,15 @@ export function PaymentOptionsScreen({
       });
     } catch (error) {
       setCheckoutSummary(null);
+      const handledError = handleAppError(error);
+      const rateFailure = handledError.code === 'SHIPPING_RATE_FAILED'
+        || handledError.code === 'SHIPPING_RATE_RESPONSE_INVALID';
       setNotice({
         title: 'Protected checkout unavailable',
         body: selectedFulfillmentMethod === 'shipping'
-          ? 'We couldn’t calculate shipping for this order. Please check the delivery address and try again.'
-          : handleAppError(error).userMessage,
+          && rateFailure
+            ? 'We couldn’t calculate shipping for this order. Please check the delivery address and try again.'
+            : handledError.userMessage,
       });
     } finally {
       setCheckoutBusy(false);

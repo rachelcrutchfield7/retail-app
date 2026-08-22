@@ -99,8 +99,20 @@ test('shipping rate states block duplicate purchase and never default failed shi
 
   assert.match(checkoutScreen, /Calculating tracked shipping\.\.\./);
   assert.match(checkoutScreen, /We couldn’t calculate shipping for this order\. Please check the delivery address and try again\./);
+  assert.match(checkoutScreen, /rateFailure = handledError\.code === 'SHIPPING_RATE_FAILED'/);
+  assert.match(checkoutScreen, /handledError\.userMessage/);
+  assert.doesNotMatch(checkoutScreen, /selectedFulfillmentMethod === 'shipping'\\s*\\? 'We couldn’t calculate shipping/s);
   assert.match(paymentCard, /disabled=\{disabled \|\| !protectedCheckoutReady \|\| checkoutLoading\}/);
   assert.doesNotMatch(checkoutScreen, /catch \(error\)[^]*shippingDisplay[^]*'\$0\.00'/);
+});
+
+test('payment service preserves safe Edge Function checkout error bodies', () => {
+  const paymentService = readFileSync(join(root, 'src/services/paymentService.ts'), 'utf8');
+
+  assert.match(paymentService, /async function readFunctionErrorMessage/);
+  assert.match(paymentService, /context as \{ json: \(\) => Promise<unknown> \}/);
+  assert.match(paymentService, /serverMessage \?\? error\.message/);
+  assert.match(paymentService, /serverMessage \?\? 'Stripe checkout could not be started\. Please try again in a moment\.'/);
 });
 
 test('shipping guidance explains tracked rate selection and tracking timing', () => {

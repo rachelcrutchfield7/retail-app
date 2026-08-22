@@ -65,3 +65,20 @@ test('conversation UI exposes make offer and seller response controls', () => {
   assert.match(offerCard, /Decline/);
   assert.match(offerCard, /Counter offer/);
 });
+
+test('accepted offer checkout preflight rejects expired or consumed offers before checkout', () => {
+  const offerService = readFileSync(join(root, 'src/services/offerService.ts'), 'utf8');
+  const sprint4App = readFileSync(join(root, 'src/sprint4/Sprint4App.tsx'), 'utf8');
+
+  assert.match(offerService, /export async function assertAcceptedOfferCheckoutAvailable/);
+  assert.match(offerService, /\.from\('offers'\)/);
+  assert.match(offerService, /accepted_expires_at/);
+  assert.match(offerService, /acceptedExpiresAt <= Date\.now\(\)/);
+  assert.match(offerService, /offer\.consumed_at/);
+  assert.match(offerService, /This accepted offer is no longer available\. Return to Messages and make a new offer\./);
+  assert.match(sprint4App, /assertAcceptedOfferCheckoutAvailable\(acceptedOfferId\)/);
+  assert.ok(
+    sprint4App.indexOf('assertAcceptedOfferCheckoutAvailable(acceptedOfferId)') < sprint4App.indexOf('getShippingRates({'),
+    'accepted offer freshness should be checked before rate/checkout work'
+  );
+});
