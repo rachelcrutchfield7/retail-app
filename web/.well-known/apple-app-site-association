@@ -13,6 +13,10 @@
           {
             "/": "/auth/callback",
             "comment": "Open ReTail auth callbacks in the app after email confirmation."
+          },
+          {
+            "/": "/auth/reset-password",
+            "comment": "Open ReTail password reset callbacks in the app."
           }
         ]
       }

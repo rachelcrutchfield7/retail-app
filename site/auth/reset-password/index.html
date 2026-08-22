@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Reset password | ReTail</title>
+  <link rel="stylesheet" href="/styles.css">
+  <style>
+    body {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    main {
+      max-width: 480px;
+      border: 1px solid #dfe8d7;
+      border-radius: 16px;
+      background: #fff;
+      padding: 28px;
+      box-shadow: 0 18px 48px rgba(34, 49, 38, 0.12);
+    }
+
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 44px;
+      border-radius: 999px;
+      background: #2f6f4e;
+      color: #fff;
+      padding: 0 18px;
+      text-decoration: none;
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Reset your password</h1>
+    <p>Open ReTail to choose a new password for your account.</p>
+    <a id="open-retail" class="button" href="retail://auth/reset-password">Open ReTail</a>
+  </main>
+  <script>
+    (function () {
+      var target = "retail://auth/reset-password" + window.location.search + window.location.hash;
+      var link = document.getElementById("open-retail");
+      if (link) {
+        link.setAttribute("href", target);
+      }
+      if (window.history && window.history.replaceState) {
+        window.history.replaceState(null, document.title, "/auth/reset-password");
+      }
+      window.setTimeout(function () {
+        window.location.href = target;
+      }, 100);
+    })();
+  </script>
+</body>
+</html>

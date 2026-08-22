@@ -22,6 +22,7 @@ import type { AccountType, Profile, RescueSignupInput, Session, User } from './t
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const supportedAccountTypes: AccountType[] = ['regular', 'rescue'];
 const emailConfirmationRedirectUrl = 'https://retailpetapp.com/auth/callback';
+const passwordRecoveryRedirectUrl = 'https://retailpetapp.com/auth/reset-password';
 const authCallbackHosts = new Set(['retailpetapp.com', 'www.retailpetapp.com']);
 
 function assertValidEmail(email: string): void {
@@ -126,22 +127,26 @@ export function getEmailConfirmationRedirectUrl(): string {
   return emailConfirmationRedirectUrl;
 }
 
-function isReTailAuthCallbackUrl(url: string): boolean {
+export function getPasswordRecoveryRedirectUrl(): string {
+  return passwordRecoveryRedirectUrl;
+}
+
+function isReTailAuthCallbackUrl(url: string, expectedPath = '/auth/callback'): boolean {
   try {
     const parsedUrl = new URL(url);
 
     if (parsedUrl.protocol === 'retail:') {
-      return parsedUrl.hostname === 'auth' && parsedUrl.pathname === '/callback';
+      return parsedUrl.hostname === 'auth' && parsedUrl.pathname === expectedPath.replace(/^\/auth/, '');
     }
 
-    return parsedUrl.protocol === 'https:' && authCallbackHosts.has(parsedUrl.hostname) && parsedUrl.pathname === '/auth/callback';
+    return parsedUrl.protocol === 'https:' && authCallbackHosts.has(parsedUrl.hostname) && parsedUrl.pathname === expectedPath;
   } catch {
     return false;
   }
 }
 
-function authCallbackParams(url: string): URLSearchParams | null {
-  if (!isReTailAuthCallbackUrl(url)) {
+function authCallbackParams(url: string, expectedPath = '/auth/callback'): URLSearchParams | null {
+  if (!isReTailAuthCallbackUrl(url, expectedPath)) {
     return null;
   }
 
@@ -168,6 +173,10 @@ export async function handleEmailConfirmationCallbackUrl(
   const params = authCallbackParams(url);
 
   if (!params) {
+    return null;
+  }
+
+  if (params.get('type') === 'recovery') {
     return null;
   }
 
@@ -234,6 +243,76 @@ export async function handleEmailConfirmationCallbackUrl(
   return sessionFromSupabase(authSession, profile);
 }
 
+export async function handlePasswordRecoveryCallbackUrl(
+  url: string,
+  dependencies: {
+    setSession?: typeof supabase.auth.setSession;
+    exchangeCodeForSession?: typeof supabase.auth.exchangeCodeForSession;
+  } = {}
+): Promise<Session | null> {
+  const params = authCallbackParams(url, '/auth/reset-password');
+
+  if (!params) {
+    return null;
+  }
+
+  const errorCode = params.get('error_code') ?? params.get('error');
+  if (errorCode) {
+    throw createServiceError(
+      'PASSWORD_RECOVERY_LINK_INVALID',
+      `Supabase password recovery callback failed: ${errorCode}`,
+      'This password reset link is invalid or has expired. Request a new one.'
+    );
+  }
+
+  const callbackType = params.get('type');
+  const accessToken = params.get('access_token');
+  const refreshToken = params.get('refresh_token');
+  const authCode = params.get('code');
+
+  if (callbackType && callbackType !== 'recovery') {
+    return null;
+  }
+
+  let authSession: Parameters<typeof sessionFromSupabase>[0] | null = null;
+
+  if (authCode) {
+    const exchangeCodeForSession =
+      dependencies.exchangeCodeForSession ?? ((code) => supabase.auth.exchangeCodeForSession(code));
+    const { data, error } = await exchangeCodeForSession(authCode);
+
+    if (error) {
+      throwSupabaseError(error, 'This password reset link is invalid or has expired. Request a new one.');
+    }
+
+    authSession = data.session ?? null;
+  }
+
+  if (!authSession && accessToken && refreshToken) {
+    const setSession = dependencies.setSession ?? ((input) => supabase.auth.setSession(input));
+    const { data, error } = await setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    });
+
+    if (error) {
+      throwSupabaseError(error, 'This password reset link is invalid or has expired. Request a new one.');
+    }
+
+    authSession = data.session ?? null;
+  }
+
+  if (!authSession) {
+    throw createServiceError(
+      'PASSWORD_RECOVERY_SESSION_MISSING',
+      'Supabase returned no session after password recovery callback',
+      'This password reset link is invalid or has expired. Request a new one.'
+    );
+  }
+
+  return sessionFromSupabase(authSession, undefined);
+}
+
 export async function signInWithEmailAndProfile(email: string, password: string): Promise<{ session: Session; profile: Profile | null }> {
   assertValidEmail(email);
 
@@ -289,11 +368,36 @@ export async function signOut(): Promise<void> {
   resetAnalyticsUser();
 }
 
-export async function resetPassword(email: string): Promise<void> {
+export async function resetPassword(
+  email: string,
+  dependencies: {
+    resetPasswordForEmail?: typeof supabase.auth.resetPasswordForEmail;
+  } = {}
+): Promise<void> {
   assertValidEmail(email);
-  const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase());
+  const resetPasswordForEmail =
+    dependencies.resetPasswordForEmail ?? ((input, options) => supabase.auth.resetPasswordForEmail(input, options));
+  const { error } = await resetPasswordForEmail(email.trim().toLowerCase(), {
+    redirectTo: passwordRecoveryRedirectUrl,
+  });
 
   if (error) {
     throwSupabaseError(error, 'We could not send a reset link. Please try again.');
+  }
+}
+
+export async function updateRecoveredPassword(
+  password: string,
+  dependencies: {
+    updateUser?: typeof supabase.auth.updateUser;
+  } = {}
+): Promise<void> {
+  assertStrongPassword(password);
+
+  const updateUser = dependencies.updateUser ?? ((input) => supabase.auth.updateUser(input));
+  const { error } = await updateUser({ password });
+
+  if (error) {
+    throwSupabaseError(error, 'We could not update your password. Please try again.');
   }
 }

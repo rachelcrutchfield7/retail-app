@@ -63,6 +63,7 @@ test('Cloudflare Pages static site includes launch, beta, legal, and support pag
     'site/community-guidelines/index.html',
     'site/support/index.html',
     'site/auth/callback/index.html',
+    'site/auth/reset-password/index.html',
     'site/404.html',
     'site/styles.css',
   ];
@@ -81,6 +82,7 @@ test('Cloudflare Pages static site includes launch, beta, legal, and support pag
   assert.match(read('site/community-guidelines/index.html'), /Respectfully/);
   assert.match(read('site/support/index.html'), /Email support/);
   assert.match(read('site/auth/callback/index.html'), /retail:\/\/auth\/callback/);
+  assert.match(read('site/auth/reset-password/index.html'), /retail:\/\/auth\/reset-password/);
 });
 
 test('public link worker supports listing and auth callback app links', () => {
@@ -91,9 +93,13 @@ test('public link worker supports listing and auth callback app links', () => {
 
   assert.match(worker, /"\/": "\/listing\/\*"/);
   assert.match(worker, /"\/": "\/auth\/callback"/);
+  assert.match(worker, /"\/": "\/auth\/reset-password"/);
   assert.match(worker, /retail:\/\/auth\/callback/);
+  assert.match(worker, /retail:\/\/auth\/reset-password/);
   assert.match(workerRoutes, /retailpetapp\.com\/auth\/callback\*/);
+  assert.match(workerRoutes, /retailpetapp\.com\/auth\/reset-password\*/);
   assert.match(aasa, /"\/": "\/auth\/callback"/);
+  assert.match(aasa, /"\/": "\/auth\/reset-password"/);
   assert.match(assetlinks, /delegate_permission\/common\.handle_all_urls/);
 });
 
@@ -108,6 +114,7 @@ test('domain operations are documented without pretending universal links are co
   assert.match(docs, /assetlinks\.json/);
   assert.match(docs, /Do not guess those values/);
   assert.match(docs, /https:\/\/retailpetapp\.com\/auth\/callback/);
+  assert.match(docs, /https:\/\/retailpetapp\.com\/auth\/reset-password/);
   assert.match(docs, /contact@retailpetapp\.com/);
   assert.match(docs, /payment issues, user issues, account access, reports, safety concerns/);
   assert.match(readme, /retailpetapp\.com/);

@@ -63,7 +63,7 @@ Before using the public domain for authentication redirects, add these to the Su
 https://retailpetapp.com
 https://retailpetapp.com/beta
 https://retailpetapp.com/auth/callback
-https://retailpetapp.com/reset-password
+https://retailpetapp.com/auth/reset-password
 ```
 
 Keep local development URLs separate from beta and production redirect URLs.

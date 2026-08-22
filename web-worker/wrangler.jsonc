@@ -14,6 +14,10 @@
     {
       "pattern": "retailpetapp.com/auth/callback*",
       "zone_name": "retailpetapp.com"
+    },
+    {
+      "pattern": "retailpetapp.com/auth/reset-password*",
+      "zone_name": "retailpetapp.com"
     }
   ],
   "vars": {

@@ -114,7 +114,7 @@ import {
   type SellerShippingOrigin,
   type ShippingRateOption,
 } from '../services/shippingService';
-import { handleEmailConfirmationCallbackUrl } from '../services/authService';
+import { handleEmailConfirmationCallbackUrl, handlePasswordRecoveryCallbackUrl, updateRecoveredPassword } from '../services/authService';
 import { getListingIdFromSharedUrl } from '../services/listingShareService';
 import {
   getStripeConnectPayoutState,
@@ -190,6 +190,7 @@ type SprintRoute =
   | { name: 'rescue-hub' }
   | { name: 'rescue-profile'; rescue: RescueOrganization }
   | { name: 'settings' }
+  | { name: 'password-reset'; error?: string }
   | { name: 'preferences' }
   | { name: 'safety-center' }
   | { name: 'faq' }
@@ -334,6 +335,25 @@ function Sprint4Experience() {
           .catch(() => auth.refreshProfile());
         return;
       }
+
+      void handlePasswordRecoveryCallbackUrl(url)
+        .then((recoverySession) => {
+          if (!mounted || !recoverySession) {
+            return;
+          }
+
+          setRoute({ name: 'password-reset' });
+        })
+        .catch(() => {
+          if (!mounted) {
+            return;
+          }
+
+          setRoute({
+            name: 'password-reset',
+            error: 'This password reset link is invalid or has expired. Request a new one.',
+          });
+        });
 
       void handleEmailConfirmationCallbackUrl(url)
         .then((confirmedSession) => {
@@ -561,6 +581,19 @@ function Sprint4Experience() {
         onPreferences={openPreferences}
         onSafetyCenter={openSafetyCenter}
         onFAQ={openFAQ}
+      />
+    );
+  }
+
+  if (route.name === 'password-reset') {
+    return (
+      <PasswordRecoveryScreen
+        initialError={route.error}
+        onComplete={() => {
+          void auth.refreshProfile();
+          setRoute({ name: 'tabs', tab: 'profile' });
+        }}
+        onRequestNewLink={() => setRoute({ name: 'tabs', tab: 'profile' })}
       />
     );
   }
@@ -2496,6 +2529,110 @@ export function ReviewScreen({
       <Text style={styles.metaText}>{comment.length}/1000 characters</Text>
       {notice ? <NoticeCard title={notice.includes('submitted') ? 'Review saved' : 'Review not saved'} body={notice} /> : null}
       <Button title="Submit Review" icon={Star} onPress={submit} loading={review.loading} fullWidth />
+    </ScreenFrame>
+  );
+}
+
+function PasswordRecoveryScreen({
+  initialError,
+  onComplete,
+  onRequestNewLink,
+}: {
+  initialError?: string;
+  onComplete: () => void;
+  onRequestNewLink: () => void;
+}) {
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [confirmError, setConfirmError] = useState('');
+  const [notice, setNotice] = useState<{ title: string; body: string } | null>(
+    initialError ? { title: 'Reset link expired', body: initialError } : null
+  );
+  const [saving, setSaving] = useState(false);
+  const [completed, setCompleted] = useState(false);
+
+  const submit = async () => {
+    setPasswordError('');
+    setConfirmError('');
+    setNotice(null);
+
+    if (!password.trim()) {
+      setPasswordError('Enter a new password.');
+      return;
+    }
+
+    if (!confirmPassword.trim()) {
+      setConfirmError('Confirm your new password.');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setConfirmError('Passwords do not match.');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await updateRecoveredPassword(password);
+      setPassword('');
+      setConfirmPassword('');
+      setCompleted(true);
+      setNotice({
+        title: 'Password updated',
+        body: 'Your ReTail password has been changed. Continue to your account when you are ready.',
+      });
+    } catch (error) {
+      const handledError = handleAppError(error);
+      setNotice({
+        title: 'Password was not updated',
+        body: handledError.userMessage,
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <ScreenFrame>
+      <View style={styles.headerBlock}>
+        <Text style={styles.title}>Reset Password</Text>
+        <Text style={styles.body}>Choose a new password for your ReTail account.</Text>
+      </View>
+      {notice ? <NoticeCard title={notice.title} body={notice.body} /> : null}
+      {completed ? (
+        <Button title="Continue to ReTail" onPress={onComplete} fullWidth />
+      ) : (
+        <Card>
+          <View style={styles.stack}>
+            <TextInput
+              label="New Password"
+              value={password}
+              onChangeText={setPassword}
+              placeholder="Enter a new password"
+              helperText="Use at least 8 characters with uppercase, lowercase, a number, and a special character."
+              error={passwordError}
+              secureTextEntry
+              autoCapitalize="none"
+              textContentType="newPassword"
+            />
+            <TextInput
+              label="Confirm New Password"
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              placeholder="Re-enter your new password"
+              error={confirmError}
+              secureTextEntry
+              autoCapitalize="none"
+              textContentType="newPassword"
+            />
+            <Button title="Update Password" onPress={() => void submit()} loading={saving} disabled={Boolean(initialError)} fullWidth />
+            {initialError ? (
+              <Button title="Request a New Reset Link" variant="outline" onPress={onRequestNewLink} fullWidth />
+            ) : null}
+          </View>
+        </Card>
+      )}
     </ScreenFrame>
   );
 }
