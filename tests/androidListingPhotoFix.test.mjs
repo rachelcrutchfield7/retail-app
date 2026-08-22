@@ -6,6 +6,7 @@ import { getLogEntries } from '../src/lib/logger.ts';
 import { readLocalImageBinary } from '../src/services/localImageFile.ts';
 import { reconcileListingImages } from '../src/services/listingService.ts';
 import { uploadListingImageBinary } from '../src/services/storageService.ts';
+import { validateCreateListingInput } from '../src/validation/createListing.ts';
 
 const listingImage = (id, imageUrl, sortOrder = 0) => ({
   id,
@@ -109,6 +110,54 @@ test('native picker keeps asset URIs and does not request Base64', async () => {
   assert.doesNotMatch(source, /data:\$\{.*base64/);
 });
 
+test('create listing starts with no photos while edit listing waits for hydrated listing images', async () => {
+  const source = await readFile(new URL('../src/sprint3/Sprint3App.tsx', import.meta.url), 'utf8');
+  const editListingScreen = source.slice(
+    source.indexOf('export function EditListingScreen'),
+    source.indexOf('function EditListingForm')
+  );
+
+  assert.match(source, /const emptyCreateListing: CreateListingInput = \{[\s\S]*?images:\s*\[\]/);
+  assert.match(editListingScreen, /if \(listing\.isLoading \|\| listing\.isFetching\)/);
+  assert.match(source, /images:\s*detail\.images\.map\(\(image\) => image\.image_url\)/);
+});
+
+function completeListingInput(overrides = {}) {
+  return {
+    title: 'Rabbit starter kit',
+    description: 'Water bottle, hay feeder, and ceramic bowls.',
+    category: 'Small Pets',
+    condition: 'Good',
+    listing_type: 'sale',
+    price: '35',
+    images: ['https://retail.test/existing.jpg'],
+    city: 'Austin',
+    state: 'TX',
+    zip_code: '78701',
+    pickup_available: true,
+    porch_pickup_available: false,
+    meetup_available: true,
+    shipping_available: false,
+    shipping_payer: 'buyer',
+    safety_confirmed: true,
+    ...overrides,
+  };
+}
+
+test('hosted edit photos count toward minimum listing photo validation', () => {
+  const result = validateCreateListingInput(completeListingInput());
+
+  assert.equal(result.isValid, true);
+  assert.equal(result.errors.images, undefined);
+});
+
+test('removing every listing photo still fails minimum photo validation', () => {
+  const result = validateCreateListingInput(completeListingInput({ images: [] }));
+
+  assert.equal(result.isValid, false);
+  assert.equal(result.errors.images, 'Add at least one photo.');
+});
+
 test('Supabase Storage receives ArrayBuffer image data instead of Blob data', async () => {
   const calls = [];
   const binary = new Uint8Array([1, 2, 3, 4]).buffer;
@@ -207,6 +256,28 @@ test('unchanged hosted listing image is preserved without upload or duplicate re
   const harness = reconciliationHarness();
 
   await reconcileListingImages([existing.image_url, existing.image_url], [existing], harness.dependencies);
+
+  assert.deepEqual(harness.uploadedUris, []);
+  assert.deepEqual(harness.removedIds, []);
+  assert.deepEqual(harness.sortUpdates, []);
+});
+
+test('price-only edit preserves hosted listing photos without reupload', async () => {
+  const existing = listingImage('existing-1', 'https://retail.test/existing.jpg');
+  const harness = reconciliationHarness();
+
+  await reconcileListingImages([existing.image_url], [existing], harness.dependencies);
+
+  assert.deepEqual(harness.uploadedUris, []);
+  assert.deepEqual(harness.removedIds, []);
+  assert.deepEqual(harness.sortUpdates, []);
+});
+
+test('description-only edit preserves hosted listing photos without reupload', async () => {
+  const existing = listingImage('existing-1', 'https://retail.test/existing.jpg');
+  const harness = reconciliationHarness();
+
+  await reconcileListingImages([existing.image_url], [existing], harness.dependencies);
 
   assert.deepEqual(harness.uploadedUris, []);
   assert.deepEqual(harness.removedIds, []);

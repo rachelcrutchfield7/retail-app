@@ -3754,7 +3754,7 @@ export function EditListingScreen({
   const auth = useAuth();
   const listing = useListing(listingId);
 
-  if (listing.isLoading) {
+  if (listing.isLoading || listing.isFetching) {
     return (
       <ScreenFrame>
         <BrandedLoadingPanel title="Loading listing editor" body="Opening the saved details so you can make changes." />
