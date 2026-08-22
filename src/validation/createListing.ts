@@ -14,6 +14,7 @@ export type CreateListingField =
   | 'getting_options'
   | 'ship_from_zip_code'
   | 'shipping_cost_estimate'
+  | 'shipping_origin'
   | 'package_weight_oz'
   | 'package_length_in'
   | 'package_width_in'

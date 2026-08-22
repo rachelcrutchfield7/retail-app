@@ -125,6 +125,12 @@ import {
   refreshStripeConnectStatus,
 } from '../services/stripeConnectService';
 import type { StripeConnectStatus } from '../services/stripeConnectService';
+import {
+  getDefaultSellerShippingOrigin,
+  saveDefaultSellerShippingOrigin,
+  validateSellerShippingOrigin,
+} from '../services/shippingService';
+import type { SellerShippingOrigin } from '../services/shippingService';
 import { splitPackageWeightOz, totalPackageWeightOzFromParts } from '../services/shippingRules';
 import { isListingShareable, shareListing } from '../services/listingShareService';
 import type {
@@ -1224,6 +1230,7 @@ export function CreateListingScreen({
   const [payoutNotice, setPayoutNotice] = useState<Notice | null>(null);
   const [latestStripeStatus, setLatestStripeStatus] = useState<StripeConnectStatus | null>(null);
   const [payoutOnboardingVisible, setPayoutOnboardingVisible] = useState(false);
+  const [shippingOriginReady, setShippingOriginReady] = useState(false);
   const submitLockedRef = useRef(false);
   const profileStripeStatus = {
     accountId: auth.profile?.stripe_connect_account_id,
@@ -1240,6 +1247,13 @@ export function CreateListingScreen({
   const update = <FieldName extends keyof CreateListingInput>(field: FieldName, value: CreateListingInput[FieldName]) => {
     setForm((current) => ({ ...current, [field]: value }));
   };
+
+  const updateShippingOriginReady = useCallback((ready: boolean) => {
+    setShippingOriginReady(ready);
+    if (ready) {
+      setErrors((current) => ({ ...current, shipping_origin: undefined }));
+    }
+  }, []);
 
   const setupPayouts = () => {
     setPayoutOnboardingVisible(true);
@@ -1297,6 +1311,15 @@ export function CreateListingScreen({
     const validation = validateCreateListingInput(form);
     if (!validation.isValid) {
       setErrors(validation.errors);
+      submitLockedRef.current = false;
+      return;
+    }
+
+    if (form.shipping_available && !shippingOriginReady) {
+      setErrors({
+        ...validation.errors,
+        shipping_origin: 'Add a private ship-from address before offering shipping.',
+      });
       submitLockedRef.current = false;
       return;
     }
@@ -1385,6 +1408,7 @@ export function CreateListingScreen({
           uploading={uploading}
           progress={progress}
           onChange={update}
+          onShippingOriginReadyChange={updateShippingOriginReady}
         />
         {mutation.error ? <Text style={styles.errorText}>{mutation.error}</Text> : null}
         <Button
@@ -3802,15 +3826,31 @@ function EditListingForm({
   });
   const [errors, setErrors] = useState<ReturnType<typeof validateCreateListingInput>['errors']>({});
   const [notice, setNotice] = useState<Notice | null>(null);
+  const [shippingOriginReady, setShippingOriginReady] = useState(false);
 
   const update = <FieldName extends keyof CreateListingInput>(field: FieldName, value: CreateListingInput[FieldName]) => {
     setForm((current) => ({ ...current, [field]: value }));
   };
 
+  const updateShippingOriginReady = useCallback((ready: boolean) => {
+    setShippingOriginReady(ready);
+    if (ready) {
+      setErrors((current) => ({ ...current, shipping_origin: undefined }));
+    }
+  }, []);
+
   const save = async () => {
     const validation = validateCreateListingInput(form);
     if (!validation.isValid) {
       setErrors(validation.errors);
+      return;
+    }
+
+    if (form.shipping_available && !shippingOriginReady) {
+      setErrors({
+        ...validation.errors,
+        shipping_origin: 'Add a private ship-from address before offering shipping.',
+      });
       return;
     }
 
@@ -3843,6 +3883,7 @@ function EditListingForm({
           uploading={false}
           progress={0}
           onChange={update}
+          onShippingOriginReadyChange={updateShippingOriginReady}
         />
         {mutation.error ? <Text style={styles.errorText}>{mutation.error}</Text> : null}
         <Button title="Save Listing" onPress={save} loading={mutation.loading} disabled={!editable} fullWidth />
@@ -3857,13 +3898,23 @@ function ListingForm({
   uploading,
   progress,
   onChange,
+  onShippingOriginReadyChange,
 }: {
   form: CreateListingInput;
   errors: ReturnType<typeof validateCreateListingInput>['errors'];
   uploading: boolean;
   progress: number;
   onChange: <FieldName extends keyof CreateListingInput>(field: FieldName, value: CreateListingInput[FieldName]) => void;
+  onShippingOriginReadyChange?: (ready: boolean) => void;
 }) {
+  const [shippingOrigin, setShippingOrigin] = useState<SellerShippingOrigin | null>(null);
+  const [shippingOriginDraft, setShippingOriginDraft] = useState<SellerShippingOrigin>(emptySellerShippingOrigin());
+  const [shippingOriginEditing, setShippingOriginEditing] = useState(false);
+  const [shippingOriginLoading, setShippingOriginLoading] = useState(false);
+  const [shippingOriginSaving, setShippingOriginSaving] = useState(false);
+  const [shippingOriginError, setShippingOriginError] = useState<string | null>(null);
+  const [shippingOriginReloadKey, setShippingOriginReloadKey] = useState(0);
+
   const updateZipCode = (zipCode: string) => {
     onChange('zip_code', zipCode);
     const matchedLocation = findManualLocationByZipCode(zipCode);
@@ -3874,6 +3925,82 @@ function ListingForm({
 
     onChange('city', matchedLocation.city);
     onChange('state', matchedLocation.state);
+  };
+
+  useEffect(() => {
+    let active = true;
+
+    if (!form.shipping_available) {
+      setShippingOrigin(null);
+      setShippingOriginDraft(emptySellerShippingOrigin());
+      setShippingOriginEditing(false);
+      setShippingOriginError(null);
+      onShippingOriginReadyChange?.(false);
+      return () => {
+        active = false;
+      };
+    }
+
+    setShippingOriginLoading(true);
+    setShippingOriginError(null);
+    void getDefaultSellerShippingOrigin()
+      .then((origin) => {
+        if (!active) {
+          return;
+        }
+
+        const ready = Boolean(origin && !validateSellerShippingOrigin(origin));
+        setShippingOrigin(origin);
+        setShippingOriginDraft(origin ?? emptySellerShippingOrigin());
+        setShippingOriginEditing(false);
+        onShippingOriginReadyChange?.(ready);
+      })
+      .catch((error) => {
+        if (!active) {
+          return;
+        }
+
+        setShippingOrigin(null);
+        setShippingOriginDraft(emptySellerShippingOrigin());
+        setShippingOriginEditing(false);
+        setShippingOriginError(handleAppError(error).userMessage);
+        onShippingOriginReadyChange?.(false);
+      })
+      .finally(() => {
+        if (active) {
+          setShippingOriginLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [form.shipping_available, onShippingOriginReadyChange, shippingOriginReloadKey]);
+
+  const updateShippingOriginDraft = (field: keyof SellerShippingOrigin, value: string) => {
+    setShippingOriginDraft((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  };
+
+  const saveShippingOriginFromForm = async () => {
+    setShippingOriginError(null);
+    setShippingOriginSaving(true);
+
+    try {
+      const saved = await saveDefaultSellerShippingOrigin(shippingOriginDraft);
+      setShippingOrigin(saved);
+      setShippingOriginDraft(saved);
+      setShippingOriginEditing(false);
+      onShippingOriginReadyChange?.(true);
+      onChange('ship_from_zip_code', saved.postalCode);
+    } catch (error) {
+      setShippingOriginError(handleAppError(error).userMessage);
+      onShippingOriginReadyChange?.(false);
+    } finally {
+      setShippingOriginSaving(false);
+    }
   };
 
   return (
@@ -4067,6 +4194,30 @@ function ListingForm({
               error={errors.package_height_in}
             />
           </View>
+          <ShippingOriginSetupCard
+            origin={shippingOrigin}
+            draft={shippingOriginDraft}
+            loading={shippingOriginLoading}
+            saving={shippingOriginSaving}
+            editing={shippingOriginEditing}
+            error={errors.shipping_origin ?? shippingOriginError}
+            onAdd={() => {
+              setShippingOriginDraft(shippingOrigin ?? emptySellerShippingOrigin());
+              setShippingOriginEditing(true);
+            }}
+            onEdit={() => {
+              setShippingOriginDraft(shippingOrigin ?? emptySellerShippingOrigin());
+              setShippingOriginEditing(true);
+            }}
+            onCancel={() => {
+              setShippingOriginDraft(shippingOrigin ?? emptySellerShippingOrigin());
+              setShippingOriginEditing(!shippingOrigin);
+              setShippingOriginError(null);
+              setShippingOriginReloadKey((current) => current + 1);
+            }}
+            onChange={updateShippingOriginDraft}
+            onSave={() => void saveShippingOriginFromForm()}
+          />
         </>
       ) : null}
       {errors.getting_options ? <Text style={styles.errorText}>{errors.getting_options}</Text> : null}
@@ -4123,6 +4274,146 @@ function PackageWeightInputs({
         </View>
       </View>
     </Field>
+  );
+}
+
+function emptySellerShippingOrigin(): SellerShippingOrigin {
+  return {
+    name: '',
+    addressLine1: '',
+    addressLine2: '',
+    city: '',
+    state: '',
+    postalCode: '',
+    country: 'US',
+    phone: '',
+  };
+}
+
+function shippingOriginSummary(origin: SellerShippingOrigin | null): string {
+  if (!origin) {
+    return '';
+  }
+
+  return `Shipping from: ${origin.city}, ${origin.state} ${origin.postalCode}`;
+}
+
+function ShippingOriginSetupCard({
+  origin,
+  draft,
+  loading,
+  saving,
+  editing,
+  error,
+  onAdd,
+  onEdit,
+  onCancel,
+  onChange,
+  onSave,
+}: {
+  origin: SellerShippingOrigin | null;
+  draft: SellerShippingOrigin;
+  loading: boolean;
+  saving: boolean;
+  editing: boolean;
+  error?: string | null;
+  onAdd: () => void;
+  onEdit: () => void;
+  onCancel: () => void;
+  onChange: (field: keyof SellerShippingOrigin, value: string) => void;
+  onSave: () => void;
+}) {
+  const ready = Boolean(origin && !validateSellerShippingOrigin(origin));
+
+  return (
+    <Card>
+      <View style={styles.stack}>
+        <View style={styles.locationRow}>
+          <MapPin size={20} color={colors.logoOrange} />
+          <Text style={styles.cardTitle}>Ship-from address</Text>
+        </View>
+        <Text style={styles.body}>
+          Used only to calculate shipping rates and create labels. Buyers will not see your street address.
+        </Text>
+        {loading ? <Text style={styles.metaText}>Checking your saved shipping address...</Text> : null}
+        {!loading && ready && !editing ? (
+          <>
+            <Text style={styles.bodyStrong}>{shippingOriginSummary(origin)}</Text>
+            <Button title="Edit Shipping Address" icon={Edit3} variant="outline" onPress={onEdit} fullWidth />
+          </>
+        ) : null}
+        {!loading && !ready && !editing ? (
+          <>
+            <Text style={styles.errorText}>
+              Add a private ship-from address before offering shipping on this listing.
+            </Text>
+            <Button
+              title={origin ? 'Edit Shipping Address' : 'Add Shipping Address'}
+              icon={MapPin}
+              variant="outline"
+              onPress={origin ? onEdit : onAdd}
+              fullWidth
+            />
+          </>
+        ) : null}
+        {editing ? (
+          <>
+            <TextInput
+              label="Full name"
+              value={draft.name}
+              onChangeText={(value) => onChange('name', value)}
+            />
+            <TextInput
+              label="Address line 1"
+              value={draft.addressLine1}
+              onChangeText={(value) => onChange('addressLine1', value)}
+            />
+            <TextInput
+              label="Address line 2"
+              value={draft.addressLine2 ?? ''}
+              onChangeText={(value) => onChange('addressLine2', value)}
+            />
+            <TextInput
+              label="City"
+              value={draft.city}
+              onChangeText={(value) => onChange('city', value)}
+            />
+            <View style={styles.gridTwo}>
+              <TextInput
+                label="State"
+                value={draft.state}
+                onChangeText={(value) => onChange('state', value.toUpperCase().slice(0, 2))}
+                placeholder="IL"
+              />
+              <TextInput
+                label="ZIP code"
+                value={draft.postalCode}
+                onChangeText={(value) => onChange('postalCode', value)}
+                placeholder="62025"
+                keyboardType="number-pad"
+              />
+            </View>
+            <TextInput
+              label="Country"
+              value={draft.country}
+              onChangeText={(value) => onChange('country', value.toUpperCase().slice(0, 2))}
+              placeholder="US"
+            />
+            <TextInput
+              label="Phone for carrier"
+              value={draft.phone ?? ''}
+              onChangeText={(value) => onChange('phone', value)}
+              keyboardType="phone-pad"
+            />
+            <View style={styles.gridTwo}>
+              <Button title="Cancel" variant="outline" onPress={onCancel} disabled={saving} fullWidth />
+              <Button title="Save Address" icon={MapPin} onPress={onSave} loading={saving} fullWidth />
+            </View>
+          </>
+        ) : null}
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      </View>
+    </Card>
   );
 }
 

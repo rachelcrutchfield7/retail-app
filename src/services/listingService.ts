@@ -23,6 +23,8 @@ import type {
   ListingQueryParams,
   UpdateListingInput,
 } from './types';
+import { getDefaultSellerShippingOrigin, validateSellerShippingOrigin } from './shippingService';
+import type { SellerShippingOrigin } from './shippingService';
 import { normalizePackageWeightOz, normalizePositiveDecimal, validateShippingPackage } from './shippingRules';
 
 const allowedSorts = new Set(['recent', 'price_asc', 'price_desc', 'distance', 'favorites']);
@@ -275,6 +277,26 @@ function assertShippingPackageInput(input: UpdateListingInput): void {
       'Add package weight, dimensions, and a valid ship-from zip code before offering shipping.'
     );
   }
+}
+
+async function requireDefaultSellerShippingOriginForShipping(
+  shippingAvailable: boolean | undefined
+): Promise<SellerShippingOrigin | null> {
+  if (!shippingAvailable) {
+    return null;
+  }
+
+  const origin = await getDefaultSellerShippingOrigin();
+
+  if (!origin || validateSellerShippingOrigin(origin)) {
+    throw createServiceError(
+      'SELLER_SHIPPING_ORIGIN_REQUIRED',
+      'Shipping was enabled without a valid default seller shipping origin',
+      'Add a private ship-from address before offering shipping. Buyers will not see your street address.'
+    );
+  }
+
+  return origin;
 }
 
 export async function getNearbyListings(params: ListingQueryParams = {}): Promise<PaginatedListings> {
@@ -534,6 +556,7 @@ export async function getListingById(listingId: string): Promise<ListingDetail> 
 export async function createListing(input: CreateListingInput): Promise<Listing> {
   await requireCurrentPolicyAcceptance();
   assertCreateListingInput(input);
+  const shippingOrigin = await requireDefaultSellerShippingOriginForShipping(input.shipping_available);
   const categoryId = await resolveCategoryId(input.category_id, input.category);
   const listingType = input.listing_type;
   const price = listingType === 'sale' ? priceNumber(input.price) : null;
@@ -556,7 +579,9 @@ export async function createListing(input: CreateListingInput): Promise<Listing>
     requested_shipping_payer: input.shipping_available ? input.shipping_payer ?? 'buyer' : 'buyer',
     requested_shipping_cost_estimate: input.shipping_available ? priceNumber(input.shipping_cost_estimate) : null,
     requested_handling_time: input.shipping_available ? input.handling_time?.trim() || null : null,
-    requested_ship_from_zip_code: input.shipping_available ? input.ship_from_zip_code?.trim() || input.zip_code?.trim() || null : null,
+    requested_ship_from_zip_code: input.shipping_available
+      ? (shippingOrigin?.postalCode ?? input.ship_from_zip_code?.trim() ?? input.zip_code?.trim() ?? null)
+      : null,
     requested_package_weight_oz: input.shipping_available ? normalizePackageWeightOz(input.package_weight_oz) : null,
     requested_package_length_in: input.shipping_available ? normalizePositiveDecimal(input.package_length_in) : null,
     requested_package_width_in: input.shipping_available ? normalizePositiveDecimal(input.package_width_in) : null,
@@ -597,6 +622,7 @@ export async function createListing(input: CreateListingInput): Promise<Listing>
 export async function updateListing(listingId: string, input: UpdateListingInput): Promise<Listing> {
   await ensureCurrentProfile();
   assertShippingPackageInput(input);
+  const shippingOrigin = await requireDefaultSellerShippingOriginForShipping(input.shipping_available);
   const submittedStatus = (input as { status?: Listing['status'] }).status;
 
   if (submittedStatus !== undefined) {
@@ -631,7 +657,9 @@ export async function updateListing(listingId: string, input: UpdateListingInput
     requested_shipping_payer: input.shipping_payer ?? null,
     requested_shipping_cost_estimate: input.shipping_cost_estimate !== undefined ? priceNumber(input.shipping_cost_estimate) : null,
     requested_handling_time: input.handling_time !== undefined ? input.handling_time?.trim() || '' : null,
-    requested_ship_from_zip_code: input.ship_from_zip_code !== undefined ? input.ship_from_zip_code?.trim() || '' : null,
+    requested_ship_from_zip_code: input.shipping_available
+      ? (shippingOrigin?.postalCode ?? input.ship_from_zip_code?.trim() ?? input.zip_code?.trim() ?? '')
+      : input.ship_from_zip_code !== undefined ? input.ship_from_zip_code?.trim() || '' : null,
     requested_package_weight_oz: input.package_weight_oz !== undefined ? normalizePackageWeightOz(input.package_weight_oz) : null,
     requested_package_length_in: input.package_length_in !== undefined ? normalizePositiveDecimal(input.package_length_in) : null,
     requested_package_width_in: input.package_width_in !== undefined ? normalizePositiveDecimal(input.package_width_in) : null,
