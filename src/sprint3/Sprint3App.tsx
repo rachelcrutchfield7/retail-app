@@ -4013,14 +4013,14 @@ function ListingForm({
         progress={progress}
       />
       <TextInput
-        label="Title"
+        label="Title *"
         value={form.title}
         onChangeText={(value) => onChange('title', value)}
         placeholder="Large crate, cat tree, aquarium filter..."
         error={errors.title}
       />
       <TextArea
-        label="Description"
+        label="Description *"
         value={form.description}
         onChangeText={(value) => onChange('description', value)}
         placeholder="Condition, size, pickup notes..."
@@ -4065,8 +4065,8 @@ function ListingForm({
         onChangeText={(value) => onChange('reason_for_listing', value)}
         placeholder="Pet outgrew it, upgraded, foster supplies..."
       />
-      <CategorySelector value={form.category as Category} onChange={(category) => onChange('category', category)} error={errors.category} />
-      <ConditionSelector value={form.condition} onChange={(condition) => onChange('condition', condition)} error={errors.condition} />
+      <CategorySelector label="Category *" value={form.category as Category} onChange={(category) => onChange('category', category)} error={errors.category} />
+      <ConditionSelector label="Condition *" value={form.condition} onChange={(condition) => onChange('condition', condition)} error={errors.condition} />
       <Text style={styles.filterLabel}>Listing Type</Text>
       <View style={styles.wrapRow}>
         <FilterChip label="For Sale" selected={form.listing_type === 'sale'} onPress={() => onChange('listing_type', 'sale')} />
@@ -4080,18 +4080,20 @@ function ListingForm({
       ) : null}
       <RescueWishlistMatch form={form} />
       {form.listing_type === 'sale' ? (
-        <PriceInput value={String(form.price ?? '')} onChangeText={(value) => onChange('price', value)} error={errors.price} />
+        <PriceInput label="Price *" value={String(form.price ?? '')} onChangeText={(value) => onChange('price', value)} error={errors.price} />
       ) : null}
       <LocationPicker
         city={form.city}
         state={form.state}
+        cityLabel="City *"
+        stateLabel="State *"
         onCityChange={(value) => onChange('city', value)}
         onStateChange={(value) => onChange('state', value)}
         cityError={errors.city}
         stateError={errors.state}
       />
       <TextInput
-        label="Zip Code"
+        label="Zip Code *"
         value={form.zip_code ?? ''}
         onChangeText={updateZipCode}
         placeholder="78701"
@@ -4138,7 +4140,7 @@ function ListingForm({
             label="Estimated shipping cost"
             value={String(form.shipping_cost_estimate ?? '')}
             onChangeText={(value) => onChange('shipping_cost_estimate', value)}
-            placeholder="$8"
+            placeholder="$"
             helperText="Optional estimate. Final shipping can be confirmed in chat."
             error={errors.shipping_cost_estimate}
           />
@@ -4165,30 +4167,30 @@ function ListingForm({
           <Text style={styles.body}>
             Enter the weight of the item after it is packed for shipping, including the box and packing materials.
           </Text>
-          <View style={styles.gridTwo}>
+          <View style={styles.packageDimensionStack}>
             <TextInput
-              label="Length"
+              label="Length *"
               value={String(form.package_length_in ?? '')}
               onChangeText={(value) => onChange('package_length_in', value)}
-              placeholder="12"
+              placeholder="in"
               keyboardType="decimal-pad"
               helperText="Inches"
               error={errors.package_length_in}
             />
             <TextInput
-              label="Width"
+              label="Width *"
               value={String(form.package_width_in ?? '')}
               onChangeText={(value) => onChange('package_width_in', value)}
-              placeholder="8"
+              placeholder="in"
               keyboardType="decimal-pad"
               helperText="Inches"
               error={errors.package_width_in}
             />
             <TextInput
-              label="Height"
+              label="Height *"
               value={String(form.package_height_in ?? '')}
               onChangeText={(value) => onChange('package_height_in', value)}
-              placeholder="4"
+              placeholder="in"
               keyboardType="decimal-pad"
               helperText="Measure the packed box in inches."
               error={errors.package_height_in}
@@ -4251,24 +4253,24 @@ function PackageWeightInputs({
   };
 
   return (
-    <Field label="Package Weight">
+    <Field label="Package Weight *">
       <View style={styles.gridTwo}>
         <View style={styles.weightInput}>
           <TextInput
-            label="Pounds"
+            label="Pounds *"
             value={poundsValue}
             onChangeText={(nextPounds) => updateWeight(nextPounds, ouncesValue)}
-            placeholder="2"
+            placeholder="lb"
             keyboardType="number-pad"
             error={error}
           />
         </View>
         <View style={styles.weightInput}>
           <TextInput
-            label="Ounces"
+            label="Ounces *"
             value={ouncesValue}
             onChangeText={(nextOunces) => updateWeight(poundsValue, nextOunces)}
-            placeholder="11"
+            placeholder="oz"
             keyboardType="number-pad"
           />
         </View>
@@ -4366,7 +4368,7 @@ function ShippingOriginSetupCard({
               onChangeText={(value) => onChange('name', value)}
             />
             <TextInput
-              label="Address line 1"
+              label="Address *"
               value={draft.addressLine1}
               onChangeText={(value) => onChange('addressLine1', value)}
             />
@@ -4376,19 +4378,19 @@ function ShippingOriginSetupCard({
               onChangeText={(value) => onChange('addressLine2', value)}
             />
             <TextInput
-              label="City"
+              label="City *"
               value={draft.city}
               onChangeText={(value) => onChange('city', value)}
             />
             <View style={styles.gridTwo}>
               <TextInput
-                label="State"
+                label="State *"
                 value={draft.state}
                 onChangeText={(value) => onChange('state', value.toUpperCase().slice(0, 2))}
                 placeholder="IL"
               />
               <TextInput
-                label="ZIP code"
+                label="ZIP Code *"
                 value={draft.postalCode}
                 onChangeText={(value) => onChange('postalCode', value)}
                 placeholder="62025"
@@ -4396,7 +4398,7 @@ function ShippingOriginSetupCard({
               />
             </View>
             <TextInput
-              label="Country"
+              label="Country *"
               value={draft.country}
               onChangeText={(value) => onChange('country', value.toUpperCase().slice(0, 2))}
               placeholder="US"
@@ -5359,6 +5361,9 @@ function createSprint3Styles(themeColors: ThemeColors) {
   gridTwo: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    gap: spacing.md,
+  },
+  packageDimensionStack: {
     gap: spacing.md,
   },
   weightInput: {

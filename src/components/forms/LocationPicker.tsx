@@ -5,6 +5,8 @@ import { TextInput } from './TextInput';
 type LocationPickerProps = {
   city: string;
   state: string;
+  cityLabel?: string;
+  stateLabel?: string;
   onCityChange: (city: string) => void;
   onStateChange: (state: string) => void;
   cityError?: string;
@@ -14,6 +16,8 @@ type LocationPickerProps = {
 export function LocationPicker({
   city,
   state,
+  cityLabel = 'City',
+  stateLabel = 'State',
   onCityChange,
   onStateChange,
   cityError,
@@ -22,7 +26,7 @@ export function LocationPicker({
   return (
     <View style={styles.locationGrid}>
       <TextInput
-        label="City"
+        label={cityLabel}
         value={city}
         onChangeText={onCityChange}
         placeholder="Austin"
@@ -30,7 +34,7 @@ export function LocationPicker({
         error={cityError}
       />
       <TextInput
-        label="State"
+        label={stateLabel}
         value={state}
         onChangeText={onStateChange}
         placeholder="TX"

@@ -1,18 +1,19 @@
 import { TextField } from './TextField';
 
 type PriceInputProps = {
+  label?: string;
   value: string;
   onChangeText: (value: string) => void;
   error?: string;
 };
 
-export function PriceInput({ value, onChangeText, error }: PriceInputProps) {
+export function PriceInput({ label = 'Price', value, onChangeText, error }: PriceInputProps) {
   return (
     <TextField
-      label="Price"
+      label={label}
       value={value}
       onChangeText={onChangeText}
-      placeholder="$25"
+      placeholder="$"
       keyboardType="default"
       error={error}
     />

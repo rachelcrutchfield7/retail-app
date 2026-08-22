@@ -7,17 +7,18 @@ import { FilterChip } from '../marketplace/FilterChip';
 import { formStyles } from './Field';
 
 type ConditionSelectorProps = {
+  label?: string;
   value?: ListingCondition;
   onChange: (condition: ListingCondition) => void;
   error?: string;
 };
 
-export function ConditionSelector({ value, onChange, error }: ConditionSelectorProps) {
+export function ConditionSelector({ label = 'Condition', value, onChange, error }: ConditionSelectorProps) {
   const themeColors = useThemeColors();
 
   return (
     <View style={styles.field}>
-      <Text style={[formStyles.fieldLabel, { color: themeColors.textPrimary }]}>Condition</Text>
+      <Text style={[formStyles.fieldLabel, { color: themeColors.textPrimary }]}>{label}</Text>
       <View style={styles.row}>
         {CONDITIONS.map((condition) => (
           <FilterChip

@@ -71,6 +71,7 @@ test('accepted offer checkout preflight rejects expired or consumed offers befor
   const sprint4App = readFileSync(join(root, 'src/sprint4/Sprint4App.tsx'), 'utf8');
 
   assert.match(offerService, /export async function assertAcceptedOfferCheckoutAvailable/);
+  assert.match(offerService, /export async function isAcceptedOfferCheckoutAvailable/);
   assert.match(offerService, /\.from\('offers'\)/);
   assert.match(offerService, /accepted_expires_at/);
   assert.match(offerService, /acceptedExpiresAt <= Date\.now\(\)/);
@@ -81,4 +82,15 @@ test('accepted offer checkout preflight rejects expired or consumed offers befor
     sprint4App.indexOf('assertAcceptedOfferCheckoutAvailable(acceptedOfferId)') < sprint4App.indexOf('getShippingRates({'),
     'accepted offer freshness should be checked before rate/checkout work'
   );
+});
+
+test('expired accepted offer messages do not permanently block new offers or normal checkout', () => {
+  const sprint4App = readFileSync(join(root, 'src/sprint4/Sprint4App.tsx'), 'utf8');
+
+  assert.match(sprint4App, /const latestAcceptedOfferMessage = useMemo/);
+  assert.match(sprint4App, /isAcceptedOfferCheckoutAvailable\(offerId\)/);
+  assert.match(sprint4App, /setActionableAcceptedOfferId\(available \? offerId : null\)/);
+  assert.match(sprint4App, /latestAcceptedOfferMessage\?\.offerId === actionableAcceptedOfferId/);
+  assert.match(sprint4App, /const canMakeOffer = paidListing && !isSeller && !acceptedAmount && !acceptedOfferChecking/);
+  assert.match(sprint4App, /Checking the current offer status\.\.\./);
 });

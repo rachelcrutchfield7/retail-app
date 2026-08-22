@@ -7,17 +7,18 @@ import { CategoryChip } from '../marketplace/CategoryChip';
 import { formStyles } from './Field';
 
 type CategorySelectorProps = {
+  label?: string;
   value?: Category;
   onChange: (category: Category) => void;
   error?: string;
 };
 
-export function CategorySelector({ value, onChange, error }: CategorySelectorProps) {
+export function CategorySelector({ label = 'Category', value, onChange, error }: CategorySelectorProps) {
   const themeColors = useThemeColors();
 
   return (
     <View style={styles.field}>
-      <Text style={[formStyles.fieldLabel, { color: themeColors.textPrimary }]}>Category</Text>
+      <Text style={[formStyles.fieldLabel, { color: themeColors.textPrimary }]}>{label}</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
         {CATEGORIES.map((category) => (
           <CategoryChip

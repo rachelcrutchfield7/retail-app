@@ -53,9 +53,9 @@ test('formatted package weight omits zero-value units', () => {
 test('listing form uses pounds and ounces while preserving package_weight_oz', () => {
   const sprint3App = read('src/sprint3/Sprint3App.tsx');
 
-  assert.match(sprint3App, /label="Package Weight"/);
-  assert.match(sprint3App, /label="Pounds"/);
-  assert.match(sprint3App, /label="Ounces"/);
+  assert.match(sprint3App, /label="Package Weight \*"/);
+  assert.match(sprint3App, /label="Pounds \*"/);
+  assert.match(sprint3App, /label="Ounces \*"/);
   assert.match(sprint3App, /totalPackageWeightOzFromParts/);
   assert.match(sprint3App, /onChange\('package_weight_oz', value\)/);
   assert.doesNotMatch(sprint3App, /helperText="Ounces\. Seller is responsible for accurate package weight\."/);

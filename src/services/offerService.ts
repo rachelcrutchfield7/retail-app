@@ -400,6 +400,15 @@ export async function assertAcceptedOfferCheckoutAvailable(offerId: string): Pro
   }
 }
 
+export async function isAcceptedOfferCheckoutAvailable(offerId: string): Promise<boolean> {
+  try {
+    await assertAcceptedOfferCheckoutAvailable(offerId);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function acceptOffer(
   conversationId: string,
   offer: OfferEvent

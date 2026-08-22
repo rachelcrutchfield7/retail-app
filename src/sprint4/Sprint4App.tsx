@@ -134,6 +134,7 @@ import {
   declineOffer,
   formatOfferBodyPreview,
   hasOfferResponse,
+  isAcceptedOfferCheckoutAvailable,
   makeOffer,
   parseOfferMessage,
 } from '../services/offerService';
@@ -1076,9 +1077,15 @@ export function ConversationScreen({
     action: 'accept' | 'decline' | 'counter';
   } | null>(null);
   const [offerActionErrors, setOfferActionErrors] = useState<Record<string, string>>({});
+  const [actionableAcceptedOfferId, setActionableAcceptedOfferId] = useState<string | null>(null);
+  const [acceptedOfferChecking, setAcceptedOfferChecking] = useState(false);
   const messageListRef = useRef<FlatList<MessageListItem>>(null);
   const messageItems = useMemo(() => buildMessageList(messages.data ?? []), [messages.data]);
   const lastMessageKey = messageItems.at(-1)?.key ?? 'empty';
+  const latestAcceptedOfferMessage = useMemo(
+    () => findLatestAcceptedOffer(messages.data ?? []),
+    [messages.data]
+  );
 
   const chooseImage = async () => {
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
@@ -1183,6 +1190,37 @@ export function ConversationScreen({
     return () => clearTimeout(timeout);
   }, [conversation.isLoading, conversationId, lastMessageKey, messageItems.length, messages.isLoading]);
 
+  useEffect(() => {
+    const offerId = latestAcceptedOfferMessage?.offerId;
+    let active = true;
+
+    setActionableAcceptedOfferId(null);
+
+    if (!offerId) {
+      setAcceptedOfferChecking(false);
+      return () => {
+        active = false;
+      };
+    }
+
+    setAcceptedOfferChecking(true);
+    void isAcceptedOfferCheckoutAvailable(offerId)
+      .then((available) => {
+        if (active) {
+          setActionableAcceptedOfferId(available ? offerId : null);
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setAcceptedOfferChecking(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [latestAcceptedOfferMessage?.offerId]);
+
   // Conversation detail is enough to render the thread shell.
   // Do not block the entire screen while the first message page loads.
   if (conversation.isLoading && !conversation.data) {
@@ -1205,9 +1243,11 @@ export function ConversationScreen({
   const hasListing = Boolean(conversationDetail.listingId);
   const paidListing = isPaidListing(conversationDetail.listingSummary);
   const isSeller = conversationDetail.sellerId === auth.user?.id;
-  const acceptedOffer = findLatestAcceptedOffer(messages.data ?? []);
+  const acceptedOffer = latestAcceptedOfferMessage?.offerId === actionableAcceptedOfferId
+    ? latestAcceptedOfferMessage
+    : null;
   const acceptedAmount = acceptedOffer?.amount;
-  const canMakeOffer = paidListing && !isSeller && !acceptedAmount;
+  const canMakeOffer = paidListing && !isSeller && !acceptedAmount && !acceptedOfferChecking;
   const latestReportableMessage = [...(messages.data ?? [])]
     .reverse()
     .find((message) => message.sender_id !== auth.user?.id && message.message_type !== 'system');
@@ -1271,7 +1311,11 @@ export function ConversationScreen({
                 />
                 ) : (
                   <Text style={styles.metaText}>
-                    {isSeller ? 'Review offers in the conversation and choose accept, decline, or counter.' : 'Checkout will unlock after the seller accepts an offer.'}
+                    {isSeller
+                      ? 'Review offers in the conversation and choose accept, decline, or counter.'
+                      : acceptedOfferChecking
+                        ? 'Checking the current offer status...'
+                        : 'Checkout will unlock after the seller accepts an offer.'}
                   </Text>
                 )}
               </View>
@@ -1279,7 +1323,7 @@ export function ConversationScreen({
             {offerOpen && canMakeOffer ? (
               <View style={styles.offerForm}>
                 <TextInput
-                  label="Offer Amount"
+                  label="Offer Amount *"
                   value={offerAmount}
                   onChangeText={setOfferAmount}
                   keyboardType="decimal-pad"

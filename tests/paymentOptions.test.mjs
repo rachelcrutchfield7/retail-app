@@ -115,6 +115,24 @@ test('payment service preserves safe Edge Function checkout error bodies', () =>
   assert.match(paymentService, /serverMessage \?\? 'Stripe checkout could not be started\. Please try again in a moment\.'/);
 });
 
+test('post-rate shipping checkout failures are not mislabeled as rate calculation failures', () => {
+  const checkoutScreen = sprint4CheckoutSource();
+  const offerService = readFileSync(join(root, 'src/services/offerService.ts'), 'utf8');
+
+  assert.match(checkoutScreen, /const rateFailure = handledError\.code === 'SHIPPING_RATE_FAILED'/);
+  assert.match(checkoutScreen, /&& rateFailure/);
+  assert.match(checkoutScreen, /: handledError\.userMessage/);
+  assert.match(offerService, /This accepted offer is no longer available\. Return to Messages and make a new offer\./);
+});
+
+test('shipping checkout sends full-price orders without stale accepted offer authority', () => {
+  const checkoutScreen = sprint4CheckoutSource();
+
+  assert.match(checkoutScreen, /acceptedOfferId,\s*offerDisplayAmount,\s*onBack,/);
+  assert.match(checkoutScreen, /if \(acceptedOfferId\) \{\s*await assertAcceptedOfferCheckoutAvailable\(acceptedOfferId\);\s*\}/s);
+  assert.match(checkoutScreen, /acceptedOfferId,\s*offerDisplayAmount: checkoutAmount,/);
+});
+
 test('shipping guidance explains tracked rate selection and tracking timing', () => {
   const checkoutScreen = sprint4CheckoutSource();
 

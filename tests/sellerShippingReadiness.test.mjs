@@ -57,6 +57,51 @@ test('listing shipping setup places private ship-from address after package meas
   assert.match(sprint3App, /Shipping from: \$\{origin\.city\}, \$\{origin\.state\} \$\{origin\.postalCode\}/);
 });
 
+test('new listing numeric package and price fields start empty without arbitrary prefilled values', () => {
+  assert.match(sprint3App, /price: ''/);
+  assert.match(sprint3App, /package_weight_oz: ''/);
+  assert.match(sprint3App, /package_length_in: ''/);
+  assert.match(sprint3App, /package_width_in: ''/);
+  assert.match(sprint3App, /package_height_in: ''/);
+  assert.match(sprint3App, /package_weight_oz: item\.packageWeightOz \?\? ''/);
+  assert.match(sprint3App, /package_length_in: item\.packageLengthIn \?\? ''/);
+  assert.match(sprint3App, /package_width_in: item\.packageWidthIn \?\? ''/);
+  assert.match(sprint3App, /package_height_in: item\.packageHeightIn \?\? ''/);
+  assert.doesNotMatch(sprint3App, /placeholder="(?:1|2|4|8|11|12)"/);
+});
+
+test('required listing and shipping fields are visibly marked and conditionally enforced', () => {
+  assert.match(sprint3App, /label="Title \*"/);
+  assert.match(sprint3App, /label="Description \*"/);
+  assert.match(sprint3App, /label="Category \*"/);
+  assert.match(sprint3App, /label="Condition \*"/);
+  assert.match(sprint3App, /label="Price \*"/);
+  assert.match(sprint3App, /cityLabel="City \*"/);
+  assert.match(sprint3App, /stateLabel="State \*"/);
+  assert.match(sprint3App, /label="Zip Code \*"/);
+  assert.match(sprint3App, /<Field label="Package Weight \*">/);
+  assert.match(sprint3App, /label="Length \*"/);
+  assert.match(sprint3App, /label="Width \*"/);
+  assert.match(sprint3App, /label="Height \*"/);
+  assert.match(sprint3App, /label="Address \*"/);
+  assert.match(sprint3App, /label="Phone Number \*"/);
+  assert.match(sprint3App, /form\.shipping_available \? \(/);
+  assert.match(listingService, /if \(!shippingAvailable\) \{\s*return null;\s*\}/s);
+});
+
+test('package measurement inputs use a comfortable mobile stack', () => {
+  const dimensionsBlock = extractBetween(
+    sprint3App,
+    '<View style={styles.packageDimensionStack}>',
+    '<ShippingOriginSetupCard',
+  );
+
+  assert.match(dimensionsBlock, /label="Length \*"/);
+  assert.match(dimensionsBlock, /label="Width \*"/);
+  assert.match(dimensionsBlock, /label="Height \*"/);
+  assert.match(sprint3App, /packageDimensionStack: \{\s*gap: spacing\.md,\s*\}/s);
+});
+
 test('existing default origin is reused and add-edit flow saves the private seller origin', () => {
   assert.match(sprint3App, /getDefaultSellerShippingOrigin\(\)/);
   assert.match(sprint3App, /saveDefaultSellerShippingOrigin\(shippingOriginDraft\)/);

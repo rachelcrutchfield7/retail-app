@@ -125,19 +125,19 @@ export function validateShippingPackage(input: ShippingPackageInput & { shipping
   }
 
   if (!normalizePackageWeightOz(input.weightOz)) {
-    errors.weightOz = 'Add a package weight greater than zero.';
+    errors.weightOz = 'Enter the packed weight.';
   }
 
   if (!normalizePositiveDecimal(input.lengthIn)) {
-    errors.lengthIn = 'Add package length in inches.';
+    errors.lengthIn = 'Enter the packed length.';
   }
 
   if (!normalizePositiveDecimal(input.widthIn)) {
-    errors.widthIn = 'Add package width in inches.';
+    errors.widthIn = 'Enter the packed width.';
   }
 
   if (!normalizePositiveDecimal(input.heightIn)) {
-    errors.heightIn = 'Add package height in inches.';
+    errors.heightIn = 'Enter the packed height.';
   }
 
   if (input.shippingPayer && input.shippingPayer !== 'buyer' && input.shippingPayer !== 'seller') {
