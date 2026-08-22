@@ -22,6 +22,10 @@ export default {
                 {
                   "/": "/listing/*",
                   comment: "Open public ReTail listings in the ReTail app."
+                },
+                {
+                  "/": "/auth/callback",
+                  comment: "Open ReTail auth callbacks in the app after email confirmation."
                 }
               ]
             }
@@ -43,6 +47,10 @@ export default {
           }
         }
       ]);
+    }
+
+    if (url.pathname === "/auth/callback") {
+      return html(authCallbackPage(url));
     }
 
     const match = url.pathname.match(/^\/listing\/([^/]+)\/?$/);
@@ -332,6 +340,43 @@ function html(value: string, status = 200) {
           : "no-store"
     }
   });
+}
+
+function authCallbackPage(url: URL) {
+  const appUrl = `retail://auth/callback${url.search}${url.hash}`;
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta name="robots" content="noindex" />
+<title>Email confirmed | ReTail</title>
+<style>
+body{margin:0;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f8faf6;color:#243126;display:grid;min-height:100vh;place-items:center;padding:24px}
+main{max-width:480px;background:#fff;border:1px solid #dfe8d7;border-radius:16px;padding:28px;box-shadow:0 18px 48px rgba(34,49,38,.12)}
+h1{font-size:1.7rem;margin:0 0 12px}
+p{line-height:1.5;margin:0 0 18px}
+a{display:inline-flex;align-items:center;justify-content:center;min-height:44px;border-radius:999px;background:#2f6f4e;color:#fff;text-decoration:none;font-weight:700;padding:0 18px}
+</style>
+</head>
+<body>
+<main>
+<h1>Email confirmed</h1>
+<p>Your ReTail email is confirmed. Open ReTail to finish signing in.</p>
+<a id="open-retail" href="${escapeHtml(appUrl)}">Open ReTail</a>
+</main>
+<script>
+(function(){
+  var target = ${JSON.stringify(appUrl)};
+  if (window.history && window.history.replaceState) {
+    window.history.replaceState(null, document.title, "/auth/callback");
+  }
+  setTimeout(function(){ window.location.href = target; }, 100);
+})();
+</script>
+</body>
+</html>`;
 }
 
 function escapeHtml(value: string) {

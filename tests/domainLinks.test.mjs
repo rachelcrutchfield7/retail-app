@@ -62,6 +62,7 @@ test('Cloudflare Pages static site includes launch, beta, legal, and support pag
     'site/terms/index.html',
     'site/community-guidelines/index.html',
     'site/support/index.html',
+    'site/auth/callback/index.html',
     'site/404.html',
     'site/styles.css',
   ];
@@ -79,6 +80,21 @@ test('Cloudflare Pages static site includes launch, beta, legal, and support pag
   assert.match(read('site/terms/index.html'), /Live animals/);
   assert.match(read('site/community-guidelines/index.html'), /Respectfully/);
   assert.match(read('site/support/index.html'), /Email support/);
+  assert.match(read('site/auth/callback/index.html'), /retail:\/\/auth\/callback/);
+});
+
+test('public link worker supports listing and auth callback app links', () => {
+  const worker = read('web-worker/src/index.ts');
+  const workerRoutes = read('web-worker/wrangler.jsonc');
+  const aasa = read('web/.well-known/apple-app-site-association');
+  const assetlinks = read('web/.well-known/assetlinks.json');
+
+  assert.match(worker, /"\/": "\/listing\/\*"/);
+  assert.match(worker, /"\/": "\/auth\/callback"/);
+  assert.match(worker, /retail:\/\/auth\/callback/);
+  assert.match(workerRoutes, /retailpetapp\.com\/auth\/callback\*/);
+  assert.match(aasa, /"\/": "\/auth\/callback"/);
+  assert.match(assetlinks, /delegate_permission\/common\.handle_all_urls/);
 });
 
 test('domain operations are documented without pretending universal links are complete', () => {

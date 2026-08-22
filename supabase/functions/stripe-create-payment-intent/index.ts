@@ -729,14 +729,21 @@ Deno.serve(async (request) => {
   let reservationAttachedToPaymentIntent = false;
   let foundingSellerCheckoutToken: string | null = null;
   let foundingSellerBenefitAttached = false;
+  let checkoutStage = 'request_start';
+  let listingIdForDiagnostics: string | null = null;
+  let acceptedOfferPresentForDiagnostics = false;
+  let taxCalculationCreatedForDiagnostics = false;
 
   try {
+    checkoutStage = 'authenticate_request';
     const { supabaseAdmin, user } = await requireAuthenticatedRequest(request);
     supabaseAdminForRelease = supabaseAdmin;
     buyerIdForRelease = user.id;
 
+    checkoutStage = 'parse_request';
     const body = await request.json() as CheckoutRequest;
     const listingId = typeof body.listingId === 'string' ? body.listingId : '';
+    listingIdForDiagnostics = listingId || null;
 
     if (!listingId) {
       return jsonResponse({ error: 'A valid listing is required.' }, 400);
@@ -746,13 +753,16 @@ Deno.serve(async (request) => {
       typeof body.acceptedOfferId === 'string' && body.acceptedOfferId.trim()
         ? body.acceptedOfferId.trim()
         : null;
+    acceptedOfferPresentForDiagnostics = Boolean(acceptedOfferId);
 
     // Normal checkout still uses the canonical listing amount.
     // Accepted-offer checkout passes the offer ID; the reservation RPC
     // independently validates the offer and derives its authoritative cents.
+    checkoutStage = 'load_listing_amount';
     const canonicalAmountCents =
       await loadCanonicalListingAmountCents(supabaseAdmin, listingId);
 
+    checkoutStage = 'reserve_listing';
     const { data: reservationRows, error: reservationError } = await supabaseAdmin.rpc(
       'reserve_stripe_checkout_listing',
       {
@@ -777,9 +787,11 @@ Deno.serve(async (request) => {
     reservationToRelease = reservation;
 
     if (reservation.existing_payment_intent_id) {
+      checkoutStage = 'retrieve_existing_payment_intent';
       const existingPaymentIntent = await getStripe().paymentIntents.retrieve(reservation.existing_payment_intent_id);
 
       if (isPaymentIntentReusable(existingPaymentIntent) && reservation.existing_transaction_id) {
+        checkoutStage = 'load_existing_transaction';
         const existingBreakdown = await loadTransactionCheckoutBreakdown(supabaseAdmin, reservation.existing_transaction_id);
         const sameOfferAuthority =
           (existingBreakdown?.accepted_offer_id ?? null) === acceptedOfferId;
@@ -806,6 +818,7 @@ Deno.serve(async (request) => {
     }
 
     if (reservation.stale_payment_intent_id) {
+      checkoutStage = 'cancel_stale_payment_intent';
       const staleCancelled = await cancelStalePaymentIntent(reservation.stale_payment_intent_id);
 
       if (!staleCancelled) {
@@ -830,6 +843,7 @@ Deno.serve(async (request) => {
     const itemAmountCents = reservation.amount_cents;
     const normalPlatformFeeCents = calculatePlatformFeeCents(itemAmountCents);
     foundingSellerCheckoutToken = crypto.randomUUID();
+    checkoutStage = 'reserve_founding_seller_benefit';
     const foundingSellerBenefit = await reserveFoundingSellerBenefit(
       supabaseAdmin,
       foundingSellerCheckoutToken,
@@ -837,6 +851,7 @@ Deno.serve(async (request) => {
       normalPlatformFeeCents,
     );
     const platformFeeCents = foundingSellerBenefit.platformFeeCents;
+    checkoutStage = 'stripe_tax_calculation';
     const taxCalculation = await createCheckoutTaxCalculation({
       reservation,
       itemAmountCents,
@@ -844,11 +859,13 @@ Deno.serve(async (request) => {
       shippingCollectedCents: shipping.shippingCollectedCents,
       taxAddress,
     });
+    taxCalculationCreatedForDiagnostics = true;
     const taxAmountCents = taxCalculation.tax_amount_exclusive + taxCalculation.tax_amount_inclusive;
     const checkoutTotalCents = taxCalculation.amount_total;
     const sellerAmountCents = itemAmountCents;
     const stripeApplicationFeeWithheldCents = platformFeeCents + shipping.shippingCollectedCents + taxAmountCents;
 
+    checkoutStage = 'payment_intent_create';
     const paymentIntent = await getStripe().paymentIntents.create({
       amount: checkoutTotalCents,
       currency: 'usd',
@@ -869,7 +886,7 @@ Deno.serve(async (request) => {
         retail_buyer_id: user.id,
         retail_seller_id: String(reservation.seller_id),
         retail_platform_fee_cents: String(platformFeeCents),
-        retail_platform_fee_before_founding_seller_cents: String(normalPlatformFeeCents),
+        retail_platform_fee_pre_fs_cents: String(normalPlatformFeeCents),
         retail_founding_seller_benefit_applied: String(foundingSellerBenefit.benefitApplied),
         retail_founding_seller_fee_waived_cents: String(foundingSellerBenefit.waivedPlatformFeeCents),
         retail_shipping_collected_cents: String(shipping.shippingCollectedCents),
@@ -884,6 +901,7 @@ Deno.serve(async (request) => {
     } as Stripe.PaymentIntentCreateParams);
     createdPaymentIntentId = paymentIntent.id;
 
+    checkoutStage = 'transaction_persist';
     const transactionPayload = {
       listing_id: reservation.listing_id,
       buyer_id: user.id,
@@ -944,6 +962,7 @@ Deno.serve(async (request) => {
     }
 
     if (shippingQuote) {
+      checkoutStage = 'shipping_rate_lock';
       const { error: quoteUpdateError } = await supabaseAdmin
         .from('shipping_rate_quotes')
         .update({
@@ -962,6 +981,7 @@ Deno.serve(async (request) => {
         return jsonResponse({ error: 'Payment was created, but ReTail could not lock the shipping rate.' }, 500);
       }
 
+      checkoutStage = 'shipping_detail_persist';
       const { error: shippingDetailError } = await supabaseAdmin
         .from('transaction_shipping_details')
         .upsert({
@@ -990,6 +1010,7 @@ Deno.serve(async (request) => {
     }
 
     try {
+      checkoutStage = 'founding_seller_benefit_attach';
       await attachFoundingSellerBenefit(
         supabaseAdmin,
         foundingSellerCheckoutToken,
@@ -1007,6 +1028,7 @@ Deno.serve(async (request) => {
       return jsonResponse({ error: 'Payment was created, but ReTail could not save the seller benefit.' }, 500);
     }
 
+    checkoutStage = 'checkout_reservation_attach';
     const { error: attachError } = await supabaseAdmin.rpc('attach_stripe_checkout_reservation', {
       p_listing_id: reservation.listing_id,
       p_buyer_id: user.id,
@@ -1023,6 +1045,7 @@ Deno.serve(async (request) => {
       return jsonResponse({ error: 'Payment was created, but ReTail could not finish reserving the listing.' }, 500);
     }
 
+    checkoutStage = 'response';
     reservationAttachedToPaymentIntent = true;
     reservationToRelease = null;
 
@@ -1082,7 +1105,27 @@ Deno.serve(async (request) => {
       return jsonResponse({ error: error.message }, error.status);
     }
 
-    const status = typeof (error as { status?: unknown }).status === 'number' ? (error as { status: number }).status : 500;
+    const stripeStatus =
+      typeof (error as { statusCode?: unknown }).statusCode === 'number'
+        ? (error as { statusCode: number }).statusCode
+        : typeof (error as { status?: unknown }).status === 'number'
+          ? (error as { status: number }).status
+          : undefined;
+
+    console.error('Stripe checkout failed.', {
+      stage: checkoutStage,
+      listingId: listingIdForDiagnostics,
+      acceptedOfferPresent: acceptedOfferPresentForDiagnostics,
+      taxCalculationCreated: taxCalculationCreatedForDiagnostics,
+      paymentIntentCreated: Boolean(createdPaymentIntentId),
+      stripeErrorCode: typeof (error as { code?: unknown }).code === 'string' ? (error as { code: string }).code : undefined,
+      stripeErrorParam: typeof (error as { param?: unknown }).param === 'string' ? (error as { param: string }).param : undefined,
+      stripeErrorType: typeof (error as { type?: unknown }).type === 'string' ? (error as { type: string }).type : undefined,
+      stripeStatusCode: stripeStatus,
+      errorMessage: error instanceof Error ? error.message : 'Stripe checkout failed.',
+    });
+
+    const status = stripeStatus ?? 500;
     return jsonResponse({ error: error instanceof Error ? error.message : 'Stripe checkout failed.' }, status);
   }
 });

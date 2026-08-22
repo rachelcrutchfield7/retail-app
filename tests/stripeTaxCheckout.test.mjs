@@ -21,6 +21,12 @@ function paymentOptionsSource() {
   );
 }
 
+function checkoutMetadataKeys() {
+  const metadataMatch = stripeCreate.match(/metadata:\s*\{([\s\S]*?)\n\s*\},\n\s*description:/);
+  assert.ok(metadataMatch, 'checkout PaymentIntent metadata object should be present');
+  return [...metadataMatch[1].matchAll(/^\s*([A-Za-z0-9_]+):/gm)].map((match) => match[1]);
+}
+
 test('Stripe Tax checkout uses server-side listing price instead of client totals', () => {
   assert.match(stripeCreate, /loadCanonicalListingAmountCents\(supabaseAdmin, listingId\)/);
   assert.match(stripeCreate, /\.from\('listings'\)\s*\.select\('price'\)/s);
@@ -30,6 +36,8 @@ test('Stripe Tax checkout uses server-side listing price instead of client total
 });
 
 test('Stripe Tax Calculation API is authoritative for buyer total and PaymentIntent tax hook', () => {
+  assert.match(stripeShared, /STRIPE_API_VERSION = '2025-11-17\.clover'/);
+  assert.match(stripeShared, /new Stripe\(secretKey,\s*\{\s*apiVersion: STRIPE_API_VERSION/s);
   assert.match(stripeCreate, /getStripe\(\)\.tax\.calculations\.create\(params\)/);
   assert.match(stripeCreate, /const checkoutTotalCents = taxCalculation\.amount_total/);
   assert.match(stripeCreate, /paymentIntents\.create\(\{\s*amount: checkoutTotalCents/s);
@@ -71,12 +79,23 @@ test('application fee withholds ReTail fee, tax, and collected shipping from con
 
 test('collected tax is separated from ReTail marketplace revenue in transaction and metadata fields', () => {
   assert.match(stripeCreate, /retail_platform_fee_cents: String\(platformFeeCents\)/);
-  assert.match(stripeCreate, /retail_platform_fee_before_founding_seller_cents: String\(normalPlatformFeeCents\)/);
+  assert.match(stripeCreate, /retail_platform_fee_pre_fs_cents: String\(normalPlatformFeeCents\)/);
   assert.match(stripeCreate, /retail_tax_amount_cents: String\(taxAmountCents\)/);
   assert.match(stripeCreate, /retail_application_fee_withheld_cents: String\(stripeApplicationFeeWithheldCents\)/);
   assert.match(stripeCreate, /platform_fee_cents: platformFeeCents/);
   assert.match(stripeCreate, /tax_amount_cents: taxAmountCents/);
   assert.doesNotMatch(stripeCreate, /platform_fee_cents: stripeApplicationFeeWithheldCents/);
+});
+
+test('checkout Stripe metadata keys stay within Stripe key length limits', () => {
+  const keys = checkoutMetadataKeys();
+  assert.ok(keys.length > 0, 'checkout metadata keys should be parsed');
+  assert.deepEqual(
+    keys.filter((key) => key.length > 40),
+    [],
+    'Stripe metadata keys must be 40 characters or fewer',
+  );
+  assert.ok(keys.includes('retail_platform_fee_pre_fs_cents'));
 });
 
 test('transaction persistence stores authoritative tax and accounting breakdown', () => {
@@ -127,4 +146,19 @@ test('checkout response and client types include Stripe Tax breakdown fields', (
 test('client-submitted tax and total fields are not part of the checkout request contract', () => {
   assert.doesNotMatch(stripeCreate, /taxAmountCents\?:|totalAmountCents\?:|shippingAmountCents\?:|retailFeeAmountCents\?:/);
   assert.doesNotMatch(paymentService, /taxAmountCents,\s*\n|totalAmountCents,\s*\n|retailFeeAmountCents,\s*\n/);
+});
+
+test('checkout failures log safe stage diagnostics and preserve Stripe status codes', () => {
+  assert.match(stripeCreate, /let checkoutStage = 'request_start'/);
+  assert.match(stripeCreate, /checkoutStage = 'payment_intent_create'/);
+  assert.match(stripeCreate, /taxCalculationCreatedForDiagnostics = true/);
+  assert.match(stripeCreate, /console\.error\('Stripe checkout failed\.'/);
+  assert.match(stripeCreate, /stripeErrorCode/);
+  assert.match(stripeCreate, /stripeErrorParam/);
+  assert.match(stripeCreate, /stripeErrorType/);
+  assert.match(stripeCreate, /stripeStatusCode: stripeStatus/);
+  assert.match(stripeCreate, /statusCode\?: unknown/);
+  assert.doesNotMatch(stripeCreate, /console\.error\('Stripe checkout failed\.'[\s\S]*client_secret/);
+  assert.doesNotMatch(stripeCreate, /console\.error\('Stripe checkout failed\.'[\s\S]*STRIPE_SECRET_KEY/);
+  assert.doesNotMatch(stripeCreate, /console\.error\('Stripe checkout failed\.'[\s\S]*Authorization/);
 });

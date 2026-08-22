@@ -9,6 +9,10 @@
           {
             "/": "/listing/*",
             "comment": "Open public ReTail listing links in the ReTail app."
+          },
+          {
+            "/": "/auth/callback",
+            "comment": "Open ReTail auth callbacks in the app after email confirmation."
           }
         ]
       }

@@ -114,6 +114,7 @@ import {
   type SellerShippingOrigin,
   type ShippingRateOption,
 } from '../services/shippingService';
+import { handleEmailConfirmationCallbackUrl } from '../services/authService';
 import { getListingIdFromSharedUrl } from '../services/listingShareService';
 import {
   getStripeConnectPayoutState,
@@ -331,6 +332,19 @@ function Sprint4Experience() {
           .catch(() => auth.refreshProfile());
         return;
       }
+
+      void handleEmailConfirmationCallbackUrl(url)
+        .then((confirmedSession) => {
+          if (!mounted || !confirmedSession) {
+            return;
+          }
+
+          void auth.refreshProfile();
+          setRoute({ name: 'tabs', tab: 'profile' });
+        })
+        .catch(() => {
+          Alert.alert('Email confirmation needs attention', 'We could not finish confirming your email. Please sign in again.');
+        });
 
       const sharedListingId = getListingIdFromSharedUrl(url);
       if (sharedListingId) {

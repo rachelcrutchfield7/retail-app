@@ -10,6 +10,10 @@
     {
       "pattern": "retailpetapp.com/.well-known/*",
       "zone_name": "retailpetapp.com"
+    },
+    {
+      "pattern": "retailpetapp.com/auth/callback*",
+      "zone_name": "retailpetapp.com"
     }
   ],
   "vars": {

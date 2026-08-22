@@ -9,6 +9,7 @@ const root = fileURLToPath(new URL('../..', import.meta.url));
 const read = (path) => readFileSync(join(root, path), 'utf8');
 
 const migration = readMigrationBySuffix('_stripe_checkout_reservation.sql');
+const reservationTriggerFix = read('supabase/migrations/20260822031317_allow_checkout_reservation_listing_trigger_context.sql');
 const stripeCreate = read('supabase/functions/stripe-create-payment-intent/index.ts');
 const stripeWebhook = read('supabase/functions/stripe-webhook/index.ts');
 const stripeShared = read('supabase/functions/_shared/stripe.ts');
@@ -123,4 +124,14 @@ test('checkout reservation task does not change fees, mobile UI, or unsupported 
   assert.doesNotMatch(stripeCreate, /charge\.refunded|charge\.dispute|refund\.|dispute\./);
   assert.match(stripeWebhook, /charge\.refunded/);
   assert.match(stripeWebhook, /charge\.dispute\.created/);
+});
+
+test('checkout reservation context bypasses only the user-facing listing write guard', () => {
+  assert.match(reservationTriggerFix, /create or replace function private\.enforce_phase_f_listing_write/);
+  assert.match(reservationTriggerFix, /current_setting\('retail\.checkout_reservation_context', true\)/);
+  assert.match(reservationTriggerFix, /if trusted_checkout_reservation then\s+return new;\s+end if;/s);
+  assert.match(reservationTriggerFix, /caller_id := private\.require_active_account\(\)/);
+  assert.match(reservationTriggerFix, /RETAIL_LISTING_PERMISSION_DENIED/);
+  assert.match(reservationTriggerFix, /RETAIL_PROTECTED_LISTING_FIELD/);
+  assert.doesNotMatch(reservationTriggerFix, /jwt_role = 'service_role'/);
 });

@@ -5,7 +5,11 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { readMigrationBySuffix } from './migrationTestUtils.mjs';
 
-import { signUpWithEmail } from '../src/services/authService.ts';
+import {
+  getEmailConfirmationRedirectUrl,
+  handleEmailConfirmationCallbackUrl,
+  signUpWithEmail,
+} from '../src/services/authService.ts';
 import {
   getCurrentConsentState,
   recordCurrentPolicyAcceptance,
@@ -77,11 +81,132 @@ test('email signup records required acceptance and marketing false in pending me
   );
 
   assert.equal(calls.length, 1);
+  assert.equal(calls[0].options.emailRedirectTo, 'https://retailpetapp.com/auth/callback');
   assert.equal(calls[0].options.data.retail_terms_accepted, true);
   assert.equal(calls[0].options.data.retail_community_guidelines_accepted, true);
   assert.equal(calls[0].options.data.retail_privacy_acknowledged, true);
   assert.equal(calls[0].options.data.retail_marketing_email_opt_in, false);
   assert.equal(calls[0].options.data.retail_consent_source, 'email_signup');
+});
+
+test('email confirmation callback exchanges Supabase tokens into an app session', async () => {
+  const callbackUrl = `${getEmailConfirmationRedirectUrl()}#access_token=access-token&refresh_token=refresh-token&type=signup`;
+  const setSessionCalls = [];
+
+  const session = await handleEmailConfirmationCallbackUrl(callbackUrl, {
+    async setSession(input) {
+      setSessionCalls.push(input);
+      return {
+        data: {
+          session: {
+            access_token: input.access_token,
+            expires_at: 1800000000,
+            user: {
+              id: 'confirmed-user',
+              email: 'confirmed@example.com',
+              email_confirmed_at: '2026-08-22T00:00:00.000Z',
+              user_metadata: {
+                display_name: 'Confirmed Person',
+                username: 'confirmed_person',
+                account_type: 'regular',
+              },
+            },
+          },
+        },
+        error: null,
+      };
+    },
+    async ensureProfile() {
+      return {
+        id: 'confirmed-user',
+        account_type: 'regular',
+        display_name: 'Confirmed Person',
+        username: 'confirmed_person',
+        buyer_rating: 0,
+        seller_rating: 0,
+        review_count: 0,
+        listings_count: 0,
+        completed_sales_count: 0,
+        is_verified: false,
+        is_admin: false,
+        is_banned: false,
+        stripe_connect_charges_enabled: false,
+        stripe_connect_payouts_enabled: false,
+        stripe_connect_details_submitted: false,
+        created_at: '2026-08-22T00:00:00.000Z',
+        updated_at: '2026-08-22T00:00:00.000Z',
+      };
+    },
+  });
+
+  assert.deepEqual(setSessionCalls, [{ access_token: 'access-token', refresh_token: 'refresh-token' }]);
+  assert.equal(session?.user.id, 'confirmed-user');
+  assert.equal(session?.user.emailVerified, true);
+});
+
+test('email confirmation callback supports Supabase code exchange callbacks', async () => {
+  const callbackUrl = `${getEmailConfirmationRedirectUrl()}?code=confirmation-code`;
+  const exchangeCalls = [];
+
+  const session = await handleEmailConfirmationCallbackUrl(callbackUrl, {
+    async exchangeCodeForSession(code) {
+      exchangeCalls.push(code);
+      return {
+        data: {
+          session: {
+            access_token: 'code-access-token',
+            expires_at: 1800000000,
+            user: {
+              id: 'code-confirmed-user',
+              email: 'code-confirmed@example.com',
+              email_confirmed_at: '2026-08-22T00:00:00.000Z',
+              user_metadata: {
+                display_name: 'Code Confirmed',
+                username: 'code_confirmed',
+                account_type: 'regular',
+              },
+            },
+          },
+        },
+        error: null,
+      };
+    },
+    async ensureProfile() {
+      return {
+        id: 'code-confirmed-user',
+        account_type: 'regular',
+        display_name: 'Code Confirmed',
+        username: 'code_confirmed',
+        buyer_rating: 0,
+        seller_rating: 0,
+        review_count: 0,
+        listings_count: 0,
+        completed_sales_count: 0,
+        is_verified: false,
+        is_admin: false,
+        is_banned: false,
+        stripe_connect_charges_enabled: false,
+        stripe_connect_payouts_enabled: false,
+        stripe_connect_details_submitted: false,
+        created_at: '2026-08-22T00:00:00.000Z',
+        updated_at: '2026-08-22T00:00:00.000Z',
+      };
+    },
+  });
+
+  assert.deepEqual(exchangeCalls, ['confirmation-code']);
+  assert.equal(session?.user.id, 'code-confirmed-user');
+  assert.equal(session?.user.emailVerified, true);
+});
+
+test('email confirmation callback ignores unrelated app links', async () => {
+  const session = await handleEmailConfirmationCallbackUrl('https://retailpetapp.com/listing/listing-id', {
+    async setSession() {
+      throw new Error('setSession should not be called for non-auth links');
+    },
+  });
+
+  assert.equal(session, null);
 });
 
 test('email signup preserves an explicit marketing opt-in', async () => {

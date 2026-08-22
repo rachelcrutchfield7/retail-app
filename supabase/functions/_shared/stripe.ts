@@ -1,5 +1,6 @@
 import Stripe from 'npm:stripe@^22';
 
+export const STRIPE_API_VERSION = '2025-11-17.clover';
 export const RETAIL_PRODUCT_TAX_CODE = Deno.env.get('RETAIL_PRODUCT_TAX_CODE') ?? 'txcd_99999999';
 export const RETAIL_SHIPPING_TAX_CODE = Deno.env.get('RETAIL_SHIPPING_TAX_CODE') ?? 'txcd_92010001';
 export const RETAIL_FEE_TAX_CODE = Deno.env.get('RETAIL_FEE_TAX_CODE') ?? 'txcd_20030000';
@@ -11,7 +12,9 @@ export function getStripe() {
     throw new Error('Missing STRIPE_SECRET_KEY.');
   }
 
-  return new Stripe(secretKey);
+  return new Stripe(secretKey, {
+    apiVersion: STRIPE_API_VERSION,
+  });
 }
 
 export function calculatePlatformFeeCents(amountCents: number): number {

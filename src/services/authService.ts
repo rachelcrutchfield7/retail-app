@@ -21,6 +21,8 @@ import type { AccountType, Profile, RescueSignupInput, Session, User } from './t
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const supportedAccountTypes: AccountType[] = ['regular', 'rescue'];
+const emailConfirmationRedirectUrl = 'https://retailpetapp.com/auth/callback';
+const authCallbackHosts = new Set(['retailpetapp.com', 'www.retailpetapp.com']);
 
 function assertValidEmail(email: string): void {
   if (!emailPattern.test(email.trim())) {
@@ -82,6 +84,7 @@ export async function signUpWithEmail(
     email: normalizedEmail,
     password,
     options: {
+      emailRedirectTo: emailConfirmationRedirectUrl,
       data: {
         display_name: displayName.trim(),
         username: normalizedUsername,
@@ -117,6 +120,118 @@ export async function signUpWithEmail(
   const user = userFromSupabase(data.user, undefined);
   trackEvent('Registration', { accountType: normalizedAccountType });
   return user;
+}
+
+export function getEmailConfirmationRedirectUrl(): string {
+  return emailConfirmationRedirectUrl;
+}
+
+function isReTailAuthCallbackUrl(url: string): boolean {
+  try {
+    const parsedUrl = new URL(url);
+
+    if (parsedUrl.protocol === 'retail:') {
+      return parsedUrl.hostname === 'auth' && parsedUrl.pathname === '/callback';
+    }
+
+    return parsedUrl.protocol === 'https:' && authCallbackHosts.has(parsedUrl.hostname) && parsedUrl.pathname === '/auth/callback';
+  } catch {
+    return false;
+  }
+}
+
+function authCallbackParams(url: string): URLSearchParams | null {
+  if (!isReTailAuthCallbackUrl(url)) {
+    return null;
+  }
+
+  const parsedUrl = new URL(url);
+  const params = new URLSearchParams(parsedUrl.search);
+  const hash = parsedUrl.hash.startsWith('#') ? parsedUrl.hash.slice(1) : parsedUrl.hash;
+
+  if (hash) {
+    const hashParams = new URLSearchParams(hash);
+    hashParams.forEach((value, key) => params.set(key, value));
+  }
+
+  return params;
+}
+
+export async function handleEmailConfirmationCallbackUrl(
+  url: string,
+  dependencies: {
+    setSession?: typeof supabase.auth.setSession;
+    exchangeCodeForSession?: typeof supabase.auth.exchangeCodeForSession;
+    ensureProfile?: typeof ensureCurrentProfile;
+  } = {}
+): Promise<Session | null> {
+  const params = authCallbackParams(url);
+
+  if (!params) {
+    return null;
+  }
+
+  const errorCode = params.get('error_code') ?? params.get('error');
+  if (errorCode) {
+    throw createServiceError(
+      'EMAIL_CONFIRMATION_FAILED',
+      `Supabase email confirmation callback failed: ${errorCode}`,
+      'We could not finish confirming your email. Please request a new confirmation link.'
+    );
+  }
+
+  const accessToken = params.get('access_token');
+  const refreshToken = params.get('refresh_token');
+  const authCode = params.get('code');
+
+  let authSession: Parameters<typeof sessionFromSupabase>[0] | null = null;
+
+  if (authCode) {
+    const exchangeCodeForSession =
+      dependencies.exchangeCodeForSession ?? ((code) => supabase.auth.exchangeCodeForSession(code));
+    const { data, error } = await exchangeCodeForSession(authCode);
+
+    if (error) {
+      throwSupabaseError(error, 'We could not finish confirming your email. Please sign in again.');
+    }
+
+    authSession = data.session ?? null;
+  }
+
+  if (!authSession && (!accessToken || !refreshToken)) {
+    return null;
+  }
+
+  if (!authSession && accessToken && refreshToken) {
+    const setSession = dependencies.setSession ?? ((input) => supabase.auth.setSession(input));
+    const { data, error } = await setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    });
+
+    if (error) {
+      throwSupabaseError(error, 'We could not finish confirming your email. Please sign in again.');
+    }
+
+    authSession = data.session ?? null;
+  }
+
+  if (!authSession) {
+    throw createServiceError(
+      'EMAIL_CONFIRMATION_SESSION_MISSING',
+      'Supabase returned no session after email confirmation callback',
+      'Your email is confirmed. Please sign in to continue.'
+    );
+  }
+
+  let profile: Profile | undefined;
+  try {
+    profile = await (dependencies.ensureProfile ?? ensureCurrentProfile)();
+  } catch (profileError) {
+    logger.warning('Email was confirmed, but profile setup needs attention.', { error: profileError });
+  }
+
+  return sessionFromSupabase(authSession, profile);
 }
 
 export async function signInWithEmailAndProfile(email: string, password: string): Promise<{ session: Session; profile: Profile | null }> {
