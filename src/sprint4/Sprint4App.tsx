@@ -1717,6 +1717,8 @@ export function PaymentOptionsScreen({
     zipCode: auth.profile?.zip_code ?? '',
     phone: '',
   });
+  type ShippingAddressField = keyof typeof shippingAddress;
+  const [shippingAddressErrors, setShippingAddressErrors] = useState<Partial<Record<ShippingAddressField, string>>>({});
   const paymentReadiness = getPaymentReadiness();
 
   if (listing.isLoading) {
@@ -1798,13 +1800,47 @@ export function PaymentOptionsScreen({
   const updateShippingAddress = (field: keyof typeof shippingAddress, value: string) => {
     setCheckoutSummary(null);
     clearShippingRates();
+    setShippingAddressErrors((current) => {
+      if (!current[field]) {
+        return current;
+      }
+      const next = { ...current };
+      delete next[field];
+      return next;
+    });
     setShippingAddress((current) => ({ ...current, [field]: value }));
   };
   const selectFulfillmentMethod = (method: 'pickup' | 'shipping') => {
     setCheckoutSummary(null);
     clearShippingRates();
     setNotice(null);
+    if (method === 'pickup') {
+      setShippingAddressErrors({});
+    }
     setFulfillmentMethod(method);
+  };
+
+  const validateShippingAddressForRates = () => {
+    const errors: Partial<Record<ShippingAddressField, string>> = {};
+
+    if (!shippingAddress.street1.trim()) {
+      errors.street1 = 'Street address is required for shipping.';
+    }
+    if (!shippingAddress.city.trim()) {
+      errors.city = 'City is required for shipping.';
+    }
+    if (!/^[A-Z]{2}$/.test(shippingAddress.state.trim().toUpperCase())) {
+      errors.state = 'Use a 2-letter state abbreviation.';
+    }
+    if (!/^\d{5}(-\d{4})?$/.test(shippingAddress.zipCode.trim())) {
+      errors.zipCode = 'Use a valid 5-digit ZIP code.';
+    }
+    if (shippingAddress.phone.replace(/\D/g, '').length < 7) {
+      errors.phone = 'Phone number is required by the shipping carrier.';
+    }
+
+    setShippingAddressErrors(errors);
+    return Object.keys(errors).length === 0;
   };
 
   const presentStripePaymentSheet = async (checkout: ProtectedCheckoutSetup) => {
@@ -1848,15 +1884,10 @@ export function PaymentOptionsScreen({
     }
 
     if (selectedFulfillmentMethod === 'shipping') {
-      const missingAddress = !shippingAddress.street1.trim()
-        || !shippingAddress.city.trim()
-        || !shippingAddress.state.trim()
-        || !/^\d{5}$/.test(shippingAddress.zipCode.trim());
-
-      if (missingAddress) {
+      if (!validateShippingAddressForRates()) {
         setNotice({
           title: 'Delivery address needed',
-          body: 'Add a street address, city, state, and 5-digit ZIP code before starting shipping checkout.',
+          body: 'Fix the highlighted delivery fields before calculating shipping.',
         });
         return;
       }
@@ -1964,12 +1995,19 @@ export function PaymentOptionsScreen({
                       <Text style={styles.metaText}>Sellers have up to 5 calendar days to get shipped orders accepted by the carrier.</Text>
                       <Text style={styles.cardTitle}>Delivery address</Text>
                       <TextInput label="Name" value={shippingAddress.name} onChangeText={(value) => updateShippingAddress('name', value)} />
-                      <TextInput label="Street address" value={shippingAddress.street1} onChangeText={(value) => updateShippingAddress('street1', value)} />
+                      <TextInput label="Street address" value={shippingAddress.street1} onChangeText={(value) => updateShippingAddress('street1', value)} error={shippingAddressErrors.street1} />
                       <TextInput label="Apt, suite, or unit" value={shippingAddress.street2} onChangeText={(value) => updateShippingAddress('street2', value)} />
-                      <TextInput label="City" value={shippingAddress.city} onChangeText={(value) => updateShippingAddress('city', value)} />
-                      <TextInput label="State" value={shippingAddress.state} onChangeText={(value) => updateShippingAddress('state', value.toUpperCase().slice(0, 2))} />
-                      <TextInput label="ZIP code" value={shippingAddress.zipCode} onChangeText={(value) => updateShippingAddress('zipCode', value)} keyboardType="number-pad" />
-                      <TextInput label="Phone for carrier" value={shippingAddress.phone} onChangeText={(value) => updateShippingAddress('phone', value)} keyboardType="phone-pad" />
+                      <TextInput label="City" value={shippingAddress.city} onChangeText={(value) => updateShippingAddress('city', value)} error={shippingAddressErrors.city} />
+                      <TextInput label="State" value={shippingAddress.state} onChangeText={(value) => updateShippingAddress('state', value.toUpperCase().slice(0, 2))} error={shippingAddressErrors.state} />
+                      <TextInput label="ZIP code" value={shippingAddress.zipCode} onChangeText={(value) => updateShippingAddress('zipCode', value)} keyboardType="number-pad" error={shippingAddressErrors.zipCode} />
+                      <TextInput
+                        label="Phone Number *"
+                        value={shippingAddress.phone}
+                        onChangeText={(value) => updateShippingAddress('phone', value)}
+                        keyboardType="phone-pad"
+                        helperText="Required by the shipping carrier for delivery."
+                        error={shippingAddressErrors.phone}
+                      />
                       {shippingRates.length > 0 ? (
                         <View style={styles.stack}>
                           <Text style={styles.cardTitle}>Shipping options</Text>
@@ -2879,7 +2917,13 @@ export function SettingsScreen({
         <TextInput label="City" value={shippingOrigin.city} onChangeText={(value) => updateShippingOrigin('city', value)} />
         <TextInput label="State" value={shippingOrigin.state} onChangeText={(value) => updateShippingOrigin('state', value)} />
         <TextInput label="ZIP code" value={shippingOrigin.postalCode} onChangeText={(value) => updateShippingOrigin('postalCode', value)} keyboardType="number-pad" />
-        <TextInput label="Phone for carrier" value={shippingOrigin.phone ?? ''} onChangeText={(value) => updateShippingOrigin('phone', value)} keyboardType="phone-pad" />
+        <TextInput
+          label="Phone Number *"
+          value={shippingOrigin.phone ?? ''}
+          onChangeText={(value) => updateShippingOrigin('phone', value)}
+          keyboardType="phone-pad"
+          helperText="Required by shipping carriers for delivery and label creation. Buyers will not see your phone number."
+        />
         <Button title="Save Shipping Address" icon={MapPin} onPress={() => void saveShippingOrigin()} loading={shippingOriginSaving} fullWidth />
       </SectionCard>
 

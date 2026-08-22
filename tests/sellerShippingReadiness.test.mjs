@@ -28,6 +28,8 @@ test('shipping-enabled create and update require package measurements and a defa
   assert.match(listingService, /validateSellerShippingOrigin\(origin\)/);
   assert.match(listingService, /SELLER_SHIPPING_ORIGIN_REQUIRED/);
   assert.match(listingService, /Add a private ship-from address before offering shipping/);
+  assert.match(shippingService, /Add a valid phone number for the carrier before saving your ship-from address\./);
+  assert.match(shippingService, /replace\(\/\\D\/g, ''\)\.length >= 7/);
 });
 
 test('shipping-disabled listings do not require package fields or seller origin', () => {
@@ -48,6 +50,10 @@ test('listing shipping setup places private ship-from address after package meas
   assert.ok(originIndex > dimensionsIndex, 'ship-from address should follow package dimensions');
   assert.match(sprint3App, /Ship-from address/);
   assert.match(sprint3App, /Used only to calculate shipping rates and create labels\. Buyers will not see your street address\./);
+  assert.match(sprint3App, /Phone Number \*/);
+  assert.match(sprint3App, /Required by shipping carriers for delivery and label creation\. Buyers will not see your phone number\./);
+  assert.match(sprint3App, /Complete Shipping Address/);
+  assert.match(sprint3App, /A phone number is required by the carrier before buyers can calculate shipping\./);
   assert.match(sprint3App, /Shipping from: \$\{origin\.city\}, \$\{origin\.state\} \$\{origin\.postalCode\}/);
 });
 
@@ -80,9 +86,9 @@ test('private origin fields are not copied to listing records or public listing 
 
   assert.doesNotMatch(listingService, /requested_address_line1|requested_seller_origin_address|addressLine1.*requested_/);
   assert.match(listingService, /requested_ship_from_zip_code/);
-  assert.doesNotMatch(publicListingDetail, /address_line1|seller_shipping_origins/);
-  assert.doesNotMatch(publicListingFeed, /address_line1|seller_shipping_origins/);
-  assert.doesNotMatch(publicProfile, /address_line1|seller_shipping_origins/);
+  assert.doesNotMatch(publicListingDetail, /address_line1|seller_shipping_origins|\bphone\b/);
+  assert.doesNotMatch(publicListingFeed, /address_line1|seller_shipping_origins|\bphone\b/);
+  assert.doesNotMatch(publicProfile, /address_line1|seller_shipping_origins|\bphone\b/);
 });
 
 test('seller origin privacy and shipping-rate backend guards remain intact', () => {
@@ -95,4 +101,7 @@ test('seller origin privacy and shipping-rate backend guards remain intact', () 
   assert.match(shippingRate, /Package length.*is required before shipping can be calculated/s);
   assert.match(shippingRate, /Package width.*is required before shipping can be calculated/s);
   assert.match(shippingRate, /Package height.*is required before shipping can be calculated/s);
+  assert.match(shippingRate, /replace\(\/\\D\/g, ''\)\.length >= 7/);
+  assert.match(shippingRate, /ship-from phone number before shipping can be calculated/);
+  assert.match(shippingRate, /A phone number is required by the carrier before shipping can be calculated/);
 });

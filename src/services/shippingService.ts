@@ -36,6 +36,10 @@ function optionalText(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
+function hasUsablePhone(value: string | undefined): boolean {
+  return Boolean(value && value.replace(/\D/g, '').length >= 7);
+}
+
 function originFromRow(row: Record<string, unknown>): SellerShippingOrigin {
   return {
     id: optionalText(row.id),
@@ -81,6 +85,10 @@ export function validateSellerShippingOrigin(input: SellerShippingOrigin): strin
 
   if (!/^[A-Z]{2}$/.test(origin.country)) {
     return 'Use a 2-letter country code.';
+  }
+
+  if (!hasUsablePhone(origin.phone)) {
+    return 'Add a valid phone number for the carrier before saving your ship-from address.';
   }
 
   return null;

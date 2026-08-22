@@ -43,7 +43,24 @@ test('rate shopping stores provider rate ids server-side and returns normalized 
   assert.match(shippingRate, /rateResponse\(rate, quoteId\)/);
   assert.doesNotMatch(shippingRate, /raw.*payload|label_download|SHIPSTATION_API_KEY/);
   assert.match(checkoutScreen, /getShippingRates/);
+  assert.match(checkoutScreen, /shippingAddress,\s*\}\)/);
   assert.match(checkoutScreen, /selectedShippingQuoteId/);
+  assert.match(checkoutScreen, /Phone Number \*/);
+  assert.match(checkoutScreen, /Required by the shipping carrier for delivery\./);
+  assert.match(checkoutScreen, /Phone number is required by the shipping carrier\./);
+  assert.match(checkoutScreen, /Fix the highlighted delivery fields before calculating shipping\./);
+});
+
+test('pickup checkout does not require a shipping phone number', () => {
+  assert.match(checkoutScreen, /if \(selectedFulfillmentMethod === 'shipping'\) \{\s*if \(!validateShippingAddressForRates\(\)\)/s);
+  assert.match(checkoutScreen, /shippingAddress: selectedFulfillmentMethod === 'shipping' \? shippingAddress : undefined/);
+  assert.match(checkoutScreen, /shippingRateQuoteId: selectedFulfillmentMethod === 'shipping' \? selectedShippingQuoteId \?\? undefined : undefined/);
+});
+
+test('ShipStation top-level rate arrays are treated as returned rates', () => {
+  assert.match(shipstation, /if \(Array\.isArray\(payload\)\)/);
+  assert.match(shipstation, /normalizeShipStationRates\(payload\)/);
+  assert.match(shipstation, /firstArray\(payload, \['rates', 'rate_response\.rates'\]\)/);
 });
 
 test('checkout requires selected server quote and does not accept client shipping price', () => {

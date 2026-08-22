@@ -43,7 +43,10 @@ export function getShipStationMode(): 'test' | 'live' {
   return readApiKey().startsWith('TEST_') ? 'test' : 'live';
 }
 
-async function shipStationRequest(path: string, init: RequestInit = {}): Promise<Record<string, unknown>> {
+async function shipStationRequest<T extends Record<string, unknown> | Record<string, unknown>[] = Record<string, unknown>>(
+  path: string,
+  init: RequestInit = {},
+): Promise<T> {
   const response = await fetch(`${SHIPSTATION_BASE_URL}${path}`, {
     ...init,
     headers: {
@@ -63,7 +66,7 @@ async function shipStationRequest(path: string, init: RequestInit = {}): Promise
     throw Object.assign(new Error(message), { status: response.status });
   }
 
-  return body;
+  return body as T;
 }
 
 function addressForShipStation(address: ShippingAddress): Record<string, unknown> {
@@ -82,7 +85,11 @@ function addressForShipStation(address: ShippingAddress): Record<string, unknown
   };
 }
 
-function firstArray(payload: Record<string, unknown>, keys: string[]): Record<string, unknown>[] {
+function firstArray(payload: Record<string, unknown> | Record<string, unknown>[], keys: string[]): Record<string, unknown>[] {
+  if (Array.isArray(payload)) {
+    return payload.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object'));
+  }
+
   for (const key of keys) {
     const value = key.split('.').reduce<unknown>((current, part) => {
       return current && typeof current === 'object' ? (current as Record<string, unknown>)[part] : undefined;
@@ -139,6 +146,21 @@ function normalizeRate(rate: Record<string, unknown>, shipmentId?: string): Ship
   };
 }
 
+export function normalizeShipStationRates(payload: Record<string, unknown> | Record<string, unknown>[]): ShippingRate[] {
+  const payloadRecord = Array.isArray(payload) ? undefined : payload;
+  const shipmentId = text(payloadRecord?.shipment_id ?? (payloadRecord?.shipment as Record<string, unknown> | undefined)?.shipment_id);
+  const rawRates = firstArray(payload, ['rates', 'rate_response.rates']);
+  const eligibleRates = rawRates
+    .map((rate) => normalizeRate(rate, shipmentId))
+    .filter((rate): rate is ShippingRate => Boolean(rate))
+    .sort((a, b) => a.amountCents - b.amountCents);
+  console.info('ShipStation rate normalization.', {
+    rawRateCount: rawRates.length,
+    eligibleRateCount: eligibleRates.length,
+  });
+  return eligibleRates;
+}
+
 function labelUrlFromDownload(download: unknown): string | undefined {
   if (!download || typeof download !== 'object') return undefined;
   const record = download as Record<string, unknown>;
@@ -192,7 +214,7 @@ export const shipStationProvider: ShippingProvider = {
   name: 'shipstation',
 
   async getRates(input: ShippingRateRequest): Promise<ShippingRate[]> {
-    const payload = await shipStationRequest('/rates', {
+    const payload = await shipStationRequest<Record<string, unknown> | Record<string, unknown>[]>('/rates', {
       method: 'POST',
       body: JSON.stringify({
         rate_options: {
@@ -223,11 +245,7 @@ export const shipStationProvider: ShippingProvider = {
       }),
     });
 
-    const shipmentId = text(payload.shipment_id ?? (payload.shipment as Record<string, unknown> | undefined)?.shipment_id);
-    return firstArray(payload, ['rates', 'rate_response.rates'])
-      .map((rate) => normalizeRate(rate, shipmentId))
-      .filter((rate): rate is ShippingRate => Boolean(rate))
-      .sort((a, b) => a.amountCents - b.amountCents);
+    return normalizeShipStationRates(payload);
   },
 
   async purchaseLabel(rateId: string): Promise<PurchasedLabel> {

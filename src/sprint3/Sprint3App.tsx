@@ -4345,10 +4345,12 @@ function ShippingOriginSetupCard({
         {!loading && !ready && !editing ? (
           <>
             <Text style={styles.errorText}>
-              Add a private ship-from address before offering shipping on this listing.
+              {origin
+                ? 'Complete your shipping address. A phone number is required by the carrier before buyers can calculate shipping.'
+                : 'Add a private ship-from address before offering shipping on this listing. A phone number is required by the carrier.'}
             </Text>
             <Button
-              title={origin ? 'Edit Shipping Address' : 'Add Shipping Address'}
+              title={origin ? 'Complete Shipping Address' : 'Add Shipping Address'}
               icon={MapPin}
               variant="outline"
               onPress={origin ? onEdit : onAdd}
@@ -4400,10 +4402,11 @@ function ShippingOriginSetupCard({
               placeholder="US"
             />
             <TextInput
-              label="Phone for carrier"
+              label="Phone Number *"
               value={draft.phone ?? ''}
               onChangeText={(value) => onChange('phone', value)}
               keyboardType="phone-pad"
+              helperText="Required by shipping carriers for delivery and label creation. Buyers will not see your phone number."
             />
             <View style={styles.gridTwo}>
               <Button title="Cancel" variant="outline" onPress={onCancel} disabled={saving} fullWidth />
