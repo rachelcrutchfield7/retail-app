@@ -388,7 +388,7 @@ a{display:inline-flex;align-items:center;justify-content:center;min-height:44px;
 }
 
 function passwordResetPage(url: URL) {
-  const appUrl = `retail://auth/reset-password${url.search}${url.hash}`;
+  const appUrl = `retail://auth/reset-password${url.search}`;
 
   return `<!doctype html>
 <html lang="en">
@@ -413,7 +413,7 @@ a{display:inline-flex;align-items:center;justify-content:center;min-height:44px;
 </main>
 <script>
 (function(){
-  var target = ${JSON.stringify(appUrl)};
+  var target = ${JSON.stringify(appUrl)} + window.location.hash;
   if (window.history && window.history.replaceState) {
     window.history.replaceState(null, document.title, "/auth/reset-password");
   }

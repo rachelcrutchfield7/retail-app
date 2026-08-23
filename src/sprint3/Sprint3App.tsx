@@ -3290,7 +3290,14 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
     }
 
     try {
-      await mutation.updateProfile(form);
+      await mutation.updateProfile({
+        display_name: form.display_name,
+        username: form.username,
+        bio: form.bio,
+        city: form.city,
+        state: form.state,
+        zip_code: form.zip_code,
+      });
       if (isRescueProfile) {
         if (!rescueProfile) {
           setNotice({ title: 'Rescue profile is still loading', body: 'Please try saving again in a moment.' });
