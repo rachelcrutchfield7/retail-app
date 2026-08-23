@@ -44,7 +44,7 @@ test('checkout waives only the ReTail platform fee for eligible Founding Seller 
   assert.match(stripeCreate, /shippingCollectedCents: shipping\.shippingCollectedCents/);
   assert.match(stripeCreate, /const stripeApplicationFeeWithheldCents = platformFeeCents \+ shipping\.shippingCollectedCents \+ taxAmountCents/);
   assert.match(stripeCreate, /retail_founding_seller_fee_waived_cents: String\(foundingSellerBenefit\.waivedPlatformFeeCents\)/);
-  assert.match(stripeCreate, /founding_seller_fee_waived_cents: foundingSellerBenefit\.waivedPlatformFeeCents/);
+  assert.match(stripeCreate, /attachFoundingSellerBenefit/);
   assert.match(stripeCreate, /foundingSellerFeeWaivedCents: foundingSellerBenefit\.waivedPlatformFeeCents/);
 });
 
