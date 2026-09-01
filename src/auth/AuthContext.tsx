@@ -13,6 +13,7 @@ import {
   clearGoogleSignInSelection,
   signInWithGoogle as signInWithGoogleAccount,
 } from '../services/googleAuthService';
+import { signInWithApple as signInWithAppleAccount } from '../services/appleAuthService';
 import { getCurrentProfile } from '../services/profileService';
 import type { AccountType, Profile, Session, User } from '../services/types';
 import type { RescueSignupInput } from '../services/types';
@@ -53,9 +54,12 @@ export type GoogleSignInInput = {
   marketingEmailOptIn?: boolean;
 };
 
+export type AppleSignInInput = GoogleSignInInput;
+
 type AuthContextValue = AuthState & {
   signIn: (input: SignInInput) => Promise<Session>;
   signInWithGoogle: (input?: GoogleSignInInput) => Promise<Session | null>;
+  signInWithApple: (input?: AppleSignInInput) => Promise<Session | null>;
   signUp: (input: SignUpInput) => Promise<User>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
@@ -342,6 +346,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [session]);
 
+  const signInWithApple = useCallback(async (input: AppleSignInInput = { mode: 'login' }) => {
+    setLoading(true);
+    try {
+      if (session) {
+        await removeRegisteredNativePushTokenForCurrentUser().catch((error) => {
+          logAuthLoadError(error, 'Could not remove push token before Apple sign-in.');
+        });
+        await clearPrivateAuthState();
+      } else {
+        clearPrivateAuthStateNow();
+      }
+      const nextSession = await signInWithAppleAccount({
+        platform: Platform.OS,
+        signupConsent: input.mode === 'register'
+          ? {
+            termsAccepted: input.termsAccepted === true,
+            marketingEmailOptIn: input.marketingEmailOptIn === true,
+          }
+          : undefined,
+      });
+      if (nextSession) {
+        setSession(nextSession);
+        setUser(nextSession.user);
+        const activeProfile = await getCurrentProfile();
+        setProfile(activeProfile);
+        setAuthStoreState({
+          user: nextSession.user,
+          profile: activeProfile,
+          session: nextSession,
+          loading: false,
+          isGuest: false,
+        });
+      }
+      return nextSession;
+    } finally {
+      setLoading(false);
+    }
+  }, [session]);
+
   const signOut = useCallback(async () => {
     setLoading(true);
 
@@ -388,13 +431,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isGuest: !session || !user,
       signIn,
       signInWithGoogle,
+      signInWithApple,
       signUp,
       signOut,
       resetPassword,
       refreshProfile,
       startupError,
     }),
-    [loading, profile, refreshProfile, resetPassword, session, signIn, signInWithGoogle, signOut, signUp, startupError, user]
+    [loading, profile, refreshProfile, resetPassword, session, signIn, signInWithApple, signInWithGoogle, signOut, signUp, startupError, user]
   );
 
   if (startupError) {

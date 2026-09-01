@@ -23,6 +23,10 @@ import {
   warnIfGoogleSignInUnavailable,
 } from './services/googleAuthService';
 import {
+  getAppleSignInAvailability,
+  isAppleSignInCancellation,
+} from './services/appleAuthService';
+import {
   BrowseScreen,
   CreateListingScreen,
   FavoritesScreen,
@@ -85,11 +89,13 @@ function AppExperience() {
   const [showRescueHub, setShowRescueHub] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   const [googleAuthBusy, setGoogleAuthBusy] = useState(false);
+  const [appleAuthBusy, setAppleAuthBusy] = useState(false);
   const [authPrompt, setAuthPrompt] = useState<AuthPrompt | undefined>();
   const [form, setForm] = useState<ListingForm>(emptyListingForm);
   const [messageText, setMessageText] = useState('');
   const isSignedIn = !auth.isGuest;
   const googleSignInAvailable = getGoogleSignInAvailability(Platform.OS).available;
+  const appleSignInAvailable = getAppleSignInAvailability(Platform.OS).available;
   warnIfGoogleSignInUnavailable(Platform.OS);
   const searchPreference = useMarketplaceSearchPreference();
   const listingParams = useMemo(
@@ -337,6 +343,37 @@ function AppExperience() {
     }
   };
 
+  const completeAppleAuth = async (
+    submission: Pick<AuthModalSubmission, 'mode' | 'termsAccepted' | 'marketingEmailOptIn'>
+  ) => {
+    setAppleAuthBusy(true);
+
+    try {
+      const appleSession = await auth.signInWithApple(submission);
+      if (!appleSession) {
+        return;
+      }
+
+      setShowAuth(false);
+      setAuthPrompt(undefined);
+      if (pendingReportListing) {
+        setReportingListing(pendingReportListing);
+        setPendingReportListing(null);
+      }
+    } catch (error) {
+      if (isAppleSignInCancellation(error)) {
+        return;
+      }
+
+      Alert.alert(
+        'Apple sign-in failed',
+        handleAppError(error).userMessage
+      );
+    } finally {
+      setAppleAuthBusy(false);
+    }
+  };
+
   const signOut = async () => {
     await auth.signOut();
   };
@@ -532,8 +569,11 @@ function AppExperience() {
         }}
         onComplete={completeAuth}
         onGoogleSignIn={completeGoogleAuth}
+        onAppleSignIn={completeAppleAuth}
         googleSignInAvailable={googleSignInAvailable}
         googleSignInLoading={googleAuthBusy || auth.loading}
+        appleSignInAvailable={appleSignInAvailable}
+        appleSignInLoading={appleAuthBusy || auth.loading}
       />
       <ReportListingModal
         visible={Boolean(reportingListing)}

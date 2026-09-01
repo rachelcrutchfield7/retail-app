@@ -7,6 +7,7 @@ import type { AccountType, IconComponent } from '../../types.ts';
 import { TextInput } from '../forms/TextInput';
 import { PolicyConsentChoices } from '../forms/PolicyConsentChoices';
 import { GoogleSignInButton } from './GoogleSignInButton';
+import { AppleSignInButton } from './AppleSignInButton';
 
 type AuthModalProps = {
   visible: boolean;
@@ -14,8 +15,11 @@ type AuthModalProps = {
   onClose: () => void;
   onComplete: (submission: AuthModalSubmission) => void | Promise<void>;
   onGoogleSignIn?: (submission: Pick<AuthModalSubmission, 'mode' | 'termsAccepted' | 'marketingEmailOptIn'>) => void | Promise<void>;
+  onAppleSignIn?: (submission: Pick<AuthModalSubmission, 'mode' | 'termsAccepted' | 'marketingEmailOptIn'>) => void | Promise<void>;
   googleSignInAvailable?: boolean;
   googleSignInLoading?: boolean;
+  appleSignInAvailable?: boolean;
+  appleSignInLoading?: boolean;
 };
 
 export type AuthPrompt = {
@@ -60,8 +64,11 @@ export function AuthModal({
   onClose,
   onComplete,
   onGoogleSignIn,
+  onAppleSignIn,
   googleSignInAvailable = false,
   googleSignInLoading = false,
+  appleSignInAvailable = false,
+  appleSignInLoading = false,
 }: AuthModalProps) {
   const themeColors = useThemeColors();
   const [mode, setMode] = useState<'login' | 'register'>('login');
@@ -72,6 +79,9 @@ export function AuthModal({
   const [username, setUsername] = useState('');
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [marketingEmailOptIn, setMarketingEmailOptIn] = useState(false);
+  const socialAccountTypeSupported = mode === 'login' || selectedAccountType === 'regular';
+  const canUseAppleSignIn = socialAccountTypeSupported && appleSignInAvailable && Boolean(onAppleSignIn);
+  const canUseGoogleSignIn = socialAccountTypeSupported && googleSignInAvailable && Boolean(onGoogleSignIn);
 
   const submit = () => {
     void onComplete({
@@ -120,7 +130,7 @@ export function AuthModal({
               marketingEmailOptIn={marketingEmailOptIn}
               onTermsAcceptedChange={setTermsAccepted}
               onMarketingEmailOptInChange={setMarketingEmailOptIn}
-              disabled={googleSignInLoading}
+              disabled={googleSignInLoading || appleSignInLoading}
             />
           ) : null}
 
@@ -154,14 +164,24 @@ export function AuthModal({
             </View>
           ) : null}
 
-          {googleSignInAvailable && (mode === 'login' || selectedAccountType === 'regular') && onGoogleSignIn ? (
+          {canUseAppleSignIn || canUseGoogleSignIn ? (
             <>
-              <GoogleSignInButton
-                label={mode === 'register' ? 'Sign up with Google' : 'Continue with Google'}
-                onPress={() => void onGoogleSignIn({ mode, termsAccepted, marketingEmailOptIn })}
-                loading={googleSignInLoading}
-                disabled={googleSignInLoading}
-              />
+              {canUseAppleSignIn && onAppleSignIn ? (
+                <AppleSignInButton
+                  mode={mode}
+                  onPress={() => void onAppleSignIn({ mode, termsAccepted, marketingEmailOptIn })}
+                  loading={appleSignInLoading}
+                  disabled={appleSignInLoading || googleSignInLoading}
+                />
+              ) : null}
+              {canUseGoogleSignIn && onGoogleSignIn ? (
+                <GoogleSignInButton
+                  label={mode === 'register' ? 'Sign up with Google' : 'Continue with Google'}
+                  onPress={() => void onGoogleSignIn({ mode, termsAccepted, marketingEmailOptIn })}
+                  loading={googleSignInLoading}
+                  disabled={googleSignInLoading || appleSignInLoading}
+                />
+              ) : null}
               <Text style={[styles.dividerText, { color: themeColors.textSecondary }]}>or continue with email</Text>
             </>
           ) : null}

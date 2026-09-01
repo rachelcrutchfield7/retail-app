@@ -24,6 +24,7 @@ module.exports = {
     assetBundlePatterns: ['**/*'],
     ios: {
       supportsTablet: true,
+      usesAppleSignIn: true,
       icon: './assets/app-icon.png',
       bundleIdentifier: 'com.raecrutchfield.retail',
       associatedDomains: [
@@ -114,6 +115,7 @@ module.exports = {
         },
       ],
       'expo-secure-store',
+      'expo-apple-authentication',
       googleSignInPlugin,
     ],
     extra: {

@@ -48,6 +48,7 @@ import {
 import { AuthProvider } from '../auth';
 import {
   Avatar,
+  AppleSignInButton,
   Badge,
   Button,
   Card,
@@ -117,6 +118,10 @@ import {
   isGoogleSignInCancellation,
   warnIfGoogleSignInUnavailable,
 } from '../services/googleAuthService';
+import {
+  getAppleSignInAvailability,
+  isAppleSignInCancellation,
+} from '../services/appleAuthService';
 import {
   getStripeConnectPayoutState,
   getStripeConnectPrimaryActionLabel,
@@ -1888,6 +1893,7 @@ export function ProfileScreen({
   const auth = useAuth();
   const [busy, setBusy] = useState(false);
   const [googleBusy, setGoogleBusy] = useState(false);
+  const [appleBusy, setAppleBusy] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
@@ -1912,7 +1918,8 @@ export function ProfileScreen({
   const [rescueEin, setRescueEin] = useState('');
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [marketingEmailOptIn, setMarketingEmailOptIn] = useState(false);
-  const [googleProfileSetup, setGoogleProfileSetup] = useState<{
+  const [socialProfileSetup, setSocialProfileSetup] = useState<{
+    provider: 'Apple' | 'Google';
     email: string;
     displayName: string;
     username: string;
@@ -1923,6 +1930,7 @@ export function ProfileScreen({
   const pendingReviews = usePendingReviews(Boolean(auth.profile));
   const foundingSellerBenefit = useMyFoundingSellerBenefit(Boolean(auth.profile && auth.profile.account_type === 'regular'));
   const googleSignInAvailability = getGoogleSignInAvailability(Platform.OS);
+  const appleSignInAvailability = getAppleSignInAvailability(Platform.OS);
   warnIfGoogleSignInUnavailable(Platform.OS);
 
   if (auth.loading && !auth.profile) {
@@ -2023,7 +2031,8 @@ export function ProfileScreen({
       }
 
       if (googleSession.requiresProfileSetup) {
-        setGoogleProfileSetup({
+        setSocialProfileSetup({
+          provider: 'Google',
           email: googleSession.user.email,
           displayName: googleSession.user.displayName,
           username: googleSession.user.username,
@@ -2040,6 +2049,42 @@ export function ProfileScreen({
       });
     } finally {
       setGoogleBusy(false);
+    }
+  };
+
+  const continueWithApple = async () => {
+    setAppleBusy(true);
+    setNotice(null);
+
+    try {
+      const appleSession = await auth.signInWithApple({
+        mode: authMode,
+        termsAccepted,
+        marketingEmailOptIn,
+      });
+      if (!appleSession) {
+        return;
+      }
+
+      if (appleSession.requiresProfileSetup) {
+        setSocialProfileSetup({
+          provider: 'Apple',
+          email: appleSession.user.email,
+          displayName: appleSession.user.displayName,
+          username: appleSession.user.username,
+        });
+      }
+    } catch (error) {
+      if (isAppleSignInCancellation(error)) {
+        return;
+      }
+
+      setNotice({
+        title: 'Apple sign-in failed',
+        body: handleAppError(error).userMessage,
+      });
+    } finally {
+      setAppleBusy(false);
     }
   };
 
@@ -2083,14 +2128,24 @@ export function ProfileScreen({
                   <FilterChip label="Regular User" selected={accountType === 'regular'} onPress={() => setAccountType('regular')} />
                   <FilterChip label="Animal Rescue" selected={accountType === 'rescue'} onPress={() => setAccountType('rescue')} />
                 </View>
-                {googleSignInAvailability.available && accountType === 'regular' ? (
+                {(appleSignInAvailability.available || googleSignInAvailability.available) && accountType === 'regular' ? (
                   <>
-                    <GoogleSignInButton
-                      label="Sign up with Google"
-                      onPress={() => void continueWithGoogle()}
-                      loading={googleBusy}
-                      disabled={busy || auth.loading}
-                    />
+                    {appleSignInAvailability.available ? (
+                      <AppleSignInButton
+                        mode="register"
+                        onPress={() => void continueWithApple()}
+                        loading={appleBusy}
+                        disabled={busy || googleBusy || auth.loading}
+                      />
+                    ) : null}
+                    {googleSignInAvailability.available ? (
+                      <GoogleSignInButton
+                        label="Sign up with Google"
+                        onPress={() => void continueWithGoogle()}
+                        loading={googleBusy}
+                        disabled={busy || appleBusy || auth.loading}
+                      />
+                    ) : null}
                     <Text style={styles.filterLabel}>or continue with email</Text>
                   </>
                 ) : null}
@@ -2131,14 +2186,24 @@ export function ProfileScreen({
                 <TextInput label="Username" value={username} onChangeText={setUsername} placeholder="retail_rachel" autoCapitalize="none" />
               </>
             ) : null}
-            {authMode === 'login' && googleSignInAvailability.available ? (
+            {authMode === 'login' && (appleSignInAvailability.available || googleSignInAvailability.available) ? (
               <>
-                <GoogleSignInButton
-                  label="Continue with Google"
-                  onPress={() => void continueWithGoogle()}
-                  loading={googleBusy}
-                  disabled={busy || auth.loading}
-                />
+                {appleSignInAvailability.available ? (
+                  <AppleSignInButton
+                    mode="login"
+                    onPress={() => void continueWithApple()}
+                    loading={appleBusy}
+                    disabled={busy || googleBusy || auth.loading}
+                  />
+                ) : null}
+                {googleSignInAvailability.available ? (
+                  <GoogleSignInButton
+                    label="Continue with Google"
+                    onPress={() => void continueWithGoogle()}
+                    loading={googleBusy}
+                    disabled={busy || appleBusy || auth.loading}
+                  />
+                ) : null}
                 <Text style={styles.filterLabel}>or continue with email</Text>
               </>
             ) : null}
@@ -2165,7 +2230,7 @@ export function ProfileScreen({
                 marketingEmailOptIn={marketingEmailOptIn}
                 onTermsAcceptedChange={setTermsAccepted}
                 onMarketingEmailOptInChange={setMarketingEmailOptIn}
-                disabled={busy || googleBusy || auth.loading}
+                disabled={busy || googleBusy || appleBusy || auth.loading}
               />
             ) : null}
             {authMode === 'login' ? (
@@ -2190,12 +2255,13 @@ export function ProfileScreen({
     );
   }
 
-  if (googleProfileSetup && auth.profile?.account_type === 'regular') {
+  if (socialProfileSetup && auth.profile?.account_type === 'regular') {
     return (
       <GoogleProfileSetupScreen
-        email={googleProfileSetup.email}
+        email={socialProfileSetup.email}
+        providerLabel={socialProfileSetup.provider}
         profile={auth.profile}
-        onComplete={() => setGoogleProfileSetup(null)}
+        onComplete={() => setSocialProfileSetup(null)}
         onSignOut={signOut}
       />
     );
@@ -2316,11 +2382,13 @@ export function ProfileScreen({
 
 function GoogleProfileSetupScreen({
   email,
+  providerLabel,
   profile,
   onComplete,
   onSignOut,
 }: {
   email: string;
+  providerLabel: 'Apple' | 'Google';
   profile: Profile;
   onComplete: () => void;
   onSignOut: () => void | Promise<void>;
@@ -2376,11 +2444,11 @@ function GoogleProfileSetupScreen({
       <ScrollView style={styles.listScreen} contentContainerStyle={styles.listContent} keyboardShouldPersistTaps="handled">
         <View style={styles.headerBlock}>
           <Text style={styles.title}>Set up your ReTail profile</Text>
-          <Text style={styles.body}>Your Google account is connected. Choose the public details people will see in ReTail.</Text>
+          <Text style={styles.body}>Your {providerLabel} account is connected. Choose the public details people will see in ReTail.</Text>
         </View>
         <Card>
           <View style={styles.stack}>
-            <Field label="Google email">
+            <Field label={`${providerLabel} email`}>
               <View style={[styles.lockedEmailFrame, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
                 <Text style={[styles.lockedEmailText, { color: themeColors.textSecondary }]}>{email}</Text>
               </View>
@@ -2422,7 +2490,7 @@ function GoogleProfileSetupScreen({
             />
             {mutation.error ? <Text style={styles.errorText}>{mutation.error}</Text> : null}
             <Button title="Save Profile" onPress={() => void save()} loading={mutation.loading} fullWidth />
-            <Button title="Use a Different Google Account" variant="ghost" onPress={() => void onSignOut()} disabled={mutation.loading} fullWidth />
+            <Button title={`Use a Different ${providerLabel} Account`} variant="ghost" onPress={() => void onSignOut()} disabled={mutation.loading} fullWidth />
           </View>
         </Card>
       </ScrollView>

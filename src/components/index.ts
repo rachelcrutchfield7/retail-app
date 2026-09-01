@@ -1,6 +1,7 @@
 export { AppErrorBoundary } from './feedback/AppErrorBoundary';
 export { AuthModal } from './feedback/AuthModal';
 export type { AuthModalSubmission, AuthPrompt } from './feedback/AuthModal';
+export { AppleSignInButton } from './feedback/AppleSignInButton';
 export { GoogleSignInButton } from './feedback/GoogleSignInButton';
 export { PolicyConsentGate } from './feedback/PolicyConsentGate';
 export { EmptyState } from './feedback/EmptyState';
