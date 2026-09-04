@@ -15,7 +15,13 @@ export type ProtectedCheckoutSetup = {
   transactionId: string;
   merchantDisplayName: string;
   amountCents: number;
+  /** Legacy buyer-facing response field; equals buyerServiceFeeCents. */
   platformFeeCents: number;
+  sellerFeeCents?: number;
+  buyerServiceFeeCents?: number;
+  retailFeeTotalCents?: number;
+  stripeApplicationFeeCents?: number;
+  feeModelVersion?: string;
   foundingSellerFeeWaivedCents?: number;
   foundingSellerBenefitOrdinal?: number | null;
   sellerAmountCents: number;

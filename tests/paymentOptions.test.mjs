@@ -85,7 +85,7 @@ test('checkout display uses authoritative checkout response values after rate cr
   const checkoutScreen = sprint4CheckoutSource();
 
   assert.match(checkoutScreen, /checkoutSummary\?\.itemAmountCents/);
-  assert.match(checkoutScreen, /checkoutSummary\.platformFeeCents/);
+  assert.match(checkoutScreen, /checkoutSummary\.buyerServiceFeeCents \?\? checkoutSummary\.platformFeeCents/);
   assert.match(checkoutScreen, /checkoutSummary\.taxAmountCents/);
   assert.match(checkoutScreen, /checkoutSummary\.shippingCollectedCents/);
   assert.match(checkoutScreen, /checkoutSummary\.amountCents/);
@@ -156,7 +156,7 @@ test('checkout privacy and mobile summary layout stay constrained', () => {
   assert.match(sprint4App, /checkoutSummaryValue:\s*\{[^}]*maxWidth: '42%'/s);
 });
 
-test('platform fee display uses the same configured payment helper', () => {
+test('legacy platform fee helper retains seller-fee semantics', () => {
   const amountCents = listingPriceToCents('$35.00');
 
   assert.equal(amountCents, 3500);

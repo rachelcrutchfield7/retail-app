@@ -33,18 +33,31 @@ export function listingPriceToCents(price: string): number | null {
   return Math.round(amount * 100);
 }
 
+export const RETAIL_FEE_MODEL_VERSION = 'seller10_buyer5_min50_max1000_v1';
+
+function roundHalfUpBasisPoints(amountCents: number, basisPoints: number): number {
+  if (!Number.isSafeInteger(amountCents) || amountCents <= 0) {
+    return 0;
+  }
+
+  return Math.floor(((amountCents * basisPoints) + 5_000) / 10_000);
+}
+
+export function calculateSellerFeeCents(amountCents: number): number {
+  return roundHalfUpBasisPoints(amountCents, 1_000);
+}
+
+export function calculateBuyerServiceFeeCents(amountCents: number): number {
+  if (!Number.isSafeInteger(amountCents) || amountCents <= 0) {
+    return 0;
+  }
+
+  return Math.min(Math.max(roundHalfUpBasisPoints(amountCents, 500), 50), 1_000);
+}
+
+// Retained for callers that use the legacy seller-fee terminology.
 export function calculatePlatformFeeCents(amountCents: number): number {
-  if (!Number.isFinite(amountCents) || amountCents <= 0) {
-    return 0;
-  }
-
-  if (amountCents <= config.stripePlatformFeeThresholdCents) {
-    return 0;
-  }
-
-  const percentFee = Math.round(amountCents * (config.stripePlatformFeePercent / 100));
-  const fee = Math.max(percentFee, config.stripePlatformMinFeeCents);
-  return Math.min(fee, Math.max(amountCents - 1, 0));
+  return calculateSellerFeeCents(amountCents);
 }
 
 async function readFunctionErrorMessage(error: unknown): Promise<string | null> {
@@ -125,10 +138,16 @@ export async function startProtectedCheckout(context: PaymentOptionContext): Pro
   if (!checkout?.paymentIntentClientSecret || !checkout.paymentIntentId || !checkout.transactionId) {
     throw createServiceError(
       'STRIPE_CHECKOUT_RESPONSE_INVALID',
-      `Stripe checkout response was missing required fields. Planned platform fee cents: ${calculatePlatformFeeCents(amountCents)}.`,
+      `Stripe checkout response was missing required fields. Planned buyer service fee cents: ${calculateBuyerServiceFeeCents(amountCents)}.`,
       'Stripe checkout did not return the payment details ReTail needs.'
     );
   }
+
+  const authoritativeItemAmountCents = checkout.itemAmountCents ?? amountCents;
+  const sellerFeeCents = checkout.sellerFeeCents ?? calculateSellerFeeCents(authoritativeItemAmountCents);
+  const buyerServiceFeeCents = checkout.buyerServiceFeeCents
+    ?? checkout.platformFeeCents
+    ?? calculateBuyerServiceFeeCents(authoritativeItemAmountCents);
 
   return {
     paymentIntentClientSecret: checkout.paymentIntentClientSecret,
@@ -136,11 +155,17 @@ export async function startProtectedCheckout(context: PaymentOptionContext): Pro
     transactionId: checkout.transactionId,
     merchantDisplayName: checkout.merchantDisplayName ?? 'ReTail',
     amountCents: checkout.amountCents ?? amountCents,
-    platformFeeCents: checkout.platformFeeCents ?? calculatePlatformFeeCents(amountCents),
+    // Keep the legacy buyer-facing field aligned with the service fee.
+    platformFeeCents: buyerServiceFeeCents,
+    sellerFeeCents,
+    buyerServiceFeeCents,
+    retailFeeTotalCents: checkout.retailFeeTotalCents ?? sellerFeeCents + buyerServiceFeeCents,
+    stripeApplicationFeeCents: checkout.stripeApplicationFeeCents,
+    feeModelVersion: checkout.feeModelVersion ?? RETAIL_FEE_MODEL_VERSION,
     foundingSellerFeeWaivedCents: checkout.foundingSellerFeeWaivedCents,
     foundingSellerBenefitOrdinal: checkout.foundingSellerBenefitOrdinal,
-    sellerAmountCents: checkout.sellerAmountCents ?? amountCents - calculatePlatformFeeCents(amountCents),
-    itemAmountCents: checkout.itemAmountCents ?? amountCents,
+    sellerAmountCents: checkout.sellerAmountCents ?? authoritativeItemAmountCents - sellerFeeCents,
+    itemAmountCents: authoritativeItemAmountCents,
     taxAmountCents: checkout.taxAmountCents ?? 0,
     taxCalculationId: checkout.taxCalculationId,
     fulfillmentMethod: checkout.fulfillmentMethod,

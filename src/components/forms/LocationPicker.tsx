@@ -29,7 +29,7 @@ export function LocationPicker({
         label={cityLabel}
         value={city}
         onChangeText={onCityChange}
-        placeholder="Austin"
+        placeholder="City"
         textContentType="addressCity"
         error={cityError}
       />
@@ -37,7 +37,7 @@ export function LocationPicker({
         label={stateLabel}
         value={state}
         onChangeText={onStateChange}
-        placeholder="TX"
+        placeholder="State"
         autoCapitalize="characters"
         textContentType="addressState"
         error={stateError}

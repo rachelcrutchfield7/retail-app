@@ -69,7 +69,7 @@ test('create listing shows payout setup prompt and rechecks status before publis
   assert.match(sprint3, /setLatestStripeStatus\(status\)/);
   assert.match(sprint3, /confirmPayoutReadyForPublish/);
   assert.match(sprint3, /paidListingRequiresPayout && !payoutsReady && !payoutNotice/);
-  assert.match(sprint3, /setForm\(emptyCreateListing\)[^]*onCreated\(listing\.id\)/);
+  assert.match(sprint3, /setForm\(createListingDefaults\(auth\.profile\)\)[^]*onCreated\(listing\.id\)/);
 });
 
 test('settings exposes Payments & Payouts statuses and rechecks Stripe return links', () => {

@@ -72,12 +72,13 @@ test('listings without calculated miles do not show a pending distance label', (
   assert.equal(listing.distance, 'Distance unavailable');
 });
 
-test('legacy listing form conversion keeps listing writes Supabase-ready', () => {
+test('legacy listing form conversion requires a real saved or entered location', () => {
   assert.match(appShell, /function createListingInputFromForm/);
   assert.match(appShell, /listing_type: isDonation \? 'free' : 'sale'/);
-  assert.match(appShell, /city: profile\?\.city\?\.trim\(\) \|\| 'Austin'/);
-  assert.match(appShell, /state: profile\?\.state\?\.trim\(\) \|\| 'TX'/);
-  assert.match(appShell, /zip_code: profile\?\.zip_code\?\.trim\(\) \|\| '78701'/);
+  assert.match(appShell, /city: profile\?\.city\?\.trim\(\) \|\| ''/);
+  assert.match(appShell, /state: profile\?\.state\?\.trim\(\) \|\| ''/);
+  assert.match(appShell, /zip_code: profile\?\.zip_code\?\.trim\(\) \|\| ''/);
+  assert.doesNotMatch(appShell, /city: profile\?\.city\?\.trim\(\) \|\| 'Austin'/);
   assert.match(appShell, /safety_confirmed: true/);
 });
 

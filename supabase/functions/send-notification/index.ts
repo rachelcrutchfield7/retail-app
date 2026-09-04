@@ -672,7 +672,7 @@ async function updateDelivery(
 
 function buildEmail(notification: NotificationRow, displayName: string | undefined): { subject: string; html: string; text: string } {
   const appUrl = (Deno.env.get('RETAIL_APP_URL') ?? 'https://www.retailpetapp.com').replace(/\/$/, '');
-  const logoUrl = Deno.env.get('RETAIL_EMAIL_LOGO_URL') ?? `${appUrl}/assets/email/retail-logo-email.png`;
+  const logoUrl = Deno.env.get('RETAIL_EMAIL_LOGO_URL') ?? 'https://retailpetapp.com/assets/retail-logo-header.png';
   const route = typeof notification.data.route === 'string' ? notification.data.route : undefined;
   const actionUrl = route ? `${appUrl}${route.startsWith('/') ? route : `/${route}`}` : appUrl;
   const actionLabel = actionLabelFor(notification.type);
@@ -696,7 +696,7 @@ function buildEmail(notification: NotificationRow, displayName: string | undefin
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#FFFFFF;border:1px solid #D7E3DD;border-radius:18px;overflow:hidden;">
             <tr>
               <td style="padding:28px 28px 10px;text-align:center;">
-                <img src="${escapeHtml(logoUrl)}" alt="ReTail" width="220" style="display:block;width:220px;max-width:82%;height:auto;margin:0 auto;border:0;">
+                <img src="${escapeHtml(logoUrl)}" alt="ReTail" width="180" height="80" style="display:block;width:180px;max-width:82%;height:auto;margin:0 auto;border:0;">
               </td>
             </tr>
             <tr>

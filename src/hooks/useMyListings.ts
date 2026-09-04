@@ -1,10 +1,12 @@
 import { useCallback, useMemo } from 'react';
 import { clearQueryData, getQueryData, setQueryData } from '../lib/queryClient';
 import {
+  activateListing,
   archiveListing,
   deleteListing,
   getMyListings,
   markListingDonated,
+  markListingPending,
   markListingSold,
 } from '../services/listingService';
 import { getUserListings } from '../services/profileService';
@@ -42,8 +44,10 @@ export function useMyListings() {
 
   return {
     ...resource,
+    activateListing: (listingId: string) => runAction(() => activateListing(listingId)),
     archiveListing: (listingId: string) => runAction(() => archiveListing(listingId)),
     deleteListing: (listingId: string) => runAction(() => deleteListing(listingId)),
+    markListingPending: (listingId: string) => runAction(() => markListingPending(listingId)),
     markListingSold: (listingId: string) => runAction(() => markListingSold(listingId)),
     markListingDonated: (listingId: string) => runAction(() => markListingDonated(listingId)),
   };

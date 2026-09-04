@@ -149,7 +149,6 @@ import type {
   RescueProfile,
   RescueSignupInput,
   SavedSearch,
-  TransactionOutcome,
   UpdateListingInput,
 } from '../services/types';
 import type { Category, IconComponent, Listing, ListingCondition, ListingStatus, RescueNeedUrgency, RescueOrganization, RescueOrganizationType } from '../types';
@@ -273,9 +272,9 @@ const emptyCreateListing: CreateListingInput = {
   listing_type: 'sale',
   price: '',
   images: [],
-  city: 'Austin',
-  state: 'TX',
-  zip_code: '78701',
+  city: '',
+  state: '',
+  zip_code: '',
   pickup_available: true,
   porch_pickup_available: false,
   meetup_available: true,
@@ -296,6 +295,15 @@ const emptyCreateListing: CreateListingInput = {
   reason_for_listing: '',
   safety_confirmed: false,
 };
+
+function createListingDefaults(profile?: Profile | null): CreateListingInput {
+  return {
+    ...emptyCreateListing,
+    city: profile?.city?.trim() ?? '',
+    state: profile?.state?.trim() ?? '',
+    zip_code: profile?.zip_code?.trim() ?? '',
+  };
+}
 
 export function Sprint3App() {
   return (
@@ -1227,7 +1235,7 @@ export function CreateListingScreen({
 }) {
   const auth = useAuth();
   const mutation = useCreateListing();
-  const [form, setForm] = useState<CreateListingInput>(emptyCreateListing);
+  const [form, setForm] = useState<CreateListingInput>(() => createListingDefaults(auth.profile));
   const [errors, setErrors] = useState<ReturnType<typeof validateCreateListingInput>['errors']>({});
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -1248,6 +1256,24 @@ export function CreateListingScreen({
   const payoutActionLabel = getStripeConnectPrimaryActionLabel(payoutState);
   const payoutsReady = profileHasStripePayouts(stripeStatus);
   const paidListingRequiresPayout = form.listing_type === 'sale';
+
+  useEffect(() => {
+    const city = auth.profile?.city?.trim();
+    const state = auth.profile?.state?.trim();
+    const zipCode = auth.profile?.zip_code?.trim();
+
+    if (!city || !state || !zipCode) {
+      return;
+    }
+
+    setForm((current) => {
+      if (current.city.trim() || current.state.trim() || current.zip_code?.trim()) {
+        return current;
+      }
+
+      return { ...current, city, state, zip_code: zipCode };
+    });
+  }, [auth.profile?.city, auth.profile?.state, auth.profile?.zip_code]);
 
   const update = <FieldName extends keyof CreateListingInput>(field: FieldName, value: CreateListingInput[FieldName]) => {
     setForm((current) => ({ ...current, [field]: value }));
@@ -1344,7 +1370,7 @@ export function CreateListingScreen({
       setProgress(70);
       const listing = await mutation.createListing(form);
       setProgress(100);
-      setForm(emptyCreateListing);
+      setForm(createListingDefaults(auth.profile));
       let completed = false;
       const continueToListing = () => {
         if (completed) {
@@ -1723,6 +1749,38 @@ function ListingDetailContent({
                       onPress={() => onEditListing?.(item.id)}
                       fullWidth
                     />
+                    {item.status === 'Active' ? (
+                      <Button
+                        title="Mark Pending"
+                        icon={ListChecks}
+                        variant="outline"
+                        onPress={() =>
+                          askOwnerAction(
+                            'Mark listing pending?',
+                            'Pending listings leave the marketplace and cannot be purchased until you return them to Active.',
+                            'Mark Pending',
+                            () => ownerActions.markListingPending(item.id)
+                          )
+                        }
+                        fullWidth
+                      />
+                    ) : null}
+                    {item.status === 'Pending' ? (
+                      <Button
+                        title="Return to Active"
+                        icon={Check}
+                        variant="outline"
+                        onPress={() =>
+                          askOwnerAction(
+                            'Return listing to Active?',
+                            'This makes the listing available in the marketplace again.',
+                            'Return to Active',
+                            () => ownerActions.activateListing(item.id)
+                          )
+                        }
+                        fullWidth
+                      />
+                    ) : null}
                     <Button
                       title="Archive"
                       icon={Archive}
@@ -3610,6 +3668,7 @@ export function MyListingsScreen({
 }) {
   const listings = useMyListings();
   const transaction = useCompleteTransaction();
+  const [listingView, setListingView] = useState<'current' | 'previous'>('current');
   const [confirm, setConfirm] = useState<{
     title: string;
     body: string;
@@ -3619,7 +3678,7 @@ export function MyListingsScreen({
   } | null>(null);
   const [completion, setCompletion] = useState<{
     listing: Listing;
-    outcome: TransactionOutcome;
+    outcome: 'donated';
   } | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   const completionParticipants = useEligibleTransactionParticipants(completion?.listing.id ?? '', Boolean(completion));
@@ -3667,7 +3726,7 @@ export function MyListingsScreen({
       });
       await listings.refetch();
       setNotice({
-        title: completion.outcome === 'sold' ? 'Listing marked sold' : 'Listing marked donated',
+        title: 'Listing marked donated',
         body: buyerId
           ? 'The transaction was recorded and both people can leave reviews.'
           : 'The listing status was updated. Reviews are only enabled when a ReTail user is selected.',
@@ -3678,15 +3737,22 @@ export function MyListingsScreen({
     }
   };
 
-  const groups: Array<{ status: ListingStatus; title: string }> = [
-    { status: 'Active', title: 'Active' },
-    { status: 'Pending', title: 'Pending' },
-    { status: 'Sold', title: 'Sold' },
-    { status: 'Donated', title: 'Donated' },
-    { status: 'Archived', title: 'Archived' },
+  const groups: Array<{ status: ListingStatus; title: string; view: 'current' | 'previous' }> = [
+    { status: 'Active', title: 'Active', view: 'current' },
+    { status: 'Pending', title: 'Pending', view: 'current' },
+    { status: 'Sold', title: 'Sold', view: 'previous' },
+    { status: 'Donated', title: 'Donated', view: 'previous' },
+    { status: 'Archived', title: 'Archived', view: 'previous' },
+    { status: 'Removed', title: 'Removed', view: 'previous' },
+    { status: 'Draft', title: 'Draft', view: 'previous' },
   ];
 
   const allListings = listings.data ?? [];
+  const visibleListings = allListings.filter((listing) =>
+    listingView === 'current'
+      ? ['Active', 'Pending'].includes(listing.status)
+      : !['Active', 'Pending'].includes(listing.status)
+  );
 
   return (
     <ScreenContainer>
@@ -3695,14 +3761,18 @@ export function MyListingsScreen({
         <BackButton onPress={onBack} />
         <View style={styles.headerBlock}>
           <Text style={styles.title}>My Listings</Text>
-          <Text style={styles.body}>Manage active, sold, donated, and archived items.</Text>
+          <Text style={styles.body}>Manage available items and review your listing history.</Text>
+          <View style={styles.wrapRow}>
+            <FilterChip label="Current" selected={listingView === 'current'} onPress={() => setListingView('current')} />
+            <FilterChip label="Previous" selected={listingView === 'previous'} onPress={() => setListingView('previous')} />
+          </View>
         </View>
         {notice ? <NoticeCard notice={notice} /> : null}
         {completion ? (
           <Card>
             <View style={styles.stack}>
               <Text style={styles.cardTitle}>
-                {completion.outcome === 'sold' ? 'Who bought this item?' : 'Who received this donation?'}
+                Who received this donation?
               </Text>
               <Text style={styles.body}>
                 Choose someone from the listing conversation to enable reviews. If the exchange happened outside ReTail,
@@ -3751,7 +3821,16 @@ export function MyListingsScreen({
             onAction={onCreateListing}
           />
         ) : null}
-        {groups.map((group) => {
+        {!listings.isLoading && allListings.length > 0 && visibleListings.length === 0 ? (
+          <EmptyState
+            title={listingView === 'current' ? 'No current listings' : 'No previous listings'}
+            body={listingView === 'current'
+              ? 'Active and pending listings will appear here.'
+              : 'Sold, donated, archived, and removed listings will appear here.'}
+            icon={PackageOpen}
+          />
+        ) : null}
+        {groups.filter((group) => group.view === listingView).map((group) => {
           const groupListings = allListings.filter((listing) => listing.status === group.status);
 
           if (!groupListings.length) {
@@ -3768,7 +3847,29 @@ export function MyListingsScreen({
                 {
                   label: 'Edit',
                   onPress: (listing) => onEditListing(listing.id),
-                  disabled: (listing) => ['Sold', 'Donated', 'Removed'].includes(listing.status),
+                  visible: (listing) => ['Active', 'Pending'].includes(listing.status),
+                },
+                {
+                  label: 'Mark Pending',
+                  onPress: (listing) =>
+                    ask(
+                      'Mark listing pending?',
+                      'Pending listings leave the marketplace and cannot be purchased until you return them to Active.',
+                      () => listings.markListingPending(listing.id),
+                      { confirmTitle: 'Mark Pending' }
+                    ),
+                  visible: (listing) => listing.status === 'Active',
+                },
+                {
+                  label: 'Return to Active',
+                  onPress: (listing) =>
+                    ask(
+                      'Return listing to Active?',
+                      'This makes the listing available in the marketplace again.',
+                      () => listings.activateListing(listing.id),
+                      { confirmTitle: 'Return to Active' }
+                    ),
+                  visible: (listing) => listing.status === 'Pending',
                 },
                 {
                   label: 'Archive',
@@ -3776,17 +3877,23 @@ export function MyListingsScreen({
                     ask('Archive listing?', 'Archived listings leave the marketplace feed but remain in My Listings.', () =>
                       listings.archiveListing(listing.id)
                     ),
-                  disabled: (listing) => ['Sold', 'Donated', 'Archived', 'Removed'].includes(listing.status),
+                  visible: (listing) => ['Active', 'Pending'].includes(listing.status),
                 },
                 {
                   label: 'Mark Sold',
-                  onPress: (listing) => setCompletion({ listing, outcome: 'sold' }),
-                  disabled: (listing) => ['Sold', 'Donated', 'Archived', 'Removed'].includes(listing.status),
+                  onPress: (listing) =>
+                    ask(
+                      'Mark listing sold?',
+                      'Use this for a sale completed outside ReTail checkout. Protected checkout sales are marked sold automatically.',
+                      () => listings.markListingSold(listing.id),
+                      { confirmTitle: 'Mark Sold' }
+                    ),
+                  visible: (listing) => ['Active', 'Pending'].includes(listing.status),
                 },
                 {
                   label: 'Mark Donated',
                   onPress: (listing) => setCompletion({ listing, outcome: 'donated' }),
-                  disabled: (listing) => ['Sold', 'Donated', 'Archived', 'Removed'].includes(listing.status),
+                  visible: (listing) => ['Active', 'Pending'].includes(listing.status),
                 },
                 {
                   label: 'Delete',
@@ -3796,7 +3903,7 @@ export function MyListingsScreen({
                       listings.deleteListing(listing.id),
                       { confirmTitle: 'Delete', variant: 'danger' }
                     ),
-                  disabled: (listing) => listing.status === 'Removed',
+                  visible: (listing) => listing.status !== 'Removed',
                 },
               ]}
             />
@@ -4171,7 +4278,7 @@ function ListingForm({
         label="Zip Code *"
         value={form.zip_code ?? ''}
         onChangeText={updateZipCode}
-        placeholder="78701"
+        placeholder="5-digit ZIP"
         keyboardType="number-pad"
         helperText="Used for nearby search and approximate pickup or meetup area."
         error={errors.zip_code}
@@ -4229,7 +4336,7 @@ function ListingForm({
             label="Ship-from zip code"
             value={form.ship_from_zip_code ?? ''}
             onChangeText={(value) => onChange('ship_from_zip_code', value)}
-            placeholder={form.zip_code || '78701'}
+            placeholder={form.zip_code || '5-digit ZIP'}
             keyboardType="number-pad"
             helperText="Publicly shown as a zip code only, not your exact address."
             error={errors.ship_from_zip_code}

@@ -12,6 +12,7 @@ type ListingAction = {
   onPress: (listing: Listing) => void;
   tone?: 'primary' | 'neutral' | 'danger';
   disabled?: (listing: Listing) => boolean;
+  visible?: (listing: Listing) => boolean;
 };
 
 type UserListingGridProps = {
@@ -57,7 +58,7 @@ export function UserListingGrid({
             />
             {actions.length ? (
               <View style={styles.actions}>
-                {actions.map((action) => (
+                {actions.filter((action) => action.visible?.(listing) !== false).map((action) => (
                   <ProfileActionButton
                     key={action.label}
                     title={action.label}

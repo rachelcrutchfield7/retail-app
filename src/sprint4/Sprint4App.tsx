@@ -107,6 +107,7 @@ import {
   getPaymentReadiness,
   isPaidListing,
   listingPriceToCents,
+  RETAIL_FEE_MODEL_VERSION,
   startProtectedCheckout,
 } from '../services/paymentService';
 import {
@@ -1441,6 +1442,9 @@ export function ConversationScreen({
         </Card>
       ) : null}
       <DealFlowCard paidListing={paidListing} acceptedAmount={acceptedAmount} isSeller={isSeller} />
+      {transaction && isSeller ? (
+        <SellerPayoutSummaryCard transaction={transaction} />
+      ) : null}
       {transaction?.fulfillment_method === 'shipping' ? (
         <ShippingStatusCard transaction={transaction} isSeller={isSeller} />
       ) : null}
@@ -1816,6 +1820,69 @@ function ShippingStatusCard({ transaction, isSeller }: { transaction: Transactio
   );
 }
 
+function SellerPayoutSummaryCard({ transaction }: { transaction: Transaction }) {
+  const salePriceCents = validTransactionAmount(transaction.item_amount_cents);
+  const sellingFeeCents = validTransactionAmount(transaction.seller_fee_cents);
+  const sellerAmountCents = validTransactionAmount(transaction.seller_amount_cents);
+  const currentFeeModel = transaction.fee_model_version === RETAIL_FEE_MODEL_VERSION;
+  const feeBreakdownAvailable = currentFeeModel
+    && salePriceCents !== null
+    && sellingFeeCents !== null
+    && sellerAmountCents !== null;
+  const paymentState = sellerPaymentState(transaction.payment_status);
+
+  return (
+    <Card>
+      <View style={styles.stack}>
+        <Text style={styles.cardTitle}>Seller payout</Text>
+        <Badge label={paymentState.label} tone={paymentState.tone} />
+        <CheckoutSummaryRow
+          label="Sale price"
+          value={salePriceCents !== null ? formatCheckoutCents(salePriceCents) : 'Not itemized'}
+        />
+        <CheckoutSummaryRow
+          label="ReTail selling fee"
+          value={sellingFeeCents !== null
+            ? sellingFeeCents > 0
+              ? `-${formatCheckoutCents(sellingFeeCents)}`
+              : formatCheckoutCents(0)
+            : 'Not itemized'}
+        />
+        <View style={styles.checkoutSummaryDivider} />
+        <CheckoutSummaryRow
+          label="You earn"
+          value={sellerAmountCents !== null ? formatCheckoutCents(sellerAmountCents) : 'See Stripe'}
+        />
+        {!feeBreakdownAvailable ? (
+          <Text style={styles.metaText}>
+            This legacy transaction does not include ReTail's current itemized fee breakdown.
+          </Text>
+        ) : null}
+        <Text style={styles.body}>
+          Your earnings are paid to the bank account connected to your ReTail seller account through Stripe. Check Stripe for payout availability and timing.
+        </Text>
+      </View>
+    </Card>
+  );
+}
+
+function validTransactionAmount(value: number | undefined): number | null {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null;
+}
+
+function sellerPaymentState(paymentStatus?: string): { label: string; tone: 'success' | 'warning' | 'error' | 'info' | 'neutral' } {
+  if (paymentStatus === 'succeeded') return { label: 'Payment received', tone: 'success' };
+  if (paymentStatus === 'partially_refunded') return { label: 'Partially refunded', tone: 'warning' };
+  if (paymentStatus === 'refunded') return { label: 'Refunded', tone: 'warning' };
+  if (paymentStatus === 'disputed') return { label: 'Payment disputed', tone: 'error' };
+  if (paymentStatus === 'failed' || paymentStatus === 'canceled') return { label: 'Payment not completed', tone: 'error' };
+  if (paymentStatus === 'processing' || paymentStatus?.startsWith('requires_')) {
+    return { label: 'Payment processing', tone: 'info' };
+  }
+
+  return { label: 'Payment status unavailable', tone: 'neutral' };
+}
+
 function shippingStatusLabel(status: Transaction['shipping_status']) {
   if (status === 'label_created') return 'Preparing';
   if (status === 'pre_transit' || status === 'in_transit') return 'Shipped';
@@ -1999,8 +2066,8 @@ export function PaymentOptionsScreen({
           ? 'Calculating...'
           : 'Confirmed before payment';
   const paymentCardAmount = checkoutSummary ? formatCheckoutCents(checkoutSummary.amountCents) : totalDisplay;
-  const retailFeeDisplay = checkoutSummary
-    ? formatCheckoutCents(checkoutSummary.platformFeeCents)
+  const buyerServiceFeeDisplay = checkoutSummary
+    ? formatCheckoutCents(checkoutSummary.buyerServiceFeeCents ?? checkoutSummary.platformFeeCents)
     : checkoutBusy
       ? 'Calculating...'
       : 'Calculated before payment';
@@ -2281,16 +2348,16 @@ export function PaymentOptionsScreen({
                 <Text style={styles.cardTitle}>Order summary</Text>
                 <CheckoutSummaryRow label="Item" value={formatCheckoutCents(checkoutItemCents)} />
                 <CheckoutSummaryRow
+                  label="ReTail Service Fee"
+                  detail="Supports ReTail hosting, moderation, and payment support"
+                  value={buyerServiceFeeDisplay}
+                />
+                <CheckoutSummaryRow
                   label={selectedFulfillmentMethod === 'pickup' ? 'Pickup' : 'Shipping'}
                   detail={selectedFulfillmentMethod === 'pickup'
                     ? 'Local pickup'
                     : 'Standard tracked shipping'}
                   value={shippingDisplay}
-                />
-                <CheckoutSummaryRow
-                  label="ReTail fee"
-                  detail="Supports ReTail hosting, moderation, and payment support"
-                  value={retailFeeDisplay}
                 />
                 <CheckoutSummaryRow label="Tax" value={taxDisplay} />
                 <View style={styles.checkoutSummaryDivider} />

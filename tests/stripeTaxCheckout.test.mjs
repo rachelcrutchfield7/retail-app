@@ -127,7 +127,7 @@ test('mobile checkout displays authoritative tax and total before presenting Str
   assert.match(checkoutScreen, /Review your total/);
   assert.match(checkoutScreen, /presentStripePaymentSheet\(checkoutSummary\)/);
   assert.match(checkoutScreen, /<CheckoutSummaryRow label="Item"/);
-  assert.match(checkoutScreen, /<CheckoutSummaryRow\s+label="ReTail fee"/);
+  assert.match(checkoutScreen, /<CheckoutSummaryRow\s+label="ReTail Service Fee"/);
   assert.match(checkoutScreen, /<CheckoutSummaryRow label="Tax" value=\{taxDisplay\}/);
   assert.match(checkoutScreen, /<CheckoutSummaryRow label="Total"/);
   assert.match(paymentCard, /actionTitle\?: string/);

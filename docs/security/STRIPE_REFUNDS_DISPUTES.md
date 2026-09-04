@@ -77,11 +77,17 @@ Reason: a refund or chargeback does not prove the physical item has been returne
 
 Current launch workflow:
 
-1. Authorized ReTail admin initiates a refund in Stripe Dashboard.
-2. Stripe sends `charge.refunded`.
-3. ReTail reconciles the transaction automatically.
+1. An authorized ReTail operator verifies the ReTail transaction, its latest Stripe charge, the requested refund amount, and the reason. Never identify the charge from buyer- or seller-supplied IDs alone.
+2. For a shipment, check whether the label is unused and eligible to be voided. Void it through the existing label-void workflow when appropriate, and track any carrier credit separately from the buyer refund.
+3. Refund the destination charge against its latest Stripe charge. Use `reverse_transfer=true` so the connected-account transfer is reversed, and `refund_application_fee=true` so the proportional application fee is returned. Stripe requires the transfer reversal when the application fee is refunded on a destination charge.
+4. For partial refunds, verify Stripe's proportional transfer and application-fee reversals before closing the support case. Do not assume the entire seller transfer or fee was reversed.
+5. Confirm the PaymentIntent-linked Stripe Tax association records the corresponding tax reversal. A refund must not be treated as reconciled solely because the buyer-facing refund succeeded.
+6. Wait for the signed `charge.refunded` webhook to update ReTail's authoritative transaction status and cumulative refunded amount.
+7. Reconcile the buyer refund, connected-account transfer reversal, application-fee refund, Stripe Tax reversal, and any shipping-label credit before resolving the case.
 
 ReTail does not currently expose a seller, buyer, or mobile-client refund endpoint.
+
+Creating or updating a ReTail support case does not initiate a refund. Refunds and disputes do not automatically relist inventory because payment reversal does not prove the physical item was returned.
 
 Future refund initiation must be server-side only, strongly admin-authorized, and must not accept arbitrary client-submitted PaymentIntent, charge, or amount values without server validation.
 

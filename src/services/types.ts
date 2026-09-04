@@ -405,6 +405,11 @@ export type Transaction = {
   amount_cents?: number;
   item_amount_cents?: number;
   platform_fee_cents?: number;
+  seller_fee_cents?: number;
+  buyer_service_fee_cents?: number;
+  retail_fee_total_cents?: number;
+  stripe_application_fee_cents?: number;
+  fee_model_version?: string;
   seller_amount_cents?: number;
   tax_amount_cents?: number;
   stripe_tax_calculation_id?: string;

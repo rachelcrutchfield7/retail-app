@@ -508,13 +508,34 @@ export async function getListingById(listingId: string): Promise<ListingDetail> 
     throwSupabaseError(publicListingResult.error, 'We could not load this listing.');
   }
 
-  const publicListing = Array.isArray(publicListingResult.data)
+  let listingRow = Array.isArray(publicListingResult.data)
     ? publicListingResult.data[0] as Record<string, unknown> | undefined
     : undefined;
 
-  assertListingExists(publicListing, listingId);
+  const session = await supabase.auth.getSession();
+  const userId = session.data.session?.user.id;
 
-  const row = publicListing;
+  // Public detail intentionally exposes only active inventory. An authenticated
+  // owner can still manage a pending or historical listing through the existing
+  // owner-scoped RPC without making that listing public again.
+  if (!listingRow && userId) {
+    const ownerListingsResult = await supabase.rpc('get_my_listings');
+
+    if (ownerListingsResult.error) {
+      throwSupabaseError(ownerListingsResult.error, 'We could not load this listing.');
+    }
+
+    listingRow = ((ownerListingsResult.data ?? []) as Record<string, unknown>[])
+      .find((row) => String(row.id) === listingId);
+
+    if (listingRow) {
+      listingRow = { ...listingRow, related_listings: [] };
+    }
+  }
+
+  assertListingExists(listingRow, listingId);
+
+  const row = listingRow;
   const listing = toListing(row);
   const sellerRow = row.seller as Record<string, unknown> | undefined;
 
@@ -523,8 +544,6 @@ export async function getListingById(listingId: string): Promise<ListingDetail> 
   }
 
   const images = imagesFromListingRow(row);
-  const session = await supabase.auth.getSession();
-  const userId = session.data.session?.user.id;
   const favorite = userId
     ? await supabase
         .from('favorites')
@@ -725,6 +744,34 @@ export async function archiveListing(listingId: string): Promise<void> {
   if (error) {
     throwSupabaseError(error, 'We could not archive this listing.');
   }
+}
+
+export async function markListingPending(listingId: string): Promise<Listing> {
+  const { data, error } = await supabase.rpc('mark_my_listing_pending', {
+    target_listing_id: listingId,
+  });
+
+  if (error) {
+    throwSupabaseError(error, 'We could not mark this listing pending.');
+  }
+
+  const listing = toListing(data as Record<string, unknown>);
+  trackEvent('Listing Pending', { listingId });
+  return listing;
+}
+
+export async function activateListing(listingId: string): Promise<Listing> {
+  const { data, error } = await supabase.rpc('activate_my_listing', {
+    target_listing_id: listingId,
+  });
+
+  if (error) {
+    throwSupabaseError(error, 'We could not return this listing to the marketplace.');
+  }
+
+  const listing = toListing(data as Record<string, unknown>);
+  trackEvent('Listing Activated', { listingId });
+  return listing;
 }
 
 export async function markListingSold(listingId: string): Promise<Listing> {
