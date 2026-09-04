@@ -17,6 +17,7 @@ import {
   Home,
   ListChecks,
   MapPin,
+  Menu,
   MessageCircle,
   Plus,
   Search,
@@ -25,6 +26,7 @@ import {
   Trash2,
   User,
   Wallet,
+  X,
 } from 'lucide-react-native';
 import { AuthProvider } from '../auth';
 import {
@@ -976,6 +978,148 @@ function TabsShell({
 }) {
   const unread = useUnreadMessages();
   const insets = useSafeAreaInsets();
+  const isWeb = Platform.OS === 'web';
+  const [viewportWidth, setViewportWidth] = useState(() =>
+    isWeb && typeof window !== 'undefined' ? window.innerWidth : 1024
+  );
+  const [webMenuOpen, setWebMenuOpen] = useState(false);
+  const useMobileWebHeader = isWeb && viewportWidth <= 768;
+  const webMobileMenuWidth = Math.min(248, Math.max(220, viewportWidth - spacing.lg * 2));
+
+  useEffect(() => {
+    if (!isWeb || typeof window === 'undefined') {
+      return undefined;
+    }
+
+    const updateViewportWidth = () => setViewportWidth(window.innerWidth);
+    updateViewportWidth();
+    window.addEventListener('resize', updateViewportWidth);
+    return () => window.removeEventListener('resize', updateViewportWidth);
+  }, [isWeb]);
+
+  useEffect(() => {
+    if (!useMobileWebHeader && webMenuOpen) {
+      setWebMenuOpen(false);
+    }
+  }, [useMobileWebHeader, webMenuOpen]);
+
+  const handleWebTabChange = useCallback(
+    (tab: SprintTab) => {
+      setWebMenuOpen(false);
+      onChangeTab(tab);
+    },
+    [onChangeTab]
+  );
+
+  const handleWebDownload = useCallback(() => {
+    setWebMenuOpen(false);
+    if (typeof window !== 'undefined') {
+      window.location.href = '/download';
+    }
+  }, []);
+
+  if (isWeb) {
+    if (useMobileWebHeader) {
+      return (
+        <SafeAreaView edges={['left', 'right']} style={[styles.app, styles.webApp]}>
+          <ThemedStatusBar />
+          <View style={styles.webMobileHeader}>
+            <Pressable accessibilityRole="link" onPress={() => handleWebTabChange('home')} style={styles.webMobileBrand}>
+              <Image
+                source={require('../../assets/retail-logo-header.png')}
+                style={styles.webMobileBrandLogo}
+                resizeMode="contain"
+                accessibilityLabel="ReTail"
+              />
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={webMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+              accessibilityState={{ expanded: webMenuOpen }}
+              onPress={() => setWebMenuOpen((open) => !open)}
+              style={styles.webMobileMenuButton}
+            >
+              {webMenuOpen ? <X size={24} color={colors.textPrimary} /> : <Menu size={24} color={colors.textPrimary} />}
+            </Pressable>
+            {webMenuOpen ? (
+              <View style={[styles.webMobileMenu, { width: webMobileMenuWidth }]}>
+                {tabs.map((tab) => {
+                  const Icon = tab.icon;
+                  const selected = tab.key === activeTab;
+                  return (
+                    <Pressable
+                      key={tab.key}
+                      accessibilityRole="link"
+                      accessibilityLabel={tab.label}
+                      onPress={() => handleWebTabChange(tab.key)}
+                      style={[styles.webMobileMenuItem, selected && styles.webMobileMenuItemActive]}
+                    >
+                      <Icon size={20} color={selected ? colors.primary : colors.textSecondary} />
+                      <Text style={[styles.webMobileMenuLabel, selected && styles.webNavLabelActive]}>{tab.label}</Text>
+                      {tab.key === 'messages' && (unread.data?.total ?? 0) > 0 ? <UnreadBadge count={unread.data?.total ?? 0} /> : null}
+                    </Pressable>
+                  );
+                })}
+                <Pressable
+                  accessibilityRole="link"
+                  accessibilityLabel="Download the ReTail app"
+                  onPress={handleWebDownload}
+                  style={styles.webMobileDownloadLink}
+                >
+                  <Text style={styles.webDownloadLabel}>Download App</Text>
+                </Pressable>
+              </View>
+            ) : null}
+          </View>
+          <View style={styles.webMain}>{children}</View>
+        </SafeAreaView>
+      );
+    }
+
+    return (
+      <SafeAreaView edges={['left', 'right']} style={[styles.app, styles.webApp]}>
+        <ThemedStatusBar />
+        <View style={styles.webHeader}>
+          <Pressable accessibilityRole="link" onPress={() => onChangeTab('home')} style={styles.webBrand}>
+            <Image
+              source={require('../../assets/retail-logo-header.png')}
+              style={styles.webBrandLogo}
+              resizeMode="contain"
+              accessibilityLabel="ReTail"
+            />
+          </Pressable>
+          <View style={styles.webNav}>
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
+              const selected = tab.key === activeTab;
+              return (
+                <Pressable
+                  key={tab.key}
+                  accessibilityRole="link"
+                  accessibilityLabel={tab.label}
+                  onPress={() => handleWebTabChange(tab.key)}
+                  style={[styles.webNavItem, selected && styles.webNavItemActive]}
+                >
+                  <Icon size={18} color={selected ? colors.primary : colors.textSecondary} />
+                  <Text style={[styles.webNavLabel, selected && styles.webNavLabelActive]}>{tab.label}</Text>
+                  {tab.key === 'messages' && (unread.data?.total ?? 0) > 0 ? <UnreadBadge count={unread.data?.total ?? 0} /> : null}
+                </Pressable>
+              );
+            })}
+            <Pressable
+              accessibilityRole="link"
+              accessibilityLabel="Download the ReTail app"
+              onPress={handleWebDownload}
+              style={styles.webDownloadLink}
+            >
+              <Text style={styles.webDownloadLabel}>Download App</Text>
+            </Pressable>
+          </View>
+        </View>
+        <View style={styles.webMain}>{children}</View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView edges={['left', 'right']} style={[styles.app, { paddingTop: topSafeAreaPadding(insets.top) }]}>
@@ -4613,6 +4757,153 @@ function createSprint4Styles(themeColors: ThemeColors) {
   app: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  webApp: {
+    minHeight: '100%',
+    backgroundColor: colors.background,
+  },
+  webHeader: {
+    minHeight: 76,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+  },
+  webBrand: {
+    minWidth: 150,
+    minHeight: 46,
+    justifyContent: 'center',
+  },
+  webBrandLogo: {
+    width: 142,
+    height: 40,
+  },
+  webMobileHeader: {
+    minHeight: 64,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    position: 'relative',
+    zIndex: 10,
+  },
+  webMobileBrand: {
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  webMobileBrandLogo: {
+    width: 112,
+    height: 36,
+  },
+  webMobileMenuButton: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  webMobileMenu: {
+    position: 'absolute',
+    top: 62,
+    right: spacing.md,
+    borderRadius: radius.large,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    padding: spacing.sm,
+    shadowColor: colors.textPrimary,
+    shadowOpacity: 0.12,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 8,
+    zIndex: 20,
+  },
+  webMobileMenuItem: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    borderRadius: radius.medium,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  webMobileMenuItemActive: {
+    backgroundColor: colors.primarySoft,
+  },
+  webMobileMenuLabel: {
+    flex: 1,
+    color: colors.textSecondary,
+    ...typography.body,
+    fontWeight: '700',
+  },
+  webMobileDownloadLink: {
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: radius.medium,
+    backgroundColor: colors.primary,
+    marginTop: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  webNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    flex: 1,
+  },
+  webNavItem: {
+    minHeight: 42,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  webNavItemActive: {
+    backgroundColor: colors.primarySoft,
+  },
+  webNavLabel: {
+    color: colors.textSecondary,
+    ...typography.caption,
+    fontWeight: '700',
+  },
+  webNavLabelActive: {
+    color: colors.textPrimary,
+  },
+  webDownloadLink: {
+    minHeight: 42,
+    justifyContent: 'center',
+    borderRadius: radius.pill,
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  webDownloadLabel: {
+    color: colors.white,
+    ...typography.caption,
+    fontWeight: '800',
+  },
+  webMain: {
+    flex: 1,
+    width: '100%',
+    maxWidth: 1240,
+    alignSelf: 'center',
   },
   tabContent: {
     flex: 1,
