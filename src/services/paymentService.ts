@@ -81,6 +81,17 @@ async function readFunctionErrorMessage(error: unknown): Promise<string | null> 
   }
 }
 
+function checkoutUserMessage(serverMessage: string | null): string {
+  if (
+    serverMessage?.includes('seller has not set up Stripe payouts')
+    || serverMessage?.includes('seller needs to finish Stripe payout onboarding')
+  ) {
+    return "This item isn't available for checkout yet. Please try again later.";
+  }
+
+  return serverMessage ?? 'Stripe checkout could not be started. Please try again in a moment.';
+}
+
 export async function startProtectedCheckout(context: PaymentOptionContext): Promise<ProtectedCheckoutSetup> {
   const readiness = getPaymentReadiness();
 
@@ -129,7 +140,7 @@ export async function startProtectedCheckout(context: PaymentOptionContext): Pro
     throw createServiceError(
       'STRIPE_CHECKOUT_FAILED',
       serverMessage ?? error.message,
-      serverMessage ?? 'Stripe checkout could not be started. Please try again in a moment.'
+      checkoutUserMessage(serverMessage)
     );
   }
 

@@ -3283,7 +3283,7 @@ export function SettingsScreen({
             <Text style={styles.metaText}>Usually takes just a few minutes.</Text>
           </>
         ) : null}
-        <Text style={styles.body}>Paid marketplace listings require payout setup before they can go live. Local pickup paid listings are included.</Text>
+        <Text style={styles.body}>Complete payout setup before buyers can purchase your paid marketplace listings. Local pickup paid listings are included.</Text>
         <Text style={styles.body}>Protected checkout pays sellers through Stripe Connect, keeps a ReTail receipt, and deducts the small platform fee automatically so the seller payout stays simple.</Text>
         <View style={styles.wrapRow}>
           <Badge label={stripeStatus.detailsSubmitted ? 'Details submitted' : 'Details needed'} tone={stripeStatus.detailsSubmitted ? 'success' : 'warning'} />

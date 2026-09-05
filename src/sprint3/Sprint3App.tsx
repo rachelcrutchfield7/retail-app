@@ -123,11 +123,8 @@ import {
   isAppleSignInCancellation,
 } from '../services/appleAuthService';
 import {
-  getStripeConnectPayoutState,
-  getStripeConnectPrimaryActionLabel,
   getStripeConnectStatusNotice,
   profileHasStripePayouts,
-  refreshStripeConnectStatus,
 } from '../services/stripeConnectService';
 import type { StripeConnectStatus } from '../services/stripeConnectService';
 import {
@@ -1239,7 +1236,6 @@ export function CreateListingScreen({
   const [errors, setErrors] = useState<ReturnType<typeof validateCreateListingInput>['errors']>({});
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [stripeBusy, setStripeBusy] = useState(false);
   const [payoutNotice, setPayoutNotice] = useState<Notice | null>(null);
   const [latestStripeStatus, setLatestStripeStatus] = useState<StripeConnectStatus | null>(null);
   const [payoutOnboardingVisible, setPayoutOnboardingVisible] = useState(false);
@@ -1252,8 +1248,6 @@ export function CreateListingScreen({
     detailsSubmitted: auth.profile?.stripe_connect_details_submitted === true,
   };
   const stripeStatus = latestStripeStatus ?? profileStripeStatus;
-  const payoutState = getStripeConnectPayoutState(stripeStatus);
-  const payoutActionLabel = getStripeConnectPrimaryActionLabel(payoutState);
   const payoutsReady = profileHasStripePayouts(stripeStatus);
   const paidListingRequiresPayout = form.listing_type === 'sale';
 
@@ -1296,43 +1290,6 @@ export function CreateListingScreen({
     await auth.refreshProfile();
   };
 
-  const confirmPayoutReadyForPublish = async () => {
-    if (!paidListingRequiresPayout) {
-      return true;
-    }
-
-    try {
-      setStripeBusy(true);
-      const status = await refreshStripeConnectStatus();
-      setLatestStripeStatus(status);
-      await auth.refreshProfile();
-
-      if (profileHasStripePayouts(status)) {
-        setPayoutNotice({
-          title: 'Payouts ready',
-          body: 'You can now publish listings and receive earnings through ReTail.',
-        });
-        return true;
-      }
-
-      setPayoutNotice({
-        title: status.accountId ? 'Payout setup needs attention' : 'Get paid for your sales',
-        body: status.accountId
-          ? 'Stripe needs more information before ReTail can send your earnings. Continue payout setup, then try publishing again.'
-          : "ReTail uses Stripe to securely send your earnings to you. You don't need to own a business to sell on ReTail.",
-      });
-      return false;
-    } catch (error) {
-      setPayoutNotice({
-        title: 'Payout status not verified',
-        body: 'We couldn’t verify your payout status. Please try again.',
-      });
-      return false;
-    } finally {
-      setStripeBusy(false);
-    }
-  };
-
   const submit = async () => {
     if (submitLockedRef.current || mutation.loading || uploading) {
       return;
@@ -1356,12 +1313,6 @@ export function CreateListingScreen({
     }
 
     setErrors({});
-
-    const payoutReady = await confirmPayoutReadyForPublish();
-    if (!payoutReady) {
-      submitLockedRef.current = false;
-      return;
-    }
 
     setUploading(true);
     setProgress(25);
@@ -1418,17 +1369,17 @@ export function CreateListingScreen({
         {paidListingRequiresPayout && !payoutsReady && !payoutNotice ? (
           <NoticeCard
             notice={{
-              title: 'Get paid for your sales',
-              body: "ReTail uses Stripe to securely send your earnings to you. You don't need to own a business to sell on ReTail. Usually takes just a few minutes.",
+              title: 'Set up payouts',
+              body: 'Complete your payout setup before your items can be purchased.',
             }}
-            actionLabel={stripeBusy ? 'Checking...' : payoutActionLabel}
+            actionLabel="Set Up Payouts"
             onAction={setupPayouts}
           />
         ) : null}
         {payoutNotice ? (
           <NoticeCard
             notice={payoutNotice}
-            actionLabel={profileHasStripePayouts(stripeStatus) ? undefined : stripeBusy ? 'Checking...' : payoutActionLabel}
+            actionLabel={profileHasStripePayouts(stripeStatus) ? undefined : 'Set Up Payouts'}
             onAction={profileHasStripePayouts(stripeStatus) ? undefined : setupPayouts}
           />
         ) : null}
@@ -1445,8 +1396,8 @@ export function CreateListingScreen({
         <Button
           title="Publish Listing"
           onPress={submit}
-          loading={mutation.loading || uploading || stripeBusy}
-          disabled={mutation.loading || uploading || stripeBusy}
+          loading={mutation.loading || uploading}
+          disabled={mutation.loading || uploading}
           fullWidth
         />
       </ScrollView>

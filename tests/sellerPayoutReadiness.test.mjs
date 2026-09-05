@@ -20,6 +20,8 @@ const readSellerPayoutGuardMigration = () =>
     'supabase/migrations/20260811103000_seller_payout_publish_guard.sql',
     'supabase/migrations/20260812152900_prelaunch_current_schema_baseline_created_20260813.sql'
   );
+const readListingPayoutDecouplingMigration = () =>
+  read('supabase/migrations/20260905073500_decouple_listing_payout_readiness.sql');
 
 test('payout readiness requires account id, details submitted, charges enabled, and payouts enabled', () => {
   const stripeService = read('src/services/stripeConnectService.ts');
@@ -30,18 +32,14 @@ test('payout readiness requires account id, details submitted, charges enabled, 
   assert.match(stripeService, /profile\.payoutsEnabled/);
 });
 
-test('server-side publish guard blocks active paid listings without payout readiness', () => {
-  const migration = readSellerPayoutGuardMigration();
+test('historical publish guard is removed by a forward-only listing decoupling migration', () => {
+  const historicalMigration = readSellerPayoutGuardMigration();
+  const decouplingMigration = readListingPayoutDecouplingMigration();
 
-  assert.match(migration, /private\.seller_payout_ready/);
-  assert.match(migration, /stripe_connect_details_submitted/);
-  assert.match(migration, /stripe_connect_charges_enabled/);
-  assert.match(migration, /stripe_connect_payouts_enabled/);
-  assert.match(migration, /new\.status = 'active'::public\.listing_status/);
-  assert.match(migration, /new\.listing_type = 'sale'::public\.listing_type/);
-  assert.match(migration, /coalesce\(new\.price, 0\) > 0/);
-  assert.match(migration, /RETAIL_SELLER_PAYOUT_REQUIRED/);
-  assert.match(migration, /BEFORE INSERT OR UPDATE ON "?public"?\."?listings"?|before insert or update on public\.listings/i);
+  assert.match(historicalMigration, /private\.seller_payout_ready/);
+  assert.match(historicalMigration, /RETAIL_SELLER_PAYOUT_REQUIRED/);
+  assert.match(decouplingMigration, /drop trigger if exists enforce_paid_listing_payout_readiness_before_write\s+on public\.listings/i);
+  assert.doesNotMatch(decouplingMigration, /drop function|disable trigger all|alter table[^;]+disable row level security/i);
 });
 
 test('checkout reservation revalidates seller payout readiness before payment can start', () => {
@@ -55,20 +53,18 @@ test('checkout reservation revalidates seller payout readiness before payment ca
   assert.match(checkoutFunction, /RETAIL_SELLER_STRIPE_INCOMPLETE/);
 });
 
-test('create listing shows payout setup prompt and rechecks status before publish without clearing form', () => {
+test('create listing shows a non-blocking payout notice and publishes without a Stripe readiness check', () => {
   const sprint3 = read('src/sprint3/Sprint3App.tsx');
 
-  assert.match(sprint3, /Get paid for your sales/);
-  assert.match(sprint3, /ReTail uses Stripe to securely send your earnings to you/);
-  assert.match(sprint3, /You don't need to own a business to sell on ReTail/);
-  assert.match(sprint3, /Usually takes just a few minutes/);
-  assert.match(sprint3, /getStripeConnectPrimaryActionLabel/);
+  assert.match(sprint3, /title: 'Set up payouts'/);
+  assert.match(sprint3, /Complete your payout setup before your items can be purchased\./);
+  assert.match(sprint3, /actionLabel="Set Up Payouts"/);
   assert.match(sprint3, /StripeConnectOnboardingScreen/);
   assert.match(sprint3, /onAction=\{setupPayouts\}/);
-  assert.match(sprint3, /refreshStripeConnectStatus/);
   assert.match(sprint3, /setLatestStripeStatus\(status\)/);
-  assert.match(sprint3, /confirmPayoutReadyForPublish/);
+  assert.doesNotMatch(sprint3, /confirmPayoutReadyForPublish|await refreshStripeConnectStatus\(\)/);
   assert.match(sprint3, /paidListingRequiresPayout && !payoutsReady && !payoutNotice/);
+  assert.match(sprint3, /const listing = await mutation\.createListing\(form\)/);
   assert.match(sprint3, /setForm\(createListingDefaults\(auth\.profile\)\)[^]*onCreated\(listing\.id\)/);
 });
 
@@ -105,8 +101,7 @@ test('payout actions are mutually exclusive for every Stripe Connect state', () 
   assert.match(stripeService, /return state === 'action_required' \? 'Continue Payout Setup' : 'Set Up My Payouts'/);
   assert.match(stripeService, /return 'Manage Payout Account'/);
   assert.match(sprint3, /const stripeStatus = latestStripeStatus \?\? profileStripeStatus/);
-  assert.match(sprint3, /const payoutState = getStripeConnectPayoutState\(stripeStatus\)/);
-  assert.match(sprint3, /const payoutActionLabel = getStripeConnectPrimaryActionLabel\(payoutState\)/);
+  assert.match(sprint3, /actionLabel="Set Up Payouts"/);
   assert.match(sprint4, /const stripeStatus = latestStripeStatus \?\? profileStripeStatus/);
   assert.match(sprint4, /const payoutStatus = getStripeConnectPayoutState\(stripeStatus\)/);
   assert.match(sprint4, /const payoutActionLabel = getStripeConnectPrimaryActionLabel\(payoutStatus\)/);

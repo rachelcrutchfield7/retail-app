@@ -17,7 +17,7 @@ module.exports = {
     name: 'ReTail',
     slug: 'retail',
     scheme: 'retail',
-    version: '1.0.0',
+    version: '1.1.0',
     orientation: 'portrait',
     userInterfaceStyle: 'light',
     icon: './assets/app-icon.png',

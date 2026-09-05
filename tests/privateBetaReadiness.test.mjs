@@ -72,7 +72,7 @@ test('release build configuration keeps private beta separate from production', 
 
   assert.match(appConfig, /name: 'ReTail'/);
   assert.match(appConfig, /slug: 'retail'/);
-  assert.match(appConfig, /version: '1\.0\.0'/);
+  assert.match(appConfig, /version: '1\.1\.0'/);
   assert.match(appConfig, /bundleIdentifier: 'com\.raecrutchfield\.retail'/);
   assert.match(appConfig, /package: 'com\.raecrutchfield\.retail'/);
   assert.match(appConfig, /projectId: '288a25e1-5824-4f77-a3f4-0607df5f7d89'/);
