@@ -2,8 +2,10 @@ import type Stripe from 'npm:stripe@^22';
 import { handleCors, jsonResponse } from '../_shared/cors.ts';
 import { requireAuthenticatedRequest } from '../_shared/supabase.ts';
 import {
-  calculatePlatformFeeCents,
+  calculateBuyerServiceFeeCents,
+  calculateSellerFeeCents,
   getStripe,
+  RETAIL_FEE_MODEL_VERSION,
   RETAIL_FEE_TAX_CODE,
   RETAIL_PRODUCT_TAX_CODE,
   RETAIL_SHIPPING_TAX_CODE,
@@ -75,6 +77,11 @@ type TransactionCheckoutBreakdown = {
   amount_cents: number | null;
   item_amount_cents: number | null;
   platform_fee_cents: number | null;
+  seller_fee_cents: number | null;
+  buyer_service_fee_cents: number | null;
+  retail_fee_total_cents: number | null;
+  stripe_application_fee_cents: number | null;
+  fee_model_version: string | null;
   seller_amount_cents: number | null;
   fulfillment_method: string | null;
   shipping_payer: string | null;
@@ -88,6 +95,9 @@ type TransactionCheckoutBreakdown = {
   tax_amount_cents: number | null;
   stripe_tax_calculation_id: string | null;
   accepted_offer_id: string | null;
+  seller_promotion_key: string | null;
+  seller_promotion_slot_ordinal: number | null;
+  seller_promotion_waived_fee_cents: number | null;
 };
 
 type ShippingRateQuote = {
@@ -124,6 +134,22 @@ type FoundingSellerBenefit = {
   benefitOrdinal: number | null;
 };
 
+type SellerListingPromotion = {
+  reservationId: string | null;
+  promotionApplied: boolean;
+  promotionKey: string | null;
+  slotOrdinal: number | null;
+  normalSellerFeeCents: number;
+  actualSellerFeeCents: number;
+  waivedSellerFeeCents: number;
+};
+
+type StaleSellerPromotionReservation = {
+  reservation_id: string;
+  stripe_payment_intent_id: string | null;
+};
+
+const SELLER_LISTING_PROMOTION_KEY = 'seller_listing_3_fee_free_3_v1';
 const RESERVED_MESSAGE = 'This item is currently being purchased by another buyer. Please try again shortly.';
 const TAX_CALCULATION_FAILURE = "We couldn't calculate tax for this order. Please check your delivery/billing address and try again.";
 const reusablePaymentIntentStatuses = new Set([
@@ -207,6 +233,21 @@ function isPaymentIntentReusable(paymentIntent: Stripe.PaymentIntent): boolean {
   return Boolean(paymentIntent.client_secret && reusablePaymentIntentStatuses.has(paymentIntent.status));
 }
 
+function hasCurrentFeeModel(paymentIntent: Stripe.PaymentIntent): boolean {
+  return paymentIntent.metadata?.retail_fee_model_version === RETAIL_FEE_MODEL_VERSION;
+}
+
+function hasCurrentFeeBreakdown(transaction: TransactionCheckoutBreakdown | null): transaction is TransactionCheckoutBreakdown {
+  return Boolean(
+    transaction
+    && transaction.fee_model_version === RETAIL_FEE_MODEL_VERSION
+    && typeof transaction.seller_fee_cents === 'number'
+    && typeof transaction.buyer_service_fee_cents === 'number'
+    && typeof transaction.retail_fee_total_cents === 'number'
+    && typeof transaction.stripe_application_fee_cents === 'number'
+  );
+}
+
 async function cancelStalePaymentIntent(paymentIntentId: string): Promise<boolean> {
   const stripe = getStripe();
   let paymentIntent: Stripe.PaymentIntent;
@@ -278,6 +319,11 @@ async function loadTransactionCheckoutBreakdown(
       'amount_cents',
       'item_amount_cents',
       'platform_fee_cents',
+      'seller_fee_cents',
+      'buyer_service_fee_cents',
+      'retail_fee_total_cents',
+      'stripe_application_fee_cents',
+      'fee_model_version',
       'seller_amount_cents',
       'fulfillment_method',
       'shipping_payer',
@@ -291,6 +337,9 @@ async function loadTransactionCheckoutBreakdown(
       'tax_amount_cents',
       'stripe_tax_calculation_id',
       'accepted_offer_id',
+      'seller_promotion_key',
+      'seller_promotion_slot_ordinal',
+      'seller_promotion_waived_fee_cents',
     ].join(','))
     .eq('id', transactionId)
     .maybeSingle();
@@ -311,6 +360,11 @@ function checkoutResponseFromBreakdown(
     typeof transaction.amount_cents !== 'number'
     || typeof transaction.item_amount_cents !== 'number'
     || typeof transaction.platform_fee_cents !== 'number'
+    || typeof transaction.seller_fee_cents !== 'number'
+    || typeof transaction.buyer_service_fee_cents !== 'number'
+    || typeof transaction.retail_fee_total_cents !== 'number'
+    || typeof transaction.stripe_application_fee_cents !== 'number'
+    || transaction.fee_model_version !== RETAIL_FEE_MODEL_VERSION
     || typeof transaction.seller_amount_cents !== 'number'
     || typeof transaction.tax_amount_cents !== 'number'
     || !transaction.stripe_tax_calculation_id
@@ -325,7 +379,16 @@ function checkoutResponseFromBreakdown(
     merchantDisplayName: 'ReTail',
     amountCents: transaction.amount_cents,
     itemAmountCents: transaction.item_amount_cents,
-    platformFeeCents: transaction.platform_fee_cents,
+    // Older installed clients display platformFeeCents in the buyer summary.
+    platformFeeCents: transaction.buyer_service_fee_cents,
+    sellerFeeCents: transaction.seller_fee_cents,
+    buyerServiceFeeCents: transaction.buyer_service_fee_cents,
+    retailFeeTotalCents: transaction.retail_fee_total_cents,
+    stripeApplicationFeeCents: transaction.stripe_application_fee_cents,
+    feeModelVersion: transaction.fee_model_version,
+    sellerPromotionKey: transaction.seller_promotion_key,
+    sellerPromotionSlotOrdinal: transaction.seller_promotion_slot_ordinal,
+    sellerPromotionFeeWaivedCents: transaction.seller_promotion_waived_fee_cents ?? 0,
     sellerAmountCents: transaction.seller_amount_cents,
     taxAmountCents: transaction.tax_amount_cents,
     taxCalculationId: transaction.stripe_tax_calculation_id,
@@ -600,6 +663,195 @@ async function releaseFoundingSellerBenefitToken(
   }
 }
 
+function normalizeSellerListingPromotion(
+  row: Record<string, unknown> | null | undefined,
+  normalSellerFeeCents: number,
+): SellerListingPromotion {
+  if (!row || row.promotion_applied !== true) {
+    return {
+      reservationId: null,
+      promotionApplied: false,
+      promotionKey: null,
+      slotOrdinal: null,
+      normalSellerFeeCents,
+      actualSellerFeeCents: normalSellerFeeCents,
+      waivedSellerFeeCents: 0,
+    };
+  }
+
+  const reservationId = typeof row.reservation_id === 'string'
+    ? row.reservation_id
+    : null;
+  const promotionKey = typeof row.promotion_key === 'string'
+    ? row.promotion_key
+    : null;
+  const slotOrdinal = typeof row.slot_ordinal === 'number'
+    ? row.slot_ordinal
+    : null;
+  const actualSellerFeeCents = typeof row.actual_seller_fee_cents === 'number'
+    ? row.actual_seller_fee_cents
+    : null;
+  const waivedSellerFeeCents = typeof row.waived_seller_fee_cents === 'number'
+    ? row.waived_seller_fee_cents
+    : null;
+
+  if (
+    !reservationId
+    || promotionKey !== SELLER_LISTING_PROMOTION_KEY
+    || !Number.isInteger(slotOrdinal)
+    || (slotOrdinal ?? 0) <= 0
+    || actualSellerFeeCents !== 0
+    || waivedSellerFeeCents !== normalSellerFeeCents
+  ) {
+    throw new Error('Seller promotion reservation returned an invalid fee waiver.');
+  }
+
+  return {
+    reservationId,
+    promotionApplied: true,
+    promotionKey,
+    slotOrdinal,
+    normalSellerFeeCents,
+    actualSellerFeeCents,
+    waivedSellerFeeCents,
+  };
+}
+
+async function reserveSellerListingPromotion(
+  supabaseAdmin: SupabaseAdmin,
+  checkoutToken: string,
+  sellerId: string,
+  normalSellerFeeCents: number,
+): Promise<SellerListingPromotion> {
+  const { data, error } = await supabaseAdmin.rpc('reserve_seller_listing_promotion', {
+    p_promotion_key: SELLER_LISTING_PROMOTION_KEY,
+    p_checkout_token: checkoutToken,
+    p_seller_id: sellerId,
+    p_normal_seller_fee_cents: normalSellerFeeCents,
+  });
+
+  if (error) throw error;
+  const row = Array.isArray(data) ? data[0] : null;
+  return normalizeSellerListingPromotion(
+    row as Record<string, unknown> | null,
+    normalSellerFeeCents,
+  );
+}
+
+async function attachSellerListingPromotion(
+  supabaseAdmin: SupabaseAdmin,
+  checkoutToken: string,
+  transactionId: string,
+  paymentIntentId: string,
+  promotion: SellerListingPromotion,
+): Promise<void> {
+  if (!promotion.reservationId) return;
+
+  const { error } = await supabaseAdmin.rpc('attach_seller_listing_promotion', {
+    p_checkout_token: checkoutToken,
+    p_transaction_id: transactionId,
+    p_payment_intent_id: paymentIntentId,
+  });
+
+  if (error) throw error;
+}
+
+async function releaseSellerListingPromotionToken(
+  supabaseAdmin: SupabaseAdmin,
+  checkoutToken: string | null,
+  reason: string,
+): Promise<void> {
+  if (!checkoutToken) return;
+
+  const { error } = await supabaseAdmin.rpc('release_seller_listing_promotion_token', {
+    p_checkout_token: checkoutToken,
+    p_reason: reason,
+  });
+
+  if (error) throw error;
+}
+
+async function cleanupStaleSellerPromotionReservations(
+  supabaseAdmin: SupabaseAdmin,
+): Promise<void> {
+  const { data, error } = await supabaseAdmin.rpc(
+    'list_stale_seller_listing_promotion_reservations',
+    { p_limit: 10 },
+  );
+
+  if (error) throw error;
+
+  const rows = Array.isArray(data)
+    ? data as StaleSellerPromotionReservation[]
+    : [];
+
+  for (const row of rows) {
+    let releaseReason: string | null = null;
+
+    if (!row.stripe_payment_intent_id) {
+      releaseReason = 'stale_without_payment_intent';
+    } else {
+      try {
+        const intent = await getStripe().paymentIntents.retrieve(
+          row.stripe_payment_intent_id,
+        );
+        if (intent.status === 'canceled') {
+          releaseReason = 'stripe_payment_intent_canceled';
+        }
+      } catch (cleanupError) {
+        console.warn('Seller promotion cleanup preserved an unverified reservation.', {
+          reservationId: row.reservation_id,
+          paymentIntentPresent: true,
+          error: cleanupError instanceof Error
+            ? cleanupError.message
+            : 'Unknown Stripe lookup error.',
+        });
+      }
+    }
+
+    if (!releaseReason) continue;
+
+    const { error: releaseError } = await supabaseAdmin.rpc(
+      'release_stale_seller_listing_promotion_reservation',
+      {
+        p_reservation_id: row.reservation_id,
+        p_expected_payment_intent_id: row.stripe_payment_intent_id,
+        p_reason: releaseReason,
+      },
+    );
+    if (releaseError) throw releaseError;
+  }
+}
+
+async function releaseFailedSellerPromotion(input: {
+  supabaseAdmin: SupabaseAdmin;
+  checkoutToken: string;
+  paymentIntentId: string | null;
+  promotionAttached: boolean;
+}): Promise<void> {
+  let mayRelease = input.paymentIntentId === null;
+
+  if (input.paymentIntentId) {
+    try {
+      mayRelease = await cancelStalePaymentIntent(input.paymentIntentId);
+    } catch (error) {
+      console.error('Seller promotion PaymentIntent cancellation failed.', {
+        paymentIntentId: input.paymentIntentId,
+        promotionAttached: input.promotionAttached,
+        error: error instanceof Error ? error.message : 'Unknown cancellation error.',
+      });
+    }
+  }
+
+  if (!mayRelease) return;
+
+  await releaseSellerListingPromotionToken(
+    input.supabaseAdmin,
+    input.checkoutToken,
+    'checkout_error',
+  );
+}
+
 function taxAddressFromBuyerProfile(profile: BuyerProfileTaxAddress): TaxAddress {
   const postalCode = normalizePostalCode(profile.zip_code);
 
@@ -638,7 +890,7 @@ function shipFromDetails(reservation: CheckoutReservation): Stripe.Tax.Calculati
 async function createCheckoutTaxCalculation(input: {
   reservation: CheckoutReservation;
   itemAmountCents: number;
-  platformFeeCents: number;
+  buyerServiceFeeCents: number;
   shippingCollectedCents: number;
   taxAddress: TaxAddress;
 }): Promise<Stripe.Tax.Calculation> {
@@ -659,11 +911,11 @@ async function createCheckoutTaxCalculation(input: {
     ],
   };
 
-  if (input.platformFeeCents > 0) {
+  if (input.buyerServiceFeeCents > 0) {
     params.line_items.push({
-      amount: input.platformFeeCents,
+      amount: input.buyerServiceFeeCents,
       quantity: 1,
-      reference: `retail-fee:${input.reservation.listing_id}`,
+      reference: `retail-service-fee:${input.reservation.listing_id}`,
       tax_behavior: 'exclusive',
       tax_code: RETAIL_FEE_TAX_CODE,
     });
@@ -692,7 +944,7 @@ async function createCheckoutTaxCalculation(input: {
       buyerTaxState: input.taxAddress.address.state,
       buyerTaxPostalCodePresent: Boolean(input.taxAddress.address.postal_code),
       itemAmountCents: input.itemAmountCents,
-      platformFeeCents: input.platformFeeCents,
+      buyerServiceFeeCents: input.buyerServiceFeeCents,
       shippingCollectedCents: input.shippingCollectedCents,
       productTaxCode: RETAIL_PRODUCT_TAX_CODE,
       shippingTaxCode: RETAIL_SHIPPING_TAX_CODE,
@@ -729,6 +981,8 @@ Deno.serve(async (request) => {
   let reservationAttachedToPaymentIntent = false;
   let foundingSellerCheckoutToken: string | null = null;
   let foundingSellerBenefitAttached = false;
+  let sellerPromotionCheckoutToken: string | null = null;
+  let sellerPromotionAttached = false;
   let checkoutStage = 'request_start';
   let listingIdForDiagnostics: string | null = null;
   let acceptedOfferPresentForDiagnostics = false;
@@ -739,6 +993,25 @@ Deno.serve(async (request) => {
     const { supabaseAdmin, user } = await requireAuthenticatedRequest(request);
     supabaseAdminForRelease = supabaseAdmin;
     buyerIdForRelease = user.id;
+    const buyerReceiptEmail = user.email?.trim();
+
+    if (!buyerReceiptEmail) {
+      throw new CheckoutControlledError(
+        'Your ReTail account needs an email address before checkout can start.',
+        400,
+      );
+    }
+
+    checkoutStage = 'seller_promotion_stale_cleanup';
+    try {
+      await cleanupStaleSellerPromotionReservations(supabaseAdmin);
+    } catch (cleanupError) {
+      console.warn('Seller promotion stale cleanup was deferred.', {
+        error: cleanupError instanceof Error
+          ? cleanupError.message
+          : 'Unknown promotion cleanup error.',
+      });
+    }
 
     checkoutStage = 'parse_request';
     const body = await request.json() as CheckoutRequest;
@@ -788,19 +1061,31 @@ Deno.serve(async (request) => {
 
     if (reservation.existing_payment_intent_id) {
       checkoutStage = 'retrieve_existing_payment_intent';
-      const existingPaymentIntent = await getStripe().paymentIntents.retrieve(reservation.existing_payment_intent_id);
+      let existingPaymentIntent = await getStripe().paymentIntents.retrieve(reservation.existing_payment_intent_id);
 
-      if (isPaymentIntentReusable(existingPaymentIntent) && reservation.existing_transaction_id) {
+      if (
+        isPaymentIntentReusable(existingPaymentIntent)
+        && hasCurrentFeeModel(existingPaymentIntent)
+        && reservation.existing_transaction_id
+      ) {
         checkoutStage = 'load_existing_transaction';
         const existingBreakdown = await loadTransactionCheckoutBreakdown(supabaseAdmin, reservation.existing_transaction_id);
         const sameOfferAuthority =
           (existingBreakdown?.accepted_offer_id ?? null) === acceptedOfferId;
 
         if (
-          existingBreakdown
+          hasCurrentFeeBreakdown(existingBreakdown)
           && sameOfferAuthority
           && existingBreakdown.amount_cents === existingPaymentIntent.amount
+          && existingBreakdown.stripe_application_fee_cents === existingPaymentIntent.application_fee_amount
         ) {
+          if (existingPaymentIntent.receipt_email !== buyerReceiptEmail) {
+            checkoutStage = 'payment_intent_receipt_update';
+            existingPaymentIntent = await getStripe().paymentIntents.update(existingPaymentIntent.id, {
+              receipt_email: buyerReceiptEmail,
+            });
+          }
+
           return jsonResponse(
             checkoutResponseFromBreakdown(
               existingPaymentIntent,
@@ -811,10 +1096,13 @@ Deno.serve(async (request) => {
         }
       }
 
-      await releaseCheckoutReservation(supabaseAdmin, reservation, user.id, reservation.existing_payment_intent_id);
-      reservationToRelease = null;
+      checkoutStage = 'cancel_incompatible_payment_intent';
+      const incompatibleCancelled = await cancelStalePaymentIntent(reservation.existing_payment_intent_id);
 
-      return checkoutFailure('This checkout session expired. Please try again.', 409);
+      if (!incompatibleCancelled) {
+        reservationToRelease = null;
+        return checkoutFailure(RESERVED_MESSAGE, 409);
+      }
     }
 
     if (reservation.stale_payment_intent_id) {
@@ -841,36 +1129,57 @@ Deno.serve(async (request) => {
       ? taxAddressFromShippingQuote(shippingQuote as ShippingRateQuote)
       : taxAddressFromBuyerProfile(buyerProfileTaxAddress as BuyerProfileTaxAddress);
     const itemAmountCents = reservation.amount_cents;
-    const normalPlatformFeeCents = calculatePlatformFeeCents(itemAmountCents);
+    const normalSellerFeeCents = calculateSellerFeeCents(itemAmountCents);
+    const buyerServiceFeeCents = calculateBuyerServiceFeeCents(itemAmountCents);
     foundingSellerCheckoutToken = crypto.randomUUID();
     checkoutStage = 'reserve_founding_seller_benefit';
     const foundingSellerBenefit = await reserveFoundingSellerBenefit(
       supabaseAdmin,
       foundingSellerCheckoutToken,
       reservation.seller_id,
-      normalPlatformFeeCents,
+      normalSellerFeeCents,
     );
-    const platformFeeCents = foundingSellerBenefit.platformFeeCents;
+    let sellerPromotion = normalizeSellerListingPromotion(
+      null,
+      normalSellerFeeCents,
+    );
+
+    if (!foundingSellerBenefit.benefitApplied) {
+      sellerPromotionCheckoutToken = crypto.randomUUID();
+      checkoutStage = 'reserve_seller_listing_promotion';
+      sellerPromotion = await reserveSellerListingPromotion(
+        supabaseAdmin,
+        sellerPromotionCheckoutToken,
+        reservation.seller_id,
+        normalSellerFeeCents,
+      );
+    }
+
+    const sellerFeeCents = foundingSellerBenefit.benefitApplied
+      ? foundingSellerBenefit.platformFeeCents
+      : sellerPromotion.actualSellerFeeCents;
+    const retailFeeTotalCents = sellerFeeCents + buyerServiceFeeCents;
     checkoutStage = 'stripe_tax_calculation';
     const taxCalculation = await createCheckoutTaxCalculation({
       reservation,
       itemAmountCents,
-      platformFeeCents,
+      buyerServiceFeeCents,
       shippingCollectedCents: shipping.shippingCollectedCents,
       taxAddress,
     });
     taxCalculationCreatedForDiagnostics = true;
     const taxAmountCents = taxCalculation.tax_amount_exclusive + taxCalculation.tax_amount_inclusive;
     const checkoutTotalCents = taxCalculation.amount_total;
-    const sellerAmountCents = itemAmountCents;
-    const stripeApplicationFeeWithheldCents = platformFeeCents + shipping.shippingCollectedCents + taxAmountCents;
+    const sellerAmountCents = itemAmountCents - sellerFeeCents;
+    const stripeApplicationFeeCents = retailFeeTotalCents + shipping.shippingCollectedCents + taxAmountCents;
 
     checkoutStage = 'payment_intent_create';
     const paymentIntent = await getStripe().paymentIntents.create({
       amount: checkoutTotalCents,
       currency: 'usd',
       automatic_payment_methods: { enabled: true },
-      application_fee_amount: stripeApplicationFeeWithheldCents,
+      receipt_email: buyerReceiptEmail,
+      application_fee_amount: stripeApplicationFeeCents,
       transfer_data: {
         destination: String(reservation.stripe_connect_account_id),
       },
@@ -885,14 +1194,24 @@ Deno.serve(async (request) => {
         retail_listing_id: reservation.listing_id,
         retail_buyer_id: user.id,
         retail_seller_id: String(reservation.seller_id),
-        retail_platform_fee_cents: String(platformFeeCents),
-        retail_platform_fee_pre_fs_cents: String(normalPlatformFeeCents),
+        retail_platform_fee_cents: String(sellerFeeCents),
+        retail_seller_fee_cents: String(sellerFeeCents),
+        retail_buyer_service_fee_cents: String(buyerServiceFeeCents),
+        retail_fee_total_cents: String(retailFeeTotalCents),
+        retail_fee_model_version: RETAIL_FEE_MODEL_VERSION,
+        retail_platform_fee_pre_fs_cents: String(normalSellerFeeCents),
         retail_founding_seller_benefit_applied: String(foundingSellerBenefit.benefitApplied),
         retail_founding_seller_fee_waived_cents: String(foundingSellerBenefit.waivedPlatformFeeCents),
+        retail_seller_promo_key: sellerPromotion.promotionKey ?? '',
+        retail_seller_promo_slot: sellerPromotion.slotOrdinal === null
+          ? ''
+          : String(sellerPromotion.slotOrdinal),
+        retail_seller_promo_reservation_id: sellerPromotion.reservationId ?? '',
+        retail_seller_promo_fee_waived_cents: String(sellerPromotion.waivedSellerFeeCents),
         retail_shipping_collected_cents: String(shipping.shippingCollectedCents),
         retail_tax_amount_cents: String(taxAmountCents),
         retail_tax_calculation_id: String(taxCalculation.id),
-        retail_application_fee_withheld_cents: String(stripeApplicationFeeWithheldCents),
+        retail_application_fee_cents: String(stripeApplicationFeeCents),
         retail_shipping_provider: shippingQuote?.provider ?? '',
         retail_shipping_rate_id: shippingQuote?.provider_rate_id ?? '',
         retail_accepted_offer_id: acceptedOfferId ?? '',
@@ -912,7 +1231,24 @@ Deno.serve(async (request) => {
       payment_status: paymentIntent.status,
       amount_cents: checkoutTotalCents,
       item_amount_cents: itemAmountCents,
-      platform_fee_cents: platformFeeCents,
+      platform_fee_cents: sellerFeeCents,
+      seller_fee_cents: sellerFeeCents,
+      buyer_service_fee_cents: buyerServiceFeeCents,
+      retail_fee_total_cents: retailFeeTotalCents,
+      stripe_application_fee_cents: stripeApplicationFeeCents,
+      fee_model_version: RETAIL_FEE_MODEL_VERSION,
+      seller_promotion_reservation_id: sellerPromotion.reservationId,
+      seller_promotion_key: sellerPromotion.promotionKey,
+      seller_promotion_slot_ordinal: sellerPromotion.slotOrdinal,
+      seller_promotion_normal_fee_cents: sellerPromotion.promotionApplied
+        ? sellerPromotion.normalSellerFeeCents
+        : null,
+      seller_promotion_applied_fee_cents: sellerPromotion.promotionApplied
+        ? sellerPromotion.actualSellerFeeCents
+        : null,
+      seller_promotion_waived_fee_cents: sellerPromotion.promotionApplied
+        ? sellerPromotion.waivedSellerFeeCents
+        : null,
       seller_amount_cents: sellerAmountCents,
       fulfillment_method: fulfillmentMethod,
       shipping_payer: shipping.shippingPayer,
@@ -952,6 +1288,7 @@ Deno.serve(async (request) => {
     if (transactionError || !transaction) {
       await getStripe().paymentIntents.cancel(paymentIntent.id, { cancellation_reason: 'abandoned' });
       await releaseFoundingSellerBenefitToken(supabaseAdmin, foundingSellerCheckoutToken, 'transaction_save_failed');
+      await releaseSellerListingPromotionToken(supabaseAdmin, sellerPromotionCheckoutToken, 'transaction_save_failed');
       await releaseCheckoutReservation(supabaseAdmin, reservation, user.id, null);
       reservationToRelease = null;
 
@@ -972,6 +1309,7 @@ Deno.serve(async (request) => {
       if (quoteUpdateError) {
         await getStripe().paymentIntents.cancel(paymentIntent.id, { cancellation_reason: 'abandoned' });
         await releaseFoundingSellerBenefitToken(supabaseAdmin, foundingSellerCheckoutToken, 'shipping_rate_lock_failed');
+        await releaseSellerListingPromotionToken(supabaseAdmin, sellerPromotionCheckoutToken, 'shipping_rate_lock_failed');
         await releaseCheckoutReservation(supabaseAdmin, reservation, user.id, null);
         reservationToRelease = null;
 
@@ -999,11 +1337,35 @@ Deno.serve(async (request) => {
       if (shippingDetailError) {
         await getStripe().paymentIntents.cancel(paymentIntent.id, { cancellation_reason: 'abandoned' });
         await releaseFoundingSellerBenefitToken(supabaseAdmin, foundingSellerCheckoutToken, 'shipping_detail_save_failed');
+        await releaseSellerListingPromotionToken(supabaseAdmin, sellerPromotionCheckoutToken, 'shipping_detail_save_failed');
         await releaseCheckoutReservation(supabaseAdmin, reservation, user.id, null);
         reservationToRelease = null;
 
         return jsonResponse({ error: 'Payment was created, but ReTail could not save shipping details.' }, 500);
       }
+    }
+
+    try {
+      checkoutStage = 'seller_listing_promotion_attach';
+      await attachSellerListingPromotion(
+        supabaseAdmin,
+        sellerPromotionCheckoutToken ?? '',
+        transaction.id,
+        paymentIntent.id,
+        sellerPromotion,
+      );
+      sellerPromotionAttached = Boolean(sellerPromotion.reservationId);
+    } catch {
+      await getStripe().paymentIntents.cancel(paymentIntent.id, { cancellation_reason: 'abandoned' });
+      await releaseSellerListingPromotionToken(
+        supabaseAdmin,
+        sellerPromotionCheckoutToken,
+        'promotion_attach_failed',
+      );
+      await releaseCheckoutReservation(supabaseAdmin, reservation, user.id, null);
+      reservationToRelease = null;
+
+      return jsonResponse({ error: 'Payment was created, but ReTail could not save the seller promotion.' }, 500);
     }
 
     try {
@@ -1036,6 +1398,7 @@ Deno.serve(async (request) => {
     if (attachError) {
       await getStripe().paymentIntents.cancel(paymentIntent.id, { cancellation_reason: 'abandoned' });
       await releaseFoundingSellerBenefitToken(supabaseAdmin, foundingSellerCheckoutToken, 'reservation_attach_failed');
+      await releaseSellerListingPromotionToken(supabaseAdmin, sellerPromotionCheckoutToken, 'reservation_attach_failed');
       await releaseCheckoutReservation(supabaseAdmin, reservation, user.id, null);
       reservationToRelease = null;
 
@@ -1053,9 +1416,18 @@ Deno.serve(async (request) => {
       merchantDisplayName: 'ReTail',
       amountCents: checkoutTotalCents,
       itemAmountCents,
-      platformFeeCents,
+      // Older installed clients use this buyer-facing field in Order summary.
+      platformFeeCents: buyerServiceFeeCents,
+      sellerFeeCents,
+      buyerServiceFeeCents,
+      retailFeeTotalCents,
+      stripeApplicationFeeCents,
+      feeModelVersion: RETAIL_FEE_MODEL_VERSION,
       foundingSellerFeeWaivedCents: foundingSellerBenefit.waivedPlatformFeeCents,
       foundingSellerBenefitOrdinal: foundingSellerBenefit.benefitOrdinal,
+      sellerPromotionKey: sellerPromotion.promotionKey,
+      sellerPromotionSlotOrdinal: sellerPromotion.slotOrdinal,
+      sellerPromotionFeeWaivedCents: sellerPromotion.waivedSellerFeeCents,
       sellerAmountCents,
       taxAmountCents,
       taxCalculationId: taxCalculation.id,
@@ -1069,6 +1441,25 @@ Deno.serve(async (request) => {
       currency: paymentIntent.currency,
     });
   } catch (error) {
+    if (supabaseAdminForRelease && sellerPromotionCheckoutToken) {
+      try {
+        await releaseFailedSellerPromotion({
+          supabaseAdmin: supabaseAdminForRelease,
+          checkoutToken: sellerPromotionCheckoutToken,
+          paymentIntentId: createdPaymentIntentId,
+          promotionAttached: sellerPromotionAttached,
+        });
+      } catch (promotionReleaseError) {
+        console.error('Seller promotion release failed after checkout error.', {
+          promotionAttached: sellerPromotionAttached,
+          paymentIntentId: createdPaymentIntentId,
+          error: promotionReleaseError instanceof Error
+            ? promotionReleaseError.message
+            : 'Unknown promotion release error.',
+        });
+      }
+    }
+
     if (supabaseAdminForRelease && buyerIdForRelease && reservationToRelease) {
       try {
         await releaseCheckoutReservation(

@@ -34,6 +34,7 @@ type StripeTransaction = {
   stripe_payment_intent_id: string | null;
   last_stripe_charge_id?: string | null;
   payment_status?: string | null;
+  seller_promotion_reservation_id?: string | null;
 };
 
 type NotificationType = 'transaction_completed' | 'listing_sold' | 'system';
@@ -251,6 +252,52 @@ async function releaseFoundingSellerBenefit(
   }
 }
 
+async function consumeSellerListingPromotion(
+  supabaseAdmin: SupabaseAdmin,
+  transactionId: string,
+  paymentIntentId: string,
+): Promise<void> {
+  const { error } = await supabaseAdmin.rpc('consume_seller_listing_promotion', {
+    p_transaction_id: transactionId,
+    p_payment_intent_id: paymentIntentId,
+  });
+
+  if (error) throw error;
+}
+
+async function releaseSellerListingPromotion(
+  supabaseAdmin: SupabaseAdmin,
+  transactionId: string,
+  paymentIntentId: string,
+  reason: string,
+): Promise<void> {
+  const { error } = await supabaseAdmin.rpc('release_seller_listing_promotion_checkout', {
+    p_transaction_id: transactionId,
+    p_payment_intent_id: paymentIntentId,
+    p_reason: reason,
+  });
+
+  if (error) throw error;
+}
+
+async function makePromotionPaymentIntentNonviable(
+  intent: Stripe.PaymentIntent,
+): Promise<void> {
+  if (intent.status === 'canceled') return;
+
+  if (
+    intent.status === 'succeeded'
+    || intent.status === 'processing'
+    || intent.status === 'requires_capture'
+  ) {
+    throw new Error('A viable seller-promotion PaymentIntent cannot release its slot.');
+  }
+
+  await getStripe().paymentIntents.cancel(intent.id, {
+    cancellation_reason: 'abandoned',
+  });
+}
+
 async function insertNotificationIfMissing(
   supabaseAdmin: SupabaseAdmin,
   notification: {
@@ -313,7 +360,7 @@ async function findTransactionByStripeIdentifiers(
   supabaseAdmin: SupabaseAdmin,
   identifiers: { paymentIntentId?: string | null; chargeId?: string | null },
 ): Promise<StripeTransaction | null> {
-  const selectColumns = 'id,listing_id,buyer_id,seller_id,amount_cents,currency,stripe_payment_intent_id,last_stripe_charge_id,payment_status';
+  const selectColumns = 'id,listing_id,buyer_id,seller_id,amount_cents,currency,stripe_payment_intent_id,last_stripe_charge_id,payment_status,seller_promotion_reservation_id';
 
   if (identifiers.paymentIntentId) {
     const { data, error } = await supabaseAdmin
@@ -426,12 +473,25 @@ async function handlePaymentIntentEvent(supabaseAdmin: SupabaseAdmin, event: Str
 
   if (event.type === 'payment_intent.payment_failed' || event.type === 'payment_intent.canceled') {
     await releaseFoundingSellerBenefit(supabaseAdmin, transaction.id, intent.id, event.type);
+    if (transaction.seller_promotion_reservation_id) {
+      await makePromotionPaymentIntentNonviable(intent);
+      await releaseSellerListingPromotion(
+        supabaseAdmin,
+        transaction.id,
+        intent.id,
+        event.type,
+      );
+    }
     await releaseCheckoutReservation(supabaseAdmin, transaction, intent.id);
     return;
   }
 
   if (event.type !== 'payment_intent.succeeded') {
     return;
+  }
+
+  if (transaction.seller_promotion_reservation_id) {
+    await consumeSellerListingPromotion(supabaseAdmin, transaction.id, intent.id);
   }
 
   const { data: soldListing, error: listingError } = await supabaseAdmin

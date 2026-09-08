@@ -39,10 +39,11 @@ test('Founding Seller checkout reservation is limited to first three active or c
 
 test('checkout waives only the ReTail platform fee for eligible Founding Seller transactions', () => {
   assert.match(stripeCreate, /reserveFoundingSellerBenefit/);
-  assert.match(stripeCreate, /const normalPlatformFeeCents = calculatePlatformFeeCents\(itemAmountCents\)/);
-  assert.match(stripeCreate, /const platformFeeCents = foundingSellerBenefit\.platformFeeCents/);
+  assert.match(stripeCreate, /const normalSellerFeeCents = calculateSellerFeeCents\(itemAmountCents\)/);
+  assert.match(stripeCreate, /const sellerFeeCents = foundingSellerBenefit\.benefitApplied/);
+  assert.match(stripeCreate, /foundingSellerBenefit\.platformFeeCents/);
   assert.match(stripeCreate, /shippingCollectedCents: shipping\.shippingCollectedCents/);
-  assert.match(stripeCreate, /const stripeApplicationFeeWithheldCents = platformFeeCents \+ shipping\.shippingCollectedCents \+ taxAmountCents/);
+  assert.match(stripeCreate, /const stripeApplicationFeeCents = retailFeeTotalCents \+ shipping\.shippingCollectedCents \+ taxAmountCents/);
   assert.match(stripeCreate, /retail_founding_seller_fee_waived_cents: String\(foundingSellerBenefit\.waivedPlatformFeeCents\)/);
   assert.match(stripeCreate, /attachFoundingSellerBenefit/);
   assert.match(stripeCreate, /foundingSellerFeeWaivedCents: foundingSellerBenefit\.waivedPlatformFeeCents/);

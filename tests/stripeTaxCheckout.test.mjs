@@ -66,25 +66,26 @@ test('tax calculation requires buyer location and uses server-selected shipping 
 });
 
 test('application fee withholds ReTail fee, tax, and collected shipping from connected seller proceeds', () => {
-  assert.match(stripeCreate, /const normalPlatformFeeCents = calculatePlatformFeeCents\(itemAmountCents\)/);
-  assert.match(stripeCreate, /const platformFeeCents = foundingSellerBenefit\.platformFeeCents/);
+  assert.match(stripeCreate, /const normalSellerFeeCents = calculateSellerFeeCents\(itemAmountCents\)/);
+  assert.match(stripeCreate, /const buyerServiceFeeCents = calculateBuyerServiceFeeCents\(itemAmountCents\)/);
+  assert.match(stripeCreate, /const sellerFeeCents = foundingSellerBenefit\.benefitApplied/);
   assert.match(stripeCreate, /const sellerAmountCents = itemAmountCents/);
   assert.match(
     stripeCreate,
-    /const stripeApplicationFeeWithheldCents = platformFeeCents \+ shipping\.shippingCollectedCents \+ taxAmountCents/,
+    /const stripeApplicationFeeCents = retailFeeTotalCents \+ shipping\.shippingCollectedCents \+ taxAmountCents/,
   );
-  assert.match(stripeCreate, /application_fee_amount: stripeApplicationFeeWithheldCents/);
+  assert.match(stripeCreate, /application_fee_amount: stripeApplicationFeeCents/);
   assert.match(stripeCreate, /transfer_data:\s*\{\s*destination: String\(reservation\.stripe_connect_account_id\)/s);
 });
 
 test('collected tax is separated from ReTail marketplace revenue in transaction and metadata fields', () => {
-  assert.match(stripeCreate, /retail_platform_fee_cents: String\(platformFeeCents\)/);
-  assert.match(stripeCreate, /retail_platform_fee_pre_fs_cents: String\(normalPlatformFeeCents\)/);
+  assert.match(stripeCreate, /retail_platform_fee_cents: String\(sellerFeeCents\)/);
+  assert.match(stripeCreate, /retail_platform_fee_pre_fs_cents: String\(normalSellerFeeCents\)/);
   assert.match(stripeCreate, /retail_tax_amount_cents: String\(taxAmountCents\)/);
-  assert.match(stripeCreate, /retail_application_fee_withheld_cents: String\(stripeApplicationFeeWithheldCents\)/);
-  assert.match(stripeCreate, /platform_fee_cents: platformFeeCents/);
+  assert.match(stripeCreate, /retail_application_fee_cents: String\(stripeApplicationFeeCents\)/);
+  assert.match(stripeCreate, /platform_fee_cents: sellerFeeCents/);
   assert.match(stripeCreate, /tax_amount_cents: taxAmountCents/);
-  assert.doesNotMatch(stripeCreate, /platform_fee_cents: stripeApplicationFeeWithheldCents/);
+  assert.doesNotMatch(stripeCreate, /platform_fee_cents: stripeApplicationFeeCents/);
 });
 
 test('checkout Stripe metadata keys stay within Stripe key length limits', () => {
@@ -102,7 +103,10 @@ test('transaction persistence stores authoritative tax and accounting breakdown'
   for (const field of [
     'amount_cents: checkoutTotalCents',
     'item_amount_cents: itemAmountCents',
-    'platform_fee_cents: platformFeeCents',
+    'platform_fee_cents: sellerFeeCents',
+    'seller_fee_cents: sellerFeeCents',
+    'buyer_service_fee_cents: buyerServiceFeeCents',
+    'stripe_application_fee_cents: stripeApplicationFeeCents',
     'seller_amount_cents: sellerAmountCents',
     'shipping_collected_cents: shipping.shippingCollectedCents',
     'tax_amount_cents: taxAmountCents',
