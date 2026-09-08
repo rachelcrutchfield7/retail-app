@@ -175,6 +175,7 @@ import {
   scrollContentBottomClearance,
   topSafeAreaPadding,
 } from '../utils/safeAreaLayout';
+import { IOS_COMPACT_FONT_SIZE_MULTIPLIER } from '../utils/iosTextScaling';
 
 type SprintTab = 'home' | 'search' | 'sell' | 'messages' | 'profile';
 type SprintRoute =
@@ -1146,7 +1147,14 @@ function TabsShell({
                   </View>
                 ) : null}
               </View>
-              <Text style={[styles.tabLabel, selected && styles.tabLabelActive]}>{tab.label}</Text>
+              <Text
+                {...(Platform.OS === 'ios'
+                  ? { adjustsFontSizeToFit: true, maxFontSizeMultiplier: IOS_COMPACT_FONT_SIZE_MULTIPLIER, numberOfLines: 1 }
+                  : {})}
+                style={[styles.tabLabel, selected && styles.tabLabelActive]}
+              >
+                {tab.label}
+              </Text>
             </Pressable>
           );
         })}

@@ -4,6 +4,9 @@ import { config } from './src/constants/config';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StripeProvider } from './src/lib/stripe';
 import { ThemePreferenceProvider } from './src/lib/themePreference';
+import { configureIOSNativeTextScaling } from './src/utils/iosTextScaling';
+
+configureIOSNativeTextScaling();
 
 export default function App() {
   return (

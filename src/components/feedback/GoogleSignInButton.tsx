@@ -1,5 +1,6 @@
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { radius, sizes, spacing, typography } from '../../constants/theme';
+import { IOS_COMPACT_FONT_SIZE_MULTIPLIER } from '../../utils/iosTextScaling';
 
 type GoogleSignInButtonProps = {
   label: string;
@@ -29,7 +30,14 @@ export function GoogleSignInButton({
       ) : (
         <View style={styles.content}>
           <GoogleMark />
-          <Text style={styles.label}>{label}</Text>
+          <Text
+            {...(Platform.OS === 'ios'
+              ? { adjustsFontSizeToFit: true, maxFontSizeMultiplier: IOS_COMPACT_FONT_SIZE_MULTIPLIER, numberOfLines: 1 }
+              : {})}
+            style={styles.label}
+          >
+            {label}
+          </Text>
         </View>
       )}
     </Pressable>
@@ -39,7 +47,12 @@ export function GoogleSignInButton({
 function GoogleMark() {
   return (
     <View style={styles.mark} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-      <Text style={styles.markLetter}>G</Text>
+      <Text
+        {...(Platform.OS === 'ios' ? { maxFontSizeMultiplier: 1 } : {})}
+        style={styles.markLetter}
+      >
+        G
+      </Text>
       <View style={[styles.markDot, styles.markDotRed]} />
       <View style={[styles.markDot, styles.markDotYellow]} />
       <View style={[styles.markDot, styles.markDotGreen]} />

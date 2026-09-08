@@ -25,7 +25,7 @@ module.exports = {
     ios: {
       supportsTablet: true,
       usesAppleSignIn: true,
-      icon: './assets/app-icon.png',
+      icon: './assets/ios-app-icon.png',
       bundleIdentifier: 'com.raecrutchfield.retail',
       associatedDomains: [
         'applinks:retailpetapp.com',

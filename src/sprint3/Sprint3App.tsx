@@ -156,6 +156,7 @@ import {
   scrollContentBottomClearance,
   topSafeAreaPadding,
 } from '../utils/safeAreaLayout';
+import { IOS_COMPACT_FONT_SIZE_MULTIPLIER } from '../utils/iosTextScaling';
 import { validateCreateListingInput } from '../validation/createListing';
 
 type SprintTab = 'home' | 'search' | 'sell' | 'favorites' | 'profile';
@@ -4741,9 +4742,18 @@ function HeaderShortcut({
 
 function SectionTitle({ title, hint }: { title: string; hint?: string }) {
   return (
-    <View style={styles.sectionTitleRow}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      {hint ? <Text style={styles.metaText}>{hint}</Text> : null}
+    <View style={[styles.sectionTitleRow, Platform.OS === 'ios' && styles.iosSectionTitleRow]}>
+      <Text style={[styles.sectionTitle, Platform.OS === 'ios' && styles.iosSectionTitle]}>{title}</Text>
+      {hint ? (
+        <Text
+          {...(Platform.OS === 'ios'
+            ? { adjustsFontSizeToFit: true, maxFontSizeMultiplier: IOS_COMPACT_FONT_SIZE_MULTIPLIER, numberOfLines: 1 }
+            : {})}
+          style={styles.metaText}
+        >
+          {hint}
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -5565,9 +5575,16 @@ function createSprint3Styles(themeColors: ThemeColors) {
     justifyContent: 'space-between',
     gap: spacing.md,
   },
+  iosSectionTitleRow: {
+    alignItems: 'flex-start',
+  },
   sectionTitle: {
     color: colors.textPrimary,
     ...typography.sectionTitle,
+  },
+  iosSectionTitle: {
+    flex: 1,
+    minWidth: 0,
   },
   backInline: {
     minHeight: sizes.touchTarget,
