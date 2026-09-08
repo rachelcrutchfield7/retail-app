@@ -12,7 +12,7 @@ const googleSignInPlugin = googleIosUrlScheme
     ]
   : '@react-native-google-signin/google-signin';
 
-module.exports = {
+const appConfig = {
   expo: {
     name: 'ReTail',
     slug: 'retail',
@@ -125,3 +125,9 @@ module.exports = {
     },
   },
 };
+
+if (process.env.RETAIL_IOS_MARKETING_VERSION === '1.1.1') {
+  appConfig.expo.version = '1.1.1';
+}
+
+module.exports = appConfig;

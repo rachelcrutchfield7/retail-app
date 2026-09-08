@@ -45,6 +45,13 @@
         "buildType": "app-bundle"
       }
     },
+    "production-ios": {
+      "extends": "production",
+      "env": {
+        "EXPO_PUBLIC_APP_ENV": "production",
+        "RETAIL_IOS_MARKETING_VERSION": "1.1.1"
+      }
+    },
     "release-candidate": {
       "distribution": "internal",
       "environment": "production",
