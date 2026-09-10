@@ -47,6 +47,7 @@ import {
   User,
 } from 'lucide-react-native';
 import { AuthProvider } from '../auth';
+import { PolicyConsentBoundary } from '../auth/PolicyConsentBoundary';
 import {
   Avatar,
   AppleSignInButton,
@@ -2396,18 +2397,27 @@ export function ProfileScreen({
 
   if (auth.profile.account_type === 'rescue') {
     return (
-      <RescueDashboardScreen
-        profile={auth.profile}
-        onEditProfile={onEditProfile}
-        onSettings={onSettings}
-        onPreferences={onPreferences}
-        onSafetyCenter={onSafetyCenter}
-        onFAQ={onFAQ}
-        onMessages={onMessages}
-        onNotifications={onNotifications}
-        onAdmin={onAdmin}
+      <PolicyConsentBoundary
+        userId={auth.profile.id}
+        source="legacy_user_gate"
+        pendingSignupConsent={auth.user?.pendingSignupConsent}
         onSignOut={signOut}
-      />
+        gateTitle="Review Rescue Terms & Conditions"
+        gateBody="An authorized rescue manager must review and accept ReTail's current policies before managing Rescue Hub needs and wishlists."
+      >
+        <RescueDashboardScreen
+          profile={auth.profile}
+          onEditProfile={onEditProfile}
+          onSettings={onSettings}
+          onPreferences={onPreferences}
+          onSafetyCenter={onSafetyCenter}
+          onFAQ={onFAQ}
+          onMessages={onMessages}
+          onNotifications={onNotifications}
+          onAdmin={onAdmin}
+          onSignOut={signOut}
+        />
+      </PolicyConsentBoundary>
     );
   }
 

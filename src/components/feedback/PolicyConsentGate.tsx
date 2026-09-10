@@ -10,6 +10,8 @@ type PolicyConsentGateProps = {
   checking?: boolean;
   initialMarketingEmailOptIn?: boolean;
   notice?: string | null;
+  title?: string;
+  body?: string;
   onAccept: (marketingEmailOptIn: boolean) => Promise<void>;
   onSignOut: () => Promise<void>;
 };
@@ -18,6 +20,8 @@ export function PolicyConsentGate({
   checking = false,
   initialMarketingEmailOptIn = false,
   notice,
+  title = 'Review ReTail Policies',
+  body = 'Review the current policies to continue using your ReTail account.',
   onAccept,
   onSignOut,
 }: PolicyConsentGateProps) {
@@ -54,8 +58,8 @@ export function PolicyConsentGate({
           </View>
         ) : (
           <>
-            <Text style={[styles.title, { color: themeColors.textPrimary }]}>Review ReTail Policies</Text>
-            <Text style={[styles.body, { color: themeColors.textSecondary }]}>Review the current policies to continue using your ReTail account.</Text>
+            <Text style={[styles.title, { color: themeColors.textPrimary }]}>{title}</Text>
+            <Text style={[styles.body, { color: themeColors.textSecondary }]}>{body}</Text>
             <PolicyConsentChoices
               termsAccepted={termsAccepted}
               marketingEmailOptIn={marketingEmailOptIn}

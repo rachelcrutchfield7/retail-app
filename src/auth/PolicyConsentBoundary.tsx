@@ -15,12 +15,16 @@ export function PolicyConsentBoundary({
   source,
   pendingSignupConsent,
   onSignOut,
+  gateTitle,
+  gateBody,
   children,
 }: {
   userId: string;
   source: PolicyConsentSource;
   pendingSignupConsent?: PendingSignupConsent;
   onSignOut: () => Promise<void>;
+  gateTitle?: string;
+  gateBody?: string;
   children: ReactNode;
 }) {
   const [state, setState] = useState<CurrentConsentState | null>(null);
@@ -68,7 +72,15 @@ export function PolicyConsentBoundary({
   }, [pendingSignupConsent, userId]);
 
   if (checking) {
-    return <PolicyConsentGate checking onAccept={async () => {}} onSignOut={onSignOut} />;
+    return (
+      <PolicyConsentGate
+        checking
+        title={gateTitle}
+        body={gateBody}
+        onAccept={async () => {}}
+        onSignOut={onSignOut}
+      />
+    );
   }
 
   if (state?.hasCurrentPolicyAcceptance) {
@@ -79,6 +91,8 @@ export function PolicyConsentBoundary({
     <PolicyConsentGate
       initialMarketingEmailOptIn={state?.marketingEmailOptIn ?? false}
       notice={notice}
+      title={gateTitle}
+      body={gateBody}
       onAccept={async (marketingEmailOptIn) => {
         const nextState = await recordCurrentPolicyAcceptance(marketingEmailOptIn, source);
         setState(nextState);
