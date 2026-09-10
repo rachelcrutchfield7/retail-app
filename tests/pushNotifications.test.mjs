@@ -131,6 +131,26 @@ test('backend sends Expo pushes from send-notification without exposing arbitrar
   assert.doesNotMatch(edgeFunction, /Deno\.env\.get\('EXPO/);
 });
 
+test('backend reconciles Expo receipts before treating a push ticket as delivered', () => {
+  const edgeFunction = read('supabase/functions/send-notification/index.ts');
+  const migration = read('supabase/migrations/20260910140406_push_receipt_reconciliation.sql');
+
+  assert.match(edgeFunction, /expoPushReceiptsEndpoint = 'https:\/\/exp\.host\/--\/api\/v2\/push\/getReceipts'/);
+  assert.match(edgeFunction, /expoReceiptDelayMs = 15 \* 60 \* 1000/);
+  assert.match(edgeFunction, /reconcileRecentPushReceipts\(supabaseAdmin\)/);
+  assert.match(edgeFunction, /body: JSON\.stringify\(\{ ids:/);
+  assert.match(edgeFunction, /status: 'pending',[\s\S]+provider_ticket_id: ticket\.id/);
+  assert.match(edgeFunction, /receipt\.status === 'ok'[\s\S]+status: 'sent'/);
+  assert.match(edgeFunction, /receipt\.details\?\.error \?\? 'EXPO_PUSH_RECEIPT_ERROR'/);
+  assert.match(edgeFunction, /permanentExpoTokenErrors\.has\(errorCode\)/);
+  assert.match(edgeFunction, /removeInvalidDeviceToken\(supabaseAdmin, token\)/);
+  assert.match(edgeFunction, /EXPO_PUSH_RECEIPT_EXPIRED/);
+
+  assert.match(migration, /add column if not exists receipt_checked_at timestamptz/);
+  assert.match(migration, /notification_push_deliveries_receipt_pending_idx/);
+  assert.match(migration, /receipt_checked_at is null/);
+});
+
 test('push payloads are privacy-safe and do not include sensitive message/payment/contact content', () => {
   const edgeFunction = read('supabase/functions/send-notification/index.ts');
   const buildPushStart = edgeFunction.indexOf('async function buildPush');

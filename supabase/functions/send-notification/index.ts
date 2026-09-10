@@ -49,6 +49,15 @@ type ExpoPushTicket = {
   };
 };
 
+type ExpoPushReceipt = ExpoPushTicket;
+
+type PushDeliveryReceiptRow = {
+  id: string;
+  provider_ticket_id: string;
+  device_token_id: string | null;
+  sent_at: string;
+};
+
 type PushDeliverySummary = {
   sent: number;
   skipped: number;
@@ -57,7 +66,10 @@ type PushDeliverySummary = {
 
 const resendEndpoint = 'https://api.resend.com/emails';
 const expoPushEndpoint = 'https://exp.host/--/api/v2/push/send';
+const expoPushReceiptsEndpoint = 'https://exp.host/--/api/v2/push/getReceipts';
 const permanentExpoTokenErrors = new Set(['DeviceNotRegistered']);
+const expoReceiptDelayMs = 15 * 60 * 1000;
+const expoReceiptRetentionMs = 24 * 60 * 60 * 1000;
 
 Deno.serve(async (request) => {
   const cors = handleCors(request);
@@ -303,6 +315,8 @@ async function deliverPushNotifications(
   const summary: PushDeliverySummary = { sent: 0, skipped: 0, failed: 0 };
 
   try {
+    await reconcileRecentPushReceipts(supabaseAdmin);
+
     const preferences = await loadPreferences(supabaseAdmin, notification.user_id);
 
     if (!pushEnabled(preferences, notification.type)) {
@@ -392,7 +406,7 @@ async function deliverPushNotifications(
 
         if (ticket?.status === 'ok') {
           await updatePushDelivery(supabaseAdmin, item.deliveryId, {
-            status: 'sent',
+            status: 'pending',
             provider_ticket_id: ticket.id ?? null,
             sent_at: new Date().toISOString(),
             error_code: null,
@@ -426,6 +440,144 @@ async function deliverPushNotifications(
     summary.failed += 1;
     return summary;
   }
+}
+
+async function reconcileRecentPushReceipts(
+  supabaseAdmin: ReturnType<typeof createSupabaseAdmin>
+): Promise<void> {
+  const now = Date.now();
+  const receiptReadyBefore = new Date(now - expoReceiptDelayMs).toISOString();
+  const receiptExpiredBefore = new Date(now - expoReceiptRetentionMs).toISOString();
+
+  try {
+    await markExpiredUnreconciledPushReceipts(supabaseAdmin, receiptExpiredBefore);
+
+    const { data, error } = await supabaseAdmin
+      .from('notification_push_deliveries')
+      .select('id,provider_ticket_id,device_token_id,sent_at')
+      .in('status', ['pending', 'sent'])
+      .not('provider_ticket_id', 'is', null)
+      .is('receipt_checked_at', null)
+      .gte('sent_at', receiptExpiredBefore)
+      .lte('sent_at', receiptReadyBefore)
+      .order('sent_at', { ascending: true })
+      .limit(1000);
+
+    if (error || !data?.length) {
+      return;
+    }
+
+    const deliveries = data
+      .filter((row) => typeof row.provider_ticket_id === 'string' && typeof row.sent_at === 'string')
+      .map((row) => ({
+        id: String(row.id),
+        provider_ticket_id: String(row.provider_ticket_id),
+        device_token_id: typeof row.device_token_id === 'string' ? row.device_token_id : null,
+        sent_at: String(row.sent_at),
+      })) satisfies PushDeliveryReceiptRow[];
+
+    if (deliveries.length === 0) {
+      return;
+    }
+
+    const response = await fetch(expoPushReceiptsEndpoint, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ ids: deliveries.map((delivery) => delivery.provider_ticket_id) }),
+    });
+
+    const result = await response.json().catch(() => ({})) as {
+      data?: Record<string, ExpoPushReceipt>;
+    };
+
+    if (!response.ok || !result.data) {
+      return;
+    }
+
+    const tokenIds = [...new Set(deliveries
+      .map((delivery) => delivery.device_token_id)
+      .filter((tokenId): tokenId is string => Boolean(tokenId)))];
+    const tokenById = await loadDeviceTokensById(supabaseAdmin, tokenIds);
+    const checkedAt = new Date().toISOString();
+
+    for (const delivery of deliveries) {
+      const receipt = result.data[delivery.provider_ticket_id];
+
+      if (!receipt) {
+        continue;
+      }
+
+      if (receipt.status === 'ok') {
+        await updatePushDelivery(supabaseAdmin, delivery.id, {
+          status: 'sent',
+          receipt_checked_at: checkedAt,
+          error_code: null,
+          error_message: null,
+        });
+        continue;
+      }
+
+      const errorCode = receipt.details?.error ?? 'EXPO_PUSH_RECEIPT_ERROR';
+      await updatePushDelivery(supabaseAdmin, delivery.id, {
+        status: 'failed',
+        receipt_checked_at: checkedAt,
+        error_code: errorCode,
+        error_message: safeProviderError(receipt) ?? 'Expo reported a push delivery failure.',
+      });
+
+      const token = delivery.device_token_id ? tokenById.get(delivery.device_token_id) : undefined;
+
+      if (token && permanentExpoTokenErrors.has(errorCode)) {
+        await removeInvalidDeviceToken(supabaseAdmin, token);
+      }
+    }
+  } catch (error) {
+    console.warn('ReTail push receipt reconciliation failed safely.', {
+      errorType: error instanceof Error ? error.name : typeof error,
+    });
+  }
+}
+
+async function markExpiredUnreconciledPushReceipts(
+  supabaseAdmin: ReturnType<typeof createSupabaseAdmin>,
+  receiptExpiredBefore: string
+): Promise<void> {
+  await supabaseAdmin
+    .from('notification_push_deliveries')
+    .update({
+      status: 'failed',
+      receipt_checked_at: new Date().toISOString(),
+      error_code: 'EXPO_PUSH_RECEIPT_EXPIRED',
+      error_message: 'Expo push receipt was unavailable before the receipt retention window expired.',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('status', 'pending')
+    .not('provider_ticket_id', 'is', null)
+    .is('receipt_checked_at', null)
+    .lt('sent_at', receiptExpiredBefore);
+}
+
+async function loadDeviceTokensById(
+  supabaseAdmin: ReturnType<typeof createSupabaseAdmin>,
+  tokenIds: string[]
+): Promise<Map<string, string>> {
+  if (tokenIds.length === 0) {
+    return new Map();
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from('device_tokens')
+    .select('id,token')
+    .in('id', tokenIds);
+
+  if (error) {
+    return new Map();
+  }
+
+  return new Map((data ?? []).map((row) => [String(row.id), String(row.token)]));
 }
 
 async function loadDeviceTokens(
