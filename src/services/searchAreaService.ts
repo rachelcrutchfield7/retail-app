@@ -57,6 +57,14 @@ export async function setMarketplaceSearchArea(
   });
 
   if (error) {
+    if (error.message?.includes('RETAIL_SEARCH_AREA_RATE_LIMITED')) {
+      throw createServiceError(
+        'SEARCH_AREA_RATE_LIMITED',
+        error.message,
+        'You can change your marketplace area up to 3 times per day. Distance changes do not count toward this limit.'
+      );
+    }
+
     throwSupabaseError(error, 'We could not update your marketplace area.');
   }
 

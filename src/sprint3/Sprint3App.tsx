@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import type { LayoutChangeEvent } from 'react-native';
 import {
   Alert,
+  AppState,
   FlatList,
   Image,
   Modal,
@@ -135,6 +136,13 @@ import {
 import type { SellerShippingOrigin } from '../services/shippingService';
 import { splitPackageWeightOz, totalPackageWeightOzFromParts } from '../services/shippingRules';
 import { isListingShareable, shareListing } from '../services/listingShareService';
+import {
+  clearListingDraft,
+  hasMeaningfulListingDraft,
+  loadListingDraft,
+  saveListingDraft,
+} from '../services/listingDraftService';
+import { recordSuccessfulMarketplaceExperience } from '../services/storeReviewService';
 import type {
   CreateListingInput,
   CreateSavedSearchInput,
@@ -1241,6 +1249,10 @@ export function CreateListingScreen({
   const [latestStripeStatus, setLatestStripeStatus] = useState<StripeConnectStatus | null>(null);
   const [payoutOnboardingVisible, setPayoutOnboardingVisible] = useState(false);
   const [shippingOriginReady, setShippingOriginReady] = useState(false);
+  const [draftReady, setDraftReady] = useState(false);
+  const [draftRestored, setDraftRestored] = useState(false);
+  const draftSaveQueueRef = useRef(Promise.resolve());
+  const draftWriteEpochRef = useRef(0);
   const submitLockedRef = useRef(false);
   const profileStripeStatus = {
     accountId: auth.profile?.stripe_connect_account_id,
@@ -1251,6 +1263,74 @@ export function CreateListingScreen({
   const stripeStatus = latestStripeStatus ?? profileStripeStatus;
   const payoutsReady = profileHasStripePayouts(stripeStatus);
   const paidListingRequiresPayout = form.listing_type === 'sale';
+
+  const queueDraftSave = useCallback((userId: string, nextForm: CreateListingInput) => {
+    const writeEpoch = draftWriteEpochRef.current;
+    draftSaveQueueRef.current = draftSaveQueueRef.current
+      .catch(() => undefined)
+      .then(() => (
+        writeEpoch === draftWriteEpochRef.current
+          ? saveListingDraft(userId, nextForm)
+          : null
+      ))
+      .then((savedDraft) => {
+        if (!savedDraft || savedDraft.form.images.join('|') === nextForm.images.join('|')) return;
+        setForm((current) => (
+          current.images.join('|') === nextForm.images.join('|')
+            ? { ...current, images: savedDraft.form.images }
+            : current
+        ));
+      })
+      .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const userId = auth.user?.id;
+
+    if (!userId) {
+      setDraftReady(true);
+      return undefined;
+    }
+
+    setDraftReady(false);
+    void loadListingDraft(userId).then((draft) => {
+      if (!active) return;
+      if (draft && hasMeaningfulListingDraft(draft.form)) {
+        setForm(draft.form);
+        setDraftRestored(true);
+      }
+      setDraftReady(true);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [auth.user?.id]);
+
+  useEffect(() => {
+    const userId = auth.user?.id;
+    if (!draftReady || !userId || !hasMeaningfulListingDraft(form)) return undefined;
+
+    const timer = setTimeout(() => {
+      queueDraftSave(userId, form);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [auth.user?.id, draftReady, form, queueDraftSave]);
+
+  useEffect(() => {
+    const userId = auth.user?.id;
+    if (!draftReady || !userId) return undefined;
+
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState !== 'active' && hasMeaningfulListingDraft(form)) {
+        queueDraftSave(userId, form);
+      }
+    });
+
+    return () => subscription.remove();
+  }, [auth.user?.id, draftReady, form, queueDraftSave]);
 
   useEffect(() => {
     const city = auth.profile?.city?.trim();
@@ -1322,6 +1402,11 @@ export function CreateListingScreen({
       setProgress(70);
       const listing = await mutation.createListing(form);
       setProgress(100);
+      if (auth.user?.id) {
+        draftWriteEpochRef.current += 1;
+        await draftSaveQueueRef.current.catch(() => undefined);
+        await clearListingDraft(auth.user.id);
+      }
       setForm(createListingDefaults(auth.profile));
       let completed = false;
       const continueToListing = () => {
@@ -1358,6 +1443,32 @@ export function CreateListingScreen({
     }
   };
 
+  const discardDraft = () => {
+    Alert.alert(
+      'Discard listing draft?',
+      'Your saved listing details and selected draft photos will be removed from this form.',
+      [
+        { text: 'Keep Draft', style: 'cancel' },
+        {
+          text: 'Discard',
+          style: 'destructive',
+          onPress: () => {
+            const userId = auth.user?.id;
+            draftWriteEpochRef.current += 1;
+            void draftSaveQueueRef.current
+              .catch(() => undefined)
+              .then(() => (userId ? clearListingDraft(userId) : undefined))
+              .finally(() => {
+                setForm(createListingDefaults(auth.profile));
+                setDraftRestored(false);
+                onBack();
+              });
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <ScreenContainer>
       <StatusBar style={sprint3StatusBarStyle} />
@@ -1367,6 +1478,9 @@ export function CreateListingScreen({
           <Text style={styles.title}>Create listing</Text>
           <Text style={styles.body}>Sell or donate pet supplies nearby.</Text>
         </View>
+        {draftRestored ? (
+          <NoticeCard notice={{ title: 'Draft restored', body: 'Your unfinished listing was saved on this device.' }} />
+        ) : null}
         {paidListingRequiresPayout && !payoutsReady && !payoutNotice ? (
           <NoticeCard
             notice={{
@@ -1401,6 +1515,9 @@ export function CreateListingScreen({
           disabled={mutation.loading || uploading}
           fullWidth
         />
+        {hasMeaningfulListingDraft(form) ? (
+          <Button title="Discard Draft" variant="ghost" onPress={discardDraft} disabled={mutation.loading || uploading} fullWidth />
+        ) : null}
       </ScrollView>
       <StripeConnectOnboardingScreen
         visible={payoutOnboardingVisible}
@@ -3618,6 +3735,7 @@ export function MyListingsScreen({
   onEditListing: (listingId: string) => void;
   onCreateListing?: () => void;
 }) {
+  const auth = useAuth();
   const listings = useMyListings();
   const transaction = useCompleteTransaction();
   const [listingView, setListingView] = useState<'current' | 'previous'>('current');
@@ -3671,7 +3789,7 @@ export function MyListingsScreen({
     }
 
     try {
-      await transaction.complete({
+      const completedTransaction = await transaction.complete({
         listingId: completion.listing.id,
         buyerId,
         outcome: completion.outcome,
@@ -3684,6 +3802,9 @@ export function MyListingsScreen({
           : 'The listing status was updated. Reviews are only enabled when a ReTail user is selected.',
       });
       setCompletion(null);
+      if (completedTransaction && auth.user?.id) {
+        void recordSuccessfulMarketplaceExperience(auth.user.id, completedTransaction.id).catch(() => undefined);
+      }
     } catch (error) {
       setNotice({ title: 'Listing was not completed', body: handleAppError(error).userMessage });
     }

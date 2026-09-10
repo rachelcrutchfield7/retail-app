@@ -159,6 +159,7 @@ import type {
   NotificationPreferences,
   ReportReason,
   RescueProfile,
+  RescueVerificationStatus,
   ReportStatus,
   SupportCaseIssueCategory,
   SupportCaseRequesterRole,
@@ -170,6 +171,8 @@ import type { PushNavigationTarget } from '../lib/nativePushNotifications';
 import type { RescueOrganization } from '../types';
 import type { ProtectedCheckoutSetup } from '../types/payment';
 import { handleAppError } from '../utils/errorHandler';
+import { hasMeaningfulListingDraft, loadListingDraft } from '../services/listingDraftService';
+import { recordSuccessfulMarketplaceExperience, requestStoreReviewManually } from '../services/storeReviewService';
 import {
   bottomTabBarContentClearance,
   scrollContentBottomClearance,
@@ -212,7 +215,8 @@ const tabs: Array<{ key: SprintTab; label: string; icon: typeof Home }> = [
 ];
 
 type AdminReportTab = 'active' | 'archived';
-type AdminDashboardTab = 'overview' | 'users' | 'foundingSellers' | 'listings' | 'reports' | 'support';
+type AdminDashboardTab = 'overview' | 'users' | 'rescues' | 'foundingSellers' | 'listings' | 'reports' | 'support';
+type AdminRescueStatusFilter = 'all' | RescueVerificationStatus;
 
 async function openAppLink(url: string): Promise<void> {
   const fallbackUrl = url.startsWith('https://retailpetapp.com')
@@ -258,6 +262,7 @@ function Sprint4Experience() {
   const auth = useAuth();
   const starter = useStartConversation();
   const [route, setRoute] = useState<SprintRoute>({ name: 'tabs', tab: 'home' });
+  const draftRestoreCheckedRef = useRef<string | null>(null);
 
   styles = createSprint4Styles(themeColors);
   setSprint3ThemeColors(themeColors);
@@ -318,10 +323,30 @@ function Sprint4Experience() {
       return;
     }
 
+    if (target.name === 'admin') {
+      setRoute({ name: 'admin' });
+      return;
+    }
+
     setRoute({ name: 'notifications' });
   }, []);
 
   useNativePushNotifications(auth.user?.id, navigateFromPush);
+
+  useEffect(() => {
+    const userId = auth.user?.id;
+    if (!userId || draftRestoreCheckedRef.current === userId) return;
+    draftRestoreCheckedRef.current = userId;
+
+    void loadListingDraft(userId).then((draft) => {
+      if (!draft || !hasMeaningfulListingDraft(draft.form)) return;
+      setRoute((current) => (
+        current.name === 'tabs' && current.tab === 'home'
+          ? { name: 'create-listing' }
+          : current
+      ));
+    });
+  }, [auth.user?.id]);
 
   useEffect(() => {
     let mounted = true;
@@ -1298,7 +1323,6 @@ export function ConversationScreen({
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       quality: 0.85,
-      base64: true,
     });
 
     if (result.canceled) {
@@ -1312,9 +1336,7 @@ export function ConversationScreen({
       return;
     }
 
-    setImageUri(selectedAsset.base64
-      ? `data:${selectedAsset.mimeType ?? 'image/jpeg'};base64,${selectedAsset.base64}`
-      : selectedAsset.uri);
+    setImageUri(selectedAsset.uri);
   };
 
   const send = async () => {
@@ -2167,6 +2189,9 @@ export function PaymentOptionsScreen({
         : 'Payment complete. Arrange pickup through ReTail messaging.',
     });
     await listing.refetch();
+    if (auth.user?.id) {
+      void recordSuccessfulMarketplaceExperience(auth.user.id, checkout.paymentIntentId).catch(() => undefined);
+    }
   };
 
   const payWithStripe = async () => {
@@ -3158,6 +3183,20 @@ export function SettingsScreen({
     }
   };
 
+  const rateRetail = async () => {
+    try {
+      const available = await requestStoreReviewManually();
+      if (!available) {
+        setSettingsNotice({
+          title: 'Rating unavailable',
+          body: 'The app store rating prompt is not available on this device right now.',
+        });
+      }
+    } catch (error) {
+      setSettingsNotice({ title: 'Rating unavailable', body: handleAppError(error).userMessage });
+    }
+  };
+
   if (auth.isGuest) {
     return (
       <ScreenFrame>
@@ -3468,6 +3507,7 @@ export function SettingsScreen({
         <Text style={styles.body}>General contact: {appLinks.contactEmail}</Text>
         <Text style={styles.body}>Support, payments, user issues, and reports: {appLinks.supportEmail}</Text>
         <Text style={styles.body}>ReTail Customer Support: {appLinks.supportPhone}</Text>
+        <Button title="Rate ReTail" icon={Star} variant="outline" onPress={() => void rateRetail()} fullWidth />
         <Button title="FAQ" icon={HelpCircle} variant="outline" onPress={onFAQ} fullWidth />
         <Button title="Email General Contact" variant="outline" onPress={() => void openAppLink(appLinks.contactMailto)} fullWidth />
         <Button title="Email Support" variant="outline" onPress={() => void openAppLink(appLinks.supportMailto)} fullWidth />
@@ -3637,12 +3677,14 @@ export function AdminReviewScreen({ onBack, onOpenListing }: { onBack: () => voi
   const [adminTab, setAdminTab] = useState<AdminDashboardTab>('overview');
   const [reportTab, setReportTab] = useState<AdminReportTab>('active');
   const dashboardCounts = useAdminDashboardCounts(isAdmin);
-  const approvals = useAdminRescueApprovals(isAdmin && adminTab === 'users');
+  const approvals = useAdminRescueApprovals(isAdmin && adminTab === 'rescues');
   const listingReports = useAdminListingReports(isAdmin && adminTab === 'reports', reportTab);
   const supportCases = useAdminSupportCases(isAdmin && adminTab === 'support', reportTab);
   const supportUpdater = useAdminUpdateSupportCase(reportTab);
   const [notice, setNotice] = useState<{ title: string; body: string } | null>(null);
   const [foundingSellerSearch, setFoundingSellerSearch] = useState('');
+  const [rescueSearch, setRescueSearch] = useState('');
+  const [rescueStatusFilter, setRescueStatusFilter] = useState<AdminRescueStatusFilter>('pending');
   const [selectedFoundingSellerId, setSelectedFoundingSellerId] = useState<string | null>(null);
   const [foundingSellerNotes, setFoundingSellerNotes] = useState('Founding Seller beta grant');
   const [reportNotes, setReportNotes] = useState<Record<string, string>>({});
@@ -3650,7 +3692,17 @@ export function AdminReviewScreen({ onBack, onOpenListing }: { onBack: () => voi
   const [supportNotes, setSupportNotes] = useState<Record<string, string>>({});
   const [supportMessages, setSupportMessages] = useState<Record<string, string>>({});
   const foundingSellers = useAdminFoundingSellers(isAdmin && adminTab === 'foundingSellers', selectedFoundingSellerId);
-  const pendingCount = approvals.data?.filter((rescue) => rescue.verification_status === 'pending').length ?? 0;
+  const pendingCount = dashboardCounts.data?.rescuesPending
+    ?? approvals.data?.filter((rescue) => rescue.verification_status === 'pending').length
+    ?? 0;
+  const filteredRescues = useMemo(() => {
+    const normalizedSearch = rescueSearch.trim().toLowerCase();
+    return (approvals.data ?? []).filter((rescue) => {
+      const statusMatches = rescueStatusFilter === 'all' || rescue.verification_status === rescueStatusFilter;
+      const searchMatches = !normalizedSearch || rescue.name.toLowerCase().includes(normalizedSearch);
+      return statusMatches && searchMatches;
+    });
+  }, [approvals.data, rescueSearch, rescueStatusFilter]);
   const reportCount = listingReports.data?.length ?? dashboardCounts.data?.openReports ?? 0;
   const supportCaseCount = supportCases.data?.length ?? dashboardCounts.data?.openSupportCases ?? 0;
   const foundingSellerTotal = dashboardCounts.data?.foundingSellersTotal ?? foundingSellers.list.length;
@@ -3658,6 +3710,7 @@ export function AdminReviewScreen({ onBack, onOpenListing }: { onBack: () => voi
   const adminTabs: Array<{ key: AdminDashboardTab; label: string; count?: number }> = [
     { key: 'overview', label: 'Overview' },
     { key: 'users', label: 'Users', count: dashboardCounts.data?.users },
+    { key: 'rescues', label: 'Rescues', count: pendingCount },
     { key: 'foundingSellers', label: 'Founding Sellers', count: foundingSellerTotal },
     { key: 'listings', label: 'Listings', count: dashboardCounts.data?.activeListings },
     { key: 'reports', label: 'Reports', count: dashboardCounts.data?.openReports },
@@ -3853,8 +3906,17 @@ export function AdminReviewScreen({ onBack, onOpenListing }: { onBack: () => voi
               <AdminOverviewCard
                 title="Users"
                 count={dashboardCounts.data?.users}
-                body="Profiles and rescue approvals"
+                body="Active account profiles"
                 onPress={() => setAdminTab('users')}
+              />
+              <AdminOverviewCard
+                title="Rescues"
+                count={dashboardCounts.data?.rescuesTotal}
+                body={`${pendingCount} pending approval`}
+                onPress={() => {
+                  setRescueStatusFilter('pending');
+                  setAdminTab('rescues');
+                }}
               />
               <AdminOverviewCard
                 title="Founding Sellers"
@@ -3886,40 +3948,60 @@ export function AdminReviewScreen({ onBack, onOpenListing }: { onBack: () => voi
       ) : null}
 
       {adminTab === 'users' ? (
-        <View style={styles.stack}>
-          <SectionCard title="Users">
-            <View style={styles.stack}>
-              <Text style={styles.bodyStrong}>{dashboardCounts.data?.users ?? '...'} user profiles</Text>
-              <Text style={styles.body}>
-                General user administration stays limited to safe existing tools. Rescue account approvals are managed here, and user/content moderation remains report-driven.
-              </Text>
-            </View>
-          </SectionCard>
+        <SectionCard title="Users">
+          <View style={styles.stack}>
+            <Text style={styles.bodyStrong}>{dashboardCounts.data?.users ?? '...'} user profiles</Text>
+            <Text style={styles.body}>
+              User and content moderation remains report-driven. Rescue organizations have a dedicated review workspace.
+            </Text>
+          </View>
+        </SectionCard>
+      ) : null}
 
-          <SectionCard title="Rescue Approvals">
-            <Text style={styles.bodyStrong}>{pendingCount} pending</Text>
-            <Text style={styles.body}>Review the organization details before approving. Approved rescues become visible to nearby users.</Text>
+      {adminTab === 'rescues' ? (
+        <View style={styles.stack}>
+          <SectionCard title="Rescue Management">
+            <View style={styles.stack}>
+              <Text style={styles.bodyStrong}>{dashboardCounts.data?.rescuesTotal ?? approvals.data?.length ?? '...'} rescues</Text>
+              <Text style={styles.body}>{pendingCount} pending approval. Verified rescues are visible in Rescue Hub.</Text>
+              <SearchBar
+                value={rescueSearch}
+                onChangeText={setRescueSearch}
+                onClear={() => setRescueSearch('')}
+                placeholder="Search rescue name..."
+              />
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.adminTabBar}>
+                {(['all', 'pending', 'verified', 'rejected', 'draft'] as const).map((status) => (
+                  <FilterChip
+                    key={status}
+                    label={status === 'all' ? 'All' : status === 'verified' ? 'Approved' : `${status[0]?.toUpperCase()}${status.slice(1)}`}
+                    selected={rescueStatusFilter === status}
+                    onPress={() => setRescueStatusFilter(status)}
+                  />
+                ))}
+              </ScrollView>
+            </View>
           </SectionCard>
 
           {approvals.actionError ? <NoticeCard title="Admin action failed" body={approvals.actionError} /> : null}
           {approvals.isLoading ? <LoadingSpinner /> : null}
           {approvals.isError ? <ErrorState message={handleAppError(approvals.error).userMessage} onRetry={approvals.refetch} /> : null}
-          {!approvals.isLoading && !approvals.isError && (approvals.data ?? []).length === 0 ? (
+          {!approvals.isLoading && !approvals.isError && filteredRescues.length === 0 ? (
             <EmptyState
-              title="No rescue approvals waiting"
-              body="New rescue signups will appear here when organizations submit their details."
+              title="No rescues found"
+              body="Try a different status or rescue name."
               icon={ShieldCheck}
-              actionTitle="Refresh Approvals"
+              actionTitle="Refresh Rescues"
               onAction={() => void approvals.refetch()}
             />
           ) : null}
-          {(approvals.data ?? []).map((rescue) => (
+          {filteredRescues.map((rescue) => (
             <AdminRescueReviewCard
               key={rescue.id}
               rescue={rescue}
               loading={approvals.actionLoading}
-              onApprove={() => void approve(rescue)}
-              onReject={() => void reject(rescue)}
+              onApprove={rescue.verification_status === 'verified' ? undefined : () => void approve(rescue)}
+              onReject={rescue.verification_status === 'rejected' ? undefined : () => void reject(rescue)}
             />
           ))}
         </View>
@@ -4528,8 +4610,8 @@ function AdminRescueReviewCard({
 }: {
   rescue: RescueProfile;
   loading: boolean;
-  onApprove: () => void;
-  onReject: () => void;
+  onApprove?: () => void;
+  onReject?: () => void;
 }) {
   return (
     <Card>
@@ -4552,11 +4634,15 @@ function AdminRescueReviewCard({
         <Text style={styles.body}>Organization type: {formatOrganizationType(rescue.organization_type)}</Text>
         <Text style={styles.body}>501(c)(3): {rescue.has_501c3 ? 'Yes' : 'No / pending'}</Text>
         {rescue.ein ? <Text style={styles.body}>EIN: {rescue.ein}</Text> : null}
+        <Text style={styles.metaText}>Submitted {formatAdminDate(rescue.created_at)}</Text>
+        <Text style={styles.metaText}>Last updated {formatAdminDate(rescue.updated_at)}</Text>
 
-        <View style={styles.conversationOptionGrid}>
-          <Button title="Approve" icon={CheckCheck} onPress={onApprove} loading={loading} fullWidth />
-          <Button title="Reject" icon={Flag} variant="danger" onPress={onReject} loading={loading} fullWidth />
-        </View>
+        {onApprove || onReject ? (
+          <View style={styles.conversationOptionGrid}>
+            {onApprove ? <Button title="Approve" icon={CheckCheck} onPress={onApprove} loading={loading} fullWidth /> : null}
+            {onReject ? <Button title={rescue.verification_status === 'verified' ? 'Revoke Approval' : 'Reject'} icon={Flag} variant="danger" onPress={onReject} loading={loading} fullWidth /> : null}
+          </View>
+        ) : null}
       </View>
     </Card>
   );

@@ -202,12 +202,17 @@ test('reservation amount becomes the authoritative item amount for tax fees and 
 
   assert.match(
     stripeCreate,
-    /calculatePlatformFeeCents\(itemAmountCents\)/
+    /calculateSellerFeeCents\(itemAmountCents\)/
   );
 
   assert.match(
     stripeCreate,
-    /itemAmountCents,\s*[\r\n]+\s*platformFeeCents/
+    /calculateBuyerServiceFeeCents\(itemAmountCents\)/
+  );
+
+  assert.match(
+    stripeCreate,
+    /const sellerAmountCents = itemAmountCents - sellerFeeCents/
   );
 
   assert.match(

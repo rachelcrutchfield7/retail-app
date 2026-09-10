@@ -4,7 +4,7 @@ import { trackEvent } from '../lib/analytics';
 import { supabase } from '../lib/supabase';
 import { createServiceError } from './errors';
 import { requireCurrentPolicyAcceptance } from './consentService';
-import { readLocalImageFile } from './localImageFile';
+import { readLocalImageBinary } from './localImageFile';
 import {
   getConversationById,
   getConversationParticipantIds,
@@ -317,9 +317,13 @@ export async function uploadMessageImage(fileUri: string, conversationId: string
     );
   }
 
-  const { blob, extension, mimeType, size } = await readLocalImageFile(fileUri, 'IMAGE_UPLOAD_FAILED', 'Could not read message image');
+  const { arrayBuffer, extension, mimeType, size } = await readLocalImageBinary(
+    fileUri,
+    'IMAGE_UPLOAD_FAILED',
+    'Could not read message image'
+  );
   const path = `${conversationId}/${profile.id}/${randomUuid()}.${extension}`;
-  const { error } = await supabase.storage.from('message-images').upload(path, blob, {
+  const { error } = await supabase.storage.from('message-images').upload(path, arrayBuffer, {
     contentType: mimeType,
     upsert: false,
   });

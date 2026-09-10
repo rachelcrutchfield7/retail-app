@@ -314,6 +314,24 @@ export function useSendMessage(conversationId: string) {
       setError(handleAppError(caughtError).userMessage);
     },
   });
+  const imageMutation = useMutation({
+    mutationFn: ({ imageUri, body }: { imageUri: string; body?: string }) =>
+      sendImageMessage(conversationId, imageUri, body),
+    onSuccess: (message) => {
+      queryClient.setQueryData<InfiniteData<PaginatedMessages>>(
+        queryKeys.messages(conversationId),
+        (cache) => appendMessageToCache(cache, message)
+      );
+
+      if (user) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.conversations(user.id) });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.unreadMessages(user.id) });
+      }
+    },
+    onError: (caughtError) => {
+      setError(handleAppError(caughtError).userMessage);
+    },
+  });
 
   const send = useCallback(
     async (input: Omit<SendMessageInput, 'conversationId'>) => {
@@ -331,28 +349,20 @@ export function useSendMessage(conversationId: string) {
   const sendImage = useCallback(
     async (imageUri: string, body?: string) => {
       setError(null);
-      try {
-        const message = await sendImageMessage(conversationId, imageUri, body);
-        queryClient.setQueryData<InfiniteData<PaginatedMessages>>(
-          queryKeys.messages(conversationId),
-          (cache) => appendMessageToCache(cache, message)
-        );
-        return message;
-      } catch (caughtError) {
-        setError(handleAppError(caughtError).userMessage);
-        throw caughtError;
-      }
+      return imageMutation.mutateAsync({ imageUri, body });
     },
-    [conversationId, queryClient]
+    [imageMutation]
   );
+
+  const isPending = mutation.isPending || imageMutation.isPending;
 
   return {
     send,
     sendText,
     sendImage,
-    loading: mutation.isPending,
-    isLoading: mutation.isPending,
-    isPending: mutation.isPending,
+    loading: isPending,
+    isLoading: isPending,
+    isPending,
     error,
   };
 }

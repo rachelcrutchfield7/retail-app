@@ -30,6 +30,8 @@ export type AdminFoundingSellerStatus = AdminFoundingSellerSearchResult & {
 
 export type AdminDashboardCounts = {
   users: number;
+  rescuesTotal: number;
+  rescuesPending: number;
   foundingSellersTotal: number;
   foundingSellersActive: number;
   foundingSellersPaused: number;
@@ -57,7 +59,6 @@ export async function getRescueApprovalQueue(): Promise<RescueProfile[]> {
   const { data, error } = await supabase
     .from('rescue_profiles')
     .select('*')
-    .in('verification_status', ['draft', 'pending', 'rejected'])
     .is('deleted_at', null)
     .order('created_at', { ascending: false });
 
@@ -229,6 +230,8 @@ export async function getAdminDashboardCounts(): Promise<AdminDashboardCounts> {
 
   const [
     users,
+    rescuesTotal,
+    rescuesPending,
     foundingSellersTotal,
     foundingSellersActive,
     foundingSellersPaused,
@@ -240,6 +243,18 @@ export async function getAdminDashboardCounts(): Promise<AdminDashboardCounts> {
     countAdminRows(
       supabase.from('profiles').select('id', { count: 'exact', head: true }).is('deleted_at', null),
       'users'
+    ),
+    countAdminRows(
+      supabase.from('rescue_profiles').select('id', { count: 'exact', head: true }).is('deleted_at', null),
+      'rescues'
+    ),
+    countAdminRows(
+      supabase
+        .from('rescue_profiles')
+        .select('id', { count: 'exact', head: true })
+        .eq('verification_status', 'pending')
+        .is('deleted_at', null),
+      'pending rescues'
     ),
     countAdminRows(
       supabase.from('founding_seller_benefits').select('id', { count: 'exact', head: true }),
@@ -277,6 +292,8 @@ export async function getAdminDashboardCounts(): Promise<AdminDashboardCounts> {
 
   return {
     users,
+    rescuesTotal,
+    rescuesPending,
     foundingSellersTotal,
     foundingSellersActive,
     foundingSellersPaused,

@@ -48,7 +48,7 @@ test('Founding Seller admin grant is idempotent and preserves prior usage histor
 });
 
 test('Admin UI supports Not enrolled, Active, Paused, and Revoked Founding Seller states', () => {
-  assert.match(sprint4, /type AdminDashboardTab = 'overview' \| 'users' \| 'foundingSellers' \| 'listings' \| 'reports' \| 'support'/);
+  assert.match(sprint4, /type AdminDashboardTab = 'overview' \| 'users' \| 'rescues' \| 'foundingSellers' \| 'listings' \| 'reports' \| 'support'/);
   assert.match(sprint4, /AdminDashboardTabs/);
   assert.match(sprint4, /selectedTab=\{adminTab\}/);
   assert.match(sprint4, /\{ key: 'overview', label: 'Overview' \}/);
@@ -89,7 +89,7 @@ test('Admin dashboard counts use backend count queries and lazy-load tab data', 
   assert.match(adminService, /\.from\('reports'\)/);
   assert.match(adminService, /\.from\('support_cases'\)/);
   assert.match(sprint4, /useAdminDashboardCounts\(isAdmin\)/);
-  assert.match(sprint4, /useAdminRescueApprovals\(isAdmin && adminTab === 'users'\)/);
+  assert.match(sprint4, /useAdminRescueApprovals\(isAdmin && adminTab === 'rescues'\)/);
   assert.match(sprint4, /useAdminListingReports\(isAdmin && adminTab === 'reports', reportTab\)/);
   assert.match(sprint4, /useAdminSupportCases\(isAdmin && adminTab === 'support', reportTab\)/);
   assert.match(sprint4, /useAdminFoundingSellers\(isAdmin && adminTab === 'foundingSellers', selectedFoundingSellerId\)/);
@@ -122,7 +122,8 @@ test('Admin Founding Seller read RPCs return text status values for React Native
 
 test('Founding Seller checkout, Stripe Tax, ShipStation, and payout logic remain isolated', () => {
   assert.match(foundingMigration, /reserve_founding_seller_checkout_benefit/);
-  assert.match(stripeCreate, /const platformFeeCents = foundingSellerBenefit\.platformFeeCents/);
+  assert.match(stripeCreate, /if \(!foundingSellerBenefit\.benefitApplied\) \{/);
+  assert.match(stripeCreate, /const sellerFeeCents = foundingSellerBenefit\.benefitApplied\s*\? foundingSellerBenefit\.platformFeeCents\s*: sellerPromotion\.actualSellerFeeCents/s);
   assert.match(stripeCreate, /createCheckoutTaxCalculation/);
   assert.match(stripeCreate, /shippingRateQuoteId/);
   assert.match(stripeCreate, /transfer_data: \{\s*destination: String\(reservation\.stripe_connect_account_id\)/s);

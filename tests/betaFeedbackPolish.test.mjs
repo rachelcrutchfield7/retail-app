@@ -41,8 +41,7 @@ test('Rescue Hub has explicit back behavior and matching urgent need totals', ()
 
   assert.match(sprint4App, /BackHandler\.addEventListener\('hardwareBackPress'/);
   assert.match(sprint4App, /setRoute\(\{ name: 'tabs', tab: 'home' \}\)/);
-  assert.match(rescueHubScreen, /<HeaderBar title="" onBack=\{onBack\} backLabel="Back" backVariant="prominent" \/>/);
-  assert.match(rescueHubScreen, /style=\{styles\.pageTitle\}>Rescue Hub<\/Text>/);
+  assert.match(rescueHubScreen, /<HeaderBar title="Rescue Hub" onBack=\{onBack\} backLabel="Back" backVariant="prominent" \/>/);
   assert.match(rescueHubScreen, /total \+ rescue\.urgentNeeds\.length/);
   assert.match(rescueHubScreen, /Metric label="Urgent needs"/);
   assert.match(headerBar, /backLabel\?: string/);
@@ -52,7 +51,7 @@ test('animal type chips filter against visible listing category labels', () => {
   const sprint3App = read('src/sprint3/Sprint3App.tsx');
 
   assert.match(sprint3App, /filteredMarketplaceListings = \(listings\.data\?\.items \?\? \[\]\)\.filter/);
-  assert.match(sprint3App, /const filteredItems = sortListingsForPreview\(\(listings\.data\?\.items \?\? \[\]\)\.filter/);
+  assert.match(sprint3App, /const filteredItems = useMemo\([\s\S]+\(listings\.data\?\.items \?\? \[\]\)\.filter/);
   assert.match(sprint3App, /listingCategorySlug\(listing\) === filters\.categorySlug/);
   assert.doesNotMatch(sprint3App, /categoryId,\s*\n\s*condition,/);
 });
@@ -74,7 +73,7 @@ test('safe-area context owns mobile screen insets', () => {
   assert.match(sprint4App, /react-native-safe-area-context/);
   assert.match(sprint3App, /topSafeAreaPadding\(insets\.top\)/);
   assert.match(sprint4App, /topSafeAreaPadding\(insets\.top\)/);
-  assert.match(safeAreaLayout, /bottomInset \+ spacing\.md/);
+  assert.match(safeAreaLayout, /return bottomInset \+ spacing\.xxl/);
 
   for (const file of sourceFiles) {
     const source = readFileSync(file, 'utf8');
@@ -87,19 +86,14 @@ test('safe-area context owns mobile screen insets', () => {
 });
 
 test('current tab screens leave space for phone system navigation', () => {
-  const theme = read('src/constants/theme.ts');
   const tabBar = read('src/components/navigation/TabBar.tsx');
   const sprint3App = read('src/sprint3/Sprint3App.tsx');
   const sprint4App = read('src/sprint4/Sprint4App.tsx');
 
-  assert.match(theme, /tabBarBottomOffset: 18/);
-  assert.match(theme, /tabBarMinimumBottomGap: 32/);
-  assert.match(theme, /tabBarContentClearance: 64/);
-  assert.match(tabBar, /bottomTabBarGap\(insets\.bottom\)/);
-  assert.match(tabBar, /left: spacing\.md/);
-  assert.match(tabBar, /right: spacing\.md/);
-  assert.match(sprint3App, /bottomTabBarGap\(insets\.bottom\)/);
-  assert.match(sprint4App, /bottomTabBarGap\(insets\.bottom\)/);
+  assert.match(tabBar, /useSafeAreaInsets/);
+  assert.match(tabBar, /paddingBottom: Math\.max\(insets\.bottom, spacing\.md\)/);
+  assert.match(sprint3App, /paddingBottom: Math\.max\(insets\.bottom, spacing\.sm\)/);
+  assert.match(sprint4App, /paddingBottom: Math\.max\(insets\.bottom, 2\)/);
   assert.match(sprint3App, /bottomTabBarContentClearance\(insets\.bottom\)/);
   assert.match(sprint4App, /bottomTabBarContentClearance\(insets\.bottom\)/);
   assert.match(sprint3App, /paddingHorizontal: spacing\.lg/);
@@ -113,7 +107,7 @@ test('message composer and Rescue Hub route account for device safe areas', () =
   const rescueHubScreen = read('src/screens/RescueHubScreen.tsx');
 
   assert.match(messageInput, /useSafeAreaInsets/);
-  assert.match(messageInput, /messageComposerBottomPadding\(insets\.bottom\)/);
+  assert.match(messageInput, /chatComposerBottomPadding\(insets\.bottom\)/);
   assert.match(rescueHubScreen, /useSafeAreaInsets/);
   assert.match(rescueHubScreen, /topSafeAreaPadding\(insets\.top\) \+ sizes\.screenTopGap/);
   assert.match(rescueHubScreen, /scrollContentBottomClearance\(insets\.bottom\)/);
@@ -127,7 +121,7 @@ test('HeaderBar supports a high-contrast prominent Rescue Hub back control', () 
   assert.match(headerBar, /ArrowLeft/);
   assert.match(headerBar, /prominentBackButton/);
   assert.match(headerBar, /backgroundColor: colors\.primary/);
-  assert.match(headerBar, /const iconColor = prominentBack \? colors\.white : colors\.textPrimary/);
+  assert.match(headerBar, /const iconColor = prominentBack \? themeColors\.white : themeColors\.textPrimary/);
   assert.match(headerBar, /prominentBackLabel/);
   assert.match(rescueHubScreen, /backVariant="prominent"/);
 });

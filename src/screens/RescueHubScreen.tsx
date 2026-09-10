@@ -113,6 +113,9 @@ export function RescueHubScreen({ onBack, onOpenListing, onOpenRescueProfile }: 
           void updateMarketplaceSearchArea(area, radiusMiles, setSearchArea.setSearchArea);
         }}
       />
+      <Text style={styles.nonIntrusiveText}>
+        Rescue Hub uses your marketplace area so nearby listings and rescues stay in sync. Changing distance does not change your saved area.
+      </Text>
 
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Available rescue donations</Text>

@@ -12,6 +12,7 @@ export type PushNavigationTarget =
   | { name: 'conversation'; conversationId: string }
   | { name: 'listing'; listingId: string }
   | { name: 'support-case'; transactionId: string; requesterRole: 'buyer' | 'seller'; conversationId?: string }
+  | { name: 'admin' }
   | { name: 'notifications' };
 
 export type NativePushRegistrationResult =
@@ -225,6 +226,10 @@ export function pushNavigationTargetFromData(data: Record<string, unknown> | und
   const requesterRole = data?.requesterRole === 'buyer' || data?.requesterRole === 'seller'
     ? data.requesterRole
     : undefined;
+
+  if (data?.route === 'admin') {
+    return { name: 'admin' };
+  }
 
   if (conversationId) {
     return { name: 'conversation', conversationId };
