@@ -123,12 +123,21 @@ export async function deleteNotificationLegacy(notificationId: string): Promise<
   await deleteNotification(notificationId);
 }
 
-export async function registerDeviceToken(token: string, platform: DevicePlatform): Promise<void> {
+export async function registerDeviceToken(
+  token: string,
+  platform: DevicePlatform,
+  options: { previousToken?: string } = {}
+): Promise<void> {
   await ensureCurrentProfile();
-  const { error } = await supabase.rpc('register_my_device_token', {
-    requested_token: token,
-    requested_platform: platform,
-  });
+  const { error } = platform === 'android'
+    ? await supabase.rpc('register_my_android_device_token', {
+        requested_token: token,
+        requested_previous_token: options.previousToken ?? null,
+      })
+    : await supabase.rpc('register_my_device_token', {
+        requested_token: token,
+        requested_platform: platform,
+      });
 
   if (error) {
     throwSupabaseError(error, 'We could not save notification settings for this device.');

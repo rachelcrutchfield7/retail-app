@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import * as Notifications from 'expo-notifications';
+import { AppState, Platform } from 'react-native';
 import { logger } from '../lib/logger';
 import {
   pushNavigationTargetFromData,
@@ -52,9 +53,13 @@ export function useNativePushNotifications(
       });
 
     const responseSubscription = Notifications.addNotificationResponseReceivedListener(handleResponse);
-    const tokenSubscription = Notifications.addPushTokenListener(() => {
+    const tokenSubscription = Notifications.addPushTokenListener((devicePushToken) => {
       if (userId) {
-        void registerNativePushTokenForCurrentUser(userId, { force: true });
+        void registerNativePushTokenForCurrentUser(userId, {
+          force: true,
+          devicePushToken,
+          respectPreferences: true,
+        });
       }
     });
 
@@ -62,5 +67,25 @@ export function useNativePushNotifications(
       responseSubscription.remove();
       tokenSubscription.remove();
     };
+  }, [userId]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'android' || !userId) {
+      return;
+    }
+
+    let previousState = AppState.currentState;
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (previousState !== 'active' && nextState === 'active') {
+        void registerNativePushTokenForCurrentUser(userId, {
+          force: true,
+          respectPreferences: true,
+        });
+      }
+
+      previousState = nextState;
+    });
+
+    return () => subscription.remove();
   }, [userId]);
 }

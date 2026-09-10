@@ -1,5 +1,6 @@
 import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
+import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 import { logger } from './logger';
 import {
@@ -26,6 +27,60 @@ export const RETAIL_PUSH_CHANNEL_NAME = 'ReTail Notifications';
 
 let activeRegistration: { userId: string; token: string } | null = null;
 let registrationInFlight: Promise<NativePushRegistrationResult> | null = null;
+const androidPushRegistrationStorageKey = 'retail.androidPushRegistration.v1';
+
+type NativePushRegistrationOptions = {
+  force?: boolean;
+  devicePushToken?: Notifications.DevicePushToken;
+  respectPreferences?: boolean;
+};
+
+type StoredAndroidPushRegistration = {
+  userId: string;
+  token: string;
+};
+
+async function readStoredAndroidPushRegistration(): Promise<StoredAndroidPushRegistration | null> {
+  try {
+    const stored = await SecureStore.getItemAsync(androidPushRegistrationStorageKey);
+
+    if (!stored) {
+      return null;
+    }
+
+    const parsed = JSON.parse(stored) as Partial<StoredAndroidPushRegistration>;
+    return typeof parsed.userId === 'string' && typeof parsed.token === 'string'
+      ? { userId: parsed.userId, token: parsed.token }
+      : null;
+  } catch (error) {
+    logger.warning('Stored Android push registration could not be read.', {
+      errorType: error instanceof Error ? error.name : typeof error,
+    });
+    return null;
+  }
+}
+
+async function storeAndroidPushRegistration(registration: StoredAndroidPushRegistration): Promise<void> {
+  try {
+    await SecureStore.setItemAsync(androidPushRegistrationStorageKey, JSON.stringify(registration), {
+      keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY,
+    });
+  } catch (error) {
+    logger.warning('Android push registration could not be saved locally.', {
+      errorType: error instanceof Error ? error.name : typeof error,
+    });
+  }
+}
+
+async function clearStoredAndroidPushRegistration(): Promise<void> {
+  try {
+    await SecureStore.deleteItemAsync(androidPushRegistrationStorageKey);
+  } catch (error) {
+    logger.warning('Stored Android push registration could not be cleared.', {
+      errorType: error instanceof Error ? error.name : typeof error,
+    });
+  }
+}
 
 try {
   Notifications.setNotificationHandler({
@@ -116,7 +171,7 @@ export async function getNativePushPermissionStatus(): Promise<NativePushPermiss
 
 export async function registerNativePushTokenForCurrentUser(
   userId: string,
-  options: { force?: boolean } = {}
+  options: NativePushRegistrationOptions = {}
 ): Promise<NativePushRegistrationResult> {
   const platform = nativePushPlatform();
 
@@ -150,9 +205,9 @@ export async function registerNativePushTokenForCurrentUser(
 async function registerNativePushToken(
   userId: string,
   platform: 'ios' | 'android',
-  options: { force?: boolean }
+  options: NativePushRegistrationOptions
 ): Promise<NativePushRegistrationResult> {
-  if (!options.force) {
+  if (!options.force || options.respectPreferences) {
     const preferences = await getNotificationPreferences();
 
     if (!anyPushPreferenceEnabled(preferences)) {
@@ -176,7 +231,10 @@ async function registerNativePushToken(
   }
 
   try {
-    const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+    const token = (await Notifications.getExpoPushTokenAsync({
+      projectId,
+      ...(options.devicePushToken ? { devicePushToken: options.devicePushToken } : {}),
+    })).data;
 
     if (!/^(Exponent|Expo)PushToken\\[.+\\]$/.test(token)) {
       logger.warning('Expo returned an unexpected push token shape.', { platform });
@@ -191,10 +249,21 @@ async function registerNativePushToken(
       });
     }
 
-    if (!activeRegistration || activeRegistration.userId !== userId || activeRegistration.token !== token) {
-      await registerDeviceToken(token, platform);
+    if (!activeRegistration || activeRegistration.userId !== userId || activeRegistration.token !== token || options.force) {
+      const storedRegistration = platform === 'android'
+        ? await readStoredAndroidPushRegistration()
+        : null;
+      const previousToken = storedRegistration?.userId === userId && storedRegistration.token !== token
+        ? storedRegistration.token
+        : undefined;
+
+      await registerDeviceToken(token, platform, { previousToken });
 
       activeRegistration = { userId, token };
+
+      if (platform === 'android') {
+        await storeAndroidPushRegistration(activeRegistration);
+      }
     }
 
     return { status: 'registered', token };
@@ -209,14 +278,23 @@ async function registerNativePushToken(
 }
 
 export async function removeRegisteredNativePushTokenForCurrentUser(): Promise<void> {
-  const registration = activeRegistration;
+  const registration = activeRegistration ?? (
+    Platform.OS === 'android' ? await readStoredAndroidPushRegistration() : null
+  );
 
   if (!registration) {
     return;
   }
 
   activeRegistration = null;
-  await removeDeviceToken(registration.token);
+
+  try {
+    await removeDeviceToken(registration.token);
+  } finally {
+    if (Platform.OS === 'android') {
+      await clearStoredAndroidPushRegistration();
+    }
+  }
 }
 
 export function pushNavigationTargetFromData(data: Record<string, unknown> | undefined): PushNavigationTarget {

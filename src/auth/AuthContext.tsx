@@ -401,21 +401,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     clearPrivateAuthStateNow();
     setLoading(false);
 
-    void Promise.allSettled([
-      removeRegisteredNativePushTokenForCurrentUser(),
-      clearAuthSession(),
-      clearGoogleSignInSelection(),
-    ]).then((results) => {
-      const pushTokenCleanup = results[0];
+    void (async () => {
+      const [pushTokenCleanup] = await Promise.allSettled([
+        removeRegisteredNativePushTokenForCurrentUser(),
+      ]);
+
       if (pushTokenCleanup.status === 'rejected') {
         logAuthLoadError(pushTokenCleanup.reason, 'Could not remove push token before sign-out.');
       }
 
-      const sessionCleanup = results[1];
+      const [sessionCleanup] = await Promise.allSettled([
+        clearAuthSession(),
+        clearGoogleSignInSelection(),
+      ]);
+
       if (sessionCleanup.status === 'rejected') {
         logAuthLoadError(sessionCleanup.reason, 'Could not complete remote sign-out cleanup.');
       }
-    });
+    })();
   }, []);
 
   const resetPassword = useCallback(async (email: string) => {

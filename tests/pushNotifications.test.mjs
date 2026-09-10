@@ -31,8 +31,8 @@ test('native push helper requests permission, creates Android channel, and regis
   assert.match(helper, /getPermissionsAsync\(\)/);
   assert.match(helper, /requestPermissionsAsync\(\)/);
   assert.match(helper, /getNativePushPermissionStatus/);
-  assert.match(helper, /getExpoPushTokenAsync\(\{ projectId \}\)/);
-  assert.match(helper, /registerDeviceToken\(token, platform\)/);
+  assert.match(helper, /getExpoPushTokenAsync\(\{[\s\S]+projectId/);
+  assert.match(helper, /registerDeviceToken\(token, platform, \{ previousToken \}\)/);
   assert.match(helper, /removeDeviceToken\(activeRegistration\.token\)/);
   assert.doesNotMatch(helper, /projectId:\s*'[^']+'/);
 });
@@ -143,7 +143,7 @@ test('backend reconciles Expo receipts before treating a push ticket as delivere
   assert.match(edgeFunction, /receipt\.status === 'ok'[\s\S]+status: 'sent'/);
   assert.match(edgeFunction, /receipt\.details\?\.error \?\? 'EXPO_PUSH_RECEIPT_ERROR'/);
   assert.match(edgeFunction, /permanentExpoTokenErrors\.has\(errorCode\)/);
-  assert.match(edgeFunction, /removeInvalidDeviceToken\(supabaseAdmin, token\)/);
+  assert.match(edgeFunction, /removeInvalidDeviceToken\(supabaseAdmin, delivery\.device_token_id\)/);
   assert.match(edgeFunction, /EXPO_PUSH_RECEIPT_EXPIRED/);
 
   assert.match(migration, /add column if not exists receipt_checked_at timestamptz/);

@@ -425,7 +425,7 @@ async function deliverPushNotifications(
         summary.failed += 1;
 
         if (permanentExpoTokenErrors.has(errorCode)) {
-          await removeInvalidDeviceToken(supabaseAdmin, item.token.token);
+          await removeInvalidDeviceToken(supabaseAdmin, item.token.id);
         }
       }
     }
@@ -497,10 +497,6 @@ async function reconcileRecentPushReceipts(
       return;
     }
 
-    const tokenIds = [...new Set(deliveries
-      .map((delivery) => delivery.device_token_id)
-      .filter((tokenId): tokenId is string => Boolean(tokenId)))];
-    const tokenById = await loadDeviceTokensById(supabaseAdmin, tokenIds);
     const checkedAt = new Date().toISOString();
 
     for (const delivery of deliveries) {
@@ -528,10 +524,8 @@ async function reconcileRecentPushReceipts(
         error_message: safeProviderError(receipt) ?? 'Expo reported a push delivery failure.',
       });
 
-      const token = delivery.device_token_id ? tokenById.get(delivery.device_token_id) : undefined;
-
-      if (token && permanentExpoTokenErrors.has(errorCode)) {
-        await removeInvalidDeviceToken(supabaseAdmin, token);
+      if (delivery.device_token_id && permanentExpoTokenErrors.has(errorCode)) {
+        await removeInvalidDeviceToken(supabaseAdmin, delivery.device_token_id);
       }
     }
   } catch (error) {
@@ -558,26 +552,6 @@ async function markExpiredUnreconciledPushReceipts(
     .not('provider_ticket_id', 'is', null)
     .is('receipt_checked_at', null)
     .lt('sent_at', receiptExpiredBefore);
-}
-
-async function loadDeviceTokensById(
-  supabaseAdmin: ReturnType<typeof createSupabaseAdmin>,
-  tokenIds: string[]
-): Promise<Map<string, string>> {
-  if (tokenIds.length === 0) {
-    return new Map();
-  }
-
-  const { data, error } = await supabaseAdmin
-    .from('device_tokens')
-    .select('id,token')
-    .in('id', tokenIds);
-
-  if (error) {
-    return new Map();
-  }
-
-  return new Map((data ?? []).map((row) => [String(row.id), String(row.token)]));
 }
 
 async function loadDeviceTokens(
@@ -643,11 +617,17 @@ async function updatePushDelivery(
 
 async function removeInvalidDeviceToken(
   supabaseAdmin: ReturnType<typeof createSupabaseAdmin>,
-  token: string
+  deviceTokenId: string
 ): Promise<void> {
-  await supabaseAdmin.rpc('remove_invalid_device_token_from_push_delivery', {
-    requested_token: token,
+  const { error } = await supabaseAdmin.rpc('remove_invalid_device_token_by_id', {
+    requested_device_token_id: deviceTokenId,
   });
+
+  if (error) {
+    console.warn('ReTail invalid push token cleanup failed safely.', {
+      errorCode: typeof error.code === 'string' ? error.code : 'SUPABASE_RPC_ERROR',
+    });
+  }
 }
 
 function isExpoPushToken(token: string): boolean {
