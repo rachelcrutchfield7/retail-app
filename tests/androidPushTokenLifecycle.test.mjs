@@ -48,7 +48,7 @@ test('Android token refresh avoids recursively requesting a native token and re-
 });
 
 test('Android registration RPC atomically retires only the caller installation previous token', () => {
-  const migration = read('supabase/migrations/20260910205021_android_push_token_lifecycle.sql');
+  const migration = read('supabase/migrations/20260910221649_android_push_token_lifecycle.sql');
 
   assert.match(migration, /create or replace function public\.register_my_android_device_token/);
   assert.match(migration, /caller_id uuid := auth\.uid\(\)/);
@@ -60,7 +60,7 @@ test('Android registration RPC atomically retires only the caller installation p
 });
 
 test('DeviceNotRegistered cleanup deletes the exact token row and checks RPC failures safely', () => {
-  const migration = read('supabase/migrations/20260910205021_android_push_token_lifecycle.sql');
+  const migration = read('supabase/migrations/20260910221649_android_push_token_lifecycle.sql');
   const edgeFunction = read('supabase/functions/send-notification/index.ts');
 
   assert.match(migration, /remove_invalid_device_token_by_id/);

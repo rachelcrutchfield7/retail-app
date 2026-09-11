@@ -8,7 +8,7 @@ import {
 } from '../src/services/storeReviewService.ts';
 
 const rescueMigration = await readFile(
-  new URL('../supabase/migrations/20260910030617_rescue_area_radius_rate_limit_v1.sql', import.meta.url),
+  new URL('../supabase/migrations/20260911023726_rescue_area_radius_rate_limit_v1.sql', import.meta.url),
   'utf8'
 );
 const notificationMigration = await readFile(

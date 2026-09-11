@@ -133,7 +133,7 @@ test('backend sends Expo pushes from send-notification without exposing arbitrar
 
 test('backend reconciles Expo receipts before treating a push ticket as delivered', () => {
   const edgeFunction = read('supabase/functions/send-notification/index.ts');
-  const migration = read('supabase/migrations/20260910140406_push_receipt_reconciliation.sql');
+  const migration = read('supabase/migrations/20260910171258_push_receipt_reconciliation.sql');
 
   assert.match(edgeFunction, /expoPushReceiptsEndpoint = 'https:\/\/exp\.host\/--\/api\/v2\/push\/getReceipts'/);
   assert.match(edgeFunction, /expoReceiptDelayMs = 15 \* 60 \* 1000/);
