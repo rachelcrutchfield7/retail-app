@@ -3,9 +3,17 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import { isExpoPushToken } from '../src/utils/expoPushToken.ts';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const read = (path) => readFileSync(join(root, path), 'utf8');
+
+test('Expo token validation accepts real token shapes and rejects malformed values', () => {
+  assert.equal(isExpoPushToken('ExpoPushToken[example-token]'), true);
+  assert.equal(isExpoPushToken('ExponentPushToken[example-token]'), true);
+  assert.equal(isExpoPushToken('ExpoPushToken\\[example-token\\]'), false);
+  assert.equal(isExpoPushToken('not-an-expo-token'), false);
+});
 
 test('Android registers the current Expo token with the EAS project and prior installation token', () => {
   const helper = read('src/lib/nativePushNotifications.ts');

@@ -8,6 +8,7 @@ import {
   registerDeviceToken,
   removeDeviceToken,
 } from '../services/notificationService';
+import { isExpoPushToken } from '../utils/expoPushToken';
 
 export type PushNavigationTarget =
   | { name: 'conversation'; conversationId: string }
@@ -236,7 +237,7 @@ async function registerNativePushToken(
       ...(options.devicePushToken ? { devicePushToken: options.devicePushToken } : {}),
     })).data;
 
-    if (!/^(Exponent|Expo)PushToken\\[.+\\]$/.test(token)) {
+    if (!isExpoPushToken(token)) {
       logger.warning('Expo returned an unexpected push token shape.', { platform });
       return { status: 'unavailable' };
     }
