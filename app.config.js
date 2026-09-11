@@ -17,7 +17,7 @@ const appConfig = {
     name: 'ReTail',
     slug: 'retail',
     scheme: 'retail',
-    version: '1.1.0',
+    version: '1.1.1',
     orientation: 'portrait',
     userInterfaceStyle: 'light',
     icon: './assets/app-icon.png',
@@ -126,8 +126,8 @@ const appConfig = {
   },
 };
 
-if (process.env.RETAIL_IOS_MARKETING_VERSION === '1.1.1') {
-  appConfig.expo.version = '1.1.1';
+if (process.env.RETAIL_IOS_MARKETING_VERSION === '1.1.2') {
+  appConfig.expo.version = '1.1.2';
 }
 
 module.exports = appConfig;

@@ -72,7 +72,7 @@ test('release build configuration keeps private beta separate from production', 
 
   assert.match(appConfig, /name: 'ReTail'/);
   assert.match(appConfig, /slug: 'retail'/);
-  assert.match(appConfig, /version: '1\.1\.0'/);
+  assert.match(appConfig, /version: '1\.1\.1'/);
   assert.match(appConfig, /bundleIdentifier: 'com\.raecrutchfield\.retail'/);
   assert.match(appConfig, /package: 'com\.raecrutchfield\.retail'/);
   assert.match(appConfig, /projectId: '288a25e1-5824-4f77-a3f4-0607df5f7d89'/);
@@ -80,6 +80,7 @@ test('release build configuration keeps private beta separate from production', 
   assert.equal(eas.build.preview.environment, 'preview');
   assert.equal(eas.build.preview.distribution, 'internal');
   assert.equal(eas.build.production.env.EXPO_PUBLIC_APP_ENV, 'production');
+  assert.equal(eas.build['production-ios'].env.RETAIL_IOS_MARKETING_VERSION, '1.1.2');
   assert.doesNotMatch(`${appConfig}\n${JSON.stringify(eas)}`, /localhost|127\.0\.0\.1|example\.supabase\.co|ci-placeholder/);
   assert.match(ciWorkflow, /private-beta-\*\*/);
   assert.match(securityWorkflow, /private-beta-\*\*/);
