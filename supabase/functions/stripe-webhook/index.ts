@@ -7,8 +7,13 @@ import {
   checkoutWebhookEventTypes,
   connectWebhookEventTypes,
   parseStripeWebhookExpectedLivemode,
+  stripeWebhookEventFamily,
   stripeWebhookExpectedModeEnvName,
 } from './mode.ts';
+import {
+  StripeWebhookSecretConfigurationError,
+  verifyStripeWebhookSignature,
+} from './signature.ts';
 
 const cryptoProvider = Stripe.createSubtleCryptoProvider();
 const supportedWebhookEvents = new Set([
@@ -710,19 +715,31 @@ Deno.serve(async (request) => {
   if (cors) return cors;
 
   const signature = request.headers.get('Stripe-Signature');
-  const webhookSecret = Deno.env.get('STRIPE_WEBHOOK_SECRET');
-
-  if (!signature || !webhookSecret) {
-    return jsonResponse({ error: 'Missing Stripe webhook signature configuration.' }, 400);
-  }
-
   const body = await request.text();
   let event: Stripe.Event;
 
   try {
-    event = await getStripe().webhooks.constructEventAsync(body, signature, webhookSecret, undefined, cryptoProvider);
+    event = await verifyStripeWebhookSignature({
+      body,
+      signature,
+      checkoutSecret: Deno.env.get('STRIPE_CHECKOUT_WEBHOOK_SECRET'),
+      connectSecret: Deno.env.get('STRIPE_CONNECT_WEBHOOK_SECRET'),
+      eventFamily: stripeWebhookEventFamily,
+      constructEvent: (rawBody, rawSignature, secret) => getStripe().webhooks.constructEventAsync(
+        rawBody,
+        rawSignature,
+        secret,
+        undefined,
+        cryptoProvider,
+      ),
+    });
   } catch (error) {
-    return jsonResponse({ error: error instanceof Error ? error.message : 'Invalid Stripe webhook signature.' }, 400);
+    if (error instanceof StripeWebhookSecretConfigurationError) {
+      console.error('Stripe webhook signing secret configuration is invalid.');
+      return jsonResponse({ error: 'Stripe webhook signing secret configuration is invalid.' }, 500);
+    }
+
+    return jsonResponse({ error: 'Invalid Stripe webhook signature.' }, 400);
   }
 
   if (!supportedWebhookEvents.has(event.type)) {

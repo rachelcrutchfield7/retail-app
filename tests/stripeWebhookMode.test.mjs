@@ -42,11 +42,11 @@ test('Stripe webhook expected livemode parser accepts explicit live/test values 
 });
 
 test('Stripe webhook validates mode after signature and before privileged mutation', () => {
-  assert.match(webhook, /constructEventAsync\(body, signature, webhookSecret/);
+  assert.match(webhook, /verifyStripeWebhookSignature\(\{/);
   assert.match(webhook, /validateStripeWebhookMode\(event\)/);
   assert.match(webhook, /Stripe webhook event mode mismatch/);
   assert.ok(
-    webhook.indexOf('constructEventAsync(body, signature, webhookSecret') <
+    webhook.indexOf('verifyStripeWebhookSignature({') <
       webhook.indexOf('validateStripeWebhookMode(event)')
   );
   assert.ok(

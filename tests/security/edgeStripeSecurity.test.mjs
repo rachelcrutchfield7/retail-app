@@ -68,11 +68,13 @@ test('Stripe Connect account operations use the authenticated caller profile', (
 
 test('Stripe webhook rejects missing or invalid signatures before service-role writes', () => {
   assert.match(stripeWebhook, /request\.headers\.get\('Stripe-Signature'\)/);
-  assert.match(stripeWebhook, /Deno\.env\.get\('STRIPE_WEBHOOK_SECRET'\)/);
+  assert.match(stripeWebhook, /Deno\.env\.get\('STRIPE_CHECKOUT_WEBHOOK_SECRET'\)/);
+  assert.match(stripeWebhook, /Deno\.env\.get\('STRIPE_CONNECT_WEBHOOK_SECRET'\)/);
+  assert.doesNotMatch(stripeWebhook, /Deno\.env\.get\('STRIPE_WEBHOOK_SECRET'\)/);
   assert.match(stripeWebhook, /request\.text\(\)/);
-  assert.match(stripeWebhook, /constructEventAsync\(body, signature, webhookSecret/);
+  assert.match(stripeWebhook, /verifyStripeWebhookSignature\(\{/);
   assert.ok(
-    stripeWebhook.indexOf('constructEventAsync(body, signature, webhookSecret') <
+    stripeWebhook.indexOf('verifyStripeWebhookSignature({') <
       stripeWebhook.indexOf('const supabaseAdmin = createSupabaseAdmin()')
   );
 });

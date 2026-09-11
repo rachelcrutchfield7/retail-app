@@ -69,10 +69,12 @@ test('payment event ledger is minimal, idempotent, and admin-readable only', () 
 
 test('webhook preserves signature verification and idempotency before refund or dispute mutation', () => {
   assert.match(webhook, /request\.headers\.get\('Stripe-Signature'\)/);
-  assert.match(webhook, /Deno\.env\.get\('STRIPE_WEBHOOK_SECRET'\)/);
+  assert.match(webhook, /Deno\.env\.get\('STRIPE_CHECKOUT_WEBHOOK_SECRET'\)/);
+  assert.match(webhook, /Deno\.env\.get\('STRIPE_CONNECT_WEBHOOK_SECRET'\)/);
+  assert.doesNotMatch(webhook, /Deno\.env\.get\('STRIPE_WEBHOOK_SECRET'\)/);
   assert.match(webhook, /request\.text\(\)/);
-  assert.match(webhook, /constructEventAsync\(body, signature, webhookSecret/);
-  assert.ok(webhook.indexOf('constructEventAsync(body, signature, webhookSecret') < webhook.indexOf('createSupabaseAdmin()'));
+  assert.match(webhook, /verifyStripeWebhookSignature\(\{/);
+  assert.ok(webhook.indexOf('verifyStripeWebhookSignature({') < webhook.indexOf('createSupabaseAdmin()'));
   assert.ok(webhook.indexOf('validateStripeWebhookMode(event)') < webhook.indexOf('createSupabaseAdmin()'));
   assert.ok(webhook.indexOf('const claim = await claimWebhookEvent(supabaseAdmin, event)') < webhook.indexOf("event.type === 'charge.refunded'"));
   assert.match(webhook, /claim\.action === 'already_processed'/);

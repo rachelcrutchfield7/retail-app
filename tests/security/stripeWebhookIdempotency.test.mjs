@@ -41,10 +41,12 @@ test('processed replays skip side effects and failed events remain retryable', (
 
 test('signature verification remains before any database event claim or write', () => {
   assert.match(webhook, /request\.headers\.get\('Stripe-Signature'\)/);
-  assert.match(webhook, /Deno\.env\.get\('STRIPE_WEBHOOK_SECRET'\)/);
+  assert.match(webhook, /Deno\.env\.get\('STRIPE_CHECKOUT_WEBHOOK_SECRET'\)/);
+  assert.match(webhook, /Deno\.env\.get\('STRIPE_CONNECT_WEBHOOK_SECRET'\)/);
+  assert.doesNotMatch(webhook, /Deno\.env\.get\('STRIPE_WEBHOOK_SECRET'\)/);
   assert.match(webhook, /request\.text\(\)/);
-  assert.match(webhook, /constructEventAsync\(body, signature, webhookSecret/);
-  assert.ok(webhook.indexOf('constructEventAsync(body, signature, webhookSecret') < webhook.indexOf('createSupabaseAdmin()'));
+  assert.match(webhook, /verifyStripeWebhookSignature\(\{/);
+  assert.ok(webhook.indexOf('verifyStripeWebhookSignature({') < webhook.indexOf('createSupabaseAdmin()'));
   assert.ok(webhook.indexOf('validateStripeWebhookMode(event)') < webhook.indexOf('createSupabaseAdmin()'));
   assert.ok(webhook.indexOf('createSupabaseAdmin()') < webhook.indexOf('claimWebhookEvent(supabaseAdmin, event)'));
 });
