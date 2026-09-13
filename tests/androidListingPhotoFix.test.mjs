@@ -3,9 +3,9 @@ import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 
 import { getLogEntries } from '../src/lib/logger.ts';
-import { readLocalImageBinary } from '../src/services/localImageFile.ts';
+import { detectImageMimeTypeFromBytes, readLocalImageBinary } from '../src/services/localImageFile.ts';
 import { reconcileListingImages } from '../src/services/listingService.ts';
-import { uploadListingImageBinary } from '../src/services/storageService.ts';
+import { prepareListingImageForUpload, uploadListingImageBinary } from '../src/services/storageService.ts';
 import { validateCreateListingInput } from '../src/validation/createListing.ts';
 
 const listingImage = (id, imageUrl, sortOrder = 0) => ({
@@ -15,6 +15,43 @@ const listingImage = (id, imageUrl, sortOrder = 0) => ({
   thumbnail_url: imageUrl,
   sort_order: sortOrder,
   created_at: '2026-08-08T00:00:00.000Z',
+});
+
+const binary = (bytes, mimeType = 'image/jpeg') => ({
+  arrayBuffer: Uint8Array.from(bytes).buffer,
+  extension: mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : 'jpg',
+  mimeType,
+  size: bytes.length,
+});
+
+test('listing image inspection detects HEIC bytes even when a picker labels them JPEG', () => {
+  const mislabeledHeic = Uint8Array.from([0, 0, 0, 24, 0x66, 0x74, 0x79, 0x70, 0x68, 0x65, 0x69, 0x63]);
+
+  assert.equal(detectImageMimeTypeFromBytes(mislabeledHeic), 'image/heif');
+});
+
+test('HEIC listing photos are converted to real JPEG bytes before upload', async () => {
+  const source = 'content://media/external/images/42';
+  const converted = 'file:///cache/retail-listing.jpg';
+  const reads = [];
+  const transcodes = [];
+  const prepared = await prepareListingImageForUpload(source, {
+    readImage: async (uri) => {
+      reads.push(uri);
+      return uri === source
+        ? binary([0, 0, 0, 24, 0x66, 0x74, 0x79, 0x70, 0x68, 0x65, 0x69, 0x63])
+        : binary([0xff, 0xd8, 0xff, 0xdb]);
+    },
+    transcodeToJpeg: async (uri) => {
+      transcodes.push(uri);
+      return converted;
+    },
+  });
+
+  assert.deepEqual(reads, [source, converted]);
+  assert.deepEqual(transcodes, [source]);
+  assert.equal(prepared.mimeType, 'image/jpeg');
+  assert.equal(prepared.extension, 'jpg');
 });
 
 test('native file and content URIs use native file bytes without network fetch', async () => {

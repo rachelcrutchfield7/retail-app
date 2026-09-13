@@ -153,6 +153,8 @@ function listingPage(listing: any, listingId: string) {
 
   const canonical =
     `https://retailpetapp.com/listing/${encodeURIComponent(listingId)}`;
+  const appLink =
+    `retail://listing/${encodeURIComponent(listingId)}`;
 
   const description = [price, condition, location]
     .filter(Boolean)
@@ -251,7 +253,7 @@ ${description ? `<p class="meta">${description}</p>` : ""}
 Buy and sell new or gently used pet supplies with people in your community.
 </p>
 
-<a class="button" href="${canonical}">
+<a class="button" href="${appLink}">
 Open in ReTail
 </a>
 

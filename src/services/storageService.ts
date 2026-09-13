@@ -2,7 +2,11 @@ import { supabase } from '../lib/supabase';
 import { config } from '../constants/config';
 import { logger } from '../lib/logger';
 import { createServiceError } from './errors';
-import { readLocalImageBinary } from './localImageFile';
+import {
+  detectImageMimeTypeFromBytes,
+  readLocalImageBinary,
+  type LocalImageBinary,
+} from './localImageFile';
 import {
   ensureCurrentProfile,
   throwSupabaseError,
@@ -20,6 +24,11 @@ type StorageUploadClient = {
   ) => Promise<{ error: unknown }>;
 };
 
+type ListingImagePreparationDependencies = {
+  readImage?: typeof readLocalImageBinary;
+  transcodeToJpeg?: (fileUri: string) => Promise<string>;
+};
+
 function uriScheme(fileUri: string): string {
   return /^([a-z][a-z0-9+.-]*):/i.exec(fileUri)?.[1]?.toLowerCase() ?? 'unknown';
 }
@@ -33,6 +42,72 @@ function storageErrorContext(error: unknown): Record<string, unknown> {
     storageErrorCode: typeof details.code === 'string' ? details.code : undefined,
     storageStatus: details.status ?? details.statusCode,
   };
+}
+
+function withDetectedMimeType(
+  image: LocalImageBinary,
+  mimeType: Exclude<ReturnType<typeof detectImageMimeTypeFromBytes>, 'image/heif' | null>
+): LocalImageBinary {
+  return {
+    ...image,
+    extension: mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : 'jpg',
+    mimeType,
+  };
+}
+
+async function transcodeListingImageToJpeg(fileUri: string): Promise<string> {
+  const { ImageManipulator, SaveFormat } = await import('expo-image-manipulator');
+  const context = ImageManipulator.manipulate(fileUri);
+  const renderedImage = await context.renderAsync();
+  const result = await renderedImage.saveAsync({
+    compress: 0.82,
+    format: SaveFormat.JPEG,
+  });
+
+  return result.uri;
+}
+
+export async function prepareListingImageForUpload(
+  fileUri: string,
+  dependencies: ListingImagePreparationDependencies = {}
+): Promise<LocalImageBinary> {
+  const readImage = dependencies.readImage ?? readLocalImageBinary;
+  const initial = await readImage(fileUri, 'IMAGE_UPLOAD_FAILED', 'Could not read listing image');
+  const detected = detectImageMimeTypeFromBytes(new Uint8Array(initial.arrayBuffer));
+
+  if (detected && detected !== 'image/heif') {
+    return withDetectedMimeType(initial, detected);
+  }
+
+  if (detected !== 'image/heif') {
+    throw createServiceError(
+      'UNSUPPORTED_LISTING_IMAGE',
+      'Listing image bytes did not match JPEG, PNG, or WebP',
+      'Choose a JPEG, PNG, or WebP photo and try again.'
+    );
+  }
+
+  try {
+    const normalizedUri = await (dependencies.transcodeToJpeg ?? transcodeListingImageToJpeg)(fileUri);
+    const normalized = await readImage(normalizedUri, 'IMAGE_UPLOAD_FAILED', 'Could not read converted listing image');
+    const normalizedMimeType = detectImageMimeTypeFromBytes(new Uint8Array(normalized.arrayBuffer));
+
+    if (normalizedMimeType === 'image/jpeg') {
+      return withDetectedMimeType(normalized, normalizedMimeType);
+    }
+  } catch (error) {
+    logger.warning('Listing image conversion failed.', {
+      operation: 'listing image conversion',
+      uriScheme: uriScheme(fileUri),
+      ...storageErrorContext(error),
+    });
+  }
+
+  throw createServiceError(
+    'LISTING_IMAGE_CONVERSION_FAILED',
+    'HEIC/HEIF listing image could not be converted to JPEG',
+    'We could not prepare that photo. Choose another image and try again.'
+  );
 }
 
 export async function uploadListingImageBinary(
@@ -120,11 +195,7 @@ async function uploadPublicFile(bucket: string, fileUri: string, folder: string)
     );
   }
 
-  const { arrayBuffer, extension, mimeType, size } = await readLocalImageBinary(
-    fileUri,
-    'IMAGE_UPLOAD_FAILED',
-    'Could not read listing image'
-  );
+  const { arrayBuffer, extension, mimeType, size } = await prepareListingImageForUpload(fileUri);
 
   if (size > LISTING_IMAGE_MAX_BYTES) {
     throw createServiceError(
