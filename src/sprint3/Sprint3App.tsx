@@ -161,6 +161,11 @@ import type { Category, IconComponent, Listing, ListingCondition, ListingStatus,
 import { handleAppError } from '../utils/errorHandler';
 import { listingLocationLabel } from '../utils/format';
 import {
+  homeListingSortQueryValue,
+  sortHomeListings,
+  type HomeListingSort,
+} from '../utils/homeListingSort';
+import {
   bottomTabBarContentClearance,
   scrollContentBottomClearance,
   topSafeAreaPadding,
@@ -177,8 +182,6 @@ type SprintRoute =
   | { name: 'edit-profile' }
   | { name: 'public-profile'; userId: string }
   | { name: 'my-listings' };
-
-type HomeListingSort = 'recent' | 'nearby' | 'price-low' | 'price-high';
 
 type Notice = {
   title: string;
@@ -475,9 +478,10 @@ export function HomeScreen({
     () => ({
       search,
       radiusMiles: location.radiusMiles,
+      sort: homeListingSortQueryValue(sort),
       limit: 50,
     }),
-    [location.radiusMiles, search]
+    [location.radiusMiles, search, sort]
   );
   const rescueSummary = useRescueHub(useMemo(
     () => ({
@@ -4937,50 +4941,6 @@ function mergeFeedListings(primaryListings: Listing[], secondaryListings: Listin
   }
 
   return mergedListings;
-}
-
-function sortHomeListings(listings: Listing[], sort: HomeListingSort): Listing[] {
-  if (sort === 'recent') {
-    return listings;
-  }
-
-  const sortedListings = [...listings];
-
-  if (sort === 'price-low') {
-    return sortedListings.sort((first, second) => listingPriceValue(first) - listingPriceValue(second));
-  }
-
-  if (sort === 'price-high') {
-    return sortedListings.sort((first, second) => listingPriceValue(second) - listingPriceValue(first));
-  }
-
-  return sortedListings.sort((first, second) => listingDistanceValue(first) - listingDistanceValue(second));
-}
-
-function listingPriceValue(listing: Listing): number {
-  const normalizedPrice = String(listing.price).trim().toLowerCase();
-
-  if (!normalizedPrice || normalizedPrice === 'free' || normalizedPrice === 'donation') {
-    return 0;
-  }
-
-  const numericPrice = Number(normalizedPrice.replace(/[^0-9.]/g, ''));
-  return Number.isFinite(numericPrice) ? numericPrice : Number.MAX_SAFE_INTEGER;
-}
-
-function listingDistanceValue(listing: Listing): number {
-  if (typeof listing.distanceMiles === 'number' && Number.isFinite(listing.distanceMiles)) {
-    return listing.distanceMiles;
-  }
-
-  const normalizedDistance = listing.distance.toLowerCase();
-
-  if (normalizedDistance.includes('same area')) {
-    return 0;
-  }
-
-  const numericDistance = Number(normalizedDistance.replace(/[^0-9.]/g, ''));
-  return Number.isFinite(numericDistance) ? numericDistance : Number.MAX_SAFE_INTEGER;
 }
 
 function rescueWishlistMatches(form: CreateListingInput, rescues: RescueOrganization[] | null) {
