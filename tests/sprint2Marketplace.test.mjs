@@ -78,7 +78,7 @@ test('Sprint 2 create listing validation catches incomplete listings', () => {
 
   assert.equal(result.isValid, false);
   assert.equal(result.errors.images, 'Add at least one photo.');
-  assert.equal(result.errors.price, 'Sale listings require a price.');
+  assert.equal(result.errors.price, 'Sale listings require a price greater than $0.');
 });
 
 test('Sprint 2 create listing validation requires a getting option', () => {

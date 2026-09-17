@@ -169,6 +169,7 @@ export async function startProtectedCheckout(context: PaymentOptionContext): Pro
     // Keep the legacy buyer-facing field aligned with the service fee.
     platformFeeCents: buyerServiceFeeCents,
     sellerFeeCents,
+    sellerFeeWaiverReason: checkout.sellerFeeWaiverReason,
     buyerServiceFeeCents,
     retailFeeTotalCents: checkout.retailFeeTotalCents ?? sellerFeeCents + buyerServiceFeeCents,
     stripeApplicationFeeCents: checkout.stripeApplicationFeeCents,

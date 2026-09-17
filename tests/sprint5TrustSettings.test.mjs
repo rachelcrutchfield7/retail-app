@@ -29,7 +29,9 @@ test('transactions drive review eligibility instead of listing status alone', ()
   assert.match(transactionService, /completeTransaction/);
   assert.match(transactionService, /getPendingReviews/);
   assert.match(transactionService, /linkedUser: true/);
-  assert.match(myListingsScreen, /Completed outside ReTail \/ recipient not listed/);
+  assert.match(myListingsScreen, /Complete ReTail Sale/);
+  assert.match(myListingsScreen, /Sold Elsewhere/);
+  assert.doesNotMatch(myListingsScreen, /Completed outside ReTail \/ recipient not listed/);
   assert.match(myListingsScreen, /useEligibleTransactionParticipants/);
 });
 

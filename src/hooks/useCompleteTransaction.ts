@@ -8,6 +8,7 @@ import {
 import type { CompleteTransactionInput } from '../services/types';
 import { handleAppError } from '../utils/errorHandler';
 import { useAuth } from './useAuth';
+import { invalidateListingLifecycleQueries } from './listingLifecycleCache';
 
 export function useEligibleTransactionParticipants(listingId: string, enabled = true) {
   return useQuery({
@@ -31,10 +32,11 @@ export function useCompleteTransaction() {
   const mutation = useMutation({
     mutationFn: (input: CompleteTransactionInput) => completeTransaction(input),
     onSuccess: async (_transaction, input) => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.myListings(user?.id ?? 'guest') });
-      await queryClient.invalidateQueries({ queryKey: queryKeys.listing(input.listingId) });
-      await queryClient.invalidateQueries({ queryKey: queryKeys.pendingReviews(user?.id ?? 'guest') });
-      await queryClient.invalidateQueries({ queryKey: queryKeys.notifications(user?.id ?? 'guest') });
+      await invalidateListingLifecycleQueries(
+        queryClient,
+        input.listingId,
+        user?.id ?? 'guest',
+      );
     },
   });
 

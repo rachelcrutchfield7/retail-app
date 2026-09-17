@@ -17,6 +17,7 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   Archive,
   AlertCircle,
@@ -88,7 +89,7 @@ import {
   UserListingGrid,
 } from '../components';
 import { CONDITIONS } from '../constants/categories';
-import { findManualLocationByZipCode } from '../constants/location';
+import { findManualLocationByZipCode, searchRadiusOptions } from '../constants/location';
 import { colors, radius, sizes, spacing, typography } from '../constants/theme';
 import type { ThemeColors } from '../constants/theme';
 import { useAuth } from '../hooks/useAuth';
@@ -101,6 +102,11 @@ import { useMyFoundingSellerBenefit } from '../hooks/useFoundingSeller';
 import { useListing } from '../hooks/useListing';
 import { useListings } from '../hooks/useListings';
 import { useLocation } from '../hooks/useLocation';
+import {
+  useMarketplaceSearchAreas,
+  useMarketplaceSearchPreference,
+  useSetMarketplaceSearchArea,
+} from '../hooks/useMarketplaceSearchArea';
 import { useMyListings, useUserListings } from '../hooks/useMyListings';
 import { useNotifications } from '../hooks/useNotifications';
 import { usePendingReviews } from '../hooks/usePendingReviews';
@@ -114,6 +120,7 @@ import { useUnreadMessages } from '../hooks/useUnreadMessages';
 import { useUpdateListing } from '../hooks/useUpdateListing';
 import { useUpdateProfile } from '../hooks/useUpdateProfile';
 import { QueryClientProvider } from '../lib/queryClient';
+import { queryKeys } from '../lib/queryKeys';
 import { useThemeColors } from '../lib/themePreference';
 import {
   getGoogleSignInAvailability,
@@ -138,10 +145,8 @@ import type { SellerShippingOrigin } from '../services/shippingService';
 import { splitPackageWeightOz, totalPackageWeightOzFromParts } from '../services/shippingRules';
 import { isListingShareable, shareListing } from '../services/listingShareService';
 import {
-  clearListingDraft,
   hasMeaningfulListingDraft,
-  loadListingDraft,
-  saveListingDraft,
+  ListingDraftSession,
 } from '../services/listingDraftService';
 import { recordSuccessfulMarketplaceExperience } from '../services/storeReviewService';
 import type {
@@ -157,7 +162,7 @@ import type {
   SavedSearch,
   UpdateListingInput,
 } from '../services/types';
-import type { Category, IconComponent, Listing, ListingCondition, ListingStatus, RescueNeedUrgency, RescueOrganization, RescueOrganizationType } from '../types';
+import type { Category, IconComponent, Listing, ListingCondition, ListingStatus, MarketplaceSearchRadius, RescueNeedUrgency, RescueOrganization, RescueOrganizationType } from '../types';
 import { handleAppError } from '../utils/errorHandler';
 import { listingLocationLabel } from '../utils/format';
 import {
@@ -165,6 +170,7 @@ import {
   sortHomeListings,
   type HomeListingSort,
 } from '../utils/homeListingSort';
+import { applySavedSearchArea } from '../utils/savedSearchArea';
 import {
   bottomTabBarContentClearance,
   scrollContentBottomClearance,
@@ -187,6 +193,25 @@ type Notice = {
   title: string;
   body: string;
 };
+
+type ListingCompletionRequest = {
+  listing: Listing;
+  outcome: 'sold' | 'donated';
+};
+
+function retailCompletionLabel(listing: Listing): string {
+  if (listing.listingType === 'sale') return 'Complete ReTail Sale';
+  if (listing.listingType === 'donation') return 'Complete ReTail Donation';
+  return 'Complete ReTail Giveaway';
+}
+
+function outsideDonationLabel(listing: Listing): string {
+  return listing.listingType === 'free' ? 'Given Away Elsewhere' : 'Donated Elsewhere';
+}
+
+function retailCompletionOutcome(listing: Listing): 'sold' | 'donated' {
+  return listing.listingType === 'sale' ? 'sold' : 'donated';
+}
 
 const listingKeyExtractor = (item: Listing) => item.id;
 const renderGridSeparator = () => <View style={styles.gridSeparator} />;
@@ -469,25 +494,30 @@ export function HomeScreen({
     location,
     loading: locationLoading,
     error: locationError,
-    setRadiusMiles,
   } = useLocation();
+  const searchPreference = useMarketplaceSearchPreference();
+  const searchAreaUpdate = useSetMarketplaceSearchArea();
+  const marketplaceRadiusMiles = searchPreference.data?.radius_miles ?? location.radiusMiles;
+  const marketplaceCity = searchPreference.data?.city ?? location.city;
+  const marketplaceState = searchPreference.data?.state ?? location.state;
+  const hasMarketplaceSearchArea = Boolean(searchPreference.data?.search_area_id);
   const categories = useTopLevelCategories();
   const favorites = useFavorites(Boolean(auth.user));
   const notifications = useNotifications(Boolean(auth.user) && Boolean(onNotifications));
   const params = useMemo<ListingQueryParams>(
     () => ({
       search,
-      radiusMiles: location.radiusMiles,
+      radiusMiles: marketplaceRadiusMiles,
       sort: homeListingSortQueryValue(sort),
       limit: 50,
     }),
-    [location.radiusMiles, search, sort]
+    [marketplaceRadiusMiles, search, sort]
   );
   const rescueSummary = useRescueHub(useMemo(
     () => ({
-      radiusMiles: location.radiusMiles,
+      radiusMiles: marketplaceRadiusMiles,
     }),
-    [location.radiusMiles]
+    [marketplaceRadiusMiles]
   ));
   const listings = useListings(params);
   const myListings = useMyListings();
@@ -503,11 +533,15 @@ export function HomeScreen({
       listingMatchesFeedFilters(listing, filter)
     );
 
-    return sortHomeListings(mergeFeedListings(ownFilteredListings, filteredMarketplaceListings), sort);
+    const listingsForSort = sort === 'nearby'
+      ? filteredMarketplaceListings
+      : mergeFeedListings(ownFilteredListings, filteredMarketplaceListings);
+
+    return sortHomeListings(listingsForSort, sort);
   }, [categoryId, listings.data?.items, myListings.data, search, sort]);
   const favoriteIdSet = useMemo(() => new Set((favorites.data ?? []).map((listing) => listing.id)), [favorites.data]);
   const unreadNotificationTotal = notifications.unreadCount ?? 0;
-  const locationLabel = [location.city, location.state].filter(Boolean).join(', ');
+  const locationLabel = [marketplaceCity, marketplaceState].filter(Boolean).join(', ');
   const rescueHubStats = useMemo(() => {
     const rescues = rescueSummary.data ?? [];
 
@@ -516,9 +550,30 @@ export function HomeScreen({
       urgentNeedCount: rescues.reduce((total, rescue) => total + rescue.urgentNeeds.length, 0),
     };
   }, [rescueSummary.data]);
+  const updateMarketplaceRadius = useCallback(async (nextRadius: number) => {
+    if (!isMarketplaceSearchRadius(nextRadius)) {
+      setNotice({ title: 'Distance not available', body: 'Choose 10, 25, 50, or 100 miles.' });
+      return false;
+    }
+
+    const searchAreaId = searchPreference.data?.search_area_id;
+    if (!searchAreaId) {
+      setNotice({ title: 'Choose a marketplace area first', body: 'Set your marketplace area in Profile before changing the distance.' });
+      return false;
+    }
+
+    try {
+      await searchAreaUpdate.setSearchArea({ searchAreaId, radiusMiles: nextRadius });
+      return true;
+    } catch (error) {
+      setNotice({ title: 'Distance not updated', body: handleAppError(error).userMessage });
+      return false;
+    }
+  }, [searchAreaUpdate, searchPreference.data?.search_area_id]);
   const expandHomeDistance = useCallback(() => {
-    setRadiusMiles(Math.min(location.radiusMiles === 100 ? 100 : location.radiusMiles + 25, 100));
-  }, [location.radiusMiles, setRadiusMiles]);
+    const nextRadius = searchRadiusOptions.find((option) => option > marketplaceRadiusMiles) ?? 100;
+    void updateMarketplaceRadius(nextRadius);
+  }, [marketplaceRadiusMiles, updateMarketplaceRadius]);
 
   const handleFavorite = useCallback(async (listing: Listing) => {
     if (auth.isGuest) {
@@ -624,14 +679,16 @@ export function HomeScreen({
             </Card>
           ) : null}
 
-          <DistanceFilter
-            city={location.city}
-            state={location.state}
-            radiusMiles={location.radiusMiles}
-            loading={locationLoading}
-            error={locationError}
-            onRadiusChange={setRadiusMiles}
-          />
+          {hasMarketplaceSearchArea ? (
+            <DistanceFilter
+              city={marketplaceCity}
+              state={marketplaceState}
+              radiusMiles={marketplaceRadiusMiles}
+              loading={locationLoading || searchPreference.isLoading || searchAreaUpdate.isLoading}
+              error={locationError ?? searchPreference.error?.message ?? searchAreaUpdate.error?.message}
+              onRadiusChange={(nextRadius) => void updateMarketplaceRadius(nextRadius)}
+            />
+          ) : null}
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipScroller}>
             <CategoryChip label="All" selected={!categoryId} onPress={() => setCategoryId(undefined)} />
@@ -659,7 +716,10 @@ export function HomeScreen({
             </ScrollView>
           </View>
 
-          <SectionTitle title="Marketplace listings" hint={`${sortedItems.length} within ${location.radiusMiles} mi`} />
+          <SectionTitle
+            title="Marketplace listings"
+            hint={hasMarketplaceSearchArea ? `${sortedItems.length} within ${marketplaceRadiusMiles} mi` : `${sortedItems.length} available`}
+          />
           {listings.isLoading ? <LoadingCards /> : null}
           {listings.isError ? <ErrorState message={handleAppError(listings.error).userMessage} onRetry={listings.refetch} /> : null}
         </View>
@@ -675,8 +735,8 @@ export function HomeScreen({
             title="No listings nearby yet"
             body="Try another nearby area, expand the distance, or set a saved search alert so ReTail can help you watch for new matches."
             icon={Search}
-            actionTitle={location.radiusMiles < 100 ? 'Expand Distance' : 'Create Search Alert'}
-            onAction={location.radiusMiles < 100 ? expandHomeDistance : onOpenSearch}
+            actionTitle={hasMarketplaceSearchArea && marketplaceRadiusMiles < 100 ? 'Expand Distance' : 'Create Search Alert'}
+            onAction={hasMarketplaceSearchArea && marketplaceRadiusMiles < 100 ? expandHomeDistance : onOpenSearch}
           />
         ) : null
       }
@@ -692,6 +752,9 @@ export function SearchScreen({
   onOpenProfile: () => void;
 }) {
   const auth = useAuth();
+  const queryClient = useQueryClient();
+  const applyingSavedSearchRef = useRef(false);
+  const [isApplyingSavedSearch, setIsApplyingSavedSearch] = useState(false);
   const [search, setSearch] = useState('');
   const [categoryId, setCategoryId] = useState<string | undefined>();
   const [condition, setCondition] = useState<ListingCondition | undefined>();
@@ -703,10 +766,15 @@ export function SearchScreen({
     location,
     loading: locationLoading,
     error: locationError,
-    setRadiusMiles,
-    requestCurrentLocation,
     setManualLocation,
   } = useLocation();
+  const searchPreference = useMarketplaceSearchPreference();
+  const searchAreas = useMarketplaceSearchAreas();
+  const searchAreaUpdate = useSetMarketplaceSearchArea();
+  const marketplaceRadiusMiles = searchPreference.data?.radius_miles ?? location.radiusMiles;
+  const marketplaceCity = searchPreference.data?.city ?? location.city;
+  const marketplaceState = searchPreference.data?.state ?? location.state;
+  const hasMarketplaceSearchArea = Boolean(searchPreference.data?.search_area_id);
   const categories = useTopLevelCategories();
   const favorites = useFavorites(Boolean(auth.user));
   const savedSearches = useSavedSearches(Boolean(auth.user));
@@ -721,12 +789,12 @@ export function SearchScreen({
       search,
       condition,
       listingType,
-      radiusMiles: location.radiusMiles,
+      radiusMiles: marketplaceRadiusMiles,
       minPrice: parsedMinPrice,
       maxPrice: parsedMaxPrice,
       limit: 50,
     }),
-    [condition, listingType, location.radiusMiles, parsedMaxPrice, parsedMinPrice, search]
+    [condition, listingType, marketplaceRadiusMiles, parsedMaxPrice, parsedMinPrice, search]
   );
   const listings = useListings(params);
   const filteredItems = useMemo(
@@ -749,7 +817,7 @@ export function SearchScreen({
       condition,
       minPrice: parsedMinPrice,
       maxPrice: parsedMaxPrice,
-      city: location.city,
+      city: marketplaceCity,
     }),
     search_query: search.trim() || undefined,
     category_slug: categoryId,
@@ -758,9 +826,9 @@ export function SearchScreen({
     listing_type: listingType,
     min_price: parsedMinPrice,
     max_price: parsedMaxPrice,
-    radius_miles: location.radiusMiles,
-    city: location.city,
-    state: location.state,
+    radius_miles: marketplaceRadiusMiles,
+    city: marketplaceCity,
+    state: marketplaceState,
     zip_code: location.zipCode,
     notifications_enabled: true,
   });
@@ -779,25 +847,62 @@ export function SearchScreen({
     }
   };
 
-  const applySavedSearch = (savedSearch: SavedSearch) => {
-    setSearch(savedSearch.search_query ?? '');
-    setCategoryId(savedSearch.category_slug);
-    setCondition(savedSearch.condition);
-    setListingType(savedSearch.listing_type);
-    setMinPrice(savedSearch.min_price === undefined ? '' : String(savedSearch.min_price));
-    setMaxPrice(savedSearch.max_price === undefined ? '' : String(savedSearch.max_price));
-    setRadiusMiles(savedSearch.radius_miles);
-
-    if (savedSearch.city || savedSearch.state) {
-      setManualLocation({
-        city: savedSearch.city ?? location.city,
-        state: savedSearch.state ?? location.state,
-        zipCode: savedSearch.zip_code,
-        radiusMiles: savedSearch.radius_miles,
-      });
+  const updateMarketplaceRadius = useCallback(async (nextRadius: number) => {
+    if (!isMarketplaceSearchRadius(nextRadius)) {
+      setNotice({ title: 'Distance not available', body: 'Choose 10, 25, 50, or 100 miles.' });
+      return false;
     }
 
-    setNotice({ title: 'Saved search applied', body: `Showing results for "${savedSearch.name}".` });
+    const searchAreaId = searchPreference.data?.search_area_id;
+    if (!searchAreaId) {
+      setNotice({ title: 'Choose a marketplace area first', body: 'Set your marketplace area in Profile before changing the distance.' });
+      return false;
+    }
+
+    try {
+      await searchAreaUpdate.setSearchArea({ searchAreaId, radiusMiles: nextRadius });
+      return true;
+    } catch (error) {
+      setNotice({ title: 'Distance not updated', body: handleAppError(error).userMessage });
+      return false;
+    }
+  }, [searchAreaUpdate, searchPreference.data?.search_area_id]);
+
+  const applySavedSearch = async (savedSearch: SavedSearch) => {
+    if (applyingSavedSearchRef.current) return;
+    applyingSavedSearchRef.current = true;
+    setIsApplyingSavedSearch(true);
+
+    try {
+      const availableAreas = searchAreas.data.length ? searchAreas.data : (await searchAreas.refetch()).data ?? [];
+      const currentPreference = searchPreference.data ?? (await searchPreference.refetch()).data ?? null;
+      const confirmed = await applySavedSearchArea({
+        savedSearch,
+        areas: availableAreas,
+        preference: currentPreference,
+        setSearchArea: searchAreaUpdate.setSearchArea,
+      });
+
+      queryClient.removeQueries({ queryKey: queryKeys.listings, type: 'inactive' });
+      setManualLocation({
+        city: confirmed.city,
+        state: confirmed.state,
+        zipCode: undefined,
+        radiusMiles: confirmed.radius_miles,
+      });
+      setSearch(savedSearch.search_query ?? '');
+      setCategoryId(savedSearch.category_slug);
+      setCondition(savedSearch.condition);
+      setListingType(savedSearch.listing_type);
+      setMinPrice(savedSearch.min_price === undefined ? '' : String(savedSearch.min_price));
+      setMaxPrice(savedSearch.max_price === undefined ? '' : String(savedSearch.max_price));
+      setNotice({ title: 'Saved search applied', body: `Showing results for "${savedSearch.name}".` });
+    } catch (error) {
+      setNotice({ title: 'Saved search not applied', body: handleAppError(error).userMessage });
+    } finally {
+      applyingSavedSearchRef.current = false;
+      setIsApplyingSavedSearch(false);
+    }
   };
 
   const toggleSavedSearchAlert = async (savedSearch: SavedSearch) => {
@@ -824,8 +929,8 @@ export function SearchScreen({
     setListingType(undefined);
     setMinPrice('');
     setMaxPrice('');
-    setRadiusMiles(50);
-  }, [setRadiusMiles]);
+    void updateMarketplaceRadius(50);
+  }, [updateMarketplaceRadius]);
 
   const handleFavorite = useCallback(async (listing: Listing) => {
     if (auth.isGuest) {
@@ -864,7 +969,7 @@ export function SearchScreen({
     <FlatList
       style={styles.listScreen}
       contentContainerStyle={styles.listContent}
-      data={filteredItems}
+      data={isApplyingSavedSearch ? [] : filteredItems}
       keyExtractor={listingKeyExtractor}
       ListHeaderComponent={
         <View style={styles.stackLarge}>
@@ -874,14 +979,16 @@ export function SearchScreen({
           </View>
           {notice ? <NoticeCard notice={notice} actionLabel="Profile" onAction={onOpenProfile} /> : null}
           <SearchBar value={search} onChangeText={setSearch} onClear={() => setSearch('')} />
-          <DistanceFilter
-            city={location.city}
-            state={location.state}
-            radiusMiles={location.radiusMiles}
-            loading={locationLoading}
-            error={locationError}
-            onRadiusChange={setRadiusMiles}
-          />
+          {hasMarketplaceSearchArea ? (
+            <DistanceFilter
+              city={marketplaceCity}
+              state={marketplaceState}
+              radiusMiles={marketplaceRadiusMiles}
+              loading={locationLoading || searchPreference.isLoading || searchAreaUpdate.isLoading}
+              error={locationError ?? searchPreference.error?.message ?? searchAreaUpdate.error?.message}
+              onRadiusChange={(nextRadius) => void updateMarketplaceRadius(nextRadius)}
+            />
+          ) : null}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipScroller}>
             <CategoryChip label="All" selected={!categoryId} onPress={() => setCategoryId(undefined)} />
             {(categories.data ?? []).map((category) => (
@@ -937,15 +1044,19 @@ export function SearchScreen({
                 <SavedSearchAlertCard
                   key={savedSearch.id}
                   savedSearch={savedSearch}
-                  onApply={() => applySavedSearch(savedSearch)}
+                  onApply={() => void applySavedSearch(savedSearch)}
+                  applying={isApplyingSavedSearch}
                   onToggle={() => void toggleSavedSearchAlert(savedSearch)}
                   onRemove={() => void removeSavedSearch(savedSearch)}
                 />
               ))}
             </View>
           ) : null}
-          <SectionTitle title="Results" hint={`${filteredItems.length} within ${location.radiusMiles} mi`} />
-          {listings.isLoading ? <LoadingCards /> : null}
+          <SectionTitle
+            title="Results"
+            hint={hasMarketplaceSearchArea ? `${filteredItems.length} within ${marketplaceRadiusMiles} mi` : `${filteredItems.length} available`}
+          />
+          {listings.isLoading || isApplyingSavedSearch ? <LoadingCards /> : null}
           {listings.isError ? <ErrorState message={handleAppError(listings.error).userMessage} onRetry={listings.refetch} /> : null}
         </View>
       }
@@ -955,7 +1066,7 @@ export function SearchScreen({
       ItemSeparatorComponent={renderGridSeparator}
       {...gridListPerformanceProps}
       ListEmptyComponent={
-        !listings.isLoading && !listings.isError ? (
+        !listings.isLoading && !listings.isError && !isApplyingSavedSearch ? (
           <EmptyState
             title="No results found"
             body="Broaden your search, choose another nearby area, expand the distance, or save an alert for later."
@@ -971,11 +1082,13 @@ export function SearchScreen({
 
 function SavedSearchAlertCard({
   savedSearch,
+  applying,
   onApply,
   onToggle,
   onRemove,
 }: {
   savedSearch: SavedSearch;
+  applying: boolean;
   onApply: () => void;
   onToggle: () => void;
   onRemove: () => void;
@@ -991,7 +1104,7 @@ function SavedSearchAlertCard({
           <Badge label={savedSearch.notifications_enabled ? 'Alerts On' : 'Paused'} tone={savedSearch.notifications_enabled ? 'success' : 'neutral'} />
         </View>
         <View style={styles.actionGrid}>
-          <Button title="Search" icon={Search} variant="outline" onPress={onApply} fullWidth />
+          <Button title="Search" icon={Search} variant="outline" onPress={onApply} loading={applying} fullWidth />
           <Button
             title={savedSearch.notifications_enabled ? 'Pause' : 'Resume'}
             icon={Bell}
@@ -1081,6 +1194,10 @@ function priceRangeLabel(minPrice?: number, maxPrice?: number): string {
   }
 
   return 'Any price';
+}
+
+function isMarketplaceSearchRadius(radiusMiles: number): radiusMiles is MarketplaceSearchRadius {
+  return searchRadiusOptions.some((option) => option === radiusMiles);
 }
 
 export function SellScreen({
@@ -1246,6 +1363,7 @@ export function CreateListingScreen({
 }) {
   const auth = useAuth();
   const mutation = useCreateListing();
+  const rescueDashboard = useRescueDashboard(auth.profile?.account_type === 'rescue');
   const [form, setForm] = useState<CreateListingInput>(() => createListingDefaults(auth.profile));
   const [errors, setErrors] = useState<ReturnType<typeof validateCreateListingInput>['errors']>({});
   const [uploading, setUploading] = useState(false);
@@ -1254,10 +1372,10 @@ export function CreateListingScreen({
   const [latestStripeStatus, setLatestStripeStatus] = useState<StripeConnectStatus | null>(null);
   const [payoutOnboardingVisible, setPayoutOnboardingVisible] = useState(false);
   const [shippingOriginReady, setShippingOriginReady] = useState(false);
-  const [draftReady, setDraftReady] = useState(false);
   const [draftRestored, setDraftRestored] = useState(false);
-  const draftSaveQueueRef = useRef(Promise.resolve());
-  const draftWriteEpochRef = useRef(0);
+  const [draftWarning, setDraftWarning] = useState(false);
+  const formRef = useRef(form);
+  const draftSessionRef = useRef<ListingDraftSession | null>(null);
   const submitLockedRef = useRef(false);
   const profileStripeStatus = {
     accountId: auth.profile?.stripe_connect_account_id,
@@ -1268,74 +1386,56 @@ export function CreateListingScreen({
   const stripeStatus = latestStripeStatus ?? profileStripeStatus;
   const payoutsReady = profileHasStripePayouts(stripeStatus);
   const paidListingRequiresPayout = form.listing_type === 'sale';
-
-  const queueDraftSave = useCallback((userId: string, nextForm: CreateListingInput) => {
-    const writeEpoch = draftWriteEpochRef.current;
-    draftSaveQueueRef.current = draftSaveQueueRef.current
-      .catch(() => undefined)
-      .then(() => (
-        writeEpoch === draftWriteEpochRef.current
-          ? saveListingDraft(userId, nextForm)
-          : null
-      ))
-      .then((savedDraft) => {
-        if (!savedDraft || savedDraft.form.images.join('|') === nextForm.images.join('|')) return;
-        setForm((current) => (
-          current.images.join('|') === nextForm.images.join('|')
-            ? { ...current, images: savedDraft.form.images }
-            : current
-        ));
-      })
-      .catch(() => undefined);
-  }, []);
+  const rescueProfile = rescueDashboard.data?.profile;
+  const verifiedRescueBenefit = Boolean(auth.profile?.account_type === 'rescue'
+    && rescueProfile?.owner_id === auth.user?.id
+    && rescueProfile?.is_active
+    && rescueProfile?.is_verified
+    && rescueProfile?.verification_status === 'verified'
+    && !rescueProfile?.deleted_at);
 
   useEffect(() => {
-    let active = true;
     const userId = auth.user?.id;
+    const defaults = createListingDefaults(auth.profile);
+    formRef.current = defaults;
+    setForm(defaults);
+    setDraftRestored(false);
+    setDraftWarning(false);
 
     if (!userId) {
-      setDraftReady(true);
       return undefined;
     }
 
-    setDraftReady(false);
-    void loadListingDraft(userId).then((draft) => {
-      if (!active) return;
-      if (draft && hasMeaningfulListingDraft(draft.form)) {
-        setForm(draft.form);
-        setDraftRestored(true);
-      }
-      setDraftReady(true);
+    const session = new ListingDraftSession(userId, {
+      onHydrated: (draft) => {
+        if (draft && hasMeaningfulListingDraft(draft.form)) {
+          formRef.current = draft.form;
+          setForm(draft.form);
+          setDraftRestored(true);
+        }
+      },
+      onSaved: (original, saved) => {
+        setDraftWarning(false);
+        if (formRef.current.images.join('|') !== original.images.join('|')) return;
+        const next = { ...formRef.current, images: saved.form.images };
+        formRef.current = next;
+        setForm(next);
+      },
+      onError: () => setDraftWarning(true),
+    });
+    draftSessionRef.current = session;
+    void session.hydrate();
+
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState !== 'active') void session.flush();
     });
 
     return () => {
-      active = false;
+      subscription.remove();
+      session.dispose();
+      if (draftSessionRef.current === session) draftSessionRef.current = null;
     };
   }, [auth.user?.id]);
-
-  useEffect(() => {
-    const userId = auth.user?.id;
-    if (!draftReady || !userId || !hasMeaningfulListingDraft(form)) return undefined;
-
-    const timer = setTimeout(() => {
-      queueDraftSave(userId, form);
-    }, 500);
-
-    return () => clearTimeout(timer);
-  }, [auth.user?.id, draftReady, form, queueDraftSave]);
-
-  useEffect(() => {
-    const userId = auth.user?.id;
-    if (!draftReady || !userId) return undefined;
-
-    const subscription = AppState.addEventListener('change', (nextState) => {
-      if (nextState !== 'active' && hasMeaningfulListingDraft(form)) {
-        queueDraftSave(userId, form);
-      }
-    });
-
-    return () => subscription.remove();
-  }, [auth.user?.id, draftReady, form, queueDraftSave]);
 
   useEffect(() => {
     const city = auth.profile?.city?.trim();
@@ -1351,12 +1451,17 @@ export function CreateListingScreen({
         return current;
       }
 
-      return { ...current, city, state, zip_code: zipCode };
+      const next = { ...current, city, state, zip_code: zipCode };
+      formRef.current = next;
+      return next;
     });
   }, [auth.profile?.city, auth.profile?.state, auth.profile?.zip_code]);
 
   const update = <FieldName extends keyof CreateListingInput>(field: FieldName, value: CreateListingInput[FieldName]) => {
-    setForm((current) => ({ ...current, [field]: value }));
+    const next = { ...formRef.current, [field]: value };
+    formRef.current = next;
+    setForm(next);
+    draftSessionRef.current?.update(next);
   };
 
   const updateShippingOriginReady = useCallback((ready: boolean) => {
@@ -1407,10 +1512,12 @@ export function CreateListingScreen({
       setProgress(70);
       const listing = await mutation.createListing(form);
       setProgress(100);
-      if (auth.user?.id) {
-        draftWriteEpochRef.current += 1;
-        await draftSaveQueueRef.current.catch(() => undefined);
-        await clearListingDraft(auth.user.id);
+      let draftCleared = true;
+      try {
+        await draftSessionRef.current?.clear();
+      } catch {
+        draftCleared = false;
+        setDraftWarning(true);
       }
       setForm(createListingDefaults(auth.profile));
       let completed = false;
@@ -1425,7 +1532,9 @@ export function CreateListingScreen({
 
       Alert.alert(
         'Your listing is live!',
-        'Share it with friends to help it sell faster.',
+        draftCleared
+          ? 'Share it with friends to help it sell faster.'
+          : 'Your listing is live, but its local draft could not be cleared from this device.',
         [
           { text: 'Not Now', style: 'cancel', onPress: continueToListing },
           {
@@ -1458,16 +1567,13 @@ export function CreateListingScreen({
           text: 'Discard',
           style: 'destructive',
           onPress: () => {
-            const userId = auth.user?.id;
-            draftWriteEpochRef.current += 1;
-            void draftSaveQueueRef.current
-              .catch(() => undefined)
-              .then(() => (userId ? clearListingDraft(userId) : undefined))
-              .finally(() => {
+            void draftSessionRef.current?.clear()
+              .then(() => {
                 setForm(createListingDefaults(auth.profile));
                 setDraftRestored(false);
                 onBack();
-              });
+              })
+              .catch(() => setDraftWarning(true));
           },
         },
       ]
@@ -1485,6 +1591,12 @@ export function CreateListingScreen({
         </View>
         {draftRestored ? (
           <NoticeCard notice={{ title: 'Draft restored', body: 'Your unfinished listing was saved on this device.' }} />
+        ) : null}
+        {draftWarning ? (
+          <NoticeCard notice={{ title: 'Draft not saved', body: 'Recent listing changes may not be saved on this device.' }} />
+        ) : null}
+        {paidListingRequiresPayout && verifiedRescueBenefit ? (
+          <NoticeCard notice={{ title: 'Verified Rescue benefit', body: '$0 ReTail seller fee while your rescue verification is active at checkout. Shipping and taxes are separate.' }} />
         ) : null}
         {paidListingRequiresPayout && !payoutsReady && !payoutNotice ? (
           <NoticeCard
@@ -1619,6 +1731,7 @@ function ListingDetailContent({
   const item = detail.listing;
   const favorite = useFavoriteStatus(item.id, item.favoritedBy);
   const ownerActions = useMyListings();
+  const [completion, setCompletion] = useState<ListingCompletionRequest | null>(null);
   const [ownerConfirm, setOwnerConfirm] = useState<{
     title: string;
     body: string;
@@ -1810,6 +1923,19 @@ function ListingDetailContent({
             </Card>
           ) : owner ? (
             <>
+              {completion ? (
+                <ListingCompletionPanel
+                  listing={completion.listing}
+                  outcome={completion.outcome}
+                  onCancel={() => setCompletion(null)}
+                  onCompleted={async (message) => {
+                    await onListingChanged();
+                    setCompletion(null);
+                    setNotice(message);
+                  }}
+                  onError={(message) => setNotice({ title: 'Listing was not completed', body: message })}
+                />
+              ) : null}
               <Card>
                 <View style={styles.stack}>
                   <Text style={styles.cardTitle}>Listing tools</Text>
@@ -1871,31 +1997,41 @@ function ListingDetailContent({
                       fullWidth
                     />
                     <Button
-                      title="Mark Sold"
+                      title={retailCompletionLabel(item)}
                       icon={PackageOpen}
                       variant="outline"
                       disabled={completionDisabled}
-                      onPress={() =>
-                        askOwnerAction(
-                          'Mark listing sold?',
-                          'This updates the item status so buyers know it is no longer available.',
-                          'Mark Sold',
-                          () => ownerActions.markListingSold(item.id)
-                        )
-                      }
+                      onPress={() => setCompletion({ listing: item, outcome: retailCompletionOutcome(item) })}
                       fullWidth
                     />
+                    {item.listingType === 'sale' ? (
+                      <Button
+                        title="Sold Elsewhere"
+                        icon={PackageOpen}
+                        variant="outline"
+                        disabled={completionDisabled}
+                        onPress={() =>
+                          askOwnerAction(
+                            'Sold somewhere else?',
+                            'This removes the item from ReTail without creating a buyer, transaction, review, or completion notification.',
+                            'Sold Elsewhere',
+                            () => ownerActions.markListingSoldElsewhere(item.id)
+                          )
+                        }
+                        fullWidth
+                      />
+                    ) : null}
                     <Button
-                      title="Mark Donated"
+                      title={outsideDonationLabel(item)}
                       icon={HeartHandshake}
                       variant="outline"
                       disabled={completionDisabled}
                       onPress={() =>
                         askOwnerAction(
-                          'Mark listing donated?',
-                          'This updates the item status so people know the donation is complete.',
-                          'Mark Donated',
-                          () => ownerActions.markListingDonated(item.id)
+                          `${outsideDonationLabel(item)}?`,
+                          'This removes the item from ReTail without creating a recipient, transaction, review, or completion notification.',
+                          outsideDonationLabel(item),
+                          () => ownerActions.markListingDonatedElsewhere(item.id)
                         )
                       }
                       fullWidth
@@ -3036,6 +3172,9 @@ function RescueDashboardScreen({
               ? 'Your rescue can appear publicly in Rescue Hub.'
               : 'Your rescue profile is saved. Public Rescue Hub visibility begins after verification approval.'}
           </Text>
+          {rescueProfile.is_active && rescueProfile.is_verified && rescueProfile.verification_status === 'verified' && !rescueProfile.deleted_at ? (
+            <Text style={styles.body}>Verified Rescue benefit: $0 ReTail seller fee on eligible sales. Shipping and taxes are separate.</Text>
+          ) : null}
           <Text style={styles.bodyStrong}>
             {rescueOrganizationTypeLabel(rescueProfile.organization_type)} - {rescueProfile.has_501c3 ? '501(c)(3)' : '501(c)(3) not confirmed'}
           </Text>
@@ -3738,6 +3877,85 @@ export function PublicProfileScreen({
   );
 }
 
+function ListingCompletionPanel({
+  listing,
+  outcome,
+  onCancel,
+  onCompleted,
+  onError,
+}: {
+  listing: Listing;
+  outcome: 'sold' | 'donated';
+  onCancel: () => void;
+  onCompleted: (notice: Notice) => void | Promise<void>;
+  onError: (message: string) => void;
+}) {
+  const auth = useAuth();
+  const transaction = useCompleteTransaction();
+  const participants = useEligibleTransactionParticipants(listing.id, true);
+  const exchangeName = listing.listingType === 'sale'
+    ? 'sale'
+    : listing.listingType === 'donation'
+      ? 'donation'
+      : 'giveaway';
+
+  const completeWithParticipant = async (buyerId: string) => {
+    try {
+      const completedTransaction = await transaction.complete({
+        listingId: listing.id,
+        buyerId,
+        outcome,
+      });
+
+      await onCompleted({
+        title: `ReTail ${exchangeName} completed`,
+        body: 'The completed transaction is linked to the recipient, and both people can leave reviews.',
+      });
+
+      if (completedTransaction && auth.user?.id) {
+        void recordSuccessfulMarketplaceExperience(auth.user.id, completedTransaction.id).catch(() => undefined);
+      }
+    } catch (error) {
+      onError(handleAppError(error).userMessage);
+    }
+  };
+
+  return (
+    <Card>
+      <View style={styles.stack}>
+        <Text style={styles.cardTitle}>Who completed this ReTail {exchangeName}?</Text>
+        <Text style={styles.body}>
+          Select the person from this listing's ReTail conversation. This creates the completed transaction and review eligibility.
+        </Text>
+        {participants.isLoading ? <LoadingSpinner /> : null}
+        {participants.isError ? (
+          <ErrorState
+            message={handleAppError(participants.error).userMessage}
+            onRetry={participants.refetch}
+          />
+        ) : null}
+        {(participants.data ?? []).map((participant) => (
+          <Button
+            key={participant.userId}
+            title={`${participant.displayName}${participant.username ? ` (@${participant.username})` : ''}`}
+            variant="outline"
+            onPress={() => void completeWithParticipant(participant.userId)}
+            loading={transaction.loading}
+            fullWidth
+          />
+        ))}
+        {!participants.isLoading && (participants.data ?? []).length === 0 ? (
+          <Text style={styles.body}>
+            No eligible ReTail conversation participant is attached to this listing. Use the explicit outside-ReTail action if the item left ReTail.
+          </Text>
+        ) : null}
+        <Button title="Cancel" variant="ghost" onPress={onCancel} fullWidth />
+        {transaction.error ? <Text style={styles.errorText}>{transaction.error}</Text> : null}
+      </View>
+    </Card>
+  );
+}
+
 export function MyListingsScreen({
   onBack,
   onOpenListing,
@@ -3749,9 +3967,7 @@ export function MyListingsScreen({
   onEditListing: (listingId: string) => void;
   onCreateListing?: () => void;
 }) {
-  const auth = useAuth();
   const listings = useMyListings();
-  const transaction = useCompleteTransaction();
   const [listingView, setListingView] = useState<'current' | 'previous'>('current');
   const [confirm, setConfirm] = useState<{
     title: string;
@@ -3760,12 +3976,8 @@ export function MyListingsScreen({
     variant?: 'primary' | 'danger';
     action: () => Promise<void>;
   } | null>(null);
-  const [completion, setCompletion] = useState<{
-    listing: Listing;
-    outcome: 'donated';
-  } | null>(null);
+  const [completion, setCompletion] = useState<ListingCompletionRequest | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
-  const completionParticipants = useEligibleTransactionParticipants(completion?.listing.id ?? '', Boolean(completion));
 
   const runConfirmed = async () => {
     if (!confirm) {
@@ -3795,33 +4007,6 @@ export function MyListingsScreen({
       confirmTitle: options.confirmTitle ?? 'Confirm',
       variant: options.variant ?? 'primary',
     });
-  };
-
-  const completeListing = async (buyerId?: string) => {
-    if (!completion) {
-      return;
-    }
-
-    try {
-      const completedTransaction = await transaction.complete({
-        listingId: completion.listing.id,
-        buyerId,
-        outcome: completion.outcome,
-      });
-      await listings.refetch();
-      setNotice({
-        title: 'Listing marked donated',
-        body: buyerId
-          ? 'The transaction was recorded and both people can leave reviews.'
-          : 'The listing status was updated. Reviews are only enabled when a ReTail user is selected.',
-      });
-      setCompletion(null);
-      if (completedTransaction && auth.user?.id) {
-        void recordSuccessfulMarketplaceExperience(auth.user.id, completedTransaction.id).catch(() => undefined);
-      }
-    } catch (error) {
-      setNotice({ title: 'Listing was not completed', body: handleAppError(error).userMessage });
-    }
   };
 
   const groups: Array<{ status: ListingStatus; title: string; view: 'current' | 'previous' }> = [
@@ -3856,46 +4041,17 @@ export function MyListingsScreen({
         </View>
         {notice ? <NoticeCard notice={notice} /> : null}
         {completion ? (
-          <Card>
-            <View style={styles.stack}>
-              <Text style={styles.cardTitle}>
-                Who received this donation?
-              </Text>
-              <Text style={styles.body}>
-                Choose someone from the listing conversation to enable reviews. If the exchange happened outside ReTail,
-                you can still update the listing status without creating a reviewable transaction.
-              </Text>
-              {completionParticipants.isLoading ? <LoadingSpinner /> : null}
-              {completionParticipants.isError ? (
-                <ErrorState
-                  message={handleAppError(completionParticipants.error).userMessage}
-                  onRetry={completionParticipants.refetch}
-                />
-              ) : null}
-              {(completionParticipants.data ?? []).map((participant) => (
-                <Button
-                  key={participant.userId}
-                  title={`${participant.displayName}${participant.username ? ` (@${participant.username})` : ''}`}
-                  variant="outline"
-                  onPress={() => void completeListing(participant.userId)}
-                  loading={transaction.loading}
-                  fullWidth
-                />
-              ))}
-              {!completionParticipants.isLoading && (completionParticipants.data ?? []).length === 0 ? (
-                <Text style={styles.body}>No ReTail conversations are attached to this listing yet.</Text>
-              ) : null}
-              <Button
-                title="Completed outside ReTail / recipient not listed"
-                variant="secondary"
-                onPress={() => void completeListing()}
-                loading={transaction.loading}
-                fullWidth
-              />
-              <Button title="Cancel" variant="ghost" onPress={() => setCompletion(null)} fullWidth />
-              {transaction.error ? <Text style={styles.errorText}>{transaction.error}</Text> : null}
-            </View>
-          </Card>
+          <ListingCompletionPanel
+            listing={completion.listing}
+            outcome={completion.outcome}
+            onCancel={() => setCompletion(null)}
+            onCompleted={async (message) => {
+              await listings.refetch();
+              setCompletion(null);
+              setNotice(message);
+            }}
+            onError={(message) => setNotice({ title: 'Listing was not completed', body: message })}
+          />
         ) : null}
         {listings.isLoading ? <LoadingCards /> : null}
         {listings.isError ? <ErrorState message={handleAppError(listings.error).userMessage} onRetry={listings.refetch} /> : null}
@@ -3967,20 +4123,52 @@ export function MyListingsScreen({
                   visible: (listing) => ['Active', 'Pending'].includes(listing.status),
                 },
                 {
-                  label: 'Mark Sold',
-                  onPress: (listing) =>
-                    ask(
-                      'Mark listing sold?',
-                      'Use this for a sale completed outside ReTail checkout. Protected checkout sales are marked sold automatically.',
-                      () => listings.markListingSold(listing.id),
-                      { confirmTitle: 'Mark Sold' }
-                    ),
-                  visible: (listing) => ['Active', 'Pending'].includes(listing.status),
+                  label: 'Complete ReTail Sale',
+                  onPress: (listing) => setCompletion({ listing, outcome: 'sold' }),
+                  visible: (listing) => listing.listingType === 'sale' && ['Active', 'Pending'].includes(listing.status),
                 },
                 {
-                  label: 'Mark Donated',
+                  label: 'Complete ReTail Donation',
                   onPress: (listing) => setCompletion({ listing, outcome: 'donated' }),
-                  visible: (listing) => ['Active', 'Pending'].includes(listing.status),
+                  visible: (listing) => listing.listingType === 'donation' && ['Active', 'Pending'].includes(listing.status),
+                },
+                {
+                  label: 'Complete ReTail Giveaway',
+                  onPress: (listing) => setCompletion({ listing, outcome: 'donated' }),
+                  visible: (listing) => listing.listingType === 'free' && ['Active', 'Pending'].includes(listing.status),
+                },
+                {
+                  label: 'Sold Elsewhere',
+                  onPress: (listing) =>
+                    ask(
+                      'Sold somewhere else?',
+                      'This removes the item from ReTail without creating a buyer, transaction, review, or completion notification.',
+                      () => listings.markListingSoldElsewhere(listing.id),
+                      { confirmTitle: 'Sold Elsewhere' }
+                    ),
+                  visible: (listing) => listing.listingType === 'sale' && ['Active', 'Pending'].includes(listing.status),
+                },
+                {
+                  label: 'Donated Elsewhere',
+                  onPress: (listing) =>
+                    ask(
+                      'Donated somewhere else?',
+                      'This removes the item from ReTail without creating a recipient, transaction, review, or completion notification.',
+                      () => listings.markListingDonatedElsewhere(listing.id),
+                      { confirmTitle: 'Donated Elsewhere' }
+                    ),
+                  visible: (listing) => listing.listingType !== 'free' && ['Active', 'Pending'].includes(listing.status),
+                },
+                {
+                  label: 'Given Away Elsewhere',
+                  onPress: (listing) =>
+                    ask(
+                      'Given away somewhere else?',
+                      'This removes the item from ReTail without creating a recipient, transaction, review, or completion notification.',
+                      () => listings.markListingDonatedElsewhere(listing.id),
+                      { confirmTitle: 'Given Away Elsewhere' }
+                    ),
+                  visible: (listing) => listing.listingType === 'free' && ['Active', 'Pending'].includes(listing.status),
                 },
                 {
                   label: 'Delete',

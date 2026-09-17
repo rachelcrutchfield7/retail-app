@@ -18,6 +18,7 @@ export type ProtectedCheckoutSetup = {
   /** Legacy buyer-facing response field; equals buyerServiceFeeCents. */
   platformFeeCents: number;
   sellerFeeCents?: number;
+  sellerFeeWaiverReason?: 'verified_rescue' | null;
   buyerServiceFeeCents?: number;
   retailFeeTotalCents?: number;
   stripeApplicationFeeCents?: number;

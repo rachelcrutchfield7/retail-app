@@ -590,8 +590,7 @@ async function loadConversationSummaryBatch(rows: ConversationRow[], currentProf
   };
 }
 
-async function lastMessageFor(conversationId: string): Promise<Message | undefined> {
-  const profile = await ensureCurrentProfile();
+async function lastMessageFor(conversationId: string, currentUserId: string): Promise<Message | undefined> {
   const { data, error } = await supabase
     .from('messages')
     .select('*')
@@ -604,7 +603,7 @@ async function lastMessageFor(conversationId: string): Promise<Message | undefin
     throwSupabaseError(error, 'We could not load the latest message.');
   }
 
-  return data?.[0] ? toMessage(data[0] as Record<string, unknown>, profile.id) : undefined;
+  return data?.[0] ? toMessage(data[0] as Record<string, unknown>, currentUserId) : undefined;
 }
 
 async function unreadCountFor(conversationId: string, userId: string): Promise<number> {
@@ -642,7 +641,10 @@ function fallbackConversationSummary(row: ConversationRow, currentUserId: string
   };
 }
 
-export async function buildConversationSummary(conversation: Conversation | ConversationRow): Promise<ConversationSummary> {
+export async function buildConversationSummary(
+  conversation: Conversation | ConversationRow,
+  knownProfile?: Profile
+): Promise<ConversationSummary> {
   const row = 'listing_id' in conversation
     ? conversation as ConversationRow
     : {
@@ -657,13 +659,20 @@ export async function buildConversationSummary(conversation: Conversation | Conv
         updated_at: conversation.updatedAt ?? conversation.lastMessageAt,
         deleted_at: conversation.deletedAt,
   };
-  const currentProfile = await requireParticipant(row);
+  const currentProfile = knownProfile ?? await requireParticipant(row);
+  if (row.buyer_id !== currentProfile.id && row.seller_id !== currentProfile.id) {
+    throw createServiceError(
+      'CONVERSATION_PERMISSION_DENIED',
+      `User ${currentProfile.id} cannot access conversation ${row.id}`,
+      'You can only view conversations you belong to.'
+    );
+  }
   const otherUserId = row.buyer_id === currentProfile.id ? row.seller_id : row.buyer_id;
   const [otherProfile, rescue, loadedListing, lastMessage, unreadCount, messagingBlocked] = await Promise.all([
     loadPublicProfileForConversation(otherUserId),
     loadRescueForConversation(row.rescue_id),
     row.listing_id ? loadListingForConversation(row.listing_id) : Promise.resolve(null),
-    lastMessageFor(row.id),
+    lastMessageFor(row.id, currentProfile.id),
     unreadCountFor(row.id, currentProfile.id),
     isEitherUserBlocked(row.buyer_id, row.seller_id),
   ]);
@@ -758,7 +767,7 @@ export async function getOrCreateConversation(listingId: string, expectedSellerI
   }
 
   trackEvent('Conversation Started', { conversationId: conversation.id, listingId });
-  return buildConversationSummary(conversation);
+  return buildConversationSummary(conversation, profile);
 }
 
 export async function getOrCreateRescueConversation(rescueId: string, expectedOwnerId?: string): Promise<ConversationDetail> {
@@ -854,7 +863,7 @@ export async function getConversationById(conversationId: string, userId?: strin
   }
 
   trackEvent('Conversation Opened', { conversationId });
-  return buildConversationSummary(conversation);
+  return buildConversationSummary(conversation, profile);
 }
 
 export async function getUserConversations(

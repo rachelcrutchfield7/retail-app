@@ -406,6 +406,7 @@ export type Transaction = {
   item_amount_cents?: number;
   platform_fee_cents?: number;
   seller_fee_cents?: number;
+  seller_fee_waiver_reason?: 'verified_rescue';
   buyer_service_fee_cents?: number;
   retail_fee_total_cents?: number;
   stripe_application_fee_cents?: number;

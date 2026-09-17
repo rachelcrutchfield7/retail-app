@@ -1,0 +1,46 @@
+node_modules/
+.expo/
+.astro/
+dist/
+web-build/
+coverage/
+*.log
+.DS_Store
+.env
+.env.*
+.env.local
+.env.*.local
+!.env.example
+*.pem
+*.key
+*.jks
+*.keystore
+*.p8
+*.p12
+GoogleService-Info.plist
+credentials.json
+service-account*.json
+credentials/
+*.mobileprovision
+*.cer
+
+# Local Cloudflare Worker secrets
+.dev.vars
+web-worker/.dev.vars
+
+# Wrangler local state
+web-worker/.wrangler/
+
+# Release archive contains only mobile runtime and build inputs.
+/tests/
+/docs/
+/supabase/
+/marketing-site/
+/site/
+/web/
+/web-worker/
+/tmp/
+.git
+/.github/
+/.env.example
+/*.md

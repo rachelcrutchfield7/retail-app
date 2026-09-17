@@ -34,9 +34,7 @@ export function sortHomeListings(listings: Listing[], sort: HomeListingSort): Li
   }
 
   if (sort === 'nearby') {
-    return sortedListings.sort(
-      (first, second) => listingDistanceValue(first) - listingDistanceValue(second) || newestFirst(first, second)
-    );
+    return sortedListings;
   }
 
   return sortedListings.sort(newestFirst);
@@ -48,21 +46,6 @@ function listingPriceLowValue(listing: Listing): number {
 
 function listingPriceHighValue(listing: Listing): number {
   return listing.listingType === 'sale' ? listing.priceAmount ?? 0 : -1;
-}
-
-function listingDistanceValue(listing: Listing): number {
-  if (typeof listing.distanceMiles === 'number' && Number.isFinite(listing.distanceMiles)) {
-    return listing.distanceMiles;
-  }
-
-  const normalizedDistance = listing.distance.toLowerCase();
-
-  if (normalizedDistance.includes('same area')) {
-    return 0;
-  }
-
-  const numericDistance = Number(normalizedDistance.replace(/[^0-9.]/g, ''));
-  return Number.isFinite(numericDistance) ? numericDistance : Number.MAX_SAFE_INTEGER;
 }
 
 function newestFirst(first: Listing, second: Listing): number {

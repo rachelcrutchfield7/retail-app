@@ -1,6 +1,7 @@
 import { trackEvent } from '../lib/analytics';
 import { supabase } from '../lib/supabase';
 import { createServiceError } from './errors';
+import { runListingMutationWithExpiredCheckoutRecovery } from './listingService';
 import {
   ensureCurrentProfile,
   throwSupabaseError,
@@ -56,6 +57,7 @@ function toTransaction(row: Row): Transaction {
     item_amount_cents: optionalNumber(row.item_amount_cents),
     platform_fee_cents: optionalNumber(row.platform_fee_cents),
     seller_fee_cents: optionalNumber(row.seller_fee_cents),
+    seller_fee_waiver_reason: optionalString(row.seller_fee_waiver_reason) as Transaction['seller_fee_waiver_reason'],
     buyer_service_fee_cents: optionalNumber(row.buyer_service_fee_cents),
     retail_fee_total_cents: optionalNumber(row.retail_fee_total_cents),
     stripe_application_fee_cents: optionalNumber(row.stripe_application_fee_cents),
@@ -192,11 +194,14 @@ export async function getEligibleTransactionParticipants(listingId: string): Pro
 export async function completeTransaction(input: CompleteTransactionInput): Promise<Transaction | null> {
   const outcome = input.outcome;
 
-  const { data: completionRows, error: completionError } = await supabase.rpc('complete_listing_transaction', {
+  const { data: completionRows, error: completionError } = await runListingMutationWithExpiredCheckoutRecovery(
+    input.listingId,
+    () => supabase.rpc('complete_listing_transaction', {
     target_listing_id: input.listingId,
     target_outcome: outcome,
     target_buyer_id: input.buyerId ?? null,
-  });
+    }),
+  );
 
   if (completionError) {
     throwSupabaseError(completionError, 'We could not record the completed transaction.');

@@ -90,11 +90,11 @@ test('My Listings separates Current and Previous states with state-appropriate a
   assert.match(listingHook, /activateListing/);
 });
 
-test('manual Sold uses the dedicated owner RPC and no longer creates a synthetic sale transaction', () => {
+test('Sold Elsewhere uses the dedicated owner RPC and creates no synthetic sale transaction', () => {
   const myListingsScreen = sprint3.match(/export function MyListingsScreen[\s\S]+?\n}\n\nexport function EditListingScreen/)?.[0] ?? '';
 
-  assert.match(myListingsScreen, /label: 'Mark Sold'[\s\S]+listings\.markListingSold\(listing\.id\)/);
-  assert.doesNotMatch(myListingsScreen, /setCompletion\(\{ listing, outcome: 'sold'/);
+  assert.match(myListingsScreen, /label: 'Sold Elsewhere'[\s\S]+listings\.markListingSoldElsewhere\(listing\.id\)/);
+  assert.match(myListingsScreen, /label: 'Complete ReTail Sale'[\s\S]+setCompletion\(\{ listing, outcome: 'sold'/);
   assert.match(listingService, /rpc\('mark_my_listing_sold'/);
   assert.match(baseline, /status in \('active'::public\.listing_status, 'pending'::public\.listing_status\)/);
 });

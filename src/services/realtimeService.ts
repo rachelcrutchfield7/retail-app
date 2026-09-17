@@ -11,6 +11,7 @@ type RealtimeChannel = ReturnType<typeof supabase.channel>;
 
 const localListeners = new Set<MessagingListener>();
 const activeChannels = new Set<RealtimeChannel>();
+const userConversationSubscriptions = new Map<string, { channels: RealtimeChannel[]; listeners: Set<MessagingListener> }>();
 let realtimeSubscriptionId = 0;
 
 function nextChannelName(prefix: string, scope: string): string {
@@ -36,6 +37,7 @@ function trackChannel(channel: RealtimeChannel): RealtimeChannel {
 
 export function removeAllRealtimeSubscriptions(): void {
   removeChannels([...activeChannels]);
+  userConversationSubscriptions.clear();
   localListeners.clear();
 }
 
@@ -133,6 +135,22 @@ export function subscribeToUserConversations(userId: string, listener: Messaging
 
   localListeners.add(listener);
 
+  const existing = userConversationSubscriptions.get(userId);
+  if (existing) {
+    existing.listeners.add(listener);
+    return () => {
+      localListeners.delete(listener);
+      existing.listeners.delete(listener);
+      if (existing.listeners.size === 0 && userConversationSubscriptions.get(userId) === existing) {
+        userConversationSubscriptions.delete(userId);
+        removeChannels(existing.channels);
+      }
+    };
+  }
+
+  const listeners = new Set<MessagingListener>([listener]);
+  const dispatch = (event: MessagingEvent) => listeners.forEach((subscriber) => subscriber(event));
+
   const buyerChannel = trackChannel(supabase
     .channel(nextChannelName('retail-user-buyer-conversations', userId))
     .on(
@@ -147,7 +165,7 @@ export function subscribeToUserConversations(userId: string, listener: Messaging
         const next = payload.new as Record<string, unknown>;
         const previous = payload.old as Record<string, unknown>;
         const conversationId = String(next?.id ?? previous?.id ?? '');
-        listener({ type: payload.eventType === 'INSERT' ? 'conversation_created' : 'conversation_updated', conversationId });
+        dispatch({ type: payload.eventType === 'INSERT' ? 'conversation_created' : 'conversation_updated', conversationId });
       }
     ));
 
@@ -165,18 +183,24 @@ export function subscribeToUserConversations(userId: string, listener: Messaging
         const next = payload.new as Record<string, unknown>;
         const previous = payload.old as Record<string, unknown>;
         const conversationId = String(next?.id ?? previous?.id ?? '');
-        listener({ type: payload.eventType === 'INSERT' ? 'conversation_created' : 'conversation_updated', conversationId });
+        dispatch({ type: payload.eventType === 'INSERT' ? 'conversation_created' : 'conversation_updated', conversationId });
       }
     ));
 
   const channels = [buyerChannel, sellerChannel];
+  const subscription = { channels, listeners };
+  userConversationSubscriptions.set(userId, subscription);
   channels.forEach((channel) => {
     void channel.subscribe();
   });
 
   return () => {
     localListeners.delete(listener);
-    removeChannels(channels);
+    listeners.delete(listener);
+    if (listeners.size === 0 && userConversationSubscriptions.get(userId) === subscription) {
+      userConversationSubscriptions.delete(userId);
+      removeChannels(channels);
+    }
   };
 }
 

@@ -104,8 +104,8 @@ test('inbox and unread hooks avoid per-conversation realtime fan-out', () => {
   const useConversationsHook = messagingHooks.slice(conversationsStart, conversationStart);
   const useUnreadHook = messagingHooks.slice(unreadStart, startConversationStart);
 
-  assert.match(useConversationsHook, /subscribeToUserConversations\(user\.id/);
-  assert.match(useUnreadHook, /subscribeToUserConversations\(user\.id/);
+  assert.match(useConversationsHook, /subscribeToUserConversations\(userId/);
+  assert.match(useUnreadHook, /subscribeToUserConversations\(userId/);
   assert.doesNotMatch(useConversationsHook, /subscribeToConversationMessages/);
   assert.doesNotMatch(useUnreadHook, /subscribeToConversationMessages/);
   assert.doesNotMatch(useConversationsHook, /subscribeToKnownConversationMessages/);
@@ -118,8 +118,8 @@ test('conversation open marks messages read without refetching the visible messa
   const useConversationHook = messagingHooks.slice(hookStart, hookEnd);
 
   assert.match(useConversationHook, /markMessagesRead\(conversationId\)/);
-  assert.match(useConversationHook, /queryKeys\.unreadMessages\(user\.id\)/);
-  assert.match(useConversationHook, /queryKeys\.conversations\(user\.id\)/);
+  assert.match(useConversationHook, /queryKeys\.unreadMessages\(userId\)/);
+  assert.match(useConversationHook, /queryKeys\.conversations\(userId\)/);
   assert.doesNotMatch(useConversationHook, /queryKeys\.messages\(conversationId\)/);
   assert.doesNotMatch(useConversationHook, /subscribeToConversationMessages/);
 });

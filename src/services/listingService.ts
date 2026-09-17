@@ -163,6 +163,62 @@ function sortParam(params: ListingQueryParams): string {
   return params.sort && allowedSorts.has(params.sort) ? params.sort : 'recent';
 }
 
+function positiveSalePriceNumber(value: string | number | null | undefined): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  const normalized = typeof value === 'number'
+    ? value
+    : Number(value.replace(/[$,\s]/g, ''));
+  return Number.isFinite(normalized) && normalized > 0 ? normalized : null;
+}
+
+type ListingMutationRpcResult<T> = {
+  data: T;
+  error: { message: string; code?: string } | null;
+};
+
+function isCheckoutReservationConflict(error: ListingMutationRpcResult<unknown>['error']): boolean {
+  const message = error?.message ?? '';
+  return message.includes('RETAIL_LISTING_RESERVED')
+    || message.includes('RETAIL_CHECKOUT_PAYMENT_INTENT_STILL_VIABLE')
+    || error?.code === '55P03';
+}
+
+export async function runListingMutationWithExpiredCheckoutRecovery<T>(
+  listingId: string,
+  operation: () => PromiseLike<ListingMutationRpcResult<T>>,
+): Promise<ListingMutationRpcResult<T>> {
+  let result = await operation();
+  if (!isCheckoutReservationConflict(result.error)) return result;
+
+  const status = await invalidateExpiredCheckoutForListingMutation(listingId);
+  if (
+    status === 'invalidated'
+    || status === 'already_invalidated'
+    || status === 'reservation_changed'
+    || status === 'no_expired_reservation'
+  ) {
+    result = await operation();
+  }
+
+  return result;
+}
+
+async function invalidateExpiredCheckoutForListingMutation(listingId: string): Promise<unknown> {
+  const { data, error } = await supabase.functions.invoke('stripe-invalidate-expired-checkout', {
+    body: { listingId },
+  });
+
+  if (error) {
+    throw createServiceError(
+      'LISTING_CHECKOUT_PENDING',
+      error.message,
+      'This item is currently being purchased. Try again after checkout finishes.'
+    );
+  }
+
+  return (data as { status?: unknown } | null)?.status;
+}
+
 function assertCreateListingInput(input: CreateListingInput): void {
   if (!input.title.trim() || input.title.trim().length < 3) {
     throw createServiceError('TITLE_REQUIRED', 'Listing title was blank or too short', 'Add a clear title for your item.');
@@ -184,8 +240,8 @@ function assertCreateListingInput(input: CreateListingInput): void {
     throw createServiceError('IMAGE_LIMIT_REACHED', 'Listing was created with too many images', 'You can add up to 15 photos.');
   }
 
-  if (input.listing_type === 'sale' && priceNumber(input.price) === null) {
-    throw createServiceError('PRICE_REQUIRED', 'Sale listing was missing price', 'Add a price for this listing.');
+  if (input.listing_type === 'sale' && positiveSalePriceNumber(input.price) === null) {
+    throw createServiceError('PRICE_REQUIRED', 'Sale listing price was not positive', 'Add a price greater than $0.');
   }
 
   if (!input.city.trim() || !input.state.trim()) {
@@ -323,7 +379,23 @@ export async function getNearbyListings(params: ListingQueryParams = {}): Promis
       if (!isMissingSavedLocationError(error)) {
         throw error;
       }
+
+      if (params.sort === 'distance') {
+        throw createServiceError(
+          'RETAIL_SEARCH_AREA_REQUIRED',
+          'Distance sorting requires a saved marketplace search area.',
+          'Choose a marketplace area before sorting by distance.'
+        );
+      }
     }
+  }
+
+  if (params.sort === 'distance') {
+    throw createServiceError(
+      'RETAIL_SEARCH_AREA_REQUIRED',
+      'Distance sorting requires an authenticated marketplace search area.',
+      'Sign in and choose a marketplace area before sorting by distance.'
+    );
   }
 
   return getPublicListingFeedFromRpc({ params, categoryId, condition, page, limit });
@@ -356,6 +428,14 @@ async function getNearbyListingsFromRpc({
 
   if (error) {
     if (isMissingRpcError(error)) {
+      if (params.sort === 'distance') {
+        throw createServiceError(
+          'RETAIL_DISTANCE_SORT_UNAVAILABLE',
+          'Distance sorting requires the location-aware sorted listing service.',
+          'Distance sorting is temporarily unavailable. Please try again shortly.'
+        );
+      }
+
       const fallback = await supabase.rpc('get_nearby_listings', {
         page_number: page,
         page_size: limit,
@@ -641,6 +721,16 @@ export async function createListing(input: CreateListingInput): Promise<Listing>
 export async function updateListing(listingId: string, input: UpdateListingInput): Promise<Listing> {
   await ensureCurrentProfile();
   assertShippingPackageInput(input);
+
+  if (
+    input.price !== undefined
+    && input.listing_type !== 'free'
+    && input.listing_type !== 'donation'
+    && positiveSalePriceNumber(input.price) === null
+  ) {
+    throw createServiceError('PRICE_REQUIRED', 'Sale listing price was not positive', 'Add a price greater than $0.');
+  }
+
   const shippingOrigin = await requireDefaultSellerShippingOriginForShipping(input.shipping_available);
   const submittedStatus = (input as { status?: Listing['status'] }).status;
 
@@ -657,7 +747,7 @@ export async function updateListing(listingId: string, input: UpdateListingInput
     categoryId = await resolveCategoryId(input.category_id, input.category);
   }
 
-  const { error } = await supabase.rpc('update_my_listing', {
+  const { error } = await runListingMutationWithExpiredCheckoutRecovery(listingId, () => supabase.rpc('update_my_listing', {
     target_listing_id: listingId,
     requested_category_id: categoryId,
     requested_title: input.title !== undefined ? input.title.trim() : null,
@@ -689,13 +779,15 @@ export async function updateListing(listingId: string, input: UpdateListingInput
     requested_availability_notes: input.availability_notes !== undefined ? input.availability_notes?.trim() || '' : null,
     requested_reason_for_listing: input.reason_for_listing !== undefined ? input.reason_for_listing?.trim() || '' : null,
     requested_safety_confirmed: input.safety_confirmed ?? null,
-  });
+  }));
 
   if (error) {
     throwSupabaseError(error, 'We could not update this listing.');
   }
 
   if (input.images) {
+    await invalidateExpiredCheckoutForListingMutation(listingId);
+
     const { data: currentImageRows, error: currentImagesError } = await supabase
       .from('listing_images')
       .select('*')
@@ -727,9 +819,9 @@ export async function updateListing(listingId: string, input: UpdateListingInput
 }
 
 export async function deleteListing(listingId: string): Promise<void> {
-  const { error } = await supabase.rpc('delete_my_listing', {
+  const { error } = await runListingMutationWithExpiredCheckoutRecovery(listingId, () => supabase.rpc('delete_my_listing', {
     target_listing_id: listingId,
-  });
+  }));
 
   if (error) {
     throwSupabaseError(error, 'We could not delete this listing.');
@@ -737,9 +829,9 @@ export async function deleteListing(listingId: string): Promise<void> {
 }
 
 export async function archiveListing(listingId: string): Promise<void> {
-  const { error } = await supabase.rpc('archive_my_listing', {
+  const { error } = await runListingMutationWithExpiredCheckoutRecovery(listingId, () => supabase.rpc('archive_my_listing', {
     target_listing_id: listingId,
-  });
+  }));
 
   if (error) {
     throwSupabaseError(error, 'We could not archive this listing.');
@@ -747,9 +839,9 @@ export async function archiveListing(listingId: string): Promise<void> {
 }
 
 export async function markListingPending(listingId: string): Promise<Listing> {
-  const { data, error } = await supabase.rpc('mark_my_listing_pending', {
+  const { data, error } = await runListingMutationWithExpiredCheckoutRecovery(listingId, () => supabase.rpc('mark_my_listing_pending', {
     target_listing_id: listingId,
-  });
+  }));
 
   if (error) {
     throwSupabaseError(error, 'We could not mark this listing pending.');
@@ -761,9 +853,9 @@ export async function markListingPending(listingId: string): Promise<Listing> {
 }
 
 export async function activateListing(listingId: string): Promise<Listing> {
-  const { data, error } = await supabase.rpc('activate_my_listing', {
+  const { data, error } = await runListingMutationWithExpiredCheckoutRecovery(listingId, () => supabase.rpc('activate_my_listing', {
     target_listing_id: listingId,
-  });
+  }));
 
   if (error) {
     throwSupabaseError(error, 'We could not return this listing to the marketplace.');
@@ -775,9 +867,9 @@ export async function activateListing(listingId: string): Promise<Listing> {
 }
 
 export async function markListingSold(listingId: string): Promise<Listing> {
-  const { data, error } = await supabase.rpc('mark_my_listing_sold', {
+  const { data, error } = await runListingMutationWithExpiredCheckoutRecovery(listingId, () => supabase.rpc('mark_my_listing_sold', {
     target_listing_id: listingId,
-  });
+  }));
 
   if (error) {
     throwSupabaseError(error, 'We could not mark this listing sold.');
@@ -789,9 +881,9 @@ export async function markListingSold(listingId: string): Promise<Listing> {
 }
 
 export async function markListingDonated(listingId: string): Promise<Listing> {
-  const { data, error } = await supabase.rpc('mark_my_listing_donated', {
+  const { data, error } = await runListingMutationWithExpiredCheckoutRecovery(listingId, () => supabase.rpc('mark_my_listing_donated', {
     target_listing_id: listingId,
-  });
+  }));
 
   if (error) {
     throwSupabaseError(error, 'We could not mark this listing donated.');
@@ -800,6 +892,11 @@ export async function markListingDonated(listingId: string): Promise<Listing> {
   const listing = toListing(data as Record<string, unknown>);
   return listing;
 }
+
+// These aliases make the client semantics explicit while preserving the
+// established service exports used by older call sites and tests.
+export const markListingSoldElsewhere = markListingSold;
+export const markListingDonatedElsewhere = markListingDonated;
 
 export async function getMyListings(): Promise<Listing[]> {
   const { data, error } = await supabase.rpc('get_my_listings');

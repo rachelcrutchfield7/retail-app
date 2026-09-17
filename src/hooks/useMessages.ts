@@ -150,16 +150,15 @@ export function useConversations(params: ConversationSearchParams = {}, autoLoad
   });
 
   useEffect(() => {
-    if (!user) {
+    if (!userId || userId === 'guest') {
       queryClient.removeQueries({ queryKey: queryKeys.conversations('guest') });
       return undefined;
     }
 
-    return subscribeToUserConversations(user.id, () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.conversations(user.id) });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.unreadMessages(user.id) });
+    return subscribeToUserConversations(userId, () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.conversations(userId) });
     });
-  }, [queryClient, user]);
+  }, [queryClient, userId]);
 
   return {
     data: query.data ?? null,
@@ -177,22 +176,32 @@ export function useConversations(params: ConversationSearchParams = {}, autoLoad
 export function useConversation(conversationId: string, markReadOnOpen = true) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const userId = user?.id;
   const query = useQuery<ConversationDetail, Error>({
     queryKey: queryKeys.conversation(conversationId),
     queryFn: () => getConversationById(conversationId),
-    enabled: Boolean(conversationId),
+    enabled: Boolean(conversationId && userId),
+    staleTime: 0,
+    placeholderData: () => {
+      if (!userId) {
+        return undefined;
+      }
+
+      const lists = queryClient.getQueriesData<ConversationSummary[]>({ queryKey: queryKeys.conversations(userId) });
+      return lists.flatMap(([, conversations]) => conversations ?? []).find((item) => item.id === conversationId);
+    },
   });
 
   useEffect(() => {
-    if (!conversationId || !markReadOnOpen || !user) {
+    if (!conversationId || !markReadOnOpen || !userId) {
       return;
     }
 
     void markMessagesRead(conversationId).then(() => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.unreadMessages(user.id) });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.conversations(user.id) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.unreadMessages(userId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.conversations(userId) });
     });
-  }, [conversationId, markReadOnOpen, queryClient, user]);
+  }, [conversationId, markReadOnOpen, queryClient, userId]);
 
   return {
     data: query.data ?? null,
@@ -219,6 +228,7 @@ export function useMessages(conversationId: string) {
     initialPageParam: undefined,
     getNextPageParam: (lastPage) => lastPage.nextCursor,
     enabled: Boolean(conversationId),
+    staleTime: 0,
   });
   const messages = useMemo(
     () => dedupeMessages((query.data?.pages ?? []).flatMap((page) => page.items)),
@@ -233,8 +243,10 @@ export function useMessages(conversationId: string) {
     return subscribeToConversationMessages(conversationId, (event) => {
       if (event.type === 'conversation_updated' || event.type === 'messages_read') {
         void queryClient.invalidateQueries({ queryKey: queryKeys.conversation(conversationId) });
-        void queryClient.invalidateQueries({ queryKey: queryKeys.conversations(user.id) });
-        void queryClient.invalidateQueries({ queryKey: queryKeys.unreadMessages(user.id) });
+        if (event.type === 'messages_read') {
+          void queryClient.invalidateQueries({ queryKey: queryKeys.conversations(user.id) });
+          void queryClient.invalidateQueries({ queryKey: queryKeys.unreadMessages(user.id) });
+        }
         return;
       }
 
@@ -243,6 +255,8 @@ export function useMessages(conversationId: string) {
           queryKeys.messages(conversationId),
           (cache) => removeMessageFromCache(cache, event.messageId)
         );
+        void queryClient.invalidateQueries({ queryKey: queryKeys.conversations(user.id) });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.unreadMessages(user.id) });
       } else if ('messageId' in event && event.messageId) {
         void getMessageById(conversationId, event.messageId)
           .then((message) => {
@@ -270,9 +284,10 @@ export function useMessages(conversationId: string) {
           });
       }
 
-      void queryClient.invalidateQueries({ queryKey: queryKeys.conversation(conversationId) });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.conversations(user.id) });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.unreadMessages(user.id) });
+      if (event.type === 'message_updated') {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.conversations(user.id) });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.unreadMessages(user.id) });
+      }
     });
   }, [conversationId, queryClient, user]);
 
@@ -378,16 +393,15 @@ export function useUnreadMessages(autoLoad = true) {
   });
 
   useEffect(() => {
-    if (!user) {
+    if (!userId || userId === 'guest') {
       queryClient.removeQueries({ queryKey: queryKeys.unreadMessages('guest') });
       return undefined;
     }
 
-    return subscribeToUserConversations(user.id, () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.unreadMessages(user.id) });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.conversations(user.id) });
+    return subscribeToUserConversations(userId, () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.unreadMessages(userId) });
     });
-  }, [queryClient, user]);
+  }, [queryClient, userId]);
 
   return {
     data: query.data ?? null,

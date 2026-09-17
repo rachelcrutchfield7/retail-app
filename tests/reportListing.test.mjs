@@ -38,8 +38,9 @@ test('listing details expose an owner edit action', () => {
   assert.match(sprint3, /Checking listing ownership/);
   assert.match(sprint3, /Edit Listing/);
   assert.match(sprint3, /Listing tools/);
-  assert.match(sprint3, /Mark Sold/);
-  assert.match(sprint3, /Mark Donated/);
+  assert.match(sprint3, /Complete ReTail Sale/);
+  assert.match(sprint3, /Sold Elsewhere/);
+  assert.match(sprint3, /Donated Elsewhere/);
   assert.match(sprint3, /Archive/);
   assert.match(sprint3, /Delete/);
   assert.match(sprint4, /onEditListing=\{openEditListing\}/);

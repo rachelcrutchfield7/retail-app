@@ -311,6 +311,12 @@ export async function getNearbyRescues(params: RescueHubQueryParams = {}): Promi
       if (!isMissingSavedLocationError(error)) {
         throw error;
       }
+
+      throw createServiceError(
+        'RETAIL_SEARCH_AREA_REQUIRED',
+        'Rescue Hub distance sorting requires a saved marketplace search area.',
+        'Choose a marketplace area before browsing nearby rescues.'
+      );
     }
   }
 

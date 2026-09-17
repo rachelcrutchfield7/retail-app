@@ -67,8 +67,11 @@ export function validateCreateListingInput(input: CreateListingInput): CreateLis
     errors.zip_code = 'Use a 5-digit zip code.';
   }
 
-  if (input.listing_type === 'sale' && !String(input.price ?? '').trim()) {
-    errors.price = 'Sale listings require a price.';
+  if (input.listing_type === 'sale') {
+    const normalizedPrice = Number(String(input.price ?? '').replace(/[$,\s]/g, ''));
+    if (!Number.isFinite(normalizedPrice) || normalizedPrice <= 0) {
+      errors.price = 'Sale listings require a price greater than $0.';
+    }
   }
 
   if (!input.porch_pickup_available && !input.meetup_available && !input.shipping_available && !input.pickup_available) {

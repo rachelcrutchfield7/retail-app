@@ -86,7 +86,7 @@ test('listing drafts are user-scoped, durable, and clearable', async () => {
   assert.equal(await loadListingDraft('buyer-b', { storage }), null);
   assert.equal((await loadListingDraft('buyer-a', { storage }))?.form.package_weight_oz, '48');
 
-  await clearListingDraft('buyer-a', { storage });
+  await clearListingDraft('buyer-a', { storage, removeImage: async () => undefined });
   assert.equal(await loadListingDraft('buyer-a', { storage }), null);
 });
 
@@ -102,13 +102,12 @@ test('create listing restores and autosaves a draft without changing edit listin
     sprint3.indexOf('export function CreateListingScreen'),
     sprint3.indexOf('export function ListingDetailScreen')
   );
-  assert.match(createScreen, /loadListingDraft\(userId\)/);
-  assert.match(createScreen, /saveListingDraft\(userId, nextForm\)/);
-  assert.match(createScreen, /await clearListingDraft\(auth\.user\.id\)/);
-  assert.match(createScreen, /draftWriteEpochRef\.current \+= 1/);
-  assert.match(createScreen, /await draftSaveQueueRef\.current\.catch/);
+  assert.match(createScreen, /new ListingDraftSession\(userId/);
+  assert.match(createScreen, /void session\.hydrate\(\)/);
+  assert.match(createScreen, /session\.dispose\(\)/);
+  assert.match(createScreen, /await draftSessionRef\.current\?\.clear\(\)/);
   assert.match(createScreen, /AppState\.addEventListener\('change'/);
-  assert.match(createScreen, /nextState !== 'active'[\s\S]*queueDraftSave\(userId, form\)/);
+  assert.match(createScreen, /nextState !== 'active'[\s\S]*session\.flush\(\)/);
   assert.match(createScreen, /title="Discard Draft"/);
   assert.match(sprint4, /loadListingDraft\(userId\)[\s\S]*name: 'create-listing'/);
 });

@@ -538,6 +538,7 @@ function Sprint4Experience() {
   if (route.name === 'conversation') {
     return (
       <ConversationScreen
+        key={route.conversationId}
         conversationId={route.conversationId}
         onBack={openMessages}
         onOpenListing={openListing}
@@ -1871,7 +1872,9 @@ function SellerPayoutSummaryCard({ transaction }: { transaction: Transaction }) 
           value={salePriceCents !== null ? formatCheckoutCents(salePriceCents) : 'Not itemized'}
         />
         <CheckoutSummaryRow
-          label="ReTail selling fee"
+          label={transaction.seller_fee_waiver_reason === 'verified_rescue'
+            ? 'Verified Rescue seller fee'
+            : 'ReTail selling fee'}
           value={sellingFeeCents !== null
             ? sellingFeeCents > 0
               ? `-${formatCheckoutCents(sellingFeeCents)}`
