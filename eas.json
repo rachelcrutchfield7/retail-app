@@ -49,7 +49,7 @@
       "extends": "production",
       "env": {
         "EXPO_PUBLIC_APP_ENV": "production",
-        "RETAIL_IOS_MARKETING_VERSION": "1.1.2"
+        "RETAIL_IOS_MARKETING_VERSION": "1.1.3"
       }
     },
     "release-candidate": {
