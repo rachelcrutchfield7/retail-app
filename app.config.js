@@ -126,8 +126,10 @@ const appConfig = {
   },
 };
 
-if (process.env.RETAIL_IOS_MARKETING_VERSION === '1.1.2') {
-  appConfig.expo.version = '1.1.2';
+const iosMarketingVersion = process.env.RETAIL_IOS_MARKETING_VERSION?.trim();
+
+if (iosMarketingVersion) {
+  appConfig.expo.version = iosMarketingVersion;
 }
 
 module.exports = appConfig;
