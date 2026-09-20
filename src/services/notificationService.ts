@@ -57,6 +57,7 @@ export async function getNotifications(): Promise<Notification[]> {
     .select('*')
     .eq('user_id', profile.id)
     .is('deleted_at', null)
+    .not('data', 'cs', '{"adminAction":true}')
     .order('created_at', { ascending: false })
     .limit(50);
 
@@ -74,7 +75,8 @@ export async function getUnreadNotificationCount(): Promise<number> {
     .select('id', { count: 'exact', head: true })
     .eq('user_id', profile.id)
     .eq('is_read', false)
-    .is('deleted_at', null);
+    .is('deleted_at', null)
+    .not('data', 'cs', '{"adminAction":true}');
 
   if (error) {
     throwSupabaseError(error, 'We could not load notification counts.');
