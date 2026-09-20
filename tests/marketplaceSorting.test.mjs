@@ -176,7 +176,7 @@ test('backend recent ordering is publication time then creation time, never upda
 });
 
 
-test('Home uses global inventory for recent and price sorts while Nearby and Search remain local', async () => {
+test('Home uses global inventory while Nearby and area-scoped Search remain local', async () => {
   const sprint3App = await readFile(new URL('../src/sprint3/Sprint3App.tsx', import.meta.url), 'utf8');
   const listingService = await readFile(new URL('../src/services/listingService.ts', import.meta.url), 'utf8');
   const serviceTypes = await readFile(new URL('../src/services/types.ts', import.meta.url), 'utf8');
@@ -198,8 +198,14 @@ test('Home uses global inventory for recent and price sorts while Nearby and Sea
 
   const searchScreen = sprint3App.slice(searchStart);
 
-  assert.match(searchScreen, /scope: 'nearby'/);
-  assert.match(searchScreen, /radiusMiles: marketplaceRadiusMiles/);
+  assert.match(
+    searchScreen,
+    /scope: hasMarketplaceSearchArea \? 'nearby' : 'public'/
+  );
+  assert.match(
+    searchScreen,
+    /radiusMiles: hasMarketplaceSearchArea \? marketplaceRadiusMiles : undefined/
+  );
 
   assert.match(
     listingService,

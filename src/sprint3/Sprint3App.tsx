@@ -740,11 +740,23 @@ export function HomeScreen({
       ListEmptyComponent={
         !listings.isLoading && !listings.isError ? (
           <EmptyState
-            title="No listings nearby yet"
-            body="Try another nearby area, expand the distance, or set a saved search alert so ReTail can help you watch for new matches."
+            title={sort === 'nearby' ? 'No listings nearby yet' : 'No matching listings yet'}
+            body={
+              sort === 'nearby'
+                ? 'Try another nearby area, expand the distance, or set a saved search alert so ReTail can help you watch for new matches.'
+                : 'Try another search or category, or set a search alert so ReTail can help you watch for new matches.'
+            }
             icon={Search}
-            actionTitle={hasMarketplaceSearchArea && marketplaceRadiusMiles < 100 ? 'Expand Distance' : 'Create Search Alert'}
-            onAction={hasMarketplaceSearchArea && marketplaceRadiusMiles < 100 ? expandHomeDistance : onOpenSearch}
+            actionTitle={
+              sort === 'nearby' && hasMarketplaceSearchArea && marketplaceRadiusMiles < 100
+                ? 'Expand Distance'
+                : 'Create Search Alert'
+            }
+            onAction={
+              sort === 'nearby' && hasMarketplaceSearchArea && marketplaceRadiusMiles < 100
+                ? expandHomeDistance
+                : onOpenSearch
+            }
           />
         ) : null
       }
@@ -797,13 +809,13 @@ export function SearchScreen({
       search,
       condition,
       listingType,
-      scope: 'nearby',
-      radiusMiles: marketplaceRadiusMiles,
+      scope: hasMarketplaceSearchArea ? 'nearby' : 'public',
+      radiusMiles: hasMarketplaceSearchArea ? marketplaceRadiusMiles : undefined,
       minPrice: parsedMinPrice,
       maxPrice: parsedMaxPrice,
       limit: 50,
     }),
-    [condition, listingType, marketplaceRadiusMiles, parsedMaxPrice, parsedMinPrice, search]
+    [condition, hasMarketplaceSearchArea, listingType, marketplaceRadiusMiles, parsedMaxPrice, parsedMinPrice, search]
   );
   const listings = useListings(params);
   const filteredItems = useMemo(
@@ -1078,7 +1090,11 @@ export function SearchScreen({
         !listings.isLoading && !listings.isError && !isApplyingSavedSearch ? (
           <EmptyState
             title="No results found"
-            body="Broaden your search, choose another nearby area, expand the distance, or save an alert for later."
+            body={
+              hasMarketplaceSearchArea
+                ? 'Broaden your search, choose another nearby area, expand the distance, or save an alert for later.'
+                : 'Broaden your search filters, or sign in and choose a marketplace area to search nearby.'
+            }
             icon={Search}
             actionTitle="Clear Filters"
             onAction={clearSearchFilters}
