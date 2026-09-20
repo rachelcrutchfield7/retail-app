@@ -568,7 +568,30 @@ function isMissingRpcError(error: unknown): boolean {
 }
 
 export async function getListings(params: ListingQueryParams = {}): Promise<PaginatedListings> {
-  return getNearbyListings(params);
+  if (params.scope !== 'public') {
+    return getNearbyListings(params);
+  }
+
+  if (params.sort === 'distance') {
+    throw createServiceError(
+      'RETAIL_PUBLIC_DISTANCE_SORT_UNAVAILABLE',
+      'Distance sorting cannot use the global marketplace feed.',
+      'Choose Nearby before sorting by distance.'
+    );
+  }
+
+  const page = Math.max(params.page ?? 1, 1);
+  const limit = Math.min(Math.max(params.limit ?? 20, 1), 50);
+  const categoryId = params.categoryId ? await resolveCategoryId(params.categoryId) : undefined;
+  const condition = conditionToDb(params.condition);
+
+  return getPublicListingFeedFromRpc({
+    params,
+    categoryId,
+    condition,
+    page,
+    limit,
+  });
 }
 
 export async function getRescueDonationListings(params: ListingQueryParams = {}): Promise<PaginatedListings> {

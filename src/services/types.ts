@@ -133,6 +133,7 @@ export type UpdateProfileInput = Partial<
 >;
 
 export type ListingQueryParams = {
+  scope?: 'public' | 'nearby';
   radiusMiles?: number;
   categoryId?: string;
   search?: string;

@@ -131,7 +131,8 @@ test('every rendered marketplace radius control persists the authoritative serve
   assert.equal((sprint3App.match(/onRadiusChange=\{\(nextRadius\) => void updateMarketplaceRadius\(nextRadius\)\}/g) ?? []).length, 2);
   assert.doesNotMatch(sprint3App, /onRadiusChange=\{setRadiusMiles\}/);
   assert.equal((sprint3App.match(/await searchAreaUpdate\.setSearchArea\(\{ searchAreaId, radiusMiles: nextRadius \}\)/g) ?? []).length, 2);
-  assert.equal((sprint3App.match(/\{hasMarketplaceSearchArea \? \(/g) ?? []).length, 2);
+  assert.equal((sprint3App.match(/\{hasMarketplaceSearchArea \? \(/g) ?? []).length, 1);
+  assert.match(sprint3App, /\{sort === 'nearby' && hasMarketplaceSearchArea \? \(/);
   assert.match(sprint3App, /searchRadiusOptions\.find\(\(option\) => option > marketplaceRadiusMiles\) \?\? 100/);
   assert.match(rescueHub, /onRadiusChange=\{\(nextRadius\)[\s\S]+updateMarketplaceRadius\(nextRadius/);
   assert.match(searchAreaHook, /invalidateQueries\(\{ queryKey: queryKeys\.marketplaceSearchPreference/);
@@ -172,4 +173,56 @@ test('backend recent ordering is publication time then creation time, never upda
   assert.match(nearby, /st_dwithin/);
   assert.match(nearby, /allow_approximate_distance/);
   assert.match(nearby, /safe_sort = 'favorites'/);
+});
+
+
+test('Home uses global inventory for recent and price sorts while Nearby and Search remain local', async () => {
+  const sprint3App = await readFile(new URL('../src/sprint3/Sprint3App.tsx', import.meta.url), 'utf8');
+  const listingService = await readFile(new URL('../src/services/listingService.ts', import.meta.url), 'utf8');
+  const serviceTypes = await readFile(new URL('../src/services/types.ts', import.meta.url), 'utf8');
+
+  assert.match(serviceTypes, /scope\?: 'public' \| 'nearby';/);
+
+  assert.match(
+    sprint3App,
+    /scope: sort === 'nearby' \? 'nearby' : 'public'/
+  );
+
+  assert.match(
+    sprint3App,
+    /radiusMiles: sort === 'nearby' \? marketplaceRadiusMiles : undefined/
+  );
+
+  const searchStart = sprint3App.indexOf('export function SearchScreen(');
+  assert.notEqual(searchStart, -1);
+
+  const searchScreen = sprint3App.slice(searchStart);
+
+  assert.match(searchScreen, /scope: 'nearby'/);
+  assert.match(searchScreen, /radiusMiles: marketplaceRadiusMiles/);
+
+  assert.match(
+    listingService,
+    /if \(params\.scope !== 'public'\) \{\s*return getNearbyListings\(params\);\s*\}/
+  );
+
+  assert.match(
+    listingService,
+    /getPublicListingFeedFromRpc\(\{[\s\S]*params,[\s\S]*categoryId,[\s\S]*condition,[\s\S]*page,[\s\S]*limit,[\s\S]*\}\)/
+  );
+
+  assert.match(
+    listingService,
+    /RETAIL_PUBLIC_DISTANCE_SORT_UNAVAILABLE/
+  );
+
+  assert.match(
+    sprint3App,
+    /sort === 'nearby' \? locationLabel \|\| 'Choose a location' : 'Across ReTail'/
+  );
+
+  assert.match(
+    sprint3App,
+    /available across ReTail/
+  );
 });

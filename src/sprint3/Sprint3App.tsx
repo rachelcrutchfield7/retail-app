@@ -507,7 +507,8 @@ export function HomeScreen({
   const params = useMemo<ListingQueryParams>(
     () => ({
       search,
-      radiusMiles: marketplaceRadiusMiles,
+      scope: sort === 'nearby' ? 'nearby' : 'public',
+      radiusMiles: sort === 'nearby' ? marketplaceRadiusMiles : undefined,
       sort: homeListingSortQueryValue(sort),
       limit: 50,
     }),
@@ -628,7 +629,9 @@ export function HomeScreen({
                 <Text style={styles.eyebrow}>Secondhand Pet Marketplace</Text>
                 <View style={styles.locationRow}>
                   <MapPin size={16} color={colors.textSecondary} />
-                  <Text style={styles.metaText}>{locationLabel || 'Choose a location'}</Text>
+                  <Text style={styles.metaText}>
+                    {sort === 'nearby' ? locationLabel || 'Choose a location' : 'Across ReTail'}
+                  </Text>
                 </View>
               </View>
               <View style={styles.homeActionCluster}>
@@ -679,7 +682,7 @@ export function HomeScreen({
             </Card>
           ) : null}
 
-          {hasMarketplaceSearchArea ? (
+          {sort === 'nearby' && hasMarketplaceSearchArea ? (
             <DistanceFilter
               city={marketplaceCity}
               state={marketplaceState}
@@ -718,7 +721,11 @@ export function HomeScreen({
 
           <SectionTitle
             title="Marketplace listings"
-            hint={hasMarketplaceSearchArea ? `${sortedItems.length} within ${marketplaceRadiusMiles} mi` : `${sortedItems.length} available`}
+            hint={
+              sort === 'nearby' && hasMarketplaceSearchArea
+                ? `${sortedItems.length} within ${marketplaceRadiusMiles} mi`
+                : `${sortedItems.length} available across ReTail`
+            }
           />
           {listings.isLoading ? <LoadingCards /> : null}
           {listings.isError ? <ErrorState message={handleAppError(listings.error).userMessage} onRetry={listings.refetch} /> : null}
@@ -789,6 +796,7 @@ export function SearchScreen({
       search,
       condition,
       listingType,
+      scope: 'nearby',
       radiusMiles: marketplaceRadiusMiles,
       minPrice: parsedMinPrice,
       maxPrice: parsedMaxPrice,
