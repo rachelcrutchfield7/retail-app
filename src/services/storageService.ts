@@ -12,7 +12,7 @@ import {
   throwSupabaseError,
   toListingImage,
 } from './supabaseData';
-import type { ListingImage } from './types';
+import type { IsoPostImage, ListingImage } from './types';
 
 const LISTING_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
 
@@ -275,5 +275,134 @@ export async function deleteListingImage(imageId: string): Promise<void> {
 
   if (error) {
     throwSupabaseError(error, 'We could not delete that photo.');
+  }
+}
+
+
+function toIsoPostImage(row: Record<string, unknown>): IsoPostImage {
+  return {
+    id: String(row.id),
+    isoPostId: String(row.iso_post_id),
+    imageUrl: String(row.image_url),
+    thumbnailUrl: row.thumbnail_url ? String(row.thumbnail_url) : undefined,
+    sortOrder: Number(row.sort_order ?? 0),
+    altText: row.alt_text ? String(row.alt_text) : undefined,
+    createdAt: String(row.created_at),
+  };
+}
+
+export async function uploadIsoPostImage(
+  fileUri: string,
+  isoPostId: string
+): Promise<IsoPostImage> {
+  const profile = await ensureCurrentProfile();
+
+  if (!fileUri.trim()) {
+    throw createServiceError(
+      'IMAGE_REQUIRED',
+      'ISO image upload was called without a file URI',
+      'Choose a photo to upload.'
+    );
+  }
+
+  const { data: existingRows, error: existingError } = await supabase
+    .from('iso_post_images')
+    .select('id,sort_order')
+    .eq('iso_post_id', isoPostId)
+    .order('sort_order', { ascending: true });
+
+  if (existingError) {
+    throwSupabaseError(existingError, 'We could not prepare that photo upload.');
+  }
+
+  const usedSortOrders = new Set(
+    (existingRows ?? []).map((row) => Number(row.sort_order))
+  );
+
+  let sortOrder = -1;
+
+  for (let candidate = 0; candidate < 5; candidate += 1) {
+    if (!usedSortOrders.has(candidate)) {
+      sortOrder = candidate;
+      break;
+    }
+  }
+
+  if (sortOrder < 0) {
+    throw createServiceError(
+      'IMAGE_LIMIT_REACHED',
+      'ISO post already has five images',
+      'You can add up to 5 photos.'
+    );
+  }
+
+  const imageUrl = await uploadPublicFile(
+    'iso-posts',
+    fileUri,
+    `${profile.id}/${isoPostId}`
+  );
+
+  const { data, error } = await supabase
+    .from('iso_post_images')
+    .insert({
+      iso_post_id: isoPostId,
+      image_url: imageUrl,
+      thumbnail_url: imageUrl,
+      sort_order: sortOrder,
+      alt_text: 'ISO request photo',
+    })
+    .select('*')
+    .single();
+
+  if (error) {
+    const uploadedPath = publicObjectPath('iso-posts', imageUrl);
+
+    if (uploadedPath) {
+      try {
+        await supabase.storage.from('iso-posts').remove([uploadedPath]);
+      } catch {
+        // Preserve the original database error.
+      }
+    }
+
+    throwSupabaseError(error, 'We could not save that ISO photo.');
+  }
+
+  return toIsoPostImage(data as Record<string, unknown>);
+}
+
+export async function deleteIsoPostImage(imageId: string): Promise<void> {
+  await ensureCurrentProfile();
+
+  const { data, error: loadError } = await supabase
+    .from('iso_post_images')
+    .select('*')
+    .eq('id', imageId)
+    .single();
+
+  if (loadError) {
+    throwSupabaseError(loadError, 'This photo is no longer available.');
+  }
+
+  const image = toIsoPostImage(data as Record<string, unknown>);
+  const path = publicObjectPath('iso-posts', image.imageUrl);
+
+  if (path) {
+    const { error: storageError } = await supabase.storage
+      .from('iso-posts')
+      .remove([path]);
+
+    if (storageError) {
+      throwSupabaseError(storageError, 'We could not remove that photo.');
+    }
+  }
+
+  const { error } = await supabase
+    .from('iso_post_images')
+    .delete()
+    .eq('id', imageId);
+
+  if (error) {
+    throwSupabaseError(error, 'We could not remove that photo.');
   }
 }

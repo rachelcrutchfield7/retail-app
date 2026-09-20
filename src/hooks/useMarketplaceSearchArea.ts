@@ -63,6 +63,7 @@ export function useSetMarketplaceSearchArea() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.marketplaceSearchPreference(userId) });
       await queryClient.invalidateQueries({ queryKey: queryKeys.listings });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.isoFeeds });
       await queryClient.invalidateQueries({ queryKey: ['rescue-hub'] });
     },
   });

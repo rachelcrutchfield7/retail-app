@@ -774,3 +774,95 @@ export type RescueHubQueryParams = {
 };
 
 export type RescueHubResult = RescueOrganization[];
+
+
+// -----------------------------------------------------------------------------
+// ISO / In Search Of marketplace
+// -----------------------------------------------------------------------------
+
+export type IsoPostStatus = 'active' | 'fulfilled' | 'expired' | 'closed';
+
+export type IsoDesiredCondition = 'any' | 'new' | 'used';
+
+export type IsoUrgency = 'flexible' | 'soon' | 'urgent';
+
+export type IsoRadiusMiles = 10 | 25 | 50 | 100;
+
+export type IsoPost = {
+  id: string;
+  posterId: string;
+  categoryId: string;
+  subcategoryId?: string;
+  title: string;
+  description: string;
+  desiredCondition: IsoDesiredCondition;
+  budgetMax?: number;
+  quantity: number;
+  urgency: IsoUrgency;
+  searchAreaId: string;
+  searchAreaLabel?: string;
+  radiusMiles: IsoRadiusMiles;
+  status: IsoPostStatus;
+  expiresAt: string;
+  createdAt: string;
+  updatedAt?: string;
+  deletedAt?: string;
+  imageUrl?: string;
+  responseCount: number;
+  distanceMiles?: number;
+};
+
+export type IsoPostImage = {
+  id: string;
+  isoPostId: string;
+  imageUrl: string;
+  thumbnailUrl?: string;
+  sortOrder: number;
+  altText?: string;
+  createdAt: string;
+};
+
+export type IsoResponse = {
+  id: string;
+  isoPostId: string;
+  responderId: string;
+  listingId: string;
+  createdAt: string;
+};
+
+export type IsoFeedParams = {
+  searchAreaId?: string;
+  radiusMiles?: IsoRadiusMiles;
+  categoryId?: string;
+  limit?: number;
+  offset?: number;
+};
+
+export type CreateIsoPostInput = {
+  title: string;
+  description: string;
+  categoryId: string;
+  subcategoryId?: string;
+  desiredCondition?: IsoDesiredCondition;
+  budgetMax?: number | null;
+  quantity?: number;
+  urgency?: IsoUrgency;
+  searchAreaId: string;
+  radiusMiles?: IsoRadiusMiles;
+  expiresInDays?: number;
+};
+
+export type UpdateIsoPostInput = {
+  postId: string;
+  title: string;
+  description: string;
+  categoryId: string;
+  subcategoryId?: string;
+  desiredCondition?: IsoDesiredCondition;
+  budgetMax?: number | null;
+  quantity?: number;
+  urgency?: IsoUrgency;
+  searchAreaId: string;
+  radiusMiles?: IsoRadiusMiles;
+  expiresAt?: string | null;
+};
