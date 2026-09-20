@@ -1,3 +1,4 @@
+import { INTEGRATED_SHIPPING_ENABLED } from '../_shared/featureFlags.ts';
 import { handleCors, jsonResponse } from '../_shared/cors.ts';
 import { requireAuthenticatedRequest } from '../_shared/supabase.ts';
 import { getShippingProvider } from '../_shared/shipping.ts';
@@ -119,6 +120,13 @@ function logShippingRateStage(stage: string, details: Record<string, unknown> = 
 Deno.serve(async (request) => {
   const cors = handleCors(request);
   if (cors) return cors;
+
+  if (!INTEGRATED_SHIPPING_ENABLED) {
+    return jsonResponse(
+      { error: 'Integrated shipping is temporarily unavailable. Choose local pickup or meetup.' },
+      503
+    );
+  }
 
   let currentStage = 'start';
   try {

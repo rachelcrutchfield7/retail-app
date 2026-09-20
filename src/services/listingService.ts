@@ -1,3 +1,4 @@
+import { featureFlags } from '../config/featureFlags';
 import type { Listing } from '../types';
 import { trackEvent } from '../lib/analytics';
 import { supabase } from '../lib/supabase';
@@ -256,6 +257,8 @@ function assertCreateListingInput(input: CreateListingInput): void {
     throw createServiceError('ZIP_CODE_INVALID', `Listing zip code was invalid: ${input.zip_code}`, 'Use a 5-digit zip code.');
   }
 
+  assertIntegratedShippingAvailable(input.shipping_available);
+
   if (!input.porch_pickup_available && !input.meetup_available && !input.shipping_available && !input.pickup_available) {
     throw createServiceError(
       'GETTING_OPTION_REQUIRED',
@@ -311,7 +314,19 @@ function assertListingExists(row: unknown, listingId: string): asserts row is Re
   }
 }
 
+function assertIntegratedShippingAvailable(shippingAvailable: boolean | undefined): void {
+  if (!featureFlags.integratedShipping && shippingAvailable) {
+    throw createServiceError(
+      'SHIPPING_DISABLED',
+      'Integrated shipping was requested while shipping is paused',
+      'Integrated shipping is temporarily unavailable. Choose porch pickup or meet up for now.'
+    );
+  }
+}
+
 function assertShippingPackageInput(input: UpdateListingInput): void {
+  assertIntegratedShippingAvailable(input.shipping_available);
+
   if (!input.shipping_available) {
     return;
   }

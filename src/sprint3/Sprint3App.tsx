@@ -1,3 +1,4 @@
+import { featureFlags } from '../config/featureFlags';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { LayoutChangeEvent } from 'react-native';
@@ -4272,7 +4273,7 @@ function EditListingForm({
     pickup_available: item.pickup,
     porch_pickup_available: item.porchPickup,
     meetup_available: item.meetup,
-    shipping_available: item.shipping,
+    shipping_available: featureFlags.integratedShipping && item.shipping,
     shipping_payer: item.shippingPayer ?? 'buyer',
     shipping_cost_estimate: item.shippingCostEstimate ?? '',
     handling_time: item.handlingTime ?? '',
@@ -4580,13 +4581,19 @@ function ListingForm({
         value={Boolean(form.meetup_available)}
         onValueChange={(value) => onChange('meetup_available', value)}
       />
-      <ToggleSwitch
-        label="Shipping"
-        helperText="Seller and buyer arrange shipping details in messages."
-        value={Boolean(form.shipping_available)}
-        onValueChange={(value) => onChange('shipping_available', value)}
-      />
-      {form.shipping_available ? (
+      {featureFlags.integratedShipping ? (
+        <ToggleSwitch
+          label="Shipping"
+          helperText="Seller and buyer arrange shipping details in messages."
+          value={Boolean(form.shipping_available)}
+          onValueChange={(value) => onChange('shipping_available', value)}
+        />
+      ) : (
+        <Text style={styles.metaText}>
+          Integrated shipping is temporarily unavailable. Choose porch pickup or meet up for now.
+        </Text>
+      )}
+      {featureFlags.integratedShipping && form.shipping_available ? (
         <>
           <Text style={styles.filterLabel}>Shipping details</Text>
           <View style={styles.wrapRow}>

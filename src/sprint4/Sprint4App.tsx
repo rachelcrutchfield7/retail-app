@@ -1,3 +1,4 @@
+import { featureFlags } from '../config/featureFlags';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -2075,9 +2076,11 @@ export function PaymentOptionsScreen({
   // offerDisplayAmount is presentation only. The payment backend derives
   // an accepted-offer price from acceptedOfferId.
   const checkoutAmount = offerDisplayAmount ?? item.price;
-  const canShip = item.shipping;
+  const canShip = featureFlags.integratedShipping && item.shipping;
   const canPickup = item.pickup || item.porchPickup || item.meetup;
-  const selectedFulfillmentMethod = canShip && !canPickup ? 'shipping' : fulfillmentMethod;
+  const selectedFulfillmentMethod = featureFlags.integratedShipping
+    ? (canShip && !canPickup ? 'shipping' : fulfillmentMethod)
+    : 'pickup';
   const selectedShippingRate = selectedShippingQuoteId
     ? shippingRates.find((rate) => rate.quoteId === selectedShippingQuoteId) ?? null
     : null;

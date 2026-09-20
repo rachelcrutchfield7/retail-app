@@ -69,7 +69,10 @@ test('checkout requires selected server quote and does not accept client shippin
   assert.match(stripeCreate, /\.from\('shipping_rate_quotes'\)/);
   assert.match(stripeCreate, /quote\.amount_cents/);
   assert.doesNotMatch(stripeCreate, /shippingAmountCents\?:|shippingCollectedCents\?:/);
-  assert.match(paymentService, /shippingRateQuoteId: context\.shippingRateQuoteId/);
+  assert.match(
+    paymentService,
+    /shippingRateQuoteId:\s*featureFlags\.integratedShipping\s*\?\s*context\.shippingRateQuoteId\s*:\s*undefined/
+  );
 });
 
 test('paid shipping label creation is idempotent and invoked after successful payment', () => {

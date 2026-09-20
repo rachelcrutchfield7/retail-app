@@ -1,3 +1,4 @@
+import { featureFlags } from '../config/featureFlags';
 import { config } from '../constants/config';
 import { trackEvent } from '../lib/analytics';
 import { supabase } from '../lib/supabase';
@@ -129,9 +130,11 @@ export async function startProtectedCheckout(context: PaymentOptionContext): Pro
     body: {
       listingId: context.listing.id,
       acceptedOfferId: context.acceptedOfferId ?? null,
-      fulfillmentMethod: context.fulfillmentMethod ?? (context.listing.shipping && !context.listing.pickup ? 'shipping' : 'pickup'),
-      shippingAddress: context.shippingAddress,
-      shippingRateQuoteId: context.shippingRateQuoteId,
+      fulfillmentMethod: featureFlags.integratedShipping
+        ? context.fulfillmentMethod ?? (context.listing.shipping && !context.listing.pickup ? 'shipping' : 'pickup')
+        : 'pickup',
+      shippingAddress: featureFlags.integratedShipping ? context.shippingAddress : undefined,
+      shippingRateQuoteId: featureFlags.integratedShipping ? context.shippingRateQuoteId : undefined,
     },
   });
 

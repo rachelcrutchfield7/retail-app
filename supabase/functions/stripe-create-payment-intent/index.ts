@@ -1,3 +1,4 @@
+import { INTEGRATED_SHIPPING_ENABLED } from '../_shared/featureFlags.ts';
 import type Stripe from 'npm:stripe@^22';
 import { handleCors, jsonResponse } from '../_shared/cors.ts';
 import { requireAuthenticatedRequest } from '../_shared/supabase.ts';
@@ -428,6 +429,18 @@ function resolveFulfillmentMethod(
   reservation: CheckoutReservation,
 ): 'pickup' | 'shipping' {
   const pickupAvailable = reservation.pickup_available || reservation.porch_pickup_available || reservation.meetup_available;
+
+  if (
+    !INTEGRATED_SHIPPING_ENABLED
+    && (
+      requestedMethod === 'shipping'
+      || (!pickupAvailable && reservation.shipping_available)
+    )
+  ) {
+    throw new CheckoutControlledError(
+      'Integrated shipping is temporarily unavailable. Choose local pickup or meetup.'
+    );
+  }
 
   if (requestedMethod === 'shipping') {
     if (!reservation.shipping_available) {
