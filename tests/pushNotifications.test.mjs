@@ -121,11 +121,11 @@ test('backend sends Expo pushes from send-notification without exposing arbitrar
   const edgeFunction = read('supabase/functions/send-notification/index.ts');
 
   assert.match(edgeFunction, /expoPushEndpoint = 'https:\/\/exp\.host\/--\/api\/v2\/push\/send'/);
-  assert.match(edgeFunction, /deliverPushNotifications\(supabaseAdmin, notification\)/);
+  assert.match(edgeFunction, /deliverPushNotifications\([\s\S]*supabaseAdmin,[\s\S]*deliveryNotification[\s\S]*\)/);
   assert.match(edgeFunction, /\.from\('device_tokens'\)/);
   assert.match(edgeFunction, /\.from\('notification_push_deliveries'\)/);
   assert.match(edgeFunction, /reservePushDelivery/);
-  assert.match(edgeFunction, /pushEnabled\(preferences, notification\)/);
+  assert.match(edgeFunction, /pushEnabled\(preferences, deliveryNotification\)/);
   assert.match(edgeFunction, /permanentExpoTokenErrors = new Set\(\['DeviceNotRegistered'\]\)/);
   assert.match(edgeFunction, /removeInvalidDeviceToken/);
   assert.doesNotMatch(edgeFunction, /Deno\.env\.get\('EXPO/);

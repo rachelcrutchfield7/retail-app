@@ -56,7 +56,7 @@ test('high priority admin alerts bypass marketplace push preference', () => {
 
   assert.match(
     edge,
-    /pushEnabled\(preferences, notification\)/
+    /pushEnabled\(preferences, deliveryNotification\)/
   );
 });
 
@@ -68,7 +68,7 @@ test('admin operational alerts do not send Resend email', () => {
 
   assert.match(
     edge,
-    /emailEnabled\(preferences, notification\)/
+    /emailEnabled\(preferences, deliveryNotification\)/
   );
 });
 

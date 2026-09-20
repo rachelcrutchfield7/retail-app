@@ -97,8 +97,25 @@ Deno.serve(async (request) => {
       return jsonResponse({ error: 'You cannot send this notification email.' }, 403);
     }
 
-    const push = await deliverPushNotifications(supabaseAdmin, notification);
-    const recipient = await loadRecipient(supabaseAdmin, notification.user_id);
+    const verifiedAdminAction = await verifyAdminActionRecipient(
+      supabaseAdmin,
+      notification
+    );
+
+    const deliveryNotification =
+      isAdminActionNotification(notification) && !verifiedAdminAction
+        ? sanitizeUnverifiedAdminAction(notification)
+        : notification;
+
+    const push = await deliverPushNotifications(
+      supabaseAdmin,
+      deliveryNotification
+    );
+
+    const recipient = await loadRecipient(
+      supabaseAdmin,
+      deliveryNotification.user_id
+    );
 
     if (!recipient.email) {
       await markEmailSkipped(supabaseAdmin, notification, 'Recipient account has no email address.');
@@ -111,9 +128,9 @@ Deno.serve(async (request) => {
       return jsonResponse({ ok: true, skipped: true, reason: 'already_queued_or_sent', push });
     }
 
-    const preferences = await loadPreferences(supabaseAdmin, notification.user_id);
+    const preferences = await loadPreferences(supabaseAdmin, deliveryNotification.user_id);
 
-    if (!emailEnabled(preferences, notification)) {
+    if (!emailEnabled(preferences, deliveryNotification)) {
       await updateDelivery(supabaseAdmin, notification.id, {
         status: 'skipped',
         error: 'Recipient disabled this email type.',
@@ -138,7 +155,7 @@ Deno.serve(async (request) => {
       });
     }
 
-    const message = buildEmail(notification, recipient.displayName);
+    const message = buildEmail(deliveryNotification, recipient.displayName);
     const response = await fetch(resendEndpoint, {
       method: 'POST',
       headers: {
@@ -307,6 +324,58 @@ function isHighPriorityAdminAction(notification: NotificationRow): boolean {
   );
 }
 
+async function verifyAdminActionRecipient(
+  supabaseAdmin: ReturnType<typeof createSupabaseAdmin>,
+  notification: NotificationRow
+): Promise<boolean> {
+  if (!isAdminActionNotification(notification)) {
+    return false;
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from('profiles')
+    .select('is_admin,is_banned,deleted_at')
+    .eq('id', notification.user_id)
+    .maybeSingle();
+
+  if (error || !data) {
+    return false;
+  }
+
+  return (
+    data.is_admin === true
+    && data.is_banned !== true
+    && data.deleted_at === null
+  );
+}
+
+function sanitizeUnverifiedAdminAction(
+  notification: NotificationRow
+): NotificationRow {
+  if (!isAdminActionNotification(notification)) {
+    return notification;
+  }
+
+  const {
+    adminAction: _adminAction,
+    adminPriority: _adminPriority,
+    adminTab: _adminTab,
+    rescueId: _rescueId,
+    route: rawRoute,
+    ...remainingData
+  } = notification.data;
+
+  const data =
+    rawRoute === 'admin'
+      ? remainingData
+      : { ...remainingData, route: rawRoute };
+
+  return {
+    ...notification,
+    data,
+  };
+}
+
 function emailEnabled(
   preferences: NotificationPreferencesRow | null,
   notification: NotificationRow
@@ -347,21 +416,34 @@ async function deliverPushNotifications(
   try {
     await reconcileRecentPushReceipts(supabaseAdmin);
 
-    const preferences = await loadPreferences(supabaseAdmin, notification.user_id);
+    const verifiedAdminAction = await verifyAdminActionRecipient(
+      supabaseAdmin,
+      notification
+    );
 
-    if (!pushEnabled(preferences, notification)) {
+    const deliveryNotification =
+      isAdminActionNotification(notification) && !verifiedAdminAction
+        ? sanitizeUnverifiedAdminAction(notification)
+        : notification;
+
+    const preferences = await loadPreferences(
+      supabaseAdmin,
+      deliveryNotification.user_id
+    );
+
+    if (!pushEnabled(preferences, deliveryNotification)) {
       summary.skipped += 1;
       return summary;
     }
 
-    const tokens = await loadDeviceTokens(supabaseAdmin, notification.user_id);
+    const tokens = await loadDeviceTokens(supabaseAdmin, deliveryNotification.user_id);
 
     if (tokens.length === 0) {
       summary.skipped += 1;
       return summary;
     }
 
-    const pushPayload = await buildPush(notification, supabaseAdmin);
+    const pushPayload = await buildPush(deliveryNotification, supabaseAdmin);
     const reserved: Array<{
       deliveryId: string;
       token: DeviceTokenRow;
@@ -375,7 +457,7 @@ async function deliverPushNotifications(
       }
 
       const tokenHash = await hashToken(token.token);
-      const deliveryId = await reservePushDelivery(supabaseAdmin, notification, token, tokenHash);
+      const deliveryId = await reservePushDelivery(supabaseAdmin, deliveryNotification, token, tokenHash);
 
       if (!deliveryId) {
         summary.skipped += 1;
