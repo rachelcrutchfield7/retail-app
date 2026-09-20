@@ -131,6 +131,7 @@ returns table (
   listing_id uuid,
   title text,
   category_id uuid,
+  category_name text,
   price numeric,
   listing_type text,
   condition text,
@@ -184,6 +185,7 @@ begin
       l.id as listing_id,
       l.title::text as title,
       l.category_id,
+      c.name::text as category_name,
       l.price,
       l.listing_type::text as listing_type,
       l.condition::text as condition,
@@ -209,6 +211,8 @@ begin
     from public.listings l
     left join public.profiles p
       on p.id = l.seller_id
+    left join public.categories c
+      on c.id = l.category_id
     left join public.marketplace_search_areas msa
       on msa.id = l.search_area_id
     where l.deleted_at is null
@@ -256,6 +260,7 @@ begin
     fr.listing_id,
     fr.title,
     fr.category_id,
+    fr.category_name,
     fr.price,
     fr.listing_type,
     fr.condition,

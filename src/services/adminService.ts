@@ -41,6 +41,73 @@ export type AdminDashboardCounts = {
   openSupportCases: number;
 };
 
+export type AdminMarketplaceCoverageArea = {
+  searchAreaId?: string;
+  areaLabel: string;
+  city?: string;
+  state?: string;
+  isActive: boolean;
+  activeListings: number;
+  pendingListings: number;
+  totalListings: number;
+  uniqueSellers: number;
+  rescueListings: number;
+  rescueSellers: number;
+  newestActivityAt?: string;
+};
+
+export type AdminMarketplaceListingSort =
+  | 'newest'
+  | 'oldest'
+  | 'updated'
+  | 'price_low'
+  | 'price_high'
+  | 'title';
+
+export type AdminMarketplaceListingFilters = {
+  areaId?: string;
+  state?: string;
+  status?: string;
+  categoryId?: string;
+  rescueOnly?: boolean;
+  search?: string;
+  createdAfter?: string;
+  createdBefore?: string;
+  sort?: AdminMarketplaceListingSort;
+  page?: number;
+  pageSize?: number;
+};
+
+export type AdminMarketplaceListing = {
+  listingId: string;
+  title: string;
+  categoryId: string;
+  categoryName?: string;
+  price?: number;
+  listingType: string;
+  condition: string;
+  status: string;
+  sellerId: string;
+  sellerDisplayName: string;
+  sellerUsername: string;
+  isRescue: boolean;
+  searchAreaId?: string;
+  areaLabel: string;
+  city?: string;
+  state?: string;
+  publishedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+  totalCount: number;
+};
+
+export type AdminMarketplaceListingPage = {
+  items: AdminMarketplaceListing[];
+  total: number;
+  page: number;
+  pageSize: number;
+};
+
 const reportReasonLabels: Record<string, ReportReason> = {
   spam: 'Spam',
   fraud: 'Fraud',
@@ -52,6 +119,54 @@ const reportReasonLabels: Record<string, ReportReason> = {
   duplicate_listing: 'Duplicate Listing',
   other: 'Other',
 };
+
+export async function getAdminMarketplaceCoverage(): Promise<AdminMarketplaceCoverageArea[]> {
+  await requireAdminProfile();
+
+  const { data, error } = await supabase.rpc('get_admin_marketplace_coverage');
+
+  if (error) {
+    throwSupabaseError(error, 'We could not load marketplace coverage.');
+  }
+
+  return ((data ?? []) as Row[]).map(toAdminMarketplaceCoverageArea);
+}
+
+export async function getAdminMarketplaceListings(
+  filters: AdminMarketplaceListingFilters = {}
+): Promise<AdminMarketplaceListingPage> {
+  await requireAdminProfile();
+
+  const page = Math.max(filters.page ?? 1, 1);
+  const pageSize = Math.min(Math.max(filters.pageSize ?? 50, 1), 100);
+
+  const { data, error } = await supabase.rpc('get_admin_marketplace_listings', {
+    requested_area_id: filters.areaId ?? null,
+    requested_state: filters.state?.trim() || null,
+    requested_status: filters.status?.trim() || null,
+    requested_category_id: filters.categoryId ?? null,
+    requested_rescue_only: filters.rescueOnly ?? null,
+    requested_search: filters.search?.trim() || null,
+    requested_created_after: filters.createdAfter ?? null,
+    requested_created_before: filters.createdBefore ?? null,
+    requested_sort: filters.sort ?? 'newest',
+    page_number: page,
+    page_size: pageSize,
+  });
+
+  if (error) {
+    throwSupabaseError(error, 'We could not load marketplace listings.');
+  }
+
+  const items = ((data ?? []) as Row[]).map(toAdminMarketplaceListing);
+
+  return {
+    items,
+    total: items[0]?.totalCount ?? 0,
+    page,
+    pageSize,
+  };
+}
 
 export async function getRescueApprovalQueue(): Promise<RescueProfile[]> {
   await requireAdminProfile();
@@ -301,6 +416,51 @@ export async function getAdminDashboardCounts(): Promise<AdminDashboardCounts> {
     activeListings,
     openReports,
     openSupportCases,
+  };
+}
+
+function toAdminMarketplaceCoverageArea(row: Row): AdminMarketplaceCoverageArea {
+  return {
+    searchAreaId: optionalString(row.search_area_id),
+    areaLabel: stringValue(row.area_label, 'Unassigned'),
+    city: optionalString(row.city),
+    state: optionalString(row.state),
+    isActive: row.is_active === true,
+    activeListings: numberValue(row.active_listings, 0),
+    pendingListings: numberValue(row.pending_listings, 0),
+    totalListings: numberValue(row.total_listings, 0),
+    uniqueSellers: numberValue(row.unique_sellers, 0),
+    rescueListings: numberValue(row.rescue_listings, 0),
+    rescueSellers: numberValue(row.rescue_sellers, 0),
+    newestActivityAt: optionalString(row.newest_activity_at),
+  };
+}
+
+function toAdminMarketplaceListing(row: Row): AdminMarketplaceListing {
+  const rawPrice = row.price;
+  const parsedPrice = rawPrice === null || rawPrice === undefined ? undefined : Number(rawPrice);
+
+  return {
+    listingId: stringValue(row.listing_id),
+    title: stringValue(row.title, 'Untitled listing'),
+    categoryId: stringValue(row.category_id),
+    categoryName: optionalString(row.category_name),
+    price: parsedPrice !== undefined && Number.isFinite(parsedPrice) ? parsedPrice : undefined,
+    listingType: stringValue(row.listing_type),
+    condition: stringValue(row.condition),
+    status: stringValue(row.status),
+    sellerId: stringValue(row.seller_id),
+    sellerDisplayName: stringValue(row.seller_display_name, 'ReTail seller'),
+    sellerUsername: stringValue(row.seller_username, 'unknown'),
+    isRescue: row.is_rescue === true,
+    searchAreaId: optionalString(row.search_area_id),
+    areaLabel: stringValue(row.area_label, 'Unassigned'),
+    city: optionalString(row.city),
+    state: optionalString(row.state),
+    publishedAt: optionalString(row.published_at),
+    createdAt: stringValue(row.created_at),
+    updatedAt: stringValue(row.updated_at),
+    totalCount: numberValue(row.total_count, 0),
   };
 }
 

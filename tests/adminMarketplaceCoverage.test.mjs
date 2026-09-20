@@ -81,6 +81,7 @@ test('admin marketplace listing inventory never exposes private location fields'
   assert.doesNotMatch(returnBlock, /address_line/i);
   assert.doesNotMatch(returnBlock, /ship_from/i);
 
+  assert.match(returnBlock, /category_name text/);
   assert.match(returnBlock, /area_label text/);
   assert.match(returnBlock, /city text/);
   assert.match(returnBlock, /state text/);

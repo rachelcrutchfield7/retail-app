@@ -60,6 +60,7 @@ import { colors, radius, sizes, spacing, typography } from '../constants/theme';
 import type { ThemeColors } from '../constants/theme';
 import { useAdminListingReports } from '../hooks/useAdminListingReports';
 import { useAdminDashboardCounts } from '../hooks/useAdminDashboardCounts';
+import { useAdminMarketplaceCoverage } from '../hooks/useAdminMarketplaceCoverage';
 import { useAdminFoundingSellers } from '../hooks/useAdminFoundingSellers';
 import { useAdminRescueApprovals } from '../hooks/useAdminRescueApprovals';
 import { useAuth } from '../hooks/useAuth';
@@ -128,7 +129,15 @@ import {
   refreshStripeConnectStatus,
 } from '../services/stripeConnectService';
 import type { StripeConnectStatus } from '../services/stripeConnectService';
-import type { AdminFoundingSellerSearchResult, AdminFoundingSellerStatus, FoundingSellerAdminStatus } from '../services/adminService';
+import type {
+  AdminFoundingSellerSearchResult,
+  AdminFoundingSellerStatus,
+  AdminMarketplaceCoverageArea,
+  AdminMarketplaceListing,
+  AdminMarketplaceListingFilters,
+  AdminMarketplaceListingSort,
+  FoundingSellerAdminStatus,
+} from '../services/adminService';
 import {
   acceptOffer,
   assertAcceptedOfferCheckoutAvailable,
@@ -3694,7 +3703,68 @@ export function AdminReviewScreen({ onBack, onOpenListing }: { onBack: () => voi
   const [reportMessages, setReportMessages] = useState<Record<string, string>>({});
   const [supportNotes, setSupportNotes] = useState<Record<string, string>>({});
   const [supportMessages, setSupportMessages] = useState<Record<string, string>>({});
+
+  const [marketplaceSearch, setMarketplaceSearch] = useState('');
+  const [marketplaceAreaId, setMarketplaceAreaId] = useState<string | undefined>();
+  const [marketplaceState, setMarketplaceState] = useState<string | undefined>();
+  const [marketplaceStatus, setMarketplaceStatus] = useState<string | undefined>();
+  const [marketplaceCategoryId, setMarketplaceCategoryId] = useState<string | undefined>();
+  const [marketplaceRescueOnly, setMarketplaceRescueOnly] = useState(false);
+  const [marketplaceSort, setMarketplaceSort] = useState<AdminMarketplaceListingSort>('newest');
+  const [marketplaceCreatedAfter, setMarketplaceCreatedAfter] = useState('');
+  const [marketplaceCreatedBefore, setMarketplaceCreatedBefore] = useState('');
+  const [marketplacePage, setMarketplacePage] = useState(1);
   const foundingSellers = useAdminFoundingSellers(isAdmin && adminTab === 'foundingSellers', selectedFoundingSellerId);
+
+  const marketplaceFilters = useMemo<AdminMarketplaceListingFilters>(() => ({
+    areaId: marketplaceAreaId,
+    state: marketplaceState,
+    status: marketplaceStatus,
+    categoryId: marketplaceCategoryId,
+    rescueOnly: marketplaceRescueOnly ? true : undefined,
+    search: marketplaceSearch.trim() || undefined,
+    createdAfter: /^\d{4}-\d{2}-\d{2}$/.test(marketplaceCreatedAfter)
+      ? `${marketplaceCreatedAfter}T00:00:00.000Z`
+      : undefined,
+    createdBefore: /^\d{4}-\d{2}-\d{2}$/.test(marketplaceCreatedBefore)
+      ? `${marketplaceCreatedBefore}T23:59:59.999Z`
+      : undefined,
+    sort: marketplaceSort,
+    page: marketplacePage,
+    pageSize: 50,
+  }), [
+    marketplaceAreaId,
+    marketplaceCategoryId,
+    marketplaceCreatedAfter,
+    marketplaceCreatedBefore,
+    marketplacePage,
+    marketplaceRescueOnly,
+    marketplaceSearch,
+    marketplaceSort,
+    marketplaceState,
+    marketplaceStatus,
+  ]);
+
+  const marketplaceCoverage = useAdminMarketplaceCoverage(
+    isAdmin && adminTab === 'listings',
+    marketplaceFilters
+  );
+
+  const marketplaceStates = useMemo(
+    () => Array.from(
+      new Set(
+        marketplaceCoverage.coverage
+          .map((area) => area.state)
+          .filter((state): state is string => Boolean(state))
+      )
+    ).sort(),
+    [marketplaceCoverage.coverage]
+  );
+
+  const marketplacePageCount = Math.max(
+    Math.ceil(marketplaceCoverage.listingTotal / marketplaceCoverage.pageSize),
+    1
+  );
   const pendingCount = dashboardCounts.data?.rescuesPending
     ?? approvals.data?.filter((rescue) => rescue.verification_status === 'pending').length
     ?? 0;
@@ -4104,13 +4174,400 @@ export function AdminReviewScreen({ onBack, onOpenListing }: { onBack: () => voi
       ) : null}
 
       {adminTab === 'listings' ? (
-        <SectionCard title="Listings">
-          <View style={styles.stack}>
-            <Text style={styles.bodyStrong}>Active listings: {dashboardCounts.data?.activeListings ?? '...'}</Text>
-            <Text style={styles.body}>Listing moderation currently happens through the Reports tab so admins can act from the original community report context.</Text>
-            <Button title="Review Listing Reports" icon={Flag} variant="outline" onPress={() => setAdminTab('reports')} fullWidth />
-          </View>
-        </SectionCard>
+        <View style={styles.stack}>
+          <SectionCard title="Marketplace Coverage">
+            <View style={styles.stack}>
+              <Text style={styles.body}>
+                Marketplace-wide inventory by ReTail area. These totals are independent of your personal marketplace radius.
+              </Text>
+
+              {marketplaceCoverage.coverageLoading ? <LoadingSpinner /> : null}
+
+              {marketplaceCoverage.coverageError ? (
+                <NoticeCard
+                  title="Marketplace coverage unavailable"
+                  body={marketplaceCoverage.coverageError}
+                />
+              ) : null}
+
+              {!marketplaceCoverage.coverageLoading && !marketplaceCoverage.coverageError ? (
+                <>
+                  <View style={styles.metricRow}>
+                    <Metric
+                      label="Areas"
+                      value={String(
+                        marketplaceCoverage.coverage.filter((area) => area.searchAreaId).length
+                      )}
+                    />
+                    <Metric
+                      label="With Inventory"
+                      value={String(
+                        marketplaceCoverage.coverage.filter(
+                          (area) => area.searchAreaId && area.totalListings > 0
+                        ).length
+                      )}
+                    />
+                    <Metric
+                      label="Active"
+                      value={String(
+                        marketplaceCoverage.coverage.reduce(
+                          (total, area) => total + area.activeListings,
+                          0
+                        )
+                      )}
+                    />
+                    <Metric
+                      label="Pending"
+                      value={String(
+                        marketplaceCoverage.coverage.reduce(
+                          (total, area) => total + area.pendingListings,
+                          0
+                        )
+                      )}
+                    />
+                  </View>
+
+                  {marketplaceCoverage.coverage.length === 0 ? (
+                    <Text style={styles.body}>No marketplace areas are configured yet.</Text>
+                  ) : (
+                    <View style={styles.adminOverviewGrid}>
+                      {marketplaceCoverage.coverage.map((area) => (
+                        <AdminMarketplaceCoverageCard
+                          key={area.searchAreaId ?? 'unassigned'}
+                          area={area}
+                          onSelect={
+                            area.searchAreaId
+                              ? () => {
+                                  setMarketplaceAreaId(area.searchAreaId);
+                                  setMarketplacePage(1);
+                                }
+                              : undefined
+                          }
+                        />
+                      ))}
+                    </View>
+                  )}
+                </>
+              ) : null}
+
+              <Button
+                title="Refresh Marketplace Coverage"
+                icon={MapPin}
+                variant="outline"
+                onPress={() => void marketplaceCoverage.refreshAll()}
+                fullWidth
+              />
+            </View>
+          </SectionCard>
+
+          <SectionCard title="Marketplace Listings">
+            <View style={styles.stack}>
+              <Text style={styles.body}>
+                Search and filter listings across the entire marketplace. Only coarse marketplace location information is shown here.
+              </Text>
+
+              <SearchBar
+                value={marketplaceSearch}
+                onChangeText={(value) => {
+                  setMarketplaceSearch(value);
+                  setMarketplacePage(1);
+                }}
+                onClear={() => {
+                  setMarketplaceSearch('');
+                  setMarketplacePage(1);
+                }}
+                placeholder="Search listing, seller, city, state, or ID..."
+              />
+
+              <Text style={styles.bodyStrong}>Marketplace Area</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.adminTabBar}
+              >
+                <FilterChip
+                  label="All Areas"
+                  selected={!marketplaceAreaId}
+                  onPress={() => {
+                    setMarketplaceAreaId(undefined);
+                    setMarketplacePage(1);
+                  }}
+                />
+
+                {marketplaceCoverage.coverage
+                  .filter((area) => Boolean(area.searchAreaId))
+                  .map((area) => (
+                    <FilterChip
+                      key={area.searchAreaId}
+                      label={area.areaLabel}
+                      selected={marketplaceAreaId === area.searchAreaId}
+                      onPress={() => {
+                        setMarketplaceAreaId(area.searchAreaId);
+                        setMarketplacePage(1);
+                      }}
+                    />
+                  ))}
+              </ScrollView>
+
+              <Text style={styles.bodyStrong}>State</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.adminTabBar}
+              >
+                <FilterChip
+                  label="All States"
+                  selected={!marketplaceState}
+                  onPress={() => {
+                    setMarketplaceState(undefined);
+                    setMarketplacePage(1);
+                  }}
+                />
+
+                {marketplaceStates.map((state) => (
+                  <FilterChip
+                    key={state}
+                    label={state}
+                    selected={marketplaceState === state}
+                    onPress={() => {
+                      setMarketplaceState(state);
+                      setMarketplacePage(1);
+                    }}
+                  />
+                ))}
+              </ScrollView>
+
+              <Text style={styles.bodyStrong}>Status</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.adminTabBar}
+              >
+                {[
+                  ['all', 'All'],
+                  ['active', 'Active'],
+                  ['pending', 'Pending'],
+                  ['draft', 'Draft'],
+                  ['sold', 'Sold'],
+                  ['archived', 'Archived'],
+                ].map(([value, label]) => (
+                  <FilterChip
+                    key={value}
+                    label={label}
+                    selected={
+                      value === 'all'
+                        ? !marketplaceStatus
+                        : marketplaceStatus === value
+                    }
+                    onPress={() => {
+                      setMarketplaceStatus(value === 'all' ? undefined : value);
+                      setMarketplacePage(1);
+                    }}
+                  />
+                ))}
+              </ScrollView>
+
+              <Text style={styles.bodyStrong}>Category</Text>
+
+              {marketplaceCoverage.categoriesLoading ? <LoadingSpinner /> : null}
+
+              {marketplaceCoverage.categoriesError ? (
+                <NoticeCard
+                  title="Categories unavailable"
+                  body={marketplaceCoverage.categoriesError}
+                />
+              ) : null}
+
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.adminTabBar}
+              >
+                <FilterChip
+                  label="All Categories"
+                  selected={!marketplaceCategoryId}
+                  onPress={() => {
+                    setMarketplaceCategoryId(undefined);
+                    setMarketplacePage(1);
+                  }}
+                />
+
+                {marketplaceCoverage.categories.map((category) => (
+                  <FilterChip
+                    key={category.id}
+                    label={category.name}
+                    selected={marketplaceCategoryId === category.id}
+                    onPress={() => {
+                      setMarketplaceCategoryId(category.id);
+                      setMarketplacePage(1);
+                    }}
+                  />
+                ))}
+              </ScrollView>
+
+              <Text style={styles.bodyStrong}>Seller Type</Text>
+              <View style={styles.wrapRow}>
+                <FilterChip
+                  label="All Sellers"
+                  selected={!marketplaceRescueOnly}
+                  onPress={() => {
+                    setMarketplaceRescueOnly(false);
+                    setMarketplacePage(1);
+                  }}
+                />
+                <FilterChip
+                  label="Verified Rescues"
+                  selected={marketplaceRescueOnly}
+                  onPress={() => {
+                    setMarketplaceRescueOnly(true);
+                    setMarketplacePage(1);
+                  }}
+                />
+              </View>
+
+              <Text style={styles.bodyStrong}>Sort</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.adminTabBar}
+              >
+                {[
+                  ['newest', 'Newest'],
+                  ['updated', 'Recently Updated'],
+                  ['oldest', 'Oldest'],
+                  ['price_low', 'Price Low'],
+                  ['price_high', 'Price High'],
+                  ['title', 'Title'],
+                ].map(([value, label]) => (
+                  <FilterChip
+                    key={value}
+                    label={label}
+                    selected={marketplaceSort === value}
+                    onPress={() => {
+                      setMarketplaceSort(value as AdminMarketplaceListingSort);
+                      setMarketplacePage(1);
+                    }}
+                  />
+                ))}
+              </ScrollView>
+
+              <View style={styles.stack}>
+                <TextInput
+                  label="Created after"
+                  value={marketplaceCreatedAfter}
+                  onChangeText={(value) => {
+                    setMarketplaceCreatedAfter(value);
+                    setMarketplacePage(1);
+                  }}
+                  placeholder="YYYY-MM-DD"
+                  autoCapitalize="none"
+                />
+
+                <TextInput
+                  label="Created before"
+                  value={marketplaceCreatedBefore}
+                  onChangeText={(value) => {
+                    setMarketplaceCreatedBefore(value);
+                    setMarketplacePage(1);
+                  }}
+                  placeholder="YYYY-MM-DD"
+                  autoCapitalize="none"
+                />
+              </View>
+
+              <View style={styles.wrapRow}>
+                <Button
+                  title="Reset Filters"
+                  icon={X}
+                  variant="outline"
+                  onPress={() => {
+                    setMarketplaceSearch('');
+                    setMarketplaceAreaId(undefined);
+                    setMarketplaceState(undefined);
+                    setMarketplaceStatus(undefined);
+                    setMarketplaceCategoryId(undefined);
+                    setMarketplaceRescueOnly(false);
+                    setMarketplaceSort('newest');
+                    setMarketplaceCreatedAfter('');
+                    setMarketplaceCreatedBefore('');
+                    setMarketplacePage(1);
+                  }}
+                />
+
+                <Button
+                  title="Review Listing Reports"
+                  icon={Flag}
+                  variant="outline"
+                  onPress={() => setAdminTab('reports')}
+                />
+              </View>
+
+              <Text style={styles.bodyStrong}>
+                {marketplaceCoverage.listingTotal} listing
+                {marketplaceCoverage.listingTotal === 1 ? '' : 's'} found
+              </Text>
+            </View>
+          </SectionCard>
+
+          {marketplaceCoverage.listingsLoading ? <LoadingSpinner /> : null}
+
+          {marketplaceCoverage.listingsError ? (
+            <ErrorState
+              message={marketplaceCoverage.listingsError}
+              onRetry={marketplaceCoverage.refreshListings}
+            />
+          ) : null}
+
+          {!marketplaceCoverage.listingsLoading &&
+          !marketplaceCoverage.listingsError &&
+          marketplaceCoverage.listings.length === 0 ? (
+            <EmptyState
+              title="No marketplace listings found"
+              body="Try clearing or changing the marketplace coverage filters."
+              icon={Search}
+              actionTitle="Refresh Listings"
+              onAction={() => void marketplaceCoverage.refreshListings()}
+            />
+          ) : null}
+
+          {marketplaceCoverage.listings.map((listing) => (
+            <AdminMarketplaceListingCard
+              key={listing.listingId}
+              listing={listing}
+              onOpen={() => onOpenListing(listing.listingId)}
+            />
+          ))}
+
+          {marketplaceCoverage.listingTotal > marketplaceCoverage.pageSize ? (
+            <SectionCard title="Pages">
+              <View style={styles.stack}>
+                <Text style={styles.bodyStrong}>
+                  Page {marketplacePage} of {marketplacePageCount}
+                </Text>
+
+                <View style={styles.wrapRow}>
+                  <Button
+                    title="Previous"
+                    variant="outline"
+                    disabled={marketplacePage <= 1}
+                    onPress={() => setMarketplacePage((current) => Math.max(current - 1, 1))}
+                  />
+
+                  <Button
+                    title="Next"
+                    variant="outline"
+                    disabled={marketplacePage >= marketplacePageCount}
+                    onPress={() =>
+                      setMarketplacePage((current) =>
+                        Math.min(current + 1, marketplacePageCount)
+                      )
+                    }
+                  />
+                </View>
+              </View>
+            </SectionCard>
+          ) : null}
+        </View>
       ) : null}
 
       {adminTab === 'reports' ? (
@@ -4276,6 +4733,129 @@ function AdminOverviewCard({
       <Text style={styles.bodyStrong}>{title}</Text>
       <Text style={styles.metaText}>{body}</Text>
     </Pressable>
+  );
+}
+
+function AdminMarketplaceCoverageCard({
+  area,
+  onSelect,
+}: {
+  area: AdminMarketplaceCoverageArea;
+  onSelect?: () => void;
+}) {
+  const location = [area.city, area.state].filter(Boolean).join(', ');
+
+  return (
+    <Pressable
+      accessibilityRole={onSelect ? 'button' : undefined}
+      disabled={!onSelect}
+      onPress={onSelect}
+      style={styles.adminOverviewCard}
+    >
+      <View style={styles.stack}>
+        <View style={styles.wrapRow}>
+          <Text style={styles.bodyStrong}>{area.areaLabel}</Text>
+          <Badge
+            label={area.isActive ? 'Active Area' : 'Inactive Area'}
+            tone={area.isActive ? 'success' : 'info'}
+          />
+        </View>
+
+        {location ? <Text style={styles.metaText}>{location}</Text> : null}
+
+        <View style={styles.metricRow}>
+          <Metric label="Active" value={String(area.activeListings)} />
+          <Metric label="Pending" value={String(area.pendingListings)} />
+          <Metric label="Total" value={String(area.totalListings)} />
+        </View>
+
+        <Text style={styles.metaText}>
+          {area.uniqueSellers} seller{area.uniqueSellers === 1 ? '' : 's'}
+          {' • '}
+          {area.rescueListings} rescue listing{area.rescueListings === 1 ? '' : 's'}
+        </Text>
+
+        {area.newestActivityAt ? (
+          <Text style={styles.metaText}>
+            Latest activity: {formatAdminDate(area.newestActivityAt)}
+          </Text>
+        ) : (
+          <Text style={styles.metaText}>No listing activity yet</Text>
+        )}
+
+        {onSelect ? (
+          <Text style={styles.metaText}>Open listings for this area</Text>
+        ) : null}
+      </View>
+    </Pressable>
+  );
+}
+
+function AdminMarketplaceListingCard({
+  listing,
+  onOpen,
+}: {
+  listing: AdminMarketplaceListing;
+  onOpen: () => void;
+}) {
+  const location = [
+    listing.areaLabel,
+    [listing.city, listing.state].filter(Boolean).join(', '),
+  ]
+    .filter(Boolean)
+    .join(' • ');
+
+  const price =
+    listing.listingType === 'sale' && listing.price !== undefined
+      ? `$${listing.price.toFixed(2)}`
+      : listing.listingType === 'free'
+        ? 'Free'
+        : listing.listingType === 'donation'
+          ? 'Donation'
+          : listing.listingType;
+
+  return (
+    <Card>
+      <View style={styles.stack}>
+        <View style={styles.wrapRow}>
+          <Text style={styles.cardTitle}>{listing.title}</Text>
+          <Badge label={listing.status} tone={listing.status === 'active' ? 'success' : 'info'} />
+          {listing.isRescue ? <Badge label="Verified Rescue" tone="success" /> : null}
+        </View>
+
+        <Text style={styles.bodyStrong}>{price}</Text>
+
+        <Text style={styles.body}>
+          {listing.categoryName ?? 'Unknown category'} • {listing.condition}
+        </Text>
+
+        <Text style={styles.body}>
+          Seller: {listing.sellerDisplayName} (@{listing.sellerUsername})
+        </Text>
+
+        <Text style={styles.metaText}>{location}</Text>
+
+        <Text style={styles.metaText}>
+          Listing ID: {listing.listingId}
+        </Text>
+
+        <Text style={styles.metaText}>
+          Created: {formatAdminDate(listing.createdAt)}
+        </Text>
+
+        <Text style={styles.metaText}>
+          Updated: {formatAdminDate(listing.updatedAt)}
+        </Text>
+
+        <Button
+          title="Open Listing"
+          icon={Search}
+          variant="outline"
+          onPress={onOpen}
+          fullWidth
+        />
+      </View>
+    </Card>
   );
 }
 
