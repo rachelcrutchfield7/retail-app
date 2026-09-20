@@ -125,7 +125,7 @@ test('backend sends Expo pushes from send-notification without exposing arbitrar
   assert.match(edgeFunction, /\.from\('device_tokens'\)/);
   assert.match(edgeFunction, /\.from\('notification_push_deliveries'\)/);
   assert.match(edgeFunction, /reservePushDelivery/);
-  assert.match(edgeFunction, /pushEnabled\(preferences, notification\.type\)/);
+  assert.match(edgeFunction, /pushEnabled\(preferences, notification\)/);
   assert.match(edgeFunction, /permanentExpoTokenErrors = new Set\(\['DeviceNotRegistered'\]\)/);
   assert.match(edgeFunction, /removeInvalidDeviceToken/);
   assert.doesNotMatch(edgeFunction, /Deno\.env\.get\('EXPO/);

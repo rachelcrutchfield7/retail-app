@@ -14,7 +14,7 @@ export type PushNavigationTarget =
   | { name: 'conversation'; conversationId: string }
   | { name: 'listing'; listingId: string }
   | { name: 'support-case'; transactionId: string; requesterRole: 'buyer' | 'seller'; conversationId?: string }
-  | { name: 'admin' }
+  | { name: 'admin'; adminTab?: 'rescues' | 'reports' | 'support' | 'notifications' }
   | { name: 'notifications' };
 
 export type NativePushRegistrationResult =
@@ -307,7 +307,15 @@ export function pushNavigationTargetFromData(data: Record<string, unknown> | und
     : undefined;
 
   if (data?.route === 'admin') {
-    return { name: 'admin' };
+    const adminTab =
+      data.adminTab === 'rescues'
+      || data.adminTab === 'reports'
+      || data.adminTab === 'support'
+      || data.adminTab === 'notifications'
+        ? data.adminTab
+        : undefined;
+
+    return { name: 'admin', adminTab };
   }
 
   if (conversationId) {

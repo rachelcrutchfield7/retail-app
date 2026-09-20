@@ -113,7 +113,7 @@ Deno.serve(async (request) => {
 
     const preferences = await loadPreferences(supabaseAdmin, notification.user_id);
 
-    if (!emailEnabled(preferences, notification.type)) {
+    if (!emailEnabled(preferences, notification)) {
       await updateDelivery(supabaseAdmin, notification.id, {
         status: 'skipped',
         error: 'Recipient disabled this email type.',
@@ -293,18 +293,48 @@ async function loadPreferences(
   return data as NotificationPreferencesRow | null;
 }
 
-function emailEnabled(preferences: NotificationPreferencesRow | null, type: NotificationType): boolean {
-  if (type === 'message') return preferences?.email_messages !== false;
-  if (type === 'favorite') return preferences?.email_favorites === true;
-  if (type === 'review') return preferences?.email_reviews !== false;
-  if (type === 'system') return preferences?.email_system !== false;
+function isAdminActionNotification(notification: NotificationRow): boolean {
+  return (
+    notification.type === 'system'
+    && notification.data.adminAction === true
+  );
+}
+
+function isHighPriorityAdminAction(notification: NotificationRow): boolean {
+  return (
+    isAdminActionNotification(notification)
+    && notification.data.adminPriority === 'high'
+  );
+}
+
+function emailEnabled(
+  preferences: NotificationPreferencesRow | null,
+  notification: NotificationRow
+): boolean {
+  // Operational admin alerts stay in-app / push only.
+  // Do not turn report or support activity into Resend email traffic.
+  if (isAdminActionNotification(notification)) return false;
+
+  if (notification.type === 'message') return preferences?.email_messages !== false;
+  if (notification.type === 'favorite') return preferences?.email_favorites === true;
+  if (notification.type === 'review') return preferences?.email_reviews !== false;
+  if (notification.type === 'system') return preferences?.email_system !== false;
   return preferences?.email_marketplace_updates !== false;
 }
 
-function pushEnabled(preferences: NotificationPreferencesRow | null, type: NotificationType): boolean {
-  if (type === 'message') return preferences?.push_messages === true;
-  if (type === 'favorite') return preferences?.push_favorites === true;
-  if (type === 'review') return preferences?.push_reviews === true;
+function pushEnabled(
+  preferences: NotificationPreferencesRow | null,
+  notification: NotificationRow
+): boolean {
+  // Admin operational alerts use their own priority rule and never fall
+  // through to the ordinary Marketplace Updates preference.
+  if (isAdminActionNotification(notification)) {
+    return isHighPriorityAdminAction(notification);
+  }
+
+  if (notification.type === 'message') return preferences?.push_messages === true;
+  if (notification.type === 'favorite') return preferences?.push_favorites === true;
+  if (notification.type === 'review') return preferences?.push_reviews === true;
   return preferences?.push_marketplace_updates === true;
 }
 
@@ -319,7 +349,7 @@ async function deliverPushNotifications(
 
     const preferences = await loadPreferences(supabaseAdmin, notification.user_id);
 
-    if (!pushEnabled(preferences, notification.type)) {
+    if (!pushEnabled(preferences, notification)) {
       summary.skipped += 1;
       return summary;
     }
@@ -687,6 +717,30 @@ async function buildPush(
     };
   }
 
+  if (isAdminActionNotification(notification)) {
+    if (data.adminTab === 'reports') {
+      return {
+        title: 'ReTail Admin Alert',
+        body: 'A new safety report needs review in ReTail.',
+        data,
+      };
+    }
+
+    if (data.adminTab === 'support') {
+      return {
+        title: 'ReTail Admin Alert',
+        body: 'A new support case needs review in ReTail.',
+        data,
+      };
+    }
+
+    return {
+      title: 'ReTail Admin Alert',
+      body: 'A new admin item needs review in ReTail.',
+      data,
+    };
+  }
+
   if (notification.type === 'system' && data.supportCaseId) {
     return {
       title: 'ReTail Support',
@@ -719,12 +773,27 @@ async function safePushData(
     notificationType: notification.type,
   };
 
-  for (const key of ['conversationId', 'listingId', 'transactionId', 'supportCaseId', 'reportId', 'messageId']) {
+  for (const key of [
+    'conversationId',
+    'listingId',
+    'transactionId',
+    'supportCaseId',
+    'reportId',
+    'messageId',
+    'rescueId',
+    'route',
+    'adminTab',
+    'adminPriority',
+  ]) {
     const value = notification.data[key];
 
     if (typeof value === 'string') {
       data[key] = value;
     }
+  }
+
+  if (notification.data.adminAction === true) {
+    data.adminAction = 'true';
   }
 
   if (data.supportCaseId && (!data.transactionId || !data.requesterRole)) {

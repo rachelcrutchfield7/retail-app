@@ -61,6 +61,7 @@ import { colors, radius, sizes, spacing, typography } from '../constants/theme';
 import type { ThemeColors } from '../constants/theme';
 import { useAdminListingReports } from '../hooks/useAdminListingReports';
 import { useAdminDashboardCounts } from '../hooks/useAdminDashboardCounts';
+import { useAdminNotifications } from '../hooks/useAdminNotifications';
 import { useAdminMarketplaceCoverage } from '../hooks/useAdminMarketplaceCoverage';
 import { useAdminFoundingSellers } from '../hooks/useAdminFoundingSellers';
 import { useAdminRescueApprovals } from '../hooks/useAdminRescueApprovals';
@@ -211,7 +212,7 @@ type SprintRoute =
   | { name: 'preferences' }
   | { name: 'safety-center' }
   | { name: 'faq' }
-  | { name: 'admin' }
+  | { name: 'admin'; initialTab?: AdminDashboardTab }
   | { name: 'report'; targetType: 'listing' | 'user' | 'message'; targetId: string; title: string }
   | { name: 'support-case'; transactionId: string; requesterRole: SupportCaseRequesterRole; conversationId?: string }
   | { name: 'review'; listingId: string; revieweeId: string; transactionId?: string };
@@ -225,7 +226,7 @@ const tabs: Array<{ key: SprintTab; label: string; icon: typeof Home }> = [
 ];
 
 type AdminReportTab = 'active' | 'archived';
-type AdminDashboardTab = 'overview' | 'users' | 'rescues' | 'foundingSellers' | 'listings' | 'reports' | 'support';
+type AdminDashboardTab = 'overview' | 'users' | 'rescues' | 'foundingSellers' | 'listings' | 'reports' | 'support' | 'notifications';
 type AdminRescueStatusFilter = 'all' | RescueVerificationStatus;
 
 async function openAppLink(url: string): Promise<void> {
@@ -334,7 +335,10 @@ function Sprint4Experience() {
     }
 
     if (target.name === 'admin') {
-      setRoute({ name: 'admin' });
+      setRoute({
+        name: 'admin',
+        initialTab: target.adminTab,
+      });
       return;
     }
 
@@ -651,7 +655,13 @@ function Sprint4Experience() {
   }
 
   if (route.name === 'admin') {
-    return <AdminReviewScreen onBack={() => openTab('profile')} onOpenListing={openListing} />;
+    return (
+      <AdminReviewScreen
+        onBack={() => openTab('profile')}
+        onOpenListing={openListing}
+        initialTab={route.initialTab}
+      />
+    );
   }
 
   if (route.name === 'report') {
@@ -3686,12 +3696,29 @@ function FAQScreen({ onBack }: { onBack: () => void }) {
   );
 }
 
-export function AdminReviewScreen({ onBack, onOpenListing }: { onBack: () => void; onOpenListing: (listingId: string) => void }) {
+export function AdminReviewScreen({
+  onBack,
+  onOpenListing,
+  initialTab = 'overview',
+}: {
+  onBack: () => void;
+  onOpenListing: (listingId: string) => void;
+  initialTab?: AdminDashboardTab;
+}) {
   const auth = useAuth();
   const isAdmin = Boolean(auth.profile?.is_admin);
-  const [adminTab, setAdminTab] = useState<AdminDashboardTab>('overview');
+  const [adminTab, setAdminTab] = useState<AdminDashboardTab>(initialTab);
   const [reportTab, setReportTab] = useState<AdminReportTab>('active');
+
+  useEffect(() => {
+    setAdminTab(initialTab);
+
+    if (initialTab === 'reports' || initialTab === 'support') {
+      setReportTab('active');
+    }
+  }, [initialTab]);
   const dashboardCounts = useAdminDashboardCounts(isAdmin);
+  const adminNotifications = useAdminNotifications(isAdmin);
   const approvals = useAdminRescueApprovals(isAdmin && adminTab === 'rescues');
   const listingReports = useAdminListingReports(isAdmin && adminTab === 'reports', reportTab);
   const supportCases = useAdminSupportCases(isAdmin && adminTab === 'support', reportTab);
@@ -3791,6 +3818,7 @@ export function AdminReviewScreen({ onBack, onOpenListing }: { onBack: () => voi
     { key: 'listings', label: 'Listings', count: dashboardCounts.data?.activeListings },
     { key: 'reports', label: 'Reports', count: dashboardCounts.data?.openReports },
     { key: 'support', label: 'Support', count: dashboardCounts.data?.openSupportCases },
+    { key: 'notifications', label: 'Notifications', count: adminNotifications.unreadCount },
   ];
 
   const noteForReport = (report: AdminListingReport) => reportNotes[report.id] ?? report.admin_notes ?? '';
@@ -3934,6 +3962,60 @@ export function AdminReviewScreen({ onBack, onOpenListing }: { onBack: () => voi
     ]);
   };
 
+  const openAdminNotification = async (notification: Notification) => {
+    try {
+      if (!notification.is_read) {
+        await adminNotifications.markRead(notification.id);
+      }
+
+      const targetTab = notification.data?.adminTab;
+
+      if (targetTab === 'rescues') {
+        setRescueStatusFilter('pending');
+        setAdminTab('rescues');
+        return;
+      }
+
+      if (targetTab === 'reports') {
+        setReportTab('active');
+        setAdminTab('reports');
+        return;
+      }
+
+      if (targetTab === 'support') {
+        setReportTab('active');
+        setAdminTab('support');
+        return;
+      }
+
+      setNotice({
+        title: 'Admin notification opened',
+        body: 'This alert does not have an admin destination.',
+      });
+    } catch (error) {
+      setNotice({
+        title: 'Notification could not open',
+        body: handleAppError(error).userMessage,
+      });
+    }
+  };
+
+  const markAllAdminNotificationsRead = async () => {
+    try {
+      await adminNotifications.markAllRead();
+
+      setNotice({
+        title: 'Admin notifications updated',
+        body: 'All admin alerts are marked as read.',
+      });
+    } catch (error) {
+      setNotice({
+        title: 'Notifications could not be updated',
+        body: handleAppError(error).userMessage,
+      });
+    }
+  };
+
   const updateSupportCase = async (supportCase: TransactionSupportCase, status: SupportCaseStatus) => {
     try {
       await supportUpdater.updateCase({
@@ -3968,10 +4050,102 @@ export function AdminReviewScreen({ onBack, onOpenListing }: { onBack: () => voi
       <View style={styles.headerBlock}>
         <Text style={styles.title}>Admin</Text>
         <Text style={styles.body}>Review sellers, listings, reports, support cases, and launch benefits from one organized workspace.</Text>
+        <Button
+          title={
+            adminNotifications.unreadCount > 0
+              ? `Admin Alerts (${adminNotifications.unreadCount})`
+              : 'Admin Alerts'
+          }
+          variant="outline"
+          onPress={() => setAdminTab('notifications')}
+          fullWidth
+        />
       </View>
 
       <AdminDashboardTabs tabs={adminTabs} selectedTab={adminTab} onSelect={setAdminTab} />
       {notice ? <NoticeCard title={notice.title} body={notice.body} /> : null}
+
+      {adminTab === 'notifications' ? (
+        <SectionCard title="Admin Notifications">
+          <View style={styles.stack}>
+            <Text style={styles.body}>
+              Reports, rescue verification requests, and support cases that need admin attention appear here.
+            </Text>
+
+            <Text style={styles.bodyStrong}>
+              {adminNotifications.unreadCount} unread
+            </Text>
+
+            {adminNotifications.unreadCount > 0 ? (
+              <Button
+                title="Mark All Admin Alerts Read"
+                variant="outline"
+                onPress={() => void markAllAdminNotificationsRead()}
+                fullWidth
+              />
+            ) : null}
+
+            {adminNotifications.isLoading ? <LoadingSpinner /> : null}
+
+            {adminNotifications.error ? (
+              <NoticeCard
+                title="Admin notifications unavailable"
+                body={handleAppError(adminNotifications.error).userMessage}
+              />
+            ) : null}
+
+            {!adminNotifications.isLoading
+              && !adminNotifications.error
+              && (adminNotifications.data ?? []).length === 0 ? (
+                <Text style={styles.body}>
+                  No admin alerts right now.
+                </Text>
+              ) : null}
+
+            {(adminNotifications.data ?? []).map((notification) => {
+              const targetTab = notification.data?.adminTab;
+
+              const targetLabel =
+                targetTab === 'rescues'
+                  ? 'Open Rescue Review'
+                  : targetTab === 'reports'
+                    ? 'Open Reports'
+                    : targetTab === 'support'
+                      ? 'Open Support'
+                      : 'Mark Read';
+
+              return (
+                <Card key={notification.id}>
+                  <View style={styles.stack}>
+                    <Text style={styles.cardTitle}>
+                      {notification.title}
+                    </Text>
+
+                    {!notification.is_read ? (
+                      <Text style={styles.bodyStrong}>Unread</Text>
+                    ) : null}
+
+                    <Text style={styles.body}>
+                      {notification.body}
+                    </Text>
+
+                    <Text style={styles.metaText}>
+                      {new Date(notification.created_at).toLocaleString()}
+                    </Text>
+
+                    <Button
+                      title={targetLabel}
+                      variant="outline"
+                      onPress={() => void openAdminNotification(notification)}
+                      fullWidth
+                    />
+                  </View>
+                </Card>
+              );
+            })}
+          </View>
+        </SectionCard>
+      ) : null}
 
       {adminTab === 'overview' ? (
         <SectionCard title="Overview">
