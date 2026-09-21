@@ -380,8 +380,6 @@ function emailEnabled(
   preferences: NotificationPreferencesRow | null,
   notification: NotificationRow
 ): boolean {
-  // Operational admin alerts stay in-app / push only.
-  // Do not turn report or support activity into Resend email traffic.
   if (isAdminActionNotification(notification)) return false;
 
   if (notification.type === 'message') return preferences?.email_messages !== false;
@@ -395,8 +393,6 @@ function pushEnabled(
   preferences: NotificationPreferencesRow | null,
   notification: NotificationRow
 ): boolean {
-  // Admin operational alerts use their own priority rule and never fall
-  // through to the ordinary Marketplace Updates preference.
   if (isAdminActionNotification(notification)) {
     return isHighPriorityAdminAction(notification);
   }
@@ -858,6 +854,7 @@ async function safePushData(
   for (const key of [
     'conversationId',
     'listingId',
+    'isoPostId',
     'transactionId',
     'supportCaseId',
     'reportId',

@@ -339,6 +339,11 @@ function Sprint4Experience() {
       return;
     }
 
+    if (target.name === 'iso') {
+      setRoute({ name: 'iso-detail', postId: target.postId });
+      return;
+    }
+
     if (target.name === 'listing') {
       setRoute({ name: 'listing-detail', listingId: target.listingId });
       return;
@@ -622,6 +627,7 @@ function Sprint4Experience() {
         onBack={() => openTab('home')}
         onOpenListing={openListing}
         onOpenConversation={openConversation}
+        onOpenIso={openIsoPost}
         onOpenProfile={openPublicProfile}
       />
     );
@@ -2504,11 +2510,13 @@ export function NotificationsScreen({
   onBack,
   onOpenListing,
   onOpenConversation,
+  onOpenIso,
   onOpenProfile,
 }: {
   onBack: () => void;
   onOpenListing: (listingId: string) => void;
   onOpenConversation: (conversationId: string) => void;
+  onOpenIso: (postId: string) => void;
   onOpenProfile: (userId: string) => void;
 }) {
   const auth = useAuth();
@@ -2518,9 +2526,15 @@ export function NotificationsScreen({
     await notifications.markRead(notification.id);
     const conversationId = typeof notification.data?.conversationId === 'string' ? notification.data.conversationId : undefined;
     const listingId = typeof notification.data?.listingId === 'string' ? notification.data.listingId : undefined;
+    const isoPostId = typeof notification.data?.isoPostId === 'string' ? notification.data.isoPostId : undefined;
 
     if (conversationId) {
       onOpenConversation(conversationId);
+      return;
+    }
+
+    if (isoPostId) {
+      onOpenIso(isoPostId);
       return;
     }
 

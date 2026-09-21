@@ -13,6 +13,7 @@ import { isExpoPushToken } from '../utils/expoPushToken';
 export type PushNavigationTarget =
   | { name: 'conversation'; conversationId: string }
   | { name: 'listing'; listingId: string }
+  | { name: 'iso'; postId: string }
   | { name: 'support-case'; transactionId: string; requesterRole: 'buyer' | 'seller'; conversationId?: string }
   | { name: 'admin'; adminTab?: 'rescues' | 'reports' | 'support' | 'notifications' }
   | { name: 'notifications' };
@@ -301,6 +302,7 @@ export async function removeRegisteredNativePushTokenForCurrentUser(): Promise<v
 export function pushNavigationTargetFromData(data: Record<string, unknown> | undefined): PushNavigationTarget {
   const conversationId = typeof data?.conversationId === 'string' ? data.conversationId : undefined;
   const listingId = typeof data?.listingId === 'string' ? data.listingId : undefined;
+  const isoPostId = typeof data?.isoPostId === 'string' ? data.isoPostId : undefined;
   const transactionId = typeof data?.transactionId === 'string' ? data.transactionId : undefined;
   const requesterRole = data?.requesterRole === 'buyer' || data?.requesterRole === 'seller'
     ? data.requesterRole
@@ -329,6 +331,10 @@ export function pushNavigationTargetFromData(data: Record<string, unknown> | und
       requesterRole,
       conversationId: typeof data?.conversationId === 'string' ? data.conversationId : undefined,
     };
+  }
+
+  if (isoPostId) {
+    return { name: 'iso', postId: isoPostId };
   }
 
   if (listingId) {
