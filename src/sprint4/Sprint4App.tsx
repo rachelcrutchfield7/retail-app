@@ -106,6 +106,11 @@ import {
 } from '../sprint3/Sprint3App';
 import { RescueHubScreen } from '../screens';
 import {
+  CreateIsoScreen,
+  IsoDetailScreen,
+  IsoScreen,
+} from '../screens/iso/IsoScreens';
+import {
   calculatePlatformFeeCents,
   getPaymentReadiness,
   isPaidListing,
@@ -191,12 +196,14 @@ import {
 } from '../utils/safeAreaLayout';
 import { IOS_COMPACT_FONT_SIZE_MULTIPLIER } from '../utils/iosTextScaling';
 
-type SprintTab = 'home' | 'search' | 'sell' | 'messages' | 'profile';
+type SprintTab = 'home' | 'search' | 'iso' | 'sell' | 'messages' | 'profile';
 type SprintRoute =
   | { name: 'tabs'; tab: SprintTab }
   | { name: 'listing-detail'; listingId: string }
   | { name: 'create-listing' }
   | { name: 'edit-listing'; listingId: string }
+  | { name: 'create-iso' }
+  | { name: 'iso-detail'; postId: string }
   | { name: 'edit-profile' }
   | { name: 'public-profile'; userId: string }
   | { name: 'my-listings' }
@@ -220,6 +227,7 @@ type SprintRoute =
 const tabs: Array<{ key: SprintTab; label: string; icon: typeof Home }> = [
   { key: 'home', label: 'Home', icon: Home },
   { key: 'search', label: 'Search', icon: Search },
+  { key: 'iso', label: 'ISO', icon: ListChecks },
   { key: 'sell', label: 'Sell', icon: Plus },
   { key: 'messages', label: 'Messages', icon: MessageCircle },
   { key: 'profile', label: 'Profile', icon: User },
@@ -282,6 +290,8 @@ function Sprint4Experience() {
   const openListing = (listingId: string) => setRoute({ name: 'listing-detail', listingId });
   const openCreateListing = () => setRoute({ name: 'create-listing' });
   const openEditListing = (listingId: string) => setRoute({ name: 'edit-listing', listingId });
+  const openCreateIso = () => setRoute({ name: 'create-iso' });
+  const openIsoPost = (postId: string) => setRoute({ name: 'iso-detail', postId });
   const openPublicProfile = (userId: string) => setRoute({ name: 'public-profile', userId });
   const openMessages = () => setRoute({ name: 'messages' });
   const openConversation = (conversationId: string) => setRoute({ name: 'conversation', conversationId });
@@ -519,6 +529,26 @@ function Sprint4Experience() {
     );
   }
 
+  if (route.name === 'create-iso') {
+    return (
+      <CreateIsoScreen
+        onBack={() => openTab('iso')}
+        onCreated={openIsoPost}
+      />
+    );
+  }
+
+  if (route.name === 'iso-detail') {
+    return (
+      <IsoDetailScreen
+        postId={route.postId}
+        onBack={() => openTab('iso')}
+        onOpenListing={openListing}
+        onOpenProfile={() => openTab('profile')}
+      />
+    );
+  }
+
   if (route.name === 'edit-profile') {
     return <EditProfileScreen onBack={() => openTab('profile')} />;
   }
@@ -703,6 +733,13 @@ function Sprint4Experience() {
           />
         ) : null}
         {route.tab === 'search' ? <SearchScreen onOpenListing={openListing} onOpenProfile={() => openTab('profile')} /> : null}
+        {route.tab === 'iso' ? (
+          <IsoScreen
+            onOpenPost={openIsoPost}
+            onCreatePost={openCreateIso}
+            onOpenProfile={() => openTab('profile')}
+          />
+        ) : null}
         {route.tab === 'sell' ? <SellScreen onCreateListing={openCreateListing} onOpenProfile={() => openTab('profile')} /> : null}
         {route.tab === 'messages' ? (
           <MessagesScreen

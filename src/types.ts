@@ -44,6 +44,7 @@ export type Listing = {
   listingType: ListingType;
   priceAmount?: number | null;
   category: Category;
+  categoryId?: string;
   condition: ListingCondition;
   image: string;
   city?: string;

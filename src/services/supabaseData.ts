@@ -510,6 +510,7 @@ export function toListing(row: SupabaseRow): Listing {
     listingType,
     priceAmount,
     category: categoryFromRow(categoryRow),
+    categoryId: optionalString(row.category_id) ?? optionalString(categoryRow?.id),
     condition: conditionFromDb(row.condition),
     image: images[0]?.thumbnail_url ?? images[0]?.image_url ?? '',
     city,

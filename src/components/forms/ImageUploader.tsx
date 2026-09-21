@@ -11,12 +11,33 @@ type ImageUploaderProps = {
   error?: string;
   uploading?: boolean;
   progress?: number;
+  maxImages?: number;
+  minimumImages?: number;
+  label?: string;
+  hint?: string;
 };
 
-export function ImageUploader({ images, onChange, error, uploading = false, progress = 0 }: ImageUploaderProps) {
+export function ImageUploader({
+  images,
+  onChange,
+  error,
+  uploading = false,
+  progress = 0,
+  maxImages = 15,
+  minimumImages = 1,
+  label = 'Photos',
+  hint,
+}: ImageUploaderProps) {
   const themeColors = useThemeColors();
   const [pickerError, setPickerError] = useState<string | null>(null);
-  const remainingSlots = Math.max(15 - images.length, 0);
+  const safeMaxImages = Math.max(1, maxImages);
+  const safeMinimumImages = Math.max(0, Math.min(minimumImages, safeMaxImages));
+  const remainingSlots = Math.max(safeMaxImages - images.length, 0);
+  const uploadHint =
+    hint ??
+    (safeMinimumImages > 0
+      ? `At least ${safeMinimumImages} required, up to ${safeMaxImages} photos`
+      : `Optional, up to ${safeMaxImages} ${safeMaxImages === 1 ? 'photo' : 'photos'}`);
 
   const chooseImages = async () => {
     if (remainingSlots === 0) {
@@ -42,8 +63,8 @@ export function ImageUploader({ images, onChange, error, uploading = false, prog
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (!permission.granted) {
-      Alert.alert('Photo access needed', 'Allow photo library access to add listing photos.');
-      setPickerError('Allow ReTail to access your photos so you can add listing images.');
+      Alert.alert('Photo access needed', 'Allow photo library access to add photos.');
+      setPickerError('Allow ReTail to access your photos so you can add an image.');
       return;
     }
 
@@ -68,7 +89,7 @@ export function ImageUploader({ images, onChange, error, uploading = false, prog
       return;
     }
 
-    onChange([...images, ...selectedImages].slice(0, 15));
+    onChange([...images, ...selectedImages].slice(0, safeMaxImages));
   };
 
   const removeImage = (image: string) => {
@@ -77,10 +98,10 @@ export function ImageUploader({ images, onChange, error, uploading = false, prog
 
   return (
     <View style={styles.field}>
-      <Text style={[styles.label, { color: themeColors.textPrimary }]}>Photos</Text>
+      <Text style={[styles.label, { color: themeColors.textPrimary }]}>{label}</Text>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Choose listing photos"
+        accessibilityLabel={`Choose ${label.toLowerCase()}`}
         style={[
           styles.uploadButton,
           { backgroundColor: themeColors.surface, borderColor: error ? themeColors.error : themeColors.primary },
@@ -90,7 +111,7 @@ export function ImageUploader({ images, onChange, error, uploading = false, prog
         <Camera size={24} color={themeColors.primary} />
         <View style={styles.uploadCopy}>
           <Text style={[styles.uploadTitle, { color: themeColors.textPrimary }]}>Choose images</Text>
-          <Text style={[styles.uploadHint, { color: themeColors.textSecondary }]}>At least 1 required, up to 15 photos</Text>
+          <Text style={[styles.uploadHint, { color: themeColors.textSecondary }]}>{uploadHint}</Text>
         </View>
       </Pressable>
 
