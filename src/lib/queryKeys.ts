@@ -23,6 +23,7 @@ export const queryKeys = {
   savedSearches: (userId: string) => ['saved-searches', userId] as const,
   marketplaceSearchAreas: ['marketplace-search-areas'] as const,
   marketplaceSearchPreference: (userId: string) => ['marketplace-search-preference', userId] as const,
+  marketplaceSearchLocation: (userId: string) => ['marketplace-search-location-v2', userId] as const,
   isoFeeds: ['iso-feed'] as const,
   isoFeed: (params: string) => ['iso-feed', params] as const,
   isoPost: (id: string) => ['iso-post', id] as const,

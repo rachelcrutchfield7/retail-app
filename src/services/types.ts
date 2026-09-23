@@ -206,6 +206,23 @@ export type SetMarketplaceSearchAreaInput = {
   radiusMiles?: MarketplaceSearchRadius;
 };
 
+export type MarketplaceSearchLocationPreference = {
+  marketplaceLocationId: string;
+  city: string;
+  state: string;
+  zipCode?: string;
+  countryCode: 'US';
+  resolutionLevel: 'postal_code' | 'city';
+  radiusMiles: MarketplaceSearchRadius;
+};
+
+export type SetMarketplaceSearchLocationInput = {
+  state: string;
+  city?: string;
+  zipCode?: string;
+  radiusMiles: MarketplaceSearchRadius;
+};
+
 export type PaginatedListings = {
   items: Listing[];
   page: number;

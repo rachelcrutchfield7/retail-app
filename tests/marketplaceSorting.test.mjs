@@ -127,17 +127,21 @@ test('every rendered marketplace radius control persists the authoritative serve
   const sprint3App = await readFile(new URL('../src/sprint3/Sprint3App.tsx', import.meta.url), 'utf8');
   const rescueHub = await readFile(new URL('../src/screens/RescueHubScreen.tsx', import.meta.url), 'utf8');
   const searchAreaHook = await readFile(new URL('../src/hooks/useMarketplaceSearchArea.ts', import.meta.url), 'utf8');
+  const searchLocationHook = await readFile(new URL('../src/hooks/useMarketplaceSearchLocation.ts', import.meta.url), 'utf8');
 
   assert.equal((sprint3App.match(/onRadiusChange=\{\(nextRadius\) => void updateMarketplaceRadius\(nextRadius\)\}/g) ?? []).length, 2);
   assert.doesNotMatch(sprint3App, /onRadiusChange=\{setRadiusMiles\}/);
   assert.equal((sprint3App.match(/await searchAreaUpdate\.setSearchArea\(\{ searchAreaId, radiusMiles: nextRadius \}\)/g) ?? []).length, 2);
-  assert.equal((sprint3App.match(/\{hasMarketplaceSearchArea \? \(/g) ?? []).length, 1);
-  assert.match(sprint3App, /\{sort === 'nearby' && hasMarketplaceSearchArea \? \(/);
+  assert.equal((sprint3App.match(/await searchLocationUpdate\.setRadius\(marketplaceLocationId, nextRadius\)/g) ?? []).length, 2);
+  assert.match(sprint3App, /\{sort === 'nearby' && !auth\.isGuest \? \(/);
   assert.match(sprint3App, /searchRadiusOptions\.find\(\(option\) => option > marketplaceRadiusMiles\) \?\? 100/);
   assert.match(rescueHub, /onRadiusChange=\{\(nextRadius\)[\s\S]+updateMarketplaceRadius\(nextRadius/);
   assert.match(searchAreaHook, /invalidateQueries\(\{ queryKey: queryKeys\.marketplaceSearchPreference/);
   assert.match(searchAreaHook, /invalidateQueries\(\{ queryKey: queryKeys\.listings \}\)/);
   assert.match(searchAreaHook, /invalidateQueries\(\{ queryKey: \['rescue-hub'\] \}\)/);
+  assert.match(searchLocationHook, /invalidateQueries\(\{ queryKey: queryKeys\.marketplaceSearchLocation/);
+  assert.match(searchLocationHook, /invalidateQueries\(\{ queryKey: queryKeys\.listings \}\)/);
+  assert.doesNotMatch(searchLocationHook, /rescue-hub|iso/);
 });
 
 test('distance never falls back to the legacy unsorted nearby RPC', async () => {
@@ -200,11 +204,11 @@ test('Home uses global inventory while Nearby and area-scoped Search remain loca
 
   assert.match(
     searchScreen,
-    /scope: hasMarketplaceSearchArea \? 'nearby' : 'public'/
+    /scope: hasMarketplaceSearchLocation \? 'nearby' : 'public'/
   );
   assert.match(
     searchScreen,
-    /radiusMiles: hasMarketplaceSearchArea \? marketplaceRadiusMiles : undefined/
+    /radiusMiles: hasMarketplaceSearchLocation \? marketplaceRadiusMiles : undefined/
   );
 
   assert.match(

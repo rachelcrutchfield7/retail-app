@@ -63,8 +63,9 @@ test('server persistence failures and unconfirmed server results never report ap
 test('Search screen commits location and filters only after server confirmation, hides old rows and handles failures', async () => {
   const screen = await readFile(new URL('../src/sprint3/Sprint3App.tsx', import.meta.url), 'utf8');
   const apply = screen.slice(screen.indexOf('  const applySavedSearch = async'), screen.indexOf('  const toggleSavedSearchAlert = async'));
+  assert.ok(apply.indexOf('await searchLocationUpdate.setLocation(') < apply.indexOf('setManualLocation('));
   assert.ok(apply.indexOf('await applySavedSearchArea(') < apply.indexOf('setManualLocation('));
-  assert.ok(apply.indexOf('await applySavedSearchArea(') < apply.indexOf('setSearch(savedSearch.search_query'));
+  assert.ok(apply.indexOf('await searchLocationUpdate.setLocation(') < apply.indexOf('setSearch(savedSearch.search_query'));
   assert.ok(apply.indexOf('setSearch(savedSearch.search_query') < apply.indexOf("setNotice({ title: 'Saved search applied'"));
   assert.match(apply, /queryClient\.removeQueries\(\{ queryKey: queryKeys\.listings, type: 'inactive' \}\)/);
   assert.match(apply, /catch \(error\) \{\s*setNotice\(\{ title: 'Saved search not applied'/);
@@ -81,5 +82,22 @@ test('existing server preference invalidation and RPC signatures keep feed scope
   assert.match(hook, /await queryClient\.invalidateQueries\(\{ queryKey: queryKeys\.marketplaceSearchPreference\(userId\) \}\)/);
   assert.match(hook, /await queryClient\.invalidateQueries\(\{ queryKey: queryKeys\.listings \}\)/);
   assert.match(service, /supabase\.rpc\('set_marketplace_search_area', \{\s*requested_search_area_id: input\.searchAreaId,\s*requested_radius_miles: input\.radiusMiles/);
+  assert.match(listings, /supabase\.rpc\('get_nearby_listings_v2_sorted'/);
   assert.match(listings, /supabase\.rpc\('get_nearby_listings_sorted'/);
+});
+
+test('new saved searches retain the canonical trusted marketplace ZIP', async () => {
+  const screen = await readFile(new URL('../src/sprint3/Sprint3App.tsx', import.meta.url), 'utf8');
+  const searchStart = screen.indexOf('export function SearchScreen(');
+  const search = screen.slice(searchStart);
+  assert.match(search, /zip_code: marketplaceZipCode/);
+  assert.match(search, /savedSearch\.zip_code[\s\S]*searchLocationUpdate\.setLocation/);
+});
+
+test('historical city-state saved searches upgrade to a trusted city location when applied', async () => {
+  const screen = await readFile(new URL('../src/sprint3/Sprint3App.tsx', import.meta.url), 'utf8');
+  const apply = screen.slice(screen.indexOf('  const applySavedSearch = async'), screen.indexOf('  const toggleSavedSearchAlert = async'));
+  assert.match(apply, /const savedCity = savedSearch\.city\?\.trim\(\)/);
+  assert.ok(apply.includes('&& ((savedZip && /^\\d{5}$/.test(savedZip)) || savedCity)'));
+  assert.match(apply, /searchLocationUpdate\.setLocation\(\{[\s\S]*?city: savedCity/);
 });

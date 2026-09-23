@@ -12,10 +12,23 @@ export type SafeMarketplaceLocation = {
 };
 
 export type MarketplaceLocationInput = {
-  city: string;
+  city?: string;
   state: string;
   zipCode: string;
 };
+
+export type SafeMarketplaceSearchLocation = Omit<SafeMarketplaceLocation, 'zipCode' | 'resolutionLevel'> & {
+  zipCode?: string;
+  resolutionLevel: 'postal_code' | 'city';
+};
+
+export type MarketplaceSearchLocationInput = {
+  city?: string;
+  state: string;
+  zipCode?: string;
+};
+
+type ComparableMarketplaceLocation = MarketplaceLocationInput & { city: string };
 
 type FunctionErrorBody = {
   error?: {
@@ -36,9 +49,9 @@ function normalizedZip(value: string): string {
 }
 
 export function canReuseMarketplaceLocation(
-  current: MarketplaceLocationInput & { marketplaceLocationId?: string },
-  requested: MarketplaceLocationInput
-): current is MarketplaceLocationInput & { marketplaceLocationId: string } {
+  current: ComparableMarketplaceLocation & { marketplaceLocationId?: string },
+  requested: ComparableMarketplaceLocation
+): current is ComparableMarketplaceLocation & { marketplaceLocationId: string } {
   return Boolean(current.marketplaceLocationId)
     && normalizedCity(current.city) === normalizedCity(requested.city)
     && normalizedState(current.state) === normalizedState(requested.state)
@@ -134,15 +147,31 @@ function isSafePostalLocation(value: unknown): value is SafeMarketplaceLocation 
     && typeof row.cached === 'boolean';
 }
 
-export async function resolveMarketplaceLocation(
-  input: MarketplaceLocationInput
-): Promise<SafeMarketplaceLocation> {
+function isSafeSearchLocation(value: unknown): value is SafeMarketplaceSearchLocation {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const row = value as Partial<SafeMarketplaceSearchLocation>;
+  const commonFieldsAreSafe = typeof row.marketplaceLocationId === 'string'
+    && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(row.marketplaceLocationId)
+    && typeof row.city === 'string'
+    && row.city.trim().length > 0
+    && typeof row.state === 'string'
+    && /^[A-Z]{2}$/.test(row.state)
+    && row.countryCode === 'US'
+    && typeof row.cached === 'boolean';
+
+  return commonFieldsAreSafe && (
+    (row.resolutionLevel === 'postal_code' && typeof row.zipCode === 'string' && /^\d{5}$/.test(row.zipCode))
+    || (row.resolutionLevel === 'city' && (row.zipCode === undefined || row.zipCode === null))
+  );
+}
+
+async function invokeMarketplaceLocationResolver(input: MarketplaceSearchLocationInput): Promise<unknown> {
   const { data, error } = await supabase.functions.invoke('resolve-marketplace-location', {
     body: {
       countryCode: 'US',
       state: normalizedState(input.state),
-      city: input.city.trim().replace(/\s+/g, ' '),
-      zipCode: normalizedZip(input.zipCode),
+      city: input.city?.trim().replace(/\s+/g, ' '),
+      zipCode: input.zipCode ? normalizedZip(input.zipCode) : undefined,
     },
   });
 
@@ -150,7 +179,27 @@ export async function resolveMarketplaceLocation(
     throw locationError(await functionErrorCode(error), error.message);
   }
 
+  return data;
+}
+
+export async function resolveMarketplaceLocation(
+  input: MarketplaceLocationInput
+): Promise<SafeMarketplaceLocation> {
+  const data = await invokeMarketplaceLocationResolver(input);
+
   if (!isSafePostalLocation(data)) {
+    throw locationError(undefined, 'Location resolver returned an invalid safe response.');
+  }
+
+  return data;
+}
+
+export async function resolveMarketplaceSearchLocation(
+  input: MarketplaceSearchLocationInput
+): Promise<SafeMarketplaceSearchLocation> {
+  const data = await invokeMarketplaceLocationResolver(input);
+
+  if (!isSafeSearchLocation(data)) {
     throw locationError(undefined, 'Location resolver returned an invalid safe response.');
   }
 

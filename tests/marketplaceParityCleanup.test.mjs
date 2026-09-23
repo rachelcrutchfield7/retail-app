@@ -34,7 +34,7 @@ test('listing cache identity includes public vs nearby scope through params', ()
   );
 });
 
-test('Search uses nearby only when an authoritative marketplace area exists', () => {
+test('Search uses nearby only when an authoritative trusted location or legacy area exists', () => {
   const searchStart = app.indexOf('export function SearchScreen(');
   assert.notEqual(searchStart, -1);
 
@@ -42,12 +42,12 @@ test('Search uses nearby only when an authoritative marketplace area exists', ()
 
   assert.match(
     search,
-    /scope: hasMarketplaceSearchArea \? 'nearby' : 'public'/
+    /scope: hasMarketplaceSearchLocation \? 'nearby' : 'public'/
   );
 
   assert.match(
     search,
-    /radiusMiles: hasMarketplaceSearchArea \? marketplaceRadiusMiles : undefined/
+    /radiusMiles: hasMarketplaceSearchLocation \? marketplaceRadiusMiles : undefined/
   );
 });
 
@@ -59,7 +59,7 @@ test('Home empty state distinguishes nearby from marketplace-wide modes', () => 
 
   assert.match(
     app,
-    /sort === 'nearby' && hasMarketplaceSearchArea && marketplaceRadiusMiles < 100/
+    /sort === 'nearby' && hasMarketplaceSearchLocation && marketplaceRadiusMiles < 100/
   );
 });
 

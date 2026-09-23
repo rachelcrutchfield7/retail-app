@@ -489,7 +489,7 @@ async function getNearbyListingsFromRpc({
   page: number;
   limit: number;
 }): Promise<PaginatedListings> {
-  const { data, error } = await supabase.rpc('get_nearby_listings_sorted', {
+  const nearbyArguments = {
     page_number: page,
     page_size: limit,
     category_filter: categoryId ?? null,
@@ -499,7 +499,12 @@ async function getNearbyListingsFromRpc({
     condition_filter: condition ?? null,
     listing_type_filter: params.listingType ?? null,
     sort_order: sortParam(params),
-  });
+  };
+  let { data, error } = await supabase.rpc('get_nearby_listings_v2_sorted', nearbyArguments);
+
+  if (error && isMissingRpcError(error)) {
+    ({ data, error } = await supabase.rpc('get_nearby_listings_sorted', nearbyArguments));
+  }
 
   if (error) {
     if (isMissingRpcError(error)) {
@@ -560,6 +565,7 @@ function isMissingSavedLocationError(error: unknown): boolean {
 
   return (
     error.appError.message.includes('RETAIL_LOCATION_REQUIRED') ||
+    error.appError.message.includes('RETAIL_SEARCH_LOCATION_REQUIRED') ||
     error.appError.message.includes('RETAIL_SEARCH_AREA_REQUIRED')
   );
 }

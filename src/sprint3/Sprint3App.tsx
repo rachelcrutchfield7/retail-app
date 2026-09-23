@@ -60,7 +60,7 @@ import {
   CategorySelector,
   ConditionBadge,
   ConditionSelector,
-  DistanceFilter,
+  MarketplaceLocationFilter,
   EmptyState,
   ErrorState,
   FavoriteButton,
@@ -108,6 +108,10 @@ import {
   useMarketplaceSearchPreference,
   useSetMarketplaceSearchArea,
 } from '../hooks/useMarketplaceSearchArea';
+import {
+  useMarketplaceSearchLocationPreference,
+  useSetMarketplaceSearchLocation,
+} from '../hooks/useMarketplaceSearchLocation';
 import { useMyListings, useUserListings } from '../hooks/useMyListings';
 import { useNotifications } from '../hooks/useNotifications';
 import { usePendingReviews } from '../hooks/usePendingReviews';
@@ -498,10 +502,20 @@ export function HomeScreen({
   } = useLocation();
   const searchPreference = useMarketplaceSearchPreference();
   const searchAreaUpdate = useSetMarketplaceSearchArea();
-  const marketplaceRadiusMiles = searchPreference.data?.radius_miles ?? location.radiusMiles;
-  const marketplaceCity = searchPreference.data?.city ?? location.city;
-  const marketplaceState = searchPreference.data?.state ?? location.state;
-  const hasMarketplaceSearchArea = Boolean(searchPreference.data?.search_area_id);
+  const searchLocationPreference = useMarketplaceSearchLocationPreference();
+  const searchLocationUpdate = useSetMarketplaceSearchLocation();
+  const requestedMarketplaceRadiusMiles = searchLocationPreference.data?.radiusMiles
+    ?? searchPreference.data?.radius_miles
+    ?? location.radiusMiles;
+  const marketplaceRadiusMiles: MarketplaceSearchRadius = isMarketplaceSearchRadius(requestedMarketplaceRadiusMiles)
+    ? requestedMarketplaceRadiusMiles
+    : 25;
+  const marketplaceCity = searchLocationPreference.data?.city ?? searchPreference.data?.city ?? location.city;
+  const marketplaceState = searchLocationPreference.data?.state ?? searchPreference.data?.state ?? location.state;
+  const marketplaceZipCode = searchLocationPreference.data?.zipCode ?? location.zipCode;
+  const hasMarketplaceSearchLocation = Boolean(
+    searchLocationPreference.data?.marketplaceLocationId || searchPreference.data?.search_area_id
+  );
   const categories = useTopLevelCategories();
   const favorites = useFavorites(Boolean(auth.user));
   const notifications = useNotifications(Boolean(auth.user) && Boolean(onNotifications));
@@ -558,20 +572,38 @@ export function HomeScreen({
       return false;
     }
 
-    const searchAreaId = searchPreference.data?.search_area_id;
-    if (!searchAreaId) {
-      setNotice({ title: 'Choose a marketplace area first', body: 'Set your marketplace area in Profile before changing the distance.' });
-      return false;
-    }
-
     try {
+      const marketplaceLocationId = searchLocationPreference.data?.marketplaceLocationId;
+      if (marketplaceLocationId) {
+        await searchLocationUpdate.setRadius(marketplaceLocationId, nextRadius);
+        return true;
+      }
+
+      const searchAreaId = searchPreference.data?.search_area_id;
+      if (!searchAreaId) {
+        setNotice({ title: 'Choose a marketplace location first', body: 'Enter your ZIP before changing the distance.' });
+        return false;
+      }
+
       await searchAreaUpdate.setSearchArea({ searchAreaId, radiusMiles: nextRadius });
       return true;
     } catch (error) {
       setNotice({ title: 'Distance not updated', body: handleAppError(error).userMessage });
       return false;
     }
-  }, [searchAreaUpdate, searchPreference.data?.search_area_id]);
+  }, [searchAreaUpdate, searchLocationPreference.data?.marketplaceLocationId, searchLocationUpdate, searchPreference.data?.search_area_id]);
+  const updateMarketplaceLocation = useCallback(async ({ state, zipCode }: { state: string; zipCode: string }) => {
+    try {
+      const updated = await searchLocationUpdate.setLocation({
+        state,
+        zipCode,
+        radiusMiles: marketplaceRadiusMiles,
+      });
+      setNotice({ title: 'Marketplace location updated', body: `Showing listings near ${updated.city}, ${updated.state} ${updated.zipCode ?? ''}.`.trim() });
+    } catch (error) {
+      setNotice({ title: 'Location not updated', body: handleAppError(error).userMessage });
+    }
+  }, [marketplaceRadiusMiles, searchLocationUpdate]);
   const expandHomeDistance = useCallback(() => {
     const nextRadius = searchRadiusOptions.find((option) => option > marketplaceRadiusMiles) ?? 100;
     void updateMarketplaceRadius(nextRadius);
@@ -683,13 +715,15 @@ export function HomeScreen({
             </Card>
           ) : null}
 
-          {sort === 'nearby' && hasMarketplaceSearchArea ? (
-            <DistanceFilter
+          {sort === 'nearby' && !auth.isGuest ? (
+            <MarketplaceLocationFilter
               city={marketplaceCity}
               state={marketplaceState}
+              zipCode={marketplaceZipCode}
               radiusMiles={marketplaceRadiusMiles}
-              loading={locationLoading || searchPreference.isLoading || searchAreaUpdate.isLoading}
-              error={locationError ?? searchPreference.error?.message ?? searchAreaUpdate.error?.message}
+              loading={locationLoading || searchPreference.isLoading || searchLocationPreference.isLoading || searchAreaUpdate.isLoading || searchLocationUpdate.isLoading}
+              error={locationError ?? searchLocationPreference.error?.message ?? searchPreference.error?.message ?? searchLocationUpdate.error?.message ?? searchAreaUpdate.error?.message}
+              onLocationSubmit={(input) => void updateMarketplaceLocation(input)}
               onRadiusChange={(nextRadius) => void updateMarketplaceRadius(nextRadius)}
             />
           ) : null}
@@ -723,7 +757,7 @@ export function HomeScreen({
           <SectionTitle
             title="Marketplace listings"
             hint={
-              sort === 'nearby' && hasMarketplaceSearchArea
+              sort === 'nearby' && hasMarketplaceSearchLocation
                 ? `${sortedItems.length} within ${marketplaceRadiusMiles} mi`
                 : `${sortedItems.length} available across ReTail`
             }
@@ -748,12 +782,12 @@ export function HomeScreen({
             }
             icon={Search}
             actionTitle={
-              sort === 'nearby' && hasMarketplaceSearchArea && marketplaceRadiusMiles < 100
+              sort === 'nearby' && hasMarketplaceSearchLocation && marketplaceRadiusMiles < 100
                 ? 'Expand Distance'
                 : 'Create Search Alert'
             }
             onAction={
-              sort === 'nearby' && hasMarketplaceSearchArea && marketplaceRadiusMiles < 100
+              sort === 'nearby' && hasMarketplaceSearchLocation && marketplaceRadiusMiles < 100
                 ? expandHomeDistance
                 : onOpenSearch
             }
@@ -791,10 +825,20 @@ export function SearchScreen({
   const searchPreference = useMarketplaceSearchPreference();
   const searchAreas = useMarketplaceSearchAreas();
   const searchAreaUpdate = useSetMarketplaceSearchArea();
-  const marketplaceRadiusMiles = searchPreference.data?.radius_miles ?? location.radiusMiles;
-  const marketplaceCity = searchPreference.data?.city ?? location.city;
-  const marketplaceState = searchPreference.data?.state ?? location.state;
-  const hasMarketplaceSearchArea = Boolean(searchPreference.data?.search_area_id);
+  const searchLocationPreference = useMarketplaceSearchLocationPreference();
+  const searchLocationUpdate = useSetMarketplaceSearchLocation();
+  const requestedMarketplaceRadiusMiles = searchLocationPreference.data?.radiusMiles
+    ?? searchPreference.data?.radius_miles
+    ?? location.radiusMiles;
+  const marketplaceRadiusMiles: MarketplaceSearchRadius = isMarketplaceSearchRadius(requestedMarketplaceRadiusMiles)
+    ? requestedMarketplaceRadiusMiles
+    : 25;
+  const marketplaceCity = searchLocationPreference.data?.city ?? searchPreference.data?.city ?? location.city;
+  const marketplaceState = searchLocationPreference.data?.state ?? searchPreference.data?.state ?? location.state;
+  const marketplaceZipCode = searchLocationPreference.data?.zipCode ?? location.zipCode;
+  const hasMarketplaceSearchLocation = Boolean(
+    searchLocationPreference.data?.marketplaceLocationId || searchPreference.data?.search_area_id
+  );
   const categories = useTopLevelCategories();
   const favorites = useFavorites(Boolean(auth.user));
   const savedSearches = useSavedSearches(Boolean(auth.user));
@@ -809,13 +853,13 @@ export function SearchScreen({
       search,
       condition,
       listingType,
-      scope: hasMarketplaceSearchArea ? 'nearby' : 'public',
-      radiusMiles: hasMarketplaceSearchArea ? marketplaceRadiusMiles : undefined,
+      scope: hasMarketplaceSearchLocation ? 'nearby' : 'public',
+      radiusMiles: hasMarketplaceSearchLocation ? marketplaceRadiusMiles : undefined,
       minPrice: parsedMinPrice,
       maxPrice: parsedMaxPrice,
       limit: 50,
     }),
-    [condition, hasMarketplaceSearchArea, listingType, marketplaceRadiusMiles, parsedMaxPrice, parsedMinPrice, search]
+    [condition, hasMarketplaceSearchLocation, listingType, marketplaceRadiusMiles, parsedMaxPrice, parsedMinPrice, search]
   );
   const listings = useListings(params);
   const filteredItems = useMemo(
@@ -850,7 +894,7 @@ export function SearchScreen({
     radius_miles: marketplaceRadiusMiles,
     city: marketplaceCity,
     state: marketplaceState,
-    zip_code: location.zipCode,
+    zip_code: marketplaceZipCode,
     notifications_enabled: true,
   });
 
@@ -874,20 +918,44 @@ export function SearchScreen({
       return false;
     }
 
-    const searchAreaId = searchPreference.data?.search_area_id;
-    if (!searchAreaId) {
-      setNotice({ title: 'Choose a marketplace area first', body: 'Set your marketplace area in Profile before changing the distance.' });
-      return false;
-    }
-
     try {
+      const marketplaceLocationId = searchLocationPreference.data?.marketplaceLocationId;
+      if (marketplaceLocationId) {
+        await searchLocationUpdate.setRadius(marketplaceLocationId, nextRadius);
+        return true;
+      }
+
+      const searchAreaId = searchPreference.data?.search_area_id;
+      if (!searchAreaId) {
+        setNotice({ title: 'Choose a marketplace location first', body: 'Enter your ZIP before changing the distance.' });
+        return false;
+      }
+
       await searchAreaUpdate.setSearchArea({ searchAreaId, radiusMiles: nextRadius });
       return true;
     } catch (error) {
       setNotice({ title: 'Distance not updated', body: handleAppError(error).userMessage });
       return false;
     }
-  }, [searchAreaUpdate, searchPreference.data?.search_area_id]);
+  }, [searchAreaUpdate, searchLocationPreference.data?.marketplaceLocationId, searchLocationUpdate, searchPreference.data?.search_area_id]);
+  const updateMarketplaceLocation = useCallback(async ({ state, zipCode }: { state: string; zipCode: string }) => {
+    try {
+      const updated = await searchLocationUpdate.setLocation({
+        state,
+        zipCode,
+        radiusMiles: marketplaceRadiusMiles,
+      });
+      setManualLocation({
+        city: updated.city,
+        state: updated.state,
+        zipCode: updated.zipCode,
+        radiusMiles: updated.radiusMiles,
+      });
+      setNotice({ title: 'Marketplace location updated', body: `Showing listings near ${updated.city}, ${updated.state} ${updated.zipCode ?? ''}.`.trim() });
+    } catch (error) {
+      setNotice({ title: 'Location not updated', body: handleAppError(error).userMessage });
+    }
+  }, [marketplaceRadiusMiles, searchLocationUpdate, setManualLocation]);
 
   const applySavedSearch = async (savedSearch: SavedSearch) => {
     if (applyingSavedSearchRef.current) return;
@@ -895,22 +963,56 @@ export function SearchScreen({
     setIsApplyingSavedSearch(true);
 
     try {
-      const availableAreas = searchAreas.data.length ? searchAreas.data : (await searchAreas.refetch()).data ?? [];
-      const currentPreference = searchPreference.data ?? (await searchPreference.refetch()).data ?? null;
-      const confirmed = await applySavedSearchArea({
-        savedSearch,
-        areas: availableAreas,
-        preference: currentPreference,
-        setSearchArea: searchAreaUpdate.setSearchArea,
-      });
+      const savedRadius = isMarketplaceSearchRadius(savedSearch.radius_miles)
+        ? savedSearch.radius_miles
+        : null;
+      const savedState = savedSearch.state?.trim().toUpperCase();
+      const savedZip = savedSearch.zip_code?.trim();
+      let confirmedLocation: {
+        city?: string;
+        state?: string;
+        zipCode?: string;
+        radiusMiles: MarketplaceSearchRadius;
+      };
+
+      const savedCity = savedSearch.city?.trim();
+      if (
+        savedRadius
+        && savedState
+        && /^[A-Z]{2}$/.test(savedState)
+        && ((savedZip && /^\d{5}$/.test(savedZip)) || savedCity)
+      ) {
+        const confirmed = await searchLocationUpdate.setLocation({
+          city: savedCity,
+          state: savedState,
+          zipCode: savedZip,
+          radiusMiles: savedRadius,
+        });
+        confirmedLocation = {
+          city: confirmed.city,
+          state: confirmed.state,
+          zipCode: confirmed.zipCode,
+          radiusMiles: confirmed.radiusMiles,
+        };
+      } else {
+        const availableAreas = searchAreas.data.length ? searchAreas.data : (await searchAreas.refetch()).data ?? [];
+        const currentPreference = searchPreference.data ?? (await searchPreference.refetch()).data ?? null;
+        const confirmed = await applySavedSearchArea({
+          savedSearch,
+          areas: availableAreas,
+          preference: currentPreference,
+          setSearchArea: searchAreaUpdate.setSearchArea,
+        });
+        confirmedLocation = {
+          city: confirmed.city,
+          state: confirmed.state,
+          zipCode: undefined,
+          radiusMiles: confirmed.radius_miles,
+        };
+      }
 
       queryClient.removeQueries({ queryKey: queryKeys.listings, type: 'inactive' });
-      setManualLocation({
-        city: confirmed.city,
-        state: confirmed.state,
-        zipCode: undefined,
-        radiusMiles: confirmed.radius_miles,
-      });
+      setManualLocation(confirmedLocation);
       setSearch(savedSearch.search_query ?? '');
       setCategoryId(savedSearch.category_slug);
       setCondition(savedSearch.condition);
@@ -1000,13 +1102,15 @@ export function SearchScreen({
           </View>
           {notice ? <NoticeCard notice={notice} actionLabel="Profile" onAction={onOpenProfile} /> : null}
           <SearchBar value={search} onChangeText={setSearch} onClear={() => setSearch('')} />
-          {hasMarketplaceSearchArea ? (
-            <DistanceFilter
+          {!auth.isGuest ? (
+            <MarketplaceLocationFilter
               city={marketplaceCity}
               state={marketplaceState}
+              zipCode={marketplaceZipCode}
               radiusMiles={marketplaceRadiusMiles}
-              loading={locationLoading || searchPreference.isLoading || searchAreaUpdate.isLoading}
-              error={locationError ?? searchPreference.error?.message ?? searchAreaUpdate.error?.message}
+              loading={locationLoading || searchPreference.isLoading || searchLocationPreference.isLoading || searchAreaUpdate.isLoading || searchLocationUpdate.isLoading}
+              error={locationError ?? searchLocationPreference.error?.message ?? searchPreference.error?.message ?? searchLocationUpdate.error?.message ?? searchAreaUpdate.error?.message}
+              onLocationSubmit={(input) => void updateMarketplaceLocation(input)}
               onRadiusChange={(nextRadius) => void updateMarketplaceRadius(nextRadius)}
             />
           ) : null}
@@ -1075,7 +1179,7 @@ export function SearchScreen({
           ) : null}
           <SectionTitle
             title="Results"
-            hint={hasMarketplaceSearchArea ? `${filteredItems.length} within ${marketplaceRadiusMiles} mi` : `${filteredItems.length} available`}
+            hint={hasMarketplaceSearchLocation ? `${filteredItems.length} within ${marketplaceRadiusMiles} mi` : `${filteredItems.length} available`}
           />
           {listings.isLoading || isApplyingSavedSearch ? <LoadingCards /> : null}
           {listings.isError ? <ErrorState message={handleAppError(listings.error).userMessage} onRetry={listings.refetch} /> : null}
@@ -1091,7 +1195,7 @@ export function SearchScreen({
           <EmptyState
             title="No results found"
             body={
-              hasMarketplaceSearchArea
+              hasMarketplaceSearchLocation
                 ? 'Broaden your search, choose another nearby area, expand the distance, or save an alert for later.'
                 : 'Broaden your search filters, or sign in and choose a marketplace area to search nearby.'
             }

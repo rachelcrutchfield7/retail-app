@@ -22,6 +22,7 @@ export { TextInput } from './forms/TextInput';
 export { ToggleSwitch } from './forms/ToggleSwitch';
 export { PolicyConsentChoices } from './forms/PolicyConsentChoices';
 export { DistanceFilter } from './location/DistanceFilter';
+export { MarketplaceLocationFilter } from './location/MarketplaceLocationFilter';
 export { CategoryChip } from './marketplace/CategoryChip';
 export { ConditionBadge } from './marketplace/ConditionBadge';
 export { FavoriteButton } from './marketplace/FavoriteButton';
