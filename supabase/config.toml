@@ -391,6 +391,9 @@ verify_jwt = true
 [functions.resolve-marketplace-location]
 verify_jwt = true
 
+[functions.backfill-marketplace-locations]
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 54327

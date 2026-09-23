@@ -1,0 +1,359 @@
+import assert from 'node:assert/strict';
+import { readFile, readdir } from 'node:fs/promises';
+import test from 'node:test';
+
+const {
+  MarketplaceLocationBackfillRequestError,
+  normalizeMarketplaceLocationBackfillRequest,
+  runMarketplaceLocationBackfill,
+  timingSafeSecretEqual,
+} = await import(new URL(
+  '../supabase/functions/_shared/marketplaceLocationBackfill.ts',
+  import.meta.url
+).href);
+
+const migrations = await readdir(new URL('../supabase/migrations/', import.meta.url));
+const migrationName = migrations.find((name) =>
+  name.endsWith('_location_architecture_v2_backfill_support.sql')
+);
+assert.ok(migrationName, 'Phase 5 backfill support migration should exist');
+
+const migration = await readFile(new URL(`../supabase/migrations/${migrationName}`, import.meta.url), 'utf8');
+const functionSource = await readFile(
+  new URL('../supabase/functions/backfill-marketplace-locations/index.ts', import.meta.url),
+  'utf8'
+);
+const sharedSource = await readFile(
+  new URL('../supabase/functions/_shared/marketplaceLocationBackfill.ts', import.meta.url),
+  'utf8'
+);
+const config = await readFile(new URL('../supabase/config.toml', import.meta.url), 'utf8');
+const audit = await readFile(new URL('../ops/location-v2-production-audit.sql', import.meta.url), 'utf8');
+const rollout = await readFile(new URL('../docs/location-v2-rollout.md', import.meta.url), 'utf8');
+const phase4 = await readFile(
+  new URL('../supabase/migrations/20260923122659_location_architecture_v2_geographic_marketplace_search.sql', import.meta.url),
+  'utf8'
+);
+
+const candidateRpc = migration.match(
+  /create or replace function public\.get_marketplace_location_backfill_candidates[\s\S]*?comment on function public\.get_marketplace_location_backfill_candidates/
+)?.[0] ?? '';
+const backfillRpc = migration.match(
+  /create or replace function public\.backfill_listing_marketplace_location[\s\S]*?comment on function public\.backfill_listing_marketplace_location/
+)?.[0] ?? '';
+const updateBlock = backfillRpc.match(/update public\.listings as l\s*set([\s\S]*?)where l\.id/)?.[1] ?? '';
+
+function candidate(overrides = {}) {
+  return {
+    listingId: '11111111-1111-4111-8111-111111111111',
+    city: 'Legacy Alias',
+    state: 'IL',
+    zipCode: '62018',
+    marketplaceLocationId: null,
+    ...overrides,
+  };
+}
+
+function cachedLocation(overrides = {}) {
+  return {
+    marketplaceLocationId: '22222222-2222-4222-8222-222222222222',
+    city: 'Cottage Hills',
+    state: 'IL',
+    zipCode: '62018',
+    countryCode: 'US',
+    resolutionLevel: 'postal_code',
+    ...overrides,
+  };
+}
+
+function dependencies({ candidates = [candidate()], cached = cachedLocation(), providerError, attachResult = 'backfilled' } = {}) {
+  const calls = { list: [], lookup: [], provider: [], cache: [], attach: [], logs: [] };
+  return {
+    calls,
+    value: {
+      async listCandidates(limit) { calls.list.push(limit); return candidates; },
+      async lookupCachedLocation(request) { calls.lookup.push(request); return cached; },
+      geocoder: {
+        async resolve(request) {
+          calls.provider.push(request);
+          if (providerError) throw providerError;
+          return {
+            countryCode: 'US', stateCode: 'IL', city: 'Cottage Hills', postalCode: '62018',
+            latitude: 38.9, longitude: -90.07, resolutionLevel: 'postal_code', provider: 'test',
+          };
+        },
+      },
+      async cacheLocation(result) { calls.cache.push(result); return cachedLocation(); },
+      async attachLocation(listingId, locationId) {
+        calls.attach.push({ listingId, locationId });
+        return attachResult;
+      },
+      log(entry) { calls.logs.push(entry); },
+    },
+  };
+}
+
+test('backfill RPC is inaccessible to anon and authenticated roles', () => {
+  assert.match(backfillRpc, /security definer\s*set search_path = ''/);
+  assert.match(backfillRpc, /revoke all on function public\.backfill_listing_marketplace_location\(uuid, uuid\)\s*from public, anon, authenticated/);
+  assert.match(backfillRpc, /grant execute on function public\.backfill_listing_marketplace_location\(uuid, uuid\)\s*to service_role/);
+});
+
+test('candidate scanner is also service-role only and bounded', () => {
+  assert.match(candidateRpc, /from public, anon, authenticated/);
+  assert.match(candidateRpc, /to service_role/);
+  assert.match(candidateRpc, /safe_limit < 1 or safe_limit > 50/);
+  assert.match(candidateRpc, /limit safe_limit/);
+});
+
+test('trusted location must be active', () => {
+  assert.match(backfillRpc, /ml\.is_active = true/);
+});
+
+test('trusted location must be United States', () => {
+  assert.match(backfillRpc, /ml\.country_code = 'US'/);
+});
+
+test('trusted location must use postal-code resolution', () => {
+  assert.match(backfillRpc, /ml\.resolution_level = 'postal_code'/);
+});
+
+test('trusted location must have a valid ZIP, coordinates, and point', () => {
+  assert.match(backfillRpc, /ml\.postal_code ~ '\^\[0-9\]\{5\}\$'/);
+  assert.match(backfillRpc, /ml\.latitude between -90 and 90/);
+  assert.match(backfillRpc, /ml\.longitude between -180 and 180/);
+  assert.match(backfillRpc, /ml\.location_point is not null/);
+});
+
+test('listing ZIP must match trusted postal code', () => {
+  assert.match(backfillRpc, /normalized_listing_zip <> trusted_location\.postal_code/);
+  assert.match(backfillRpc, /RETAIL_LOCATION_BACKFILL_ZIP_MISMATCH/);
+});
+
+test('listing state mismatch is rejected when listing state exists', () => {
+  assert.match(backfillRpc, /normalized_listing_state <> ''/);
+  assert.match(backfillRpc, /normalized_listing_state <> trusted_location\.state_code/);
+  assert.match(backfillRpc, /RETAIL_LOCATION_BACKFILL_STATE_MISMATCH/);
+});
+
+test('city difference alone is allowed and canonical city replaces the legacy label', () => {
+  assert.doesNotMatch(backfillRpc, /CITY_MISMATCH/);
+  assert.match(updateBlock, /city = trusted_location\.city/);
+});
+
+test('coordinates and marketplace location come only from the locked trusted row', () => {
+  assert.match(updateBlock, /marketplace_location_id = trusted_location\.id/);
+  assert.match(updateBlock, /latitude = trusted_location\.latitude/);
+  assert.match(updateBlock, /longitude = trusted_location\.longitude/);
+  assert.doesNotMatch(backfillRpc, /requested_(?:latitude|longitude)/);
+});
+
+test('existing sync_listing_location_point trigger is reused', () => {
+  assert.doesNotMatch(updateBlock, /location_point/);
+  assert.doesNotMatch(migration, /create (?:or replace )?function public\.sync_listing_location_point/i);
+});
+
+test('listing status, seller, price, reservation, and shipping fields are preserved', () => {
+  for (const field of [
+    'status', 'seller_id', 'price', 'reserved_by', 'reserved_until',
+    'reservation_payment_intent_id', 'reservation_transaction_id',
+    'shipping_available', 'shipping_payer', 'shipping_cost_estimate',
+  ]) {
+    assert.doesNotMatch(updateBlock, new RegExp(`\\b${field}\\s*=`));
+  }
+});
+
+test('already trusted listing cannot be moved to another location', () => {
+  assert.match(backfillRpc, /target_listing\.marketplace_location_id = trusted_location\.id/);
+  assert.match(backfillRpc, /RETAIL_LOCATION_BACKFILL_ALREADY_TRUSTED/);
+});
+
+test('same trusted location reapply is idempotent without another update', () => {
+  assert.match(backfillRpc, /'already_complete'::text/);
+  const alreadyComplete = backfillRpc.indexOf("'already_complete'::text");
+  const update = backfillRpc.indexOf('update public.listings as l');
+  assert.ok(alreadyComplete >= 0 && alreadyComplete < update);
+});
+
+test('listing row is locked before validation and update', () => {
+  assert.match(backfillRpc, /from public\.listings as l[\s\S]*?for update/);
+});
+
+test('trusted backfill context is narrow and cleared on success or exception', () => {
+  assert.match(migration, /trusted_location_backfill boolean := coalesce/);
+  assert.match(migration, /if trusted_checkout_reservation or trusted_location_backfill then/);
+  assert.match(backfillRpc, /set_config\('retail\.location_backfill_context', 'true', true\)/);
+  assert.equal(
+    (backfillRpc.match(/set_config\('retail\.location_backfill_context', 'false', true\)/g) ?? []).length,
+    2
+  );
+  assert.match(backfillRpc, /exception\s*when others then[\s\S]*?raise;/);
+});
+
+test('dry-run is the default and execution must be explicit', () => {
+  assert.deepEqual(normalizeMarketplaceLocationBackfillRequest(undefined), {
+    dryRun: true, execute: false, limit: 10,
+  });
+  assert.throws(
+    () => normalizeMarketplaceLocationBackfillRequest({ dryRun: false }),
+    (error) => error instanceof MarketplaceLocationBackfillRequestError
+      && error.code === 'EXECUTION_NOT_EXPLICIT'
+  );
+});
+
+test('batch limit accepts 1 through 50 and rejects larger scans', () => {
+  assert.equal(normalizeMarketplaceLocationBackfillRequest({ limit: 50 }).limit, 50);
+  assert.throws(() => normalizeMarketplaceLocationBackfillRequest({ limit: 51 }));
+  assert.throws(() => normalizeMarketplaceLocationBackfillRequest({ limit: 0 }));
+});
+
+test('dry-run with cached location reports eligibility without mutation', async () => {
+  const deps = dependencies();
+  const report = await runMarketplaceLocationBackfill(
+    normalizeMarketplaceLocationBackfillRequest({ dryRun: true, limit: 10 }), deps.value
+  );
+  assert.equal(report.eligibleForBackfill, 1);
+  assert.equal(report.backfilledListings, 0);
+  assert.equal(deps.calls.attach.length, 0);
+  assert.equal(deps.calls.provider.length, 0);
+});
+
+test('ZIP grouping produces one cache lookup and provider request per distinct location', async () => {
+  const deps = dependencies({
+    candidates: [candidate(), candidate({ listingId: '33333333-3333-4333-8333-333333333333' })],
+    cached: null,
+  });
+  const report = await runMarketplaceLocationBackfill(
+    normalizeMarketplaceLocationBackfillRequest({ dryRun: false, execute: true, limit: 10 }), deps.value
+  );
+  assert.equal(report.distinctLocations, 1);
+  assert.equal(deps.calls.lookup.length, 1);
+  assert.equal(deps.calls.provider.length, 1);
+  assert.equal(deps.calls.attach.length, 2);
+});
+
+test('cache hit avoids the provider and cache writer', async () => {
+  const deps = dependencies();
+  await runMarketplaceLocationBackfill(
+    normalizeMarketplaceLocationBackfillRequest({ dryRun: false, execute: true }), deps.value
+  );
+  assert.equal(deps.calls.provider.length, 0);
+  assert.equal(deps.calls.cache.length, 0);
+  assert.equal(deps.calls.attach.length, 1);
+});
+
+test('dry-run reports uncached ZIP without provider or listing mutation', async () => {
+  const deps = dependencies({ cached: null });
+  const report = await runMarketplaceLocationBackfill(
+    normalizeMarketplaceLocationBackfillRequest({ dryRun: true }), deps.value
+  );
+  assert.equal(report.providerLookupsNeeded, 1);
+  assert.equal(report.unresolved, 1);
+  assert.equal(deps.calls.provider.length, 0);
+  assert.equal(deps.calls.attach.length, 0);
+});
+
+test('provider failure leaves uncached listings unchanged and continues safely', async () => {
+  const deps = dependencies({ cached: null, providerError: new Error('PROVIDER_UNAVAILABLE') });
+  const report = await runMarketplaceLocationBackfill(
+    normalizeMarketplaceLocationBackfillRequest({ dryRun: false, execute: true }), deps.value
+  );
+  assert.equal(report.failedListings, 1);
+  assert.equal(report.backfilledListings, 0);
+  assert.equal(deps.calls.attach.length, 0);
+});
+
+test('malformed provider result cannot reach cache or listing attachment', async () => {
+  const deps = dependencies({ cached: null, providerError: new Error('PROVIDER_MALFORMED_RESPONSE') });
+  await runMarketplaceLocationBackfill(
+    normalizeMarketplaceLocationBackfillRequest({ dryRun: false, execute: true }), deps.value
+  );
+  assert.equal(deps.calls.cache.length, 0);
+  assert.equal(deps.calls.attach.length, 0);
+});
+
+test('trusted location mismatch is reported without attachment', async () => {
+  const deps = dependencies({ cached: cachedLocation({ state: 'MO' }) });
+  const report = await runMarketplaceLocationBackfill(
+    normalizeMarketplaceLocationBackfillRequest({ dryRun: false, execute: true }), deps.value
+  );
+  assert.equal(report.mismatches, 1);
+  assert.equal(deps.calls.attach.length, 0);
+});
+
+test('already trusted race result is handled idempotently', async () => {
+  const deps = dependencies({ attachResult: 'already_complete' });
+  const report = await runMarketplaceLocationBackfill(
+    normalizeMarketplaceLocationBackfillRequest({ dryRun: false, execute: true }), deps.value
+  );
+  assert.equal(report.alreadyTrusted, 1);
+  assert.equal(report.backfilledListings, 0);
+});
+
+test('backfill endpoint requires a dedicated constant-time internal secret', () => {
+  assert.match(functionSource, /RETAIL_LOCATION_BACKFILL_WEBHOOK_SECRET/);
+  assert.match(functionSource, /x-retail-location-backfill-secret/);
+  assert.match(functionSource, /timingSafeSecretEqual/);
+  assert.match(functionSource, /expected\.length >= 32/);
+  assert.match(config, /\[functions\.backfill-marketplace-locations\]\s*verify_jwt = false/);
+  assert.equal(timingSafeSecretEqual('a'.repeat(32), 'a'.repeat(32)), true);
+  assert.equal(timingSafeSecretEqual('a'.repeat(32), 'b'.repeat(32)), false);
+});
+
+test('authorization occurs before request parsing or database access', () => {
+  const auth = functionSource.indexOf('if (!isAuthorized(request))');
+  const parse = functionSource.indexOf('request.text()');
+  const admin = functionSource.indexOf('createSupabaseAdmin()');
+  assert.ok(auth >= 0 && auth < parse && parse < admin);
+});
+
+test('response and reports expose no coordinates, key, URL, or raw provider payload', () => {
+  const reportTypes = sharedSource.match(/export type MarketplaceLocationBackfill(?:Detail|Report)[\s\S]*?\n};/g)?.join('\n') ?? '';
+  assert.doesNotMatch(reportTypes, /latitude|longitude|location_point|apiKey|providerUrl|raw/);
+  assert.doesNotMatch(functionSource, /return jsonResponse\([^)]*(?:apiKey|latitude|longitude|location_point)/);
+});
+
+test('safe structured logs contain stages/counts and no secret or coordinate values', () => {
+  assert.match(functionSource, /console\.info\('marketplace-location-backfill', entry\)/);
+  assert.doesNotMatch(sharedSource.match(/dependencies\.log\?\.\([\s\S]*?\);/g)?.join('\n') ?? '', /latitude|longitude|apiKey|authorization/i);
+});
+
+test('old and v2 Nearby RPCs remain present and unmodified by Phase 5', () => {
+  assert.match(phase4, /create or replace function public\.get_nearby_listings_v2_sorted/);
+  assert.doesNotMatch(migration, /create or replace function public\.get_nearby_listings/i);
+  assert.doesNotMatch(migration, /drop function[^;]*get_nearby_listings/i);
+});
+
+test('Phase 5 leaves ISO, Rescue Hub, checkout, shipping, and Stripe untouched', () => {
+  assert.doesNotMatch(migration, /\b(?:iso_|rescue_|stripe|payment_intent|shipping_label|checkout)\b/i);
+  assert.doesNotMatch(functionSource, /stripe|payment_intent|shipping-label|rescue|iso-/i);
+});
+
+test('production audit is read-only and covers required rollout metrics', () => {
+  assert.doesNotMatch(audit, /\b(?:insert|update|delete|truncate|alter|drop|create)\b/i);
+  for (const metric of [
+    'total_nondeleted_listings', 'active_listings', 'listings_with_valid_zip',
+    'listings_without_marketplace_location', 'listings_with_coordinates',
+    'listings_with_search_area', 'distinct_zip_state_needing_resolution',
+    'trusted_cached_postal_locations', 'trusted_search_preferences', 'legacy_search_preferences',
+  ]) assert.match(audit, new RegExp(metric));
+});
+
+test('rollout uses individual migrations and explicitly excludes db push and Stage C', () => {
+  assert.match(rollout, /Do not use `supabase db push`/);
+  assert.match(rollout, /Do not deploy `20260914230150_checkout_payment_intent_strict_enforcement_v1\.sql`/);
+  assert.match(rollout, /apply(?:ing)? SQL|Apply the five Location v2 migrations individually/i);
+});
+
+test('rollout documents non-destructive fallback and no extra feature-flag requirement', () => {
+  assert.match(rollout, /No additional feature-flag system is required/);
+  assert.match(rollout, /v2-to-legacy RPC fallback/);
+  assert.match(rollout, /do not need to be deleted/);
+});
+
+test('smoke plan covers provider outage, cached outage path, old clients, and null legacy area', () => {
+  for (const phrase of [
+    'Geoapify unavailable', 'Cached ZIP while Geoapify unavailable',
+    'Old-client legacy-area listing', 'null `search_area_id`',
+  ]) assert.match(rollout, new RegExp(phrase));
+});
