@@ -132,7 +132,17 @@ test('seller contact and precise regular-user location remain out of public mark
   assert.doesNotMatch(types.match(/export type PublicProfile[\s\S]+?>;/)?.[0] ?? '', /'email'|'phone'/);
   assert.match(supabaseData, /export function toPublicProfile/);
   assert.doesNotMatch(supabaseData.match(/export function toPublicProfile[\s\S]+?\n}/)?.[0] ?? '', /email|phone/);
-  assert.match(types, /Omit<Listing, 'zipCode' \| 'latitude' \| 'longitude' \| 'distanceMiles' \| 'shipFromZipCode'>/);
+  const publicListing = types.match(/export type PublicListing = Omit<[\s\S]+?> & \{/)?.[0] ?? '';
+  for (const privateField of [
+    'zipCode',
+    'marketplaceLocationId',
+    'latitude',
+    'longitude',
+    'distanceMiles',
+    'shipFromZipCode',
+  ]) {
+    assert.match(publicListing, new RegExp(`'${privateField}'`));
+  }
   assert.doesNotMatch(read('src/services/supportCaseService.ts'), /seller_email|seller_phone|buyer_email|buyer_phone/);
 });
 

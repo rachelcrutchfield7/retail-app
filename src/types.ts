@@ -51,6 +51,7 @@ export type Listing = {
   state?: string;
   location: string;
   zipCode?: string;
+  marketplaceLocationId?: string;
   distance: string;
   latitude?: number;
   longitude?: number;

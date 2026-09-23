@@ -651,7 +651,10 @@ export type PrivacySettings = {
 
 export type DistanceBand = 'Under 5 miles' | '5-10 miles' | '10-25 miles' | '25-50 miles' | '50+ miles';
 
-export type PublicListing = Omit<Listing, 'zipCode' | 'latitude' | 'longitude' | 'distanceMiles' | 'shipFromZipCode'> & {
+export type PublicListing = Omit<
+  Listing,
+  'zipCode' | 'marketplaceLocationId' | 'latitude' | 'longitude' | 'distanceMiles' | 'shipFromZipCode'
+> & {
   distanceBand?: DistanceBand;
 };
 

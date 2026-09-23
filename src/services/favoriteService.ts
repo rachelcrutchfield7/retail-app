@@ -70,7 +70,7 @@ export async function getFavorites(): Promise<ListingSummary[]> {
   return (data ?? [])
     .map((favorite) => (favorite as Record<string, unknown>).listing)
     .filter((listing): listing is Record<string, unknown> => Boolean(listing))
-    .map(toListing);
+    .map((listing) => toListing(listing));
 }
 
 export async function isListingFavorited(listingId: string): Promise<boolean> {

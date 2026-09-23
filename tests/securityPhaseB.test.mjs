@@ -126,7 +126,8 @@ test('Phase B mappers keep listing locations coarse and rely on privacy-gated re
   const rescueMapper = extractBetween(rescueService, 'function hubRescueFromRow', 'function toRescueProfile');
 
   assert.match(distanceMapper, /distance_band/);
-  assert.doesNotMatch(listingMapper, /zipCode:/);
+  assert.match(listingMapper, /options: \{ includeOwnerLocation\?: boolean \}/);
+  assert.match(listingMapper, /options\.includeOwnerLocation[\s\S]+?zipCode:[\s\S]+?marketplaceLocationId:/);
   assert.doesNotMatch(listingMapper, /latitude:/);
   assert.doesNotMatch(listingMapper, /longitude:/);
   assert.match(listingMapper, /distanceMiles:/);

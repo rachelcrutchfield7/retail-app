@@ -27,13 +27,73 @@ import type {
 import { getDefaultSellerShippingOrigin, validateSellerShippingOrigin } from './shippingService';
 import type { SellerShippingOrigin } from './shippingService';
 import { normalizePackageWeightOz, normalizePositiveDecimal, validateShippingPackage } from './shippingRules';
+import {
+  canReuseMarketplaceLocation,
+  resolveMarketplaceLocation,
+} from './marketplaceLocationService';
 
 const allowedSorts = new Set(['recent', 'price_asc', 'price_desc', 'distance', 'favorites']);
 const listingSummaryCache = new Map<string, Listing>();
 
+type OwnerListingLocation = {
+  marketplaceLocationId?: string;
+  city: string;
+  state: string;
+  zipCode: string;
+};
+
 function rememberListings(listings: Listing[]): Listing[] {
   listings.forEach((listing) => listingSummaryCache.set(listing.id, listing));
   return listings;
+}
+
+async function getMyListingLocation(listingId: string): Promise<OwnerListingLocation> {
+  const { data, error } = await supabase.rpc('get_my_listing_location', {
+    target_listing_id: listingId,
+  });
+
+  if (error) {
+    throwSupabaseError(error, 'We could not load this listing location.');
+  }
+
+  const row = Array.isArray(data)
+    ? data[0] as Record<string, unknown> | undefined
+    : data as Record<string, unknown> | null;
+
+  if (!row) {
+    throw createServiceError(
+      'LISTING_NOT_FOUND',
+      `Owner location was unavailable for listing ${listingId}`,
+      'This listing is no longer available.'
+    );
+  }
+
+  return {
+    marketplaceLocationId: typeof row.marketplace_location_id === 'string'
+      ? row.marketplace_location_id
+      : undefined,
+    city: typeof row.city === 'string' ? row.city : '',
+    state: typeof row.state === 'string' ? row.state : '',
+    zipCode: typeof row.zip_code === 'string' ? row.zip_code : '',
+  };
+}
+
+async function marketplaceLocationIdForUpdate(
+  listingId: string,
+  input: UpdateListingInput
+): Promise<string> {
+  const current = await getMyListingLocation(listingId);
+  const requested = {
+    city: input.city ?? current.city,
+    state: input.state ?? current.state,
+    zipCode: input.zip_code ?? current.zipCode,
+  };
+
+  if (canReuseMarketplaceLocation(current, requested)) {
+    return current.marketplaceLocationId;
+  }
+
+  return (await resolveMarketplaceLocation(requested)).marketplaceLocationId;
 }
 
 export function getCachedListingDetailPlaceholder(listingId: string): ListingDetail | null {
@@ -629,6 +689,7 @@ export async function getListingById(listingId: string): Promise<ListingDetail> 
   let listingRow = Array.isArray(publicListingResult.data)
     ? publicListingResult.data[0] as Record<string, unknown> | undefined
     : undefined;
+  let includeOwnerLocation = false;
 
   const session = await supabase.auth.getSession();
   const userId = session.data.session?.user.id;
@@ -651,10 +712,27 @@ export async function getListingById(listingId: string): Promise<ListingDetail> 
     }
   }
 
+  if (listingRow && userId) {
+    const sellerRow = listingRow.seller as Record<string, unknown> | undefined;
+    const sellerId = listingRow.seller_id ?? sellerRow?.id;
+
+    if (sellerId === userId) {
+      const ownerLocation = await getMyListingLocation(listingId);
+      includeOwnerLocation = true;
+      listingRow = {
+        ...listingRow,
+        city: ownerLocation.city,
+        state: ownerLocation.state,
+        zip_code: ownerLocation.zipCode,
+        marketplace_location_id: ownerLocation.marketplaceLocationId ?? null,
+      };
+    }
+  }
+
   assertListingExists(listingRow, listingId);
 
   const row = listingRow;
-  const listing = toListing(row);
+  const listing = toListing(row, { includeOwnerLocation });
   const sellerRow = row.seller as Record<string, unknown> | undefined;
 
   if (!sellerRow) {
@@ -697,8 +775,14 @@ export async function createListing(input: CreateListingInput): Promise<Listing>
   const categoryId = await resolveCategoryId(input.category_id, input.category);
   const listingType = input.listing_type;
   const price = listingType === 'sale' ? priceNumber(input.price) : null;
+  const marketplaceLocation = await resolveMarketplaceLocation({
+    city: input.city,
+    state: input.state,
+    zipCode: input.zip_code?.trim() ?? '',
+  });
 
-  const { data, error } = await supabase.rpc('create_listing', {
+  const { data, error } = await supabase.rpc('create_listing_v2', {
+    requested_marketplace_location_id: marketplaceLocation.marketplaceLocationId,
     requested_category_id: categoryId,
     requested_title: input.title.trim(),
     requested_description: input.description.trim(),
@@ -706,9 +790,6 @@ export async function createListing(input: CreateListingInput): Promise<Listing>
     requested_listing_type: listingType,
     requested_price: price,
     requested_brand: input.brand?.trim() || null,
-    requested_city: input.city.trim(),
-    requested_state: input.state.trim(),
-    requested_zip_code: input.zip_code?.trim() || null,
     requested_pickup_available: Boolean(input.porch_pickup_available || input.meetup_available || input.pickup_available),
     requested_porch_pickup_available: input.porch_pickup_available ?? false,
     requested_meetup_available: input.meetup_available ?? input.pickup_available ?? true,
@@ -784,9 +865,11 @@ export async function updateListing(listingId: string, input: UpdateListingInput
   if (input.category_id !== undefined || input.category !== undefined) {
     categoryId = await resolveCategoryId(input.category_id, input.category);
   }
+  const marketplaceLocationId = await marketplaceLocationIdForUpdate(listingId, input);
 
-  const { error } = await runListingMutationWithExpiredCheckoutRecovery(listingId, () => supabase.rpc('update_my_listing', {
+  const { error } = await runListingMutationWithExpiredCheckoutRecovery(listingId, () => supabase.rpc('update_my_listing_v2', {
     target_listing_id: listingId,
+    requested_marketplace_location_id: marketplaceLocationId,
     requested_category_id: categoryId,
     requested_title: input.title !== undefined ? input.title.trim() : null,
     requested_description: input.description !== undefined ? input.description.trim() : null,
@@ -794,9 +877,6 @@ export async function updateListing(listingId: string, input: UpdateListingInput
     requested_listing_type: input.listing_type ?? null,
     requested_price: input.price !== undefined ? priceNumber(input.price) : null,
     requested_brand: input.brand !== undefined ? input.brand.trim() : null,
-    requested_city: input.city !== undefined ? input.city.trim() : null,
-    requested_state: input.state !== undefined ? input.state.trim() : null,
-    requested_zip_code: input.zip_code !== undefined ? input.zip_code?.trim() || '' : null,
     requested_pickup_available: input.pickup_available ?? null,
     requested_porch_pickup_available: input.porch_pickup_available ?? null,
     requested_meetup_available: input.meetup_available ?? null,

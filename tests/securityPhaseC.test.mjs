@@ -94,8 +94,8 @@ test('Phase C app services use controlled RPCs for protected table writes', () =
 
   assert.match(supabaseData, /rpc\('create_my_profile'/);
   assert.match(profileService, /rpc\('update_my_profile'/);
-  assert.match(listingService, /rpc\('create_listing'/);
-  assert.match(listingService, /rpc\('update_my_listing'/);
+  assert.match(listingService, /rpc\('create_listing_v2'/);
+  assert.match(listingService, /rpc\('update_my_listing_v2'/);
   assert.match(listingService, /rpc\('archive_my_listing'/);
   assert.match(listingService, /rpc\('delete_my_listing'/);
   assert.match(listingService, /rpc\('mark_my_listing_sold'/);

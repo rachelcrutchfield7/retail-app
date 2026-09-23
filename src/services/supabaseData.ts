@@ -482,7 +482,10 @@ export function toListingImage(row: SupabaseRow): ListingImage {
   };
 }
 
-export function toListing(row: SupabaseRow): Listing {
+export function toListing(
+  row: SupabaseRow,
+  options: { includeOwnerLocation?: boolean } = {}
+): Listing {
   const categoryRow = objectValue(row.category) ?? objectValue(row.categories);
   const sellerRow = objectValue(row.seller) ?? objectValue(row.profiles);
   const images = imagesFromListingRow(row);
@@ -516,6 +519,12 @@ export function toListing(row: SupabaseRow): Listing {
     city,
     state,
     location: [city, state].filter(Boolean).join(', '),
+    ...(options.includeOwnerLocation
+      ? {
+          zipCode: optionalString(row.zip_code),
+          marketplaceLocationId: optionalString(row.marketplace_location_id),
+        }
+      : {}),
     distance: distanceFromRow(row),
     distanceMiles: optionalNumber(row.distance_miles),
     status: statusFromDb(row.status),

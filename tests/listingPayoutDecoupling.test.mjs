@@ -36,9 +36,9 @@ for (const sellerState of [
 
 test('listing creation remains active, visible, and followed by the existing photo upload flow', () => {
   assert.match(createListingRpc, /'active'::public\.listing_status/);
-  assert.match(listingService, /supabase\.rpc\('create_listing'/);
+  assert.match(listingService, /supabase\.rpc\('create_listing_v2'/);
   assert.match(listingService, /for \(const imageUri of input\.images\) \{\s*await uploadListingImage\(imageUri, listingId\)/s);
-  assert.ok(listingService.indexOf("supabase.rpc('create_listing'") < listingService.indexOf('await uploadListingImage(imageUri, listingId)'));
+  assert.ok(listingService.indexOf("supabase.rpc('create_listing_v2'") < listingService.indexOf('await uploadListingImage(imageUri, listingId)'));
   assert.doesNotMatch(listingService, /profileHasStripePayouts|confirmPayoutReadyForPublish|seller_payout_ready/);
 });
 
