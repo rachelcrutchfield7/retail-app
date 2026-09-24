@@ -4,6 +4,130 @@
 -- versioned nearby listing feed. Legacy marketplace areas remain intact for
 -- old clients, ISO, Rescue Hub, analytics, and inventory fallback.
 
+-- Remove legacy coordinates from deleted pre-Location-v2 inventory before the
+-- geographic search API is enabled. The reviewed ceiling is intentionally
+-- small: production currently has three matching rows, while zero is valid on
+-- an idempotent replay.
+do $location_v2_legacy_coordinate_scrub$
+declare
+  target_count integer;
+  scrubbed_count integer;
+  managed_trigger_count integer;
+  enabled_managed_trigger_count integer;
+begin
+  select count(*)::integer
+  into target_count
+  from public.listings as l
+  where l.deleted_at is not null
+    and l.status = 'removed'::public.listing_status
+    and l.marketplace_location_id is null
+    and (
+      l.latitude is not null
+      or l.longitude is not null
+      or l.location_point is not null
+    );
+
+  if target_count > 10 then
+    raise exception 'RETAIL_LEGACY_COORDINATE_SCRUB_TOO_BROAD'
+      using
+        errcode = '54000',
+        detail = pg_catalog.format('Expected at most 10 rows, found %s.', target_count);
+  end if;
+
+  select
+    count(*)::integer,
+    count(*) filter (where t.tgenabled = 'O')::integer
+  into managed_trigger_count, enabled_managed_trigger_count
+  from pg_catalog.pg_trigger as t
+  where t.tgrelid = 'public.listings'::pg_catalog.regclass
+    and t.tgname in (
+      'listing_update_count',
+      'set_listing_search_area_before_write',
+      'set_listings_updated_at'
+    )
+    and not t.tgisinternal;
+
+  if managed_trigger_count <> 3 or enabled_managed_trigger_count <> 3 then
+    raise exception 'RETAIL_LEGACY_COORDINATE_SCRUB_TRIGGER_STATE'
+      using errcode = '55000';
+  end if;
+
+  if target_count > 0 then
+    perform pg_catalog.set_config('retail.checkout_reservation_context', 'true', true);
+
+    begin
+      execute 'alter table public.listings disable trigger listing_update_count';
+      execute 'alter table public.listings disable trigger set_listing_search_area_before_write';
+      execute 'alter table public.listings disable trigger set_listings_updated_at';
+
+      update public.listings as l
+      set latitude = null,
+          longitude = null,
+          location_point = null
+      where l.deleted_at is not null
+        and l.status = 'removed'::public.listing_status
+        and l.marketplace_location_id is null
+        and (
+          l.latitude is not null
+          or l.longitude is not null
+          or l.location_point is not null
+        );
+
+      get diagnostics scrubbed_count = row_count;
+
+      if scrubbed_count <> target_count then
+        raise exception 'RETAIL_LEGACY_COORDINATE_SCRUB_COUNT_CHANGED'
+          using errcode = '40001';
+      end if;
+
+      execute 'alter table public.listings enable trigger listing_update_count';
+      execute 'alter table public.listings enable trigger set_listing_search_area_before_write';
+      execute 'alter table public.listings enable trigger set_listings_updated_at';
+      perform pg_catalog.set_config('retail.checkout_reservation_context', 'false', true);
+    exception
+      when others then
+        execute 'alter table public.listings enable trigger listing_update_count';
+        execute 'alter table public.listings enable trigger set_listing_search_area_before_write';
+        execute 'alter table public.listings enable trigger set_listings_updated_at';
+        perform pg_catalog.set_config('retail.checkout_reservation_context', 'false', true);
+        raise;
+    end;
+  end if;
+
+  if exists (
+    select 1
+    from public.listings as l
+    where l.deleted_at is not null
+      and l.status = 'removed'::public.listing_status
+      and l.marketplace_location_id is null
+      and (
+        l.latitude is not null
+        or l.longitude is not null
+        or l.location_point is not null
+      )
+  ) then
+    raise exception 'RETAIL_LEGACY_COORDINATE_SCRUB_INCOMPLETE'
+      using errcode = '55000';
+  end if;
+
+  if exists (
+    select 1
+    from pg_catalog.pg_trigger as t
+    where t.tgrelid = 'public.listings'::pg_catalog.regclass
+      and t.tgname in (
+        'listing_update_count',
+        'set_listing_search_area_before_write',
+        'set_listings_updated_at'
+      )
+      and not t.tgisinternal
+      and t.tgenabled <> 'O'
+  ) then
+    raise exception 'RETAIL_LEGACY_COORDINATE_SCRUB_TRIGGER_RESTORE_FAILED'
+      using errcode = '55000';
+  end if;
+end;
+$location_v2_legacy_coordinate_scrub$;
+
 create table private.marketplace_search_location_preferences (
   user_id uuid primary key
     references public.profiles(id) on delete cascade,

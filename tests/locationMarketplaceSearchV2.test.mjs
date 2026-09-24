@@ -21,6 +21,10 @@ const phase3 = await readFile(
   'utf8'
 );
 
+const privacyScrub = migration.match(
+  /do \$location_v2_legacy_coordinate_scrub\$[\s\S]*?\$location_v2_legacy_coordinate_scrub\$;/
+)?.[0] ?? '';
+
 const preferenceTable = migration.match(
   /create table private\.marketplace_search_location_preferences[\s\S]*?\n\);/
 )?.[0] ?? '';
@@ -36,6 +40,62 @@ const nearby = migration.match(
 const candidateBranches = nearby.match(/with location_candidates as \(([\s\S]*?)\n  \)\n  select/)?.[1] ?? '';
 const trustedBranch = candidateBranches.split(/\n\s*union all/)[0] ?? '';
 const resultSignature = nearby.match(/returns table \(([\s\S]*?)\)\nlanguage/)?.[1] ?? '';
+
+test('Phase 4 scrubs only deleted removed pre-v2 listings with legacy public coordinates', () => {
+  assert.match(privacyScrub, /l\.deleted_at is not null/);
+  assert.match(privacyScrub, /l\.status = 'removed'::public\.listing_status/);
+  assert.match(privacyScrub, /l\.marketplace_location_id is null/);
+  assert.match(privacyScrub, /l\.latitude is not null[\s\S]*?l\.longitude is not null[\s\S]*?l\.location_point is not null/);
+  assert.doesNotMatch(privacyScrub, /deleted_at is null/);
+  assert.doesNotMatch(privacyScrub, /status = 'active'/);
+});
+
+test('legacy coordinate scrub changes only public coordinate columns', () => {
+  const updateSet = privacyScrub.match(/update public\.listings as l\s+set([\s\S]*?)\s+where l\.deleted_at is not null/)?.[1] ?? '';
+  assert.match(updateSet, /latitude = null/);
+  assert.match(updateSet, /longitude = null/);
+  assert.match(updateSet, /location_point = null/);
+  for (const field of [
+    'id', 'seller_id', 'city', 'state', 'zip_code', 'search_area_id', 'status',
+    'deleted_at', 'created_at', 'updated_at', 'published_at', 'marketplace_location_id',
+    'reserved_by', 'reserved_until', 'reservation_payment_intent_id',
+    'reservation_transaction_id', 'shipping_available', 'shipping_payer',
+  ]) {
+    assert.doesNotMatch(updateSet, new RegExp(`\\b${field}\\s*=`));
+  }
+});
+
+test('legacy coordinate scrub is bounded and idempotent', () => {
+  assert.match(privacyScrub, /if target_count > 10 then/);
+  assert.match(privacyScrub, /RETAIL_LEGACY_COORDINATE_SCRUB_TOO_BROAD/);
+  assert.match(privacyScrub, /if target_count > 0 then/);
+  assert.match(privacyScrub, /scrubbed_count <> target_count/);
+  assert.match(privacyScrub, /RETAIL_LEGACY_COORDINATE_SCRUB_INCOMPLETE/);
+  assert.doesNotMatch(privacyScrub, /target_count\s*(?:=|<>)\s*3/);
+});
+
+test('migration-only trigger handling is narrow and always restored', () => {
+  assert.match(privacyScrub, /set_config\('retail\.checkout_reservation_context', 'true', true\)/);
+  assert.equal((privacyScrub.match(/disable trigger/g) ?? []).length, 3);
+  assert.equal((privacyScrub.match(/enable trigger/g) ?? []).length, 6);
+  for (const trigger of [
+    'listing_update_count',
+    'set_listing_search_area_before_write',
+    'set_listings_updated_at',
+  ]) {
+    assert.match(privacyScrub, new RegExp(`disable trigger ${trigger}`));
+    assert.equal((privacyScrub.match(new RegExp(`enable trigger ${trigger}`, 'g')) ?? []).length, 2);
+  }
+  assert.doesNotMatch(privacyScrub, /disable trigger (?:all|user)/i);
+  assert.doesNotMatch(privacyScrub, /disable trigger sync_listing_location_point_trigger/);
+  assert.match(privacyScrub, /exception\s+when others then[\s\S]*?raise;/);
+  assert.match(privacyScrub, /RETAIL_LEGACY_COORDINATE_SCRUB_TRIGGER_RESTORE_FAILED/);
+});
+
+test('coordinate sync remains active so null latitude and longitude imply a null point', () => {
+  assert.doesNotMatch(privacyScrub, /disable trigger sync_listing_location_point_trigger/);
+  assert.match(privacyScrub, /set latitude = null,[\s\S]*?longitude = null,[\s\S]*?location_point = null/);
+});
 
 test('trusted search preference is private, owner keyed, and stores only a trusted location reference', () => {
   assert.match(preferenceTable, /user_id uuid primary key/);

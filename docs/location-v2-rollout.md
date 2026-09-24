@@ -59,6 +59,9 @@ Invalid/missing ZIPs, invalid state codes, ZIP/state mismatches, inactive or mal
 ## Trusted Location Privacy
 
 - Trusted coordinates live only in `private.marketplace_locations`.
+- Phase 4 performs one bounded, idempotent privacy scrub of deleted, `removed` pre-v2 listings that still contain legacy public coordinates. It does not target active or other non-deleted inventory.
+- The scrub clears only `public.listings.latitude`, `longitude`, and `location_point`; seller locality, ZIP, legacy search area, lifecycle state, timestamps, payment state, shipping state, and trusted location ID remain unchanged.
+- After Phase 4, every `public.listings` row, including deleted history, must have NULL public coordinate fields.
 - `public.listings.marketplace_location_id` is the trusted relationship used by Location v2.
 - Location v2 leaves `public.listings.latitude`, `longitude`, and `location_point` unused and NULL, including after backfill.
 - Production currently grants authenticated users table-level `SELECT` on `public.listings`; Location v2 does not change that old-client compatibility grant and remains private because trusted coordinates are never stored on those rows.
