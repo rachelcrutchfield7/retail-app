@@ -25,6 +25,10 @@ const phase1 = await readFile(
   new URL('../supabase/migrations/20260922144847_location_architecture_v2_foundation.sql', import.meta.url),
   'utf8'
 );
+const baseline = await readFile(
+  new URL('../supabase/migrations/20260812152900_prelaunch_current_schema_baseline_created_20260813.sql', import.meta.url),
+  'utf8'
+);
 const phase2Name = migrations.find((name) => name.endsWith('_location_architecture_v2_resolver.sql'));
 assert.ok(phase2Name, 'Phase 2 resolver migration should remain present');
 const phase2 = await readFile(new URL(`../supabase/migrations/${phase2Name}`, import.meta.url), 'utf8');
@@ -95,14 +99,25 @@ test('client state and ZIP must match the trusted postal location', () => {
   assert.match(trustedLocationHelper, /RETAIL_LISTING_LOCATION_MISMATCH/);
 });
 
-test('database applies trusted coordinates and reuses the existing point sync trigger', () => {
+test('v2 listing writes keep trusted coordinates out of client-readable listing rows', () => {
   for (const block of [createV2, updateV2]) {
-    assert.match(block, /latitude = trusted_location\.latitude/);
-    assert.match(block, /longitude = trusted_location\.longitude/);
+    assert.match(block, /latitude = null/);
+    assert.match(block, /longitude = null/);
+    assert.doesNotMatch(block, /latitude = trusted_location\.latitude/);
+    assert.doesNotMatch(block, /longitude = trusted_location\.longitude/);
     assert.doesNotMatch(block, /location_point\s*=/);
   }
   assert.match(phase1, /location_point public\.geography\(Point, 4326\)/);
+  assert.match(baseline, /new\.location_point = case[\s\S]*?when new\.latitude is not null and new\.longitude is not null[\s\S]*?else null/);
   assert.doesNotMatch(migration, /create (?:or replace )?function public\.sync_listing_location_point/);
+});
+
+test('coordinate privacy does not depend on changing legacy listing SELECT grants', () => {
+  assert.doesNotMatch(migration, /revoke\s+select\s+on\s+(?:table\s+)?public\.listings/i);
+  assert.doesNotMatch(migration, /grant\s+select\s*\([^)]*(?:latitude|longitude|location_point)/i);
+  for (const block of [createV2, updateV2]) {
+    assert.doesNotMatch(block, /trusted_location\.(?:latitude|longitude|location_point)/);
+  }
 });
 
 test('mutation responses expose safe canonical fields but no coordinates', () => {

@@ -93,6 +93,9 @@ begin
   from public.listings as l
   where l.deleted_at is null
     and l.marketplace_location_id is null
+    and l.latitude is null
+    and l.longitude is null
+    and l.location_point is null
     and l.zip_code ~ '^[0-9]{5}$'
   order by l.created_at asc, l.id asc
   limit safe_limit;
@@ -176,6 +179,12 @@ begin
     raise exception 'RETAIL_LOCATION_BACKFILL_ALREADY_TRUSTED' using errcode = '23505';
   end if;
 
+  if target_listing.latitude is not null
+    or target_listing.longitude is not null
+    or target_listing.location_point is not null then
+    raise exception 'RETAIL_LOCATION_BACKFILL_PUBLIC_COORDINATES_PRESENT' using errcode = '22023';
+  end if;
+
   normalized_listing_zip := btrim(coalesce(target_listing.zip_code, ''));
   normalized_listing_state := upper(btrim(coalesce(target_listing.state, '')));
 
@@ -192,9 +201,7 @@ begin
   begin
     update public.listings as l
     set
-      marketplace_location_id = trusted_location.id,
-      latitude = trusted_location.latitude,
-      longitude = trusted_location.longitude
+      marketplace_location_id = trusted_location.id
     where l.id = target_listing.id
       and l.marketplace_location_id is null
     returning l.* into target_listing;

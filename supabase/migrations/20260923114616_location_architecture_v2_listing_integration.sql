@@ -193,8 +193,8 @@ begin
 
   update public.listings
   set marketplace_location_id = trusted_location.id,
-      latitude = trusted_location.latitude,
-      longitude = trusted_location.longitude
+      latitude = null,
+      longitude = null
   where id = created_listing.id
     and seller_id = caller_id
   returning * into created_listing;
@@ -305,8 +305,8 @@ begin
 
   update public.listings
   set marketplace_location_id = trusted_location.id,
-      latitude = trusted_location.latitude,
-      longitude = trusted_location.longitude
+      latitude = null,
+      longitude = null
   where id = updated_listing.id
     and seller_id = caller_id
   returning * into updated_listing;

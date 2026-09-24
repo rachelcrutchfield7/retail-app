@@ -314,18 +314,23 @@ begin
 
   return query
   with location_candidates as (
-    -- Trusted listings use the indexed listing geography directly.
+    -- Trusted listings join to the private cache so coordinates never need to
+    -- be duplicated onto the client-readable listing row.
     select
       l.id as listing_id,
-      public.st_distance(l.location_point, origin_point) / 1609.344 as distance_miles,
+      public.st_distance(trusted_location.location_point, origin_point) / 1609.344 as distance_miles,
       false as same_search_area,
       1 as location_priority
-    from public.listings as l
-    where l.marketplace_location_id is not null
-      and l.location_point is not null
+    from private.marketplace_locations as trusted_location
+    join public.listings as l
+      on l.marketplace_location_id = trusted_location.id
+    where trusted_location.is_active = true
+      and trusted_location.country_code = 'US'
+      and trusted_location.resolution_level = 'postal_code'
+      and trusted_location.location_point is not null
       and l.status = 'active'::public.listing_status
       and l.deleted_at is null
-      and public.st_dwithin(l.location_point, origin_point, radius_meters)
+      and public.st_dwithin(trusted_location.location_point, origin_point, radius_meters)
 
     union all
 

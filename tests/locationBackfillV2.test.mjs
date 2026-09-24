@@ -158,15 +158,22 @@ test('existing Worden display city is preserved by the same attachment-only back
   }]);
 });
 
-test('coordinates and marketplace location come only from the locked trusted row', () => {
+test('backfill attaches only the trusted location ID and never copies coordinates', () => {
   assert.match(updateBlock, /marketplace_location_id = trusted_location\.id/);
-  assert.match(updateBlock, /latitude = trusted_location\.latitude/);
-  assert.match(updateBlock, /longitude = trusted_location\.longitude/);
+  assert.doesNotMatch(updateBlock, /latitude\s*=/);
+  assert.doesNotMatch(updateBlock, /longitude\s*=/);
+  assert.doesNotMatch(updateBlock, /location_point\s*=/);
+  assert.doesNotMatch(backfillRpc, /latitude = trusted_location\.latitude/);
+  assert.doesNotMatch(backfillRpc, /longitude = trusted_location\.longitude/);
   assert.doesNotMatch(backfillRpc, /requested_(?:latitude|longitude)/);
 });
 
-test('existing sync_listing_location_point trigger is reused', () => {
-  assert.doesNotMatch(updateBlock, /location_point/);
+test('backfill accepts only coordinate-free public listing rows', () => {
+  assert.match(candidateRpc, /l\.latitude is null/);
+  assert.match(candidateRpc, /l\.longitude is null/);
+  assert.match(candidateRpc, /l\.location_point is null/);
+  assert.match(backfillRpc, /target_listing\.latitude is not null[\s\S]*?target_listing\.longitude is not null[\s\S]*?target_listing\.location_point is not null/);
+  assert.match(backfillRpc, /RETAIL_LOCATION_BACKFILL_PUBLIC_COORDINATES_PRESENT/);
   assert.doesNotMatch(migration, /create (?:or replace )?function public\.sync_listing_location_point/i);
 });
 
@@ -366,6 +373,12 @@ test('rollout documents non-destructive fallback and no extra feature-flag requi
   assert.match(rollout, /No additional feature-flag system is required/);
   assert.match(rollout, /v2-to-legacy RPC fallback/);
   assert.match(rollout, /do not need to be deleted/);
+});
+
+test('rollout documents coordinate privacy without changing the old-client SELECT grant', () => {
+  assert.match(rollout, /authenticated users table-level `SELECT` on `public\.listings`/);
+  assert.match(rollout, /does not change that old-client compatibility grant/);
+  assert.match(rollout, /trusted coordinates are never stored on those rows/);
 });
 
 test('smoke plan covers provider outage, cached outage path, old clients, and null legacy area', () => {

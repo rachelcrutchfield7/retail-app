@@ -34,6 +34,7 @@ const nearby = migration.match(
   /create or replace function public\.get_nearby_listings_v2_sorted[\s\S]*?revoke all on function public\.get_my_marketplace_search_location_v2/
 )?.[0] ?? '';
 const candidateBranches = nearby.match(/with location_candidates as \(([\s\S]*?)\n  \)\n  select/)?.[1] ?? '';
+const trustedBranch = candidateBranches.split(/\n\s*union all/)[0] ?? '';
 const resultSignature = nearby.match(/returns table \(([\s\S]*?)\)\nlanguage/)?.[1] ?? '';
 
 test('trusted search preference is private, owner keyed, and stores only a trusted location reference', () => {
@@ -82,12 +83,13 @@ test('v2 origin prefers trusted location and falls back to the legacy area centr
   assert.match(nearby, /RETAIL_SEARCH_LOCATION_REQUIRED/);
 });
 
-test('trusted listing branch uses indexed listing geography and does not require a legacy area', () => {
-  const trustedBranch = candidateBranches.split(/\n\s*union all/)[0] ?? '';
-  assert.match(trustedBranch, /l\.marketplace_location_id is not null/);
-  assert.match(trustedBranch, /l\.location_point is not null/);
-  assert.match(trustedBranch, /st_dwithin\(l\.location_point, origin_point, radius_meters\)/);
-  assert.match(trustedBranch, /st_distance\(l\.location_point, origin_point\)/);
+test('trusted listing branch uses the private trusted point and indexed location relationship', () => {
+  assert.match(trustedBranch, /from private\.marketplace_locations as trusted_location/);
+  assert.match(trustedBranch, /l\.marketplace_location_id = trusted_location\.id/);
+  assert.match(trustedBranch, /trusted_location\.location_point is not null/);
+  assert.match(trustedBranch, /st_dwithin\(trusted_location\.location_point, origin_point, radius_meters\)/);
+  assert.match(trustedBranch, /st_distance\(trusted_location\.location_point, origin_point\)/);
+  assert.doesNotMatch(trustedBranch, /l\.(?:latitude|longitude|location_point)/);
   assert.doesNotMatch(trustedBranch, /search_area_id|destination_area/);
 });
 
@@ -109,9 +111,15 @@ test('legacy area fallback remains available only after trusted and cached ZIP p
 
 test('UNION ALL branches are mutually exclusive and avoid a location-source COALESCE', () => {
   assert.equal((candidateBranches.match(/union all/g) ?? []).length, 2);
-  assert.equal((candidateBranches.match(/l\.marketplace_location_id is not null/g) ?? []).length, 1);
+  assert.equal((candidateBranches.match(/l\.marketplace_location_id = trusted_location\.id/g) ?? []).length, 1);
   assert.equal((candidateBranches.match(/l\.marketplace_location_id is null/g) ?? []).length, 2);
   assert.doesNotMatch(candidateBranches, /coalesce\([^)]*(?:location_point|centroid)/i);
+});
+
+test('trusted branch can use the private GiST index before the listing location-id index join', () => {
+  assert.match(phase3, /create index listings_marketplace_location_id_idx[\s\S]*?on public\.listings\(marketplace_location_id\)/);
+  assert.match(trustedBranch, /from private\.marketplace_locations as trusted_location[\s\S]*?join public\.listings as l/);
+  assert.match(trustedBranch, /st_dwithin\(trusted_location\.location_point, origin_point, radius_meters\)/);
 });
 
 test('radius filtering and exact geographic distance sorting are authoritative', () => {
