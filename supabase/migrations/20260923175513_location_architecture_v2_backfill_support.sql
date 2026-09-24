@@ -92,6 +92,7 @@ begin
     l.marketplace_location_id
   from public.listings as l
   where l.deleted_at is null
+    and l.status = 'active'::public.listing_status
     and l.marketplace_location_id is null
     and l.latitude is null
     and l.longitude is null
@@ -143,8 +144,14 @@ begin
   where l.id = target_listing_id
   for update;
 
-  if not found or target_listing.deleted_at is not null then
+  if not found then
     raise exception 'RETAIL_LOCATION_BACKFILL_LISTING_NOT_FOUND' using errcode = 'P0002';
+  end if;
+
+  if target_listing.deleted_at is not null
+    or target_listing.status <> 'active'::public.listing_status then
+    raise exception 'RETAIL_MARKETPLACE_LOCATION_BACKFILL_INELIGIBLE'
+      using errcode = 'P0001';
   end if;
 
   select ml.*

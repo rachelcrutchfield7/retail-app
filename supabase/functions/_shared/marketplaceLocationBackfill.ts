@@ -163,6 +163,15 @@ function detail(
   };
 }
 
+function backfillErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === 'object' && 'message' in error) {
+    const message = (error as { message?: unknown }).message;
+    return typeof message === 'string' ? message : '';
+  }
+  return '';
+}
+
 export async function runMarketplaceLocationBackfill(
   request: MarketplaceLocationBackfillRequest,
   dependencies: MarketplaceLocationBackfillDependencies
@@ -279,7 +288,12 @@ export async function runMarketplaceLocationBackfill(
         }
         report.details.push(detail(candidate, result));
       } catch (error) {
-        const message = error instanceof Error ? error.message : '';
+        const message = backfillErrorMessage(error);
+        if (message.includes('RETAIL_MARKETPLACE_LOCATION_BACKFILL_INELIGIBLE')) {
+          report.skippedListings += 1;
+          report.details.push(detail(candidate, 'ineligible', 'LISTING_NO_LONGER_ACTIVE'));
+          continue;
+        }
         const reason = message.includes('ZIP_MISMATCH')
           ? 'ZIP_MISMATCH'
           : message.includes('STATE_MISMATCH')

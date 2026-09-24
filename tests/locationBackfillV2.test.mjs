@@ -66,7 +66,13 @@ function cachedLocation(overrides = {}) {
   };
 }
 
-function dependencies({ candidates = [candidate()], cached = cachedLocation(), providerError, attachResult = 'backfilled' } = {}) {
+function dependencies({
+  candidates = [candidate()],
+  cached = cachedLocation(),
+  providerError,
+  attachResult = 'backfilled',
+  attachError,
+} = {}) {
   const calls = { list: [], lookup: [], provider: [], cache: [], attach: [], logs: [] };
   return {
     calls,
@@ -86,6 +92,7 @@ function dependencies({ candidates = [candidate()], cached = cachedLocation(), p
       async cacheLocation(result) { calls.cache.push(result); return cachedLocation(); },
       async attachLocation(listingId, locationId) {
         calls.attach.push({ listingId, locationId });
+        if (attachError) throw attachError;
         return attachResult;
       },
       log(entry) { calls.logs.push(entry); },
@@ -104,6 +111,21 @@ test('candidate scanner is also service-role only and bounded', () => {
   assert.match(candidateRpc, /to service_role/);
   assert.match(candidateRpc, /safe_limit < 1 or safe_limit > 50/);
   assert.match(candidateRpc, /limit safe_limit/);
+});
+
+test('candidate scanner returns active listings only', () => {
+  assert.match(candidateRpc, /l\.deleted_at is null\s+and l\.status = 'active'::public\.listing_status/);
+});
+
+for (const status of ['sold', 'pending', 'draft', 'removed']) {
+  test(`${status} non-deleted listing is excluded by the active-only scanner`, () => {
+    assert.match(candidateRpc, /l\.status = 'active'::public\.listing_status/);
+    assert.doesNotMatch(candidateRpc, new RegExp(`l\\.status\\s*=\\s*'${status}'`));
+  });
+}
+
+test('deleted active-looking listing is excluded by the scanner', () => {
+  assert.match(candidateRpc, /l\.deleted_at is null/);
 });
 
 test('trusted location must be active', () => {
@@ -201,6 +223,45 @@ test('same trusted location reapply is idempotent without another update', () =>
 
 test('listing row is locked before validation and update', () => {
   assert.match(backfillRpc, /from public\.listings as l[\s\S]*?for update/);
+});
+
+test('attachment RPC checks active eligibility after acquiring the row lock', () => {
+  const rowLock = backfillRpc.indexOf('for update');
+  const statusCheck = backfillRpc.indexOf("target_listing.status <> 'active'::public.listing_status");
+  const trustedIdCheck = backfillRpc.indexOf('if target_listing.marketplace_location_id is not null then');
+  assert.ok(rowLock >= 0 && rowLock < statusCheck && statusCheck < trustedIdCheck);
+  assert.match(backfillRpc, /target_listing\.deleted_at is not null[\s\S]*?target_listing\.status <> 'active'::public\.listing_status/);
+  assert.match(backfillRpc, /RETAIL_MARKETPLACE_LOCATION_BACKFILL_INELIGIBLE/);
+});
+
+test('active listing attachment remains eligible when all trusted-location checks pass', () => {
+  assert.match(backfillRpc, /target_listing\.status <> 'active'::public\.listing_status/);
+  assert.match(updateBlock, /marketplace_location_id = trusted_location\.id/);
+});
+
+for (const status of ['sold', 'pending', 'draft', 'removed']) {
+  test(`${status} listing direct attachment fails closed`, () => {
+    assert.match(backfillRpc, /target_listing\.status <> 'active'::public\.listing_status/);
+    assert.match(backfillRpc, /RETAIL_MARKETPLACE_LOCATION_BACKFILL_INELIGIBLE/);
+  });
+}
+
+test('deleted listing direct attachment fails closed', () => {
+  assert.match(backfillRpc, /target_listing\.deleted_at is not null/);
+  assert.match(backfillRpc, /RETAIL_MARKETPLACE_LOCATION_BACKFILL_INELIGIBLE/);
+});
+
+test('active-to-sold race is rejected using the current locked row state', () => {
+  const rowLock = backfillRpc.indexOf('for update');
+  const eligibility = backfillRpc.indexOf('RETAIL_MARKETPLACE_LOCATION_BACKFILL_INELIGIBLE');
+  const update = backfillRpc.indexOf('update public.listings as l');
+  assert.ok(rowLock >= 0 && rowLock < eligibility && eligibility < update);
+});
+
+test('matching trusted ID is idempotent only after active eligibility passes', () => {
+  const eligibility = backfillRpc.indexOf('RETAIL_MARKETPLACE_LOCATION_BACKFILL_INELIGIBLE');
+  const alreadyComplete = backfillRpc.indexOf("'already_complete'::text");
+  assert.ok(eligibility >= 0 && eligibility < alreadyComplete);
 });
 
 test('trusted backfill context is narrow and cleared on success or exception', () => {
@@ -312,6 +373,42 @@ test('already trusted race result is handled idempotently', async () => {
   );
   assert.equal(report.alreadyTrusted, 1);
   assert.equal(report.backfilledListings, 0);
+});
+
+test('listing that becomes non-active after scanning is skipped without aborting the batch', async () => {
+  const deps = dependencies({
+    attachError: { message: 'RETAIL_MARKETPLACE_LOCATION_BACKFILL_INELIGIBLE' },
+  });
+  const report = await runMarketplaceLocationBackfill(
+    normalizeMarketplaceLocationBackfillRequest({ dryRun: false, execute: true }), deps.value
+  );
+  assert.equal(report.backfilledListings, 0);
+  assert.equal(report.failedListings, 0);
+  assert.equal(report.skippedListings, 1);
+  assert.equal(report.details[0]?.status, 'ineligible');
+  assert.equal(report.details[0]?.reason, 'LISTING_NO_LONGER_ACTIVE');
+});
+
+test('production-shaped active-only dry-run scans 18 listings instead of the sold-inclusive 19', async () => {
+  const candidates = [
+    candidate({ listingId: '00000000-0000-4000-8000-000000000001', zipCode: '62002' }),
+    ...Array.from({ length: 2 }, (_, index) => candidate({
+      listingId: `10000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+      zipCode: '62018',
+    })),
+    ...Array.from({ length: 14 }, (_, index) => candidate({
+      listingId: `20000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+      zipCode: '62095',
+    })),
+    candidate({ listingId: '30000000-0000-4000-8000-000000000001', zipCode: '62097' }),
+  ];
+  const deps = dependencies({ candidates });
+  const report = await runMarketplaceLocationBackfill(
+    normalizeMarketplaceLocationBackfillRequest({ dryRun: true, execute: false, limit: 50 }), deps.value
+  );
+  assert.equal(report.scannedListings, 18);
+  assert.equal(report.backfilledListings, 0);
+  assert.equal(deps.calls.attach.length, 0);
 });
 
 test('backfill endpoint requires a dedicated constant-time internal secret', () => {

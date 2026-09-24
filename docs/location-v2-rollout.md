@@ -29,6 +29,8 @@ This runbook prepares a controlled rollout. Location v2 is additive: legacy sear
 14. Continue bounded backfill batches only while health checks remain clean.
 15. Release the Location v2 client through the separately approved client release process.
 16. Monitor resolver failures, backfill failures, v2-to-legacy fallback, query latency, and unmatched ZIP/state groups.
+
+Initial Location v2 migration backfill is restricted to active, non-deleted listings. Sold, pending, draft, removed, and deleted listings are excluded; future listing location changes are handled through normal Location v2 application flows rather than historical backfill.
 17. Keep the legacy fallback active. Retire legacy area dependence only in a later, separately reviewed phase.
 
 ## Smoke Test Matrix
