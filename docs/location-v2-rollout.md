@@ -23,7 +23,7 @@ This runbook prepares a controlled rollout. Location v2 is additive: legacy sear
 8. Invoke `backfill-marketplace-locations` with the default dry-run mode and a batch limit of 10.
 9. Review mismatches, invalid records, provider lookups needed, and unresolved ZIPs. Do not correct listing data automatically.
 10. Execute one explicitly authorized batch with `{ "dryRun": false, "execute": true, "limit": 10 }`.
-11. Verify canonical city/state/ZIP, trusted location ID, coordinates, location point, unchanged listing business fields, and legacy search-area compatibility.
+11. Verify seller-entered display city, trusted state/ZIP, trusted location ID, coordinates, location point, unchanged listing business fields, and legacy search-area compatibility.
 12. Verify old marketplace feeds and old clients still work.
 13. Verify the v2 geographic feed for a trusted buyer origin, including a trusted listing whose `search_area_id` is null.
 14. Continue bounded backfill batches only while health checks remain clean.

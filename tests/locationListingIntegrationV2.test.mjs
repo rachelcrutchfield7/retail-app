@@ -41,6 +41,9 @@ const ownerLocation = migration.match(
 const trustedLocationHelper = migration.match(
   /create or replace function private\.require_trusted_listing_marketplace_location\([\s\S]*?create or replace function public\.create_listing_v2/
 )?.[0] ?? '';
+const displayCityHelper = migration.match(
+  /create or replace function private\.normalize_listing_display_city\([\s\S]*?revoke all on function private\.normalize_listing_display_city/
+)?.[0] ?? '';
 
 test('listings gain a nullable trusted location reference with restrictive deletion', () => {
   assert.match(migration, /add column marketplace_location_id uuid;/);
@@ -63,18 +66,33 @@ test('city-only, inactive, non-US, malformed, and incomplete locations fail clos
   assert.match(trustedLocationHelper, /RETAIL_LISTING_LOCATION_INVALID/);
 });
 
-test('trusted create uses canonical cache display fields and no client coordinates', () => {
-  assert.match(createV2, /requested_city => trusted_location\.city/);
+test('Cottage Hills display locality is preserved when trusted ZIP canonical city is Bethalto', () => {
+  assert.match(createV2, /display_city := private\.normalize_listing_display_city\(requested_city, trusted_location\.city\)/);
+  assert.match(createV2, /requested_city => display_city/);
   assert.match(createV2, /requested_state => trusted_location\.state_code/);
   assert.match(createV2, /requested_zip_code => trusted_location\.postal_code/);
   assert.doesNotMatch(createV2.match(/create_listing_v2\(([\s\S]*?)\)\s*returns/)?.[1] ?? '', /latitude|longitude|location_point/);
 });
 
-test('trusted update uses canonical cache display fields and no client coordinates', () => {
-  assert.match(updateV2, /requested_city => trusted_location\.city/);
+test('Worden display locality uses the same preservation policy on trusted update', () => {
+  assert.match(updateV2, /display_city := private\.normalize_listing_display_city\(requested_city, trusted_location\.city\)/);
+  assert.match(updateV2, /requested_city => display_city/);
   assert.match(updateV2, /requested_state => trusted_location\.state_code/);
   assert.match(updateV2, /requested_zip_code => trusted_location\.postal_code/);
   assert.doesNotMatch(updateV2.match(/update_my_listing_v2\(([\s\S]*?)\)\s*returns/)?.[1] ?? '', /latitude|longitude|location_point/);
+});
+
+test('display city is whitespace-normalized and blank input falls back to the trusted canonical city', () => {
+  assert.match(displayCityHelper, /regexp_replace\([\s\S]*?coalesce\(requested_city, ''\)[\s\S]*?'\[\[:space:\]\]\+'[\s\S]*?' '/);
+  assert.match(displayCityHelper, /if normalized_city = '' then[\s\S]*?coalesce\(fallback_city, ''\)/);
+  assert.match(displayCityHelper, /char_length\(normalized_city\) > 120/);
+  assert.match(displayCityHelper, /RETAIL_LISTING_CITY_INVALID/);
+});
+
+test('client state and ZIP must match the trusted postal location', () => {
+  assert.match(trustedLocationHelper, /normalized_requested_state <> trusted_location\.state_code/);
+  assert.match(trustedLocationHelper, /normalized_requested_zip <> trusted_location\.postal_code/);
+  assert.match(trustedLocationHelper, /RETAIL_LISTING_LOCATION_MISMATCH/);
 });
 
 test('database applies trusted coordinates and reuses the existing point sync trigger', () => {
@@ -122,9 +140,9 @@ test('legacy listing RPCs remain available for old installed clients', () => {
   assert.doesNotMatch(migration, /drop function[^;]*public\.update_my_listing\(/i);
 });
 
-test('legacy search-area assignment remains compatible without trigger-order coupling', () => {
-  assert.match(createV2, /requested_city => trusted_location\.city/);
-  assert.match(updateV2, /requested_city => trusted_location\.city/);
+test('legacy search-area assignment remains compatibility-only and uses the display locality', () => {
+  assert.match(createV2, /requested_city => display_city/);
+  assert.match(updateV2, /requested_city => display_city/);
   assert.doesNotMatch(migration, /drop trigger[^;]*set_listing_search_area_before_write/i);
   assert.doesNotMatch(migration, /drop (?:function|table)[^;]*marketplace_search_area/i);
 });
@@ -139,7 +157,8 @@ test('owner edit location reader is narrow, owner-scoped, and coordinate-free', 
 
 test('new RPC grants are explicit and do not expose private helpers', () => {
   assert.match(migration, /security definer\s*set search_path = ''/);
-  assert.match(migration, /revoke all on function private\.require_trusted_listing_marketplace_location\(uuid\)\s*from public, anon, authenticated/);
+  assert.match(migration, /revoke all on function private\.require_trusted_listing_marketplace_location\(uuid, text, text\)\s*from public, anon, authenticated/);
+  assert.match(migration, /revoke all on function private\.normalize_listing_display_city\(text, text\)\s*from public, anon, authenticated/);
   assert.match(migration, /grant execute on function public\.create_listing_v2\([\s\S]*?\) to authenticated/);
   assert.match(migration, /grant execute on function public\.update_my_listing_v2\([\s\S]*?\) to authenticated/);
   assert.match(migration, /grant execute on function public\.get_my_listing_location\(uuid\)\s*to authenticated/);
@@ -149,6 +168,9 @@ test('create resolves a trusted postal location before the listing mutation', ()
   const createBody = listingService.match(/export async function createListing[\s\S]*?export async function updateListing/)?.[0] ?? '';
   assert.ok(createBody.indexOf('resolveMarketplaceLocation({') < createBody.indexOf("supabase.rpc('create_listing_v2'"));
   assert.match(createBody, /requested_marketplace_location_id: marketplaceLocation\.marketplaceLocationId/);
+  assert.match(createBody, /requested_city: input\.city\.trim\(\)/);
+  assert.match(createBody, /requested_state: input\.state\.trim\(\)/);
+  assert.match(createBody, /requested_zip_code: input\.zip_code\?\.trim\(\) \?\? ''/);
   assert.doesNotMatch(createBody, /requested_(?:latitude|longitude|location_point)/);
 });
 
@@ -158,7 +180,7 @@ test('failed location resolution prevents the create RPC from running', () => {
   assert.ok(createBody.indexOf('await resolveMarketplaceLocation') < createBody.indexOf("supabase.rpc('create_listing_v2'"));
 });
 
-test('edit reuses the trusted ID only when canonical city, state, and ZIP are unchanged', () => {
+test('edit reuses the trusted ID only when display city, state, and ZIP are unchanged', () => {
   assert.match(locationService, /export function canReuseMarketplaceLocation/);
   assert.match(locationService, /normalizedCity\(current\.city\) === normalizedCity\(requested\.city\)/);
   assert.match(locationService, /normalizedState\(current\.state\) === normalizedState\(requested\.state\)/);
@@ -167,12 +189,13 @@ test('edit reuses the trusted ID only when canonical city, state, and ZIP are un
 });
 
 test('changed and legacy listing locations resolve before trusted update', () => {
-  assert.match(listingService, /return \(await resolveMarketplaceLocation\(requested\)\)\.marketplaceLocationId/);
-  assert.match(listingService, /requested_marketplace_location_id: marketplaceLocationId/);
-  assert.doesNotMatch(
-    listingService.match(/rpc\('update_my_listing_v2'[\s\S]*?\}\)\)/)?.[0] ?? '',
-    /requested_(?:city|state|zip_code|latitude|longitude|location_point)/
-  );
+  assert.match(listingService, /const resolved = await resolveMarketplaceLocation\(requested\)/);
+  assert.match(listingService, /return \{ \.\.\.requested, marketplaceLocationId: resolved\.marketplaceLocationId \}/);
+  assert.match(listingService, /requested_marketplace_location_id: marketplaceLocation\.marketplaceLocationId/);
+  assert.match(listingService, /requested_city: marketplaceLocation\.city/);
+  assert.match(listingService, /requested_state: marketplaceLocation\.state/);
+  assert.match(listingService, /requested_zip_code: marketplaceLocation\.zipCode/);
+  assert.doesNotMatch(listingService, /requested_(?:latitude|longitude|location_point)/);
 });
 
 test('client resolver invokes only the authenticated ReTail Edge Function', () => {

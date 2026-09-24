@@ -18,7 +18,9 @@ create index listings_marketplace_location_id_idx
   where marketplace_location_id is not null;
 
 create or replace function private.require_trusted_listing_marketplace_location(
-  requested_marketplace_location_id uuid
+  requested_marketplace_location_id uuid,
+  requested_state text,
+  requested_zip_code text
 )
 returns private.marketplace_locations
 language plpgsql
@@ -28,6 +30,8 @@ set search_path = ''
 as $$
 declare
   trusted_location private.marketplace_locations;
+  normalized_requested_state text := upper(btrim(coalesce(requested_state, '')));
+  normalized_requested_zip text := btrim(coalesce(requested_zip_code, ''));
 begin
   if requested_marketplace_location_id is null then
     raise exception 'RETAIL_LISTING_LOCATION_REQUIRED' using errcode = '22023';
@@ -49,11 +53,54 @@ begin
     raise exception 'RETAIL_LISTING_LOCATION_INVALID' using errcode = '22023';
   end if;
 
+  if normalized_requested_state <> trusted_location.state_code
+    or normalized_requested_zip <> trusted_location.postal_code then
+    raise exception 'RETAIL_LISTING_LOCATION_MISMATCH' using errcode = '22023';
+  end if;
+
   return trusted_location;
 end;
 $$;
 
-revoke all on function private.require_trusted_listing_marketplace_location(uuid)
+revoke all on function private.require_trusted_listing_marketplace_location(uuid, text, text)
+from public, anon, authenticated;
+
+create or replace function private.normalize_listing_display_city(
+  requested_city text,
+  fallback_city text
+)
+returns text
+language plpgsql
+immutable
+security invoker
+set search_path = ''
+as $$
+declare
+  normalized_city text := pg_catalog.regexp_replace(
+    pg_catalog.btrim(coalesce(requested_city, '')),
+    '[[:space:]]+',
+    ' ',
+    'g'
+  );
+begin
+  if normalized_city = '' then
+    normalized_city := pg_catalog.regexp_replace(
+      pg_catalog.btrim(coalesce(fallback_city, '')),
+      '[[:space:]]+',
+      ' ',
+      'g'
+    );
+  end if;
+
+  if normalized_city = '' or pg_catalog.char_length(normalized_city) > 120 then
+    raise exception 'RETAIL_LISTING_CITY_INVALID' using errcode = '22023';
+  end if;
+
+  return normalized_city;
+end;
+$$;
+
+revoke all on function private.normalize_listing_display_city(text, text)
 from public, anon, authenticated;
 
 create or replace function public.create_listing_v2(
@@ -62,6 +109,9 @@ create or replace function public.create_listing_v2(
   requested_title text,
   requested_description text,
   requested_condition public.listing_condition,
+  requested_city text default null,
+  requested_state text default null,
+  requested_zip_code text default null,
   requested_listing_type public.listing_type default 'sale'::public.listing_type,
   requested_price numeric default null,
   requested_brand text default null,
@@ -92,6 +142,7 @@ as $$
 declare
   caller_id uuid := auth.uid();
   trusted_location private.marketplace_locations;
+  display_city text;
   created_listing public.listings;
 begin
   if caller_id is null then
@@ -103,8 +154,11 @@ begin
   end if;
 
   trusted_location := private.require_trusted_listing_marketplace_location(
-    requested_marketplace_location_id
+    requested_marketplace_location_id,
+    requested_state,
+    requested_zip_code
   );
+  display_city := private.normalize_listing_display_city(requested_city, trusted_location.city);
 
   created_listing := public.create_listing(
     requested_category_id => requested_category_id,
@@ -114,7 +168,7 @@ begin
     requested_listing_type => requested_listing_type,
     requested_price => requested_price,
     requested_brand => requested_brand,
-    requested_city => trusted_location.city,
+    requested_city => display_city,
     requested_state => trusted_location.state_code,
     requested_zip_code => trusted_location.postal_code,
     requested_pickup_available => requested_pickup_available,
@@ -162,6 +216,9 @@ $$;
 create or replace function public.update_my_listing_v2(
   target_listing_id uuid,
   requested_marketplace_location_id uuid,
+  requested_city text default null,
+  requested_state text default null,
+  requested_zip_code text default null,
   requested_category_id uuid default null,
   requested_title text default null,
   requested_description text default null,
@@ -196,6 +253,7 @@ as $$
 declare
   caller_id uuid := auth.uid();
   trusted_location private.marketplace_locations;
+  display_city text;
   updated_listing public.listings;
 begin
   if caller_id is null then
@@ -207,8 +265,11 @@ begin
   end if;
 
   trusted_location := private.require_trusted_listing_marketplace_location(
-    requested_marketplace_location_id
+    requested_marketplace_location_id,
+    requested_state,
+    requested_zip_code
   );
+  display_city := private.normalize_listing_display_city(requested_city, trusted_location.city);
 
   updated_listing := public.update_my_listing(
     target_listing_id => target_listing_id,
@@ -219,7 +280,7 @@ begin
     requested_listing_type => requested_listing_type,
     requested_price => requested_price,
     requested_brand => requested_brand,
-    requested_city => trusted_location.city,
+    requested_city => display_city,
     requested_state => trusted_location.state_code,
     requested_zip_code => trusted_location.postal_code,
     requested_pickup_available => requested_pickup_available,
@@ -303,14 +364,14 @@ end;
 $$;
 
 revoke all on function public.create_listing_v2(
-  uuid, uuid, text, text, public.listing_condition, public.listing_type,
+  uuid, uuid, text, text, public.listing_condition, text, text, text, public.listing_type,
   numeric, text, boolean, boolean, boolean, boolean, text, numeric, text,
   text, numeric, numeric, numeric, numeric, text, text, text, text, text,
   boolean
 ) from public, anon, authenticated;
 
 revoke all on function public.update_my_listing_v2(
-  uuid, uuid, uuid, text, text, public.listing_condition, public.listing_type,
+  uuid, uuid, text, text, text, uuid, text, text, public.listing_condition, public.listing_type,
   numeric, text, boolean, boolean, boolean, boolean, text, numeric, text,
   text, numeric, numeric, numeric, numeric, text, text, text, text, text,
   boolean
@@ -320,14 +381,14 @@ revoke all on function public.get_my_listing_location(uuid)
 from public, anon, authenticated;
 
 grant execute on function public.create_listing_v2(
-  uuid, uuid, text, text, public.listing_condition, public.listing_type,
+  uuid, uuid, text, text, public.listing_condition, text, text, text, public.listing_type,
   numeric, text, boolean, boolean, boolean, boolean, text, numeric, text,
   text, numeric, numeric, numeric, numeric, text, text, text, text, text,
   boolean
 ) to authenticated;
 
 grant execute on function public.update_my_listing_v2(
-  uuid, uuid, uuid, text, text, public.listing_condition, public.listing_type,
+  uuid, uuid, text, text, text, uuid, text, text, public.listing_condition, public.listing_type,
   numeric, text, boolean, boolean, boolean, boolean, text, numeric, text,
   text, numeric, numeric, numeric, numeric, text, text, text, text, text,
   boolean

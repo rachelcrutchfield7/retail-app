@@ -78,10 +78,10 @@ async function getMyListingLocation(listingId: string): Promise<OwnerListingLoca
   };
 }
 
-async function marketplaceLocationIdForUpdate(
+async function marketplaceLocationForUpdate(
   listingId: string,
   input: UpdateListingInput
-): Promise<string> {
+): Promise<OwnerListingLocation & { marketplaceLocationId: string }> {
   const current = await getMyListingLocation(listingId);
   const requested = {
     city: input.city ?? current.city,
@@ -90,10 +90,11 @@ async function marketplaceLocationIdForUpdate(
   };
 
   if (canReuseMarketplaceLocation(current, requested)) {
-    return current.marketplaceLocationId;
+    return { ...requested, marketplaceLocationId: current.marketplaceLocationId };
   }
 
-  return (await resolveMarketplaceLocation(requested)).marketplaceLocationId;
+  const resolved = await resolveMarketplaceLocation(requested);
+  return { ...requested, marketplaceLocationId: resolved.marketplaceLocationId };
 }
 
 export function getCachedListingDetailPlaceholder(listingId: string): ListingDetail | null {
@@ -789,6 +790,9 @@ export async function createListing(input: CreateListingInput): Promise<Listing>
 
   const { data, error } = await supabase.rpc('create_listing_v2', {
     requested_marketplace_location_id: marketplaceLocation.marketplaceLocationId,
+    requested_city: input.city.trim(),
+    requested_state: input.state.trim(),
+    requested_zip_code: input.zip_code?.trim() ?? '',
     requested_category_id: categoryId,
     requested_title: input.title.trim(),
     requested_description: input.description.trim(),
@@ -871,11 +875,14 @@ export async function updateListing(listingId: string, input: UpdateListingInput
   if (input.category_id !== undefined || input.category !== undefined) {
     categoryId = await resolveCategoryId(input.category_id, input.category);
   }
-  const marketplaceLocationId = await marketplaceLocationIdForUpdate(listingId, input);
+  const marketplaceLocation = await marketplaceLocationForUpdate(listingId, input);
 
   const { error } = await runListingMutationWithExpiredCheckoutRecovery(listingId, () => supabase.rpc('update_my_listing_v2', {
     target_listing_id: listingId,
-    requested_marketplace_location_id: marketplaceLocationId,
+    requested_marketplace_location_id: marketplaceLocation.marketplaceLocationId,
+    requested_city: marketplaceLocation.city,
+    requested_state: marketplaceLocation.state,
+    requested_zip_code: marketplaceLocation.zipCode,
     requested_category_id: categoryId,
     requested_title: input.title !== undefined ? input.title.trim() : null,
     requested_description: input.description !== undefined ? input.description.trim() : null,

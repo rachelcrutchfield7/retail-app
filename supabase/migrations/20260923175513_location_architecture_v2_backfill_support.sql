@@ -183,8 +183,7 @@ begin
     raise exception 'RETAIL_LOCATION_BACKFILL_ZIP_MISMATCH' using errcode = '22023';
   end if;
 
-  if normalized_listing_state <> ''
-    and normalized_listing_state <> trusted_location.state_code then
+  if normalized_listing_state <> trusted_location.state_code then
     raise exception 'RETAIL_LOCATION_BACKFILL_STATE_MISMATCH' using errcode = '22023';
   end if;
 
@@ -194,9 +193,6 @@ begin
     update public.listings as l
     set
       marketplace_location_id = trusted_location.id,
-      city = trusted_location.city,
-      state = trusted_location.state_code,
-      zip_code = trusted_location.postal_code,
       latitude = trusted_location.latitude,
       longitude = trusted_location.longitude
     where l.id = target_listing.id

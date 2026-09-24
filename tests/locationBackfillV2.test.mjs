@@ -130,15 +130,32 @@ test('listing ZIP must match trusted postal code', () => {
   assert.match(backfillRpc, /RETAIL_LOCATION_BACKFILL_ZIP_MISMATCH/);
 });
 
-test('listing state mismatch is rejected when listing state exists', () => {
-  assert.match(backfillRpc, /normalized_listing_state <> ''/);
+test('listing state must match the trusted postal location', () => {
   assert.match(backfillRpc, /normalized_listing_state <> trusted_location\.state_code/);
   assert.match(backfillRpc, /RETAIL_LOCATION_BACKFILL_STATE_MISMATCH/);
 });
 
-test('city difference alone is allowed and canonical city replaces the legacy label', () => {
+test('existing Cottage Hills display city is preserved when trusted ZIP canonical city is Bethalto', () => {
   assert.doesNotMatch(backfillRpc, /CITY_MISMATCH/);
-  assert.match(updateBlock, /city = trusted_location\.city/);
+  assert.doesNotMatch(updateBlock, /\bcity\s*=/);
+  assert.doesNotMatch(updateBlock, /\bstate\s*=/);
+  assert.doesNotMatch(updateBlock, /\bzip_code\s*=/);
+});
+
+test('existing Worden display city is preserved by the same attachment-only backfill', async () => {
+  const deps = dependencies({
+    candidates: [candidate({ city: 'Worden', state: 'IL', zipCode: '62097' })],
+    cached: cachedLocation({ city: 'Edwardsville', state: 'IL', zipCode: '62097' }),
+  });
+  const report = await runMarketplaceLocationBackfill(
+    normalizeMarketplaceLocationBackfillRequest({ dryRun: false, execute: true }), deps.value
+  );
+  assert.equal(report.backfilledListings, 1);
+  assert.equal(report.details[0]?.city, 'Worden');
+  assert.deepEqual(deps.calls.attach, [{
+    listingId: '11111111-1111-4111-8111-111111111111',
+    locationId: '22222222-2222-4222-8222-222222222222',
+  }]);
 });
 
 test('coordinates and marketplace location come only from the locked trusted row', () => {
