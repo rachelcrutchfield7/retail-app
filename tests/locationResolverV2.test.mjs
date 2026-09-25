@@ -58,6 +58,7 @@ const writerBlock = migration.match(
 const postalRequest = {
   countryCode: 'US',
   stateCode: 'IL',
+  city: 'Cottage Hills',
   postalCode: '62018',
   resolutionLevel: 'postal_code',
 };
@@ -235,11 +236,262 @@ test('ZIP request uses structured postcode lookup constrained to the US', async 
 
   const url = mock.calls[0].url;
   assert.equal(url.searchParams.get('postcode'), '62018');
+  assert.equal(url.searchParams.get('city'), 'Cottage Hills');
   assert.equal(url.searchParams.get('type'), 'postcode');
   assert.equal(url.searchParams.get('filter'), 'countrycode:us');
   assert.equal(url.searchParams.get('country'), 'United States');
   assert.equal(url.searchParams.get('limit'), '1');
   assert.equal(url.searchParams.has('text'), false);
+});
+
+test('provider request diagnostics prove the sanitized production request contract', () => {
+  const geocoder = createGeoapifyMarketplaceGeocoder({ apiKey: 'test-key' });
+  const diagnostics = geocoder.inspectRequest(postalRequest);
+
+  assert.deepEqual(diagnostics, {
+    countryHintPresent: true,
+    stateHintPresent: true,
+    postalHintPresent: true,
+    cityHintPresent: true,
+    endpointModeValid: true,
+    encodingValid: true,
+    credentialMechanismValid: true,
+  });
+  assert.equal('url' in diagnostics, false);
+  assert.equal('apiKey' in diagnostics, false);
+});
+
+test('postal request city hint resolves a provider-validated locality without weakening trust checks', async () => {
+  const request = { ...postalRequest, city: 'Worden', postalCode: '62097' };
+  const mock = mockJsonFetch({ results: [geoapifyResult({ city: 'Worden', postcode: '62097' })] });
+  const geocoder = createGeoapifyMarketplaceGeocoder({ apiKey: 'test-key', fetchImpl: mock.fetchImpl });
+
+  const result = await geocoder.resolve(request);
+
+  assert.equal(mock.calls[0].url.searchParams.get('city'), 'Worden');
+  assert.equal(mock.calls[0].url.searchParams.get('postcode'), '62097');
+  assert.equal(result.city, 'Worden');
+  assert.equal(result.stateCode, 'IL');
+  assert.equal(result.postalCode, '62097');
+  assert.equal(result.countryCode, 'US');
+  assert.equal(result.localitySource, 'provider');
+});
+
+test('62002 provider-locality postcode resolution remains unchanged', async () => {
+  const request = { ...postalRequest, city: 'Alton', postalCode: '62002' };
+  const mock = mockJsonFetch({
+    results: [geoapifyResult({ city: 'Alton', postcode: '62002' })],
+  });
+  const geocoder = createGeoapifyMarketplaceGeocoder({
+    apiKey: 'test-key',
+    fetchImpl: mock.fetchImpl,
+    allowServerCandidateCityFallback: true,
+  });
+
+  const result = await geocoder.resolve(request);
+
+  assert.equal(result.city, 'Alton');
+  assert.equal(result.postalCode, '62002');
+  assert.equal(result.localitySource, 'provider');
+});
+
+test('server-controlled postcode fallback uses candidate city only after provider geography validates', async () => {
+  const request = { ...postalRequest, city: 'Worden', postalCode: '62097' };
+  const mock = mockJsonFetch({
+    results: [geoapifyResult({ city: undefined, postcode: '62097' })],
+  });
+  const geocoder = createGeoapifyMarketplaceGeocoder({
+    apiKey: 'test-key',
+    fetchImpl: mock.fetchImpl,
+    allowServerCandidateCityFallback: true,
+  });
+
+  const result = await geocoder.resolve(request);
+
+  assert.equal(result.countryCode, 'US');
+  assert.equal(result.stateCode, 'IL');
+  assert.equal(result.postalCode, '62097');
+  assert.equal(result.resolutionLevel, 'postal_code');
+  assert.equal(result.city, 'Worden');
+  assert.equal(result.localitySource, 'server_candidate_fallback');
+});
+
+test('missing provider locality remains rejected when server fallback is not enabled', async () => {
+  const request = { ...postalRequest, city: 'Worden', postalCode: '62097' };
+  const mock = mockJsonFetch({
+    results: [geoapifyResult({ city: undefined, postcode: '62097' })],
+  });
+  const geocoder = createGeoapifyMarketplaceGeocoder({
+    apiKey: 'test-key',
+    fetchImpl: mock.fetchImpl,
+  });
+
+  await assert.rejects(
+    () => geocoder.resolve(request),
+    (error) => error instanceof MarketplaceGeocoderError
+      && error.code === 'PROVIDER_MALFORMED_RESPONSE'
+      && error.diagnosticCode === 'PROVIDER_LOCALITY_MISSING'
+  );
+});
+
+test('postcode fallback requires a nonempty server-loaded candidate city', async () => {
+  const request = { ...postalRequest, city: undefined, postalCode: '62097' };
+  const mock = mockJsonFetch({
+    results: [geoapifyResult({ city: undefined, postcode: '62097' })],
+  });
+  const geocoder = createGeoapifyMarketplaceGeocoder({
+    apiKey: 'test-key',
+    fetchImpl: mock.fetchImpl,
+    allowServerCandidateCityFallback: true,
+  });
+
+  await assert.rejects(
+    () => geocoder.resolve(request),
+    (error) => error instanceof MarketplaceGeocoderError
+      && error.code === 'PROVIDER_MALFORMED_RESPONSE'
+      && error.diagnosticCode === 'PROVIDER_LOCALITY_MISSING'
+  );
+});
+
+for (const [name, overrides, code, diagnosticCode] of [
+  ['wrong country', { country_code: 'ca' }, 'PROVIDER_LOCATION_MISMATCH', undefined],
+  ['wrong state', { state_code: 'MO' }, 'PROVIDER_LOCATION_MISMATCH', undefined],
+  ['wrong ZIP', { postcode: '62098' }, 'PROVIDER_LOCATION_MISMATCH', undefined],
+  ['county result', { result_type: 'county' }, 'PROVIDER_LOCATION_MISMATCH', undefined],
+  ['invalid point', { lat: '38.9' }, 'PROVIDER_MALFORMED_RESPONSE', 'PROVIDER_LATITUDE_INVALID'],
+]) {
+  test(`candidate locality fallback cannot rescue ${name}`, async () => {
+    const request = { ...postalRequest, city: 'Worden', postalCode: '62097' };
+    const mock = mockJsonFetch({
+      results: [geoapifyResult({ city: undefined, postcode: '62097', ...overrides })],
+    });
+    const geocoder = createGeoapifyMarketplaceGeocoder({
+      apiKey: 'test-key',
+      fetchImpl: mock.fetchImpl,
+      allowServerCandidateCityFallback: true,
+    });
+
+    await assert.rejects(
+      () => geocoder.resolve(request),
+      (error) => error instanceof MarketplaceGeocoderError
+        && error.code === code
+        && error.diagnosticCode === diagnosticCode
+    );
+  });
+}
+
+test('provider locality is authoritative when it conflicts with candidate city', async () => {
+  const request = { ...postalRequest, city: 'Worden', postalCode: '62097' };
+  const mock = mockJsonFetch({
+    results: [geoapifyResult({ city: 'Provider Locality', postcode: '62097' })],
+  });
+  const geocoder = createGeoapifyMarketplaceGeocoder({
+    apiKey: 'test-key',
+    fetchImpl: mock.fetchImpl,
+    allowServerCandidateCityFallback: true,
+  });
+
+  const result = await geocoder.resolve(request);
+  assert.equal(result.city, 'Provider Locality');
+  assert.equal(result.localitySource, 'provider');
+});
+
+test('server candidate fallback is never used for city-level provider results', async () => {
+  const request = { ...cityRequest, city: 'Cottage Hills' };
+  const mock = mockJsonFetch({
+    results: [geoapifyResult({ city: undefined, postcode: undefined, result_type: 'city' })],
+  });
+  const geocoder = createGeoapifyMarketplaceGeocoder({
+    apiKey: 'test-key',
+    fetchImpl: mock.fetchImpl,
+    allowServerCandidateCityFallback: true,
+  });
+
+  await assert.rejects(
+    () => geocoder.resolve(request),
+    (error) => error instanceof MarketplaceGeocoderError
+      && error.code === 'PROVIDER_MALFORMED_RESPONSE'
+      && error.diagnosticCode === 'PROVIDER_LOCALITY_MISSING'
+  );
+});
+
+test('county-only postcode response remains malformed instead of becoming a trusted city', async () => {
+  const request = { ...postalRequest, city: 'Worden', postalCode: '62097' };
+  const mock = mockJsonFetch({
+    results: [geoapifyResult({
+      city: undefined,
+      postcode: '62097',
+      county: 'Madison County',
+    })],
+  });
+  const geocoder = createGeoapifyMarketplaceGeocoder({ apiKey: 'test-key', fetchImpl: mock.fetchImpl });
+
+  await assert.rejects(
+    () => geocoder.resolve(request),
+    (error) => error instanceof MarketplaceGeocoderError
+      && error.code === 'PROVIDER_MALFORMED_RESPONSE'
+      && error.diagnosticCode === 'PROVIDER_LOCALITY_MISSING'
+  );
+});
+
+for (const [name, body, code, diagnosticCode] of [
+  ['non-object response', null, 'PROVIDER_MALFORMED_RESPONSE', 'PROVIDER_RESPONSE_NOT_OBJECT'],
+  ['missing results', { features: [] }, 'PROVIDER_MALFORMED_RESPONSE', 'PROVIDER_RESULTS_MISSING'],
+  ['non-array results', { results: {} }, 'PROVIDER_MALFORMED_RESPONSE', 'PROVIDER_RESULTS_NOT_ARRAY'],
+  ['empty results', { results: [] }, 'NO_MATCHING_LOCATION', 'PROVIDER_RESULTS_EMPTY'],
+  ['non-object first result', { results: ['invalid'] }, 'PROVIDER_MALFORMED_RESPONSE', 'PROVIDER_RESULT_NOT_OBJECT'],
+  ['nested properties instead of flat JSON result', {
+    results: [{ properties: geoapifyResult() }],
+  }, 'PROVIDER_MALFORMED_RESPONSE', 'PROVIDER_RESULT_TYPE_MISSING'],
+  ['missing locality', {
+    results: [geoapifyResult({ city: undefined })],
+  }, 'PROVIDER_MALFORMED_RESPONSE', 'PROVIDER_LOCALITY_MISSING'],
+  ['overlong locality', {
+    results: [geoapifyResult({ city: 'x'.repeat(121) })],
+  }, 'PROVIDER_MALFORMED_RESPONSE', 'PROVIDER_LOCALITY_TOO_LONG'],
+  ['invalid latitude', {
+    results: [geoapifyResult({ lat: '38.9' })],
+  }, 'PROVIDER_MALFORMED_RESPONSE', 'PROVIDER_LATITUDE_INVALID'],
+  ['invalid longitude', {
+    results: [geoapifyResult({ lon: null })],
+  }, 'PROVIDER_MALFORMED_RESPONSE', 'PROVIDER_LONGITUDE_INVALID'],
+  ['missing result type', {
+    results: [geoapifyResult({ result_type: undefined })],
+  }, 'PROVIDER_MALFORMED_RESPONSE', 'PROVIDER_RESULT_TYPE_MISSING'],
+]) {
+  test(`provider response structure fails closed with a safe diagnostic for ${name}`, async () => {
+    const mock = mockJsonFetch(body);
+    const geocoder = createGeoapifyMarketplaceGeocoder({
+      apiKey: 'test-key',
+      fetchImpl: mock.fetchImpl,
+    });
+
+    await assert.rejects(
+      () => geocoder.resolve(postalRequest),
+      (error) => error instanceof MarketplaceGeocoderError
+        && error.code === code
+        && error.diagnosticCode === diagnosticCode
+    );
+  });
+}
+
+test('invalid provider JSON fails closed with a safe structural diagnostic', async () => {
+  const geocoder = createGeoapifyMarketplaceGeocoder({
+    apiKey: 'test-key',
+    async fetchImpl() {
+      return new Response('{', {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    },
+  });
+
+  await assert.rejects(
+    () => geocoder.resolve(postalRequest),
+    (error) => error instanceof MarketplaceGeocoderError
+      && error.code === 'PROVIDER_MALFORMED_RESPONSE'
+      && error.diagnosticCode === 'PROVIDER_RESPONSE_JSON_INVALID'
+  );
 });
 
 test('city request uses structured city lookup constrained to the US', async () => {
@@ -278,7 +530,9 @@ test('malformed provider coordinates are rejected', async () => {
   const geocoder = createGeoapifyMarketplaceGeocoder({ apiKey: 'test-key', fetchImpl: mock.fetchImpl });
   await assert.rejects(
     () => geocoder.resolve(postalRequest),
-    (error) => error instanceof MarketplaceGeocoderError && error.code === 'PROVIDER_MALFORMED_RESPONSE'
+    (error) => error instanceof MarketplaceGeocoderError
+      && error.code === 'PROVIDER_MALFORMED_RESPONSE'
+      && error.diagnosticCode === 'PROVIDER_LATITUDE_INVALID'
   );
 });
 

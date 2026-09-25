@@ -4,16 +4,27 @@ import { createGeoapifyMarketplaceGeocoder } from '../_shared/geoapifyMarketplac
 import type { MarketplaceGeocodeRequest, MarketplaceGeocodeResult } from '../_shared/marketplaceGeocoder.ts';
 import {
   MarketplaceLocationBackfillRequestError,
+  normalizeMarketplaceLocationProviderValidationRequest,
   normalizeMarketplaceLocationBackfillRequest,
   runMarketplaceLocationBackfill,
   timingSafeSecretEqual,
+  validateMarketplaceLocationBackfillProvider,
   type MarketplaceLocationBackfillCandidate,
+  type MarketplaceLocationBackfillSelection,
   type SafeCachedMarketplaceLocation,
 } from '../_shared/marketplaceLocationBackfill.ts';
 import { createSupabaseAdmin } from '../_shared/supabase.ts';
 
 type CandidateRow = {
   listing_id: string;
+  city: string;
+  state: string;
+  zip_code: string;
+  marketplace_location_id: string | null;
+};
+
+type ListingCandidateRow = {
+  id: string;
   city: string;
   state: string;
   zip_code: string;
@@ -75,11 +86,35 @@ function safeCacheRow(value: unknown): SafeCachedMarketplaceLocation | null {
 
 async function listCandidates(
   supabaseAdmin: SupabaseClient,
-  limit: number
+  selection: MarketplaceLocationBackfillSelection
 ): Promise<MarketplaceLocationBackfillCandidate[]> {
+  if (selection.candidateListingId) {
+    const { data, error } = await supabaseAdmin
+      .from('listings')
+      .select('id, city, state, zip_code, marketplace_location_id')
+      .eq('id', selection.candidateListingId)
+      .is('deleted_at', null)
+      .eq('status', 'active')
+      .is('marketplace_location_id', null)
+      .is('latitude', null)
+      .is('longitude', null)
+      .is('location_point', null)
+      .filter('zip_code', 'match', '^[0-9]{5}$')
+      .limit(2);
+    if (error) throw error;
+
+    return ((data ?? []) as ListingCandidateRow[]).map((row) => ({
+      listingId: row.id,
+      city: row.city,
+      state: row.state,
+      zipCode: row.zip_code,
+      marketplaceLocationId: row.marketplace_location_id,
+    }));
+  }
+
   const { data, error } = await supabaseAdmin.rpc(
     'get_marketplace_location_backfill_candidates',
-    { requested_limit: limit }
+    { requested_limit: selection.limit }
   );
   if (error) throw error;
 
@@ -117,13 +152,59 @@ Deno.serve(async (request: Request) => {
       }
     }
 
-    const backfillRequest = normalizeMarketplaceLocationBackfillRequest(body);
     const supabaseAdmin = createSupabaseAdmin();
     const apiKey = Deno.env.get('GEOAPIFY_API_KEY')?.trim() ?? '';
 
+    if (typeof body === 'object' && body !== null && !Array.isArray(body)
+      && (body as Record<string, unknown>).mode === 'validate_provider') {
+      stage = 'provider_validation';
+      const validationRequest = normalizeMarketplaceLocationProviderValidationRequest(body);
+      const candidates = await listCandidates(supabaseAdmin, { limit: 50 });
+      const candidate = candidates.find(
+        (row) => row.listingId === validationRequest.candidateListingId
+      );
+
+      if (!candidate) {
+        return jsonResponse({
+          mode: 'validate_provider',
+          candidateFound: false,
+          providerCalled: false,
+          providerValidated: false,
+          countryValid: false,
+          stateValid: false,
+          postalCodeValid: false,
+          localityValid: false,
+          resultTypeValid: false,
+          pointValid: false,
+          validationCode: 'INVALID_CANDIDATE',
+          structuralDiagnosticCode: 'NOT_APPLICABLE',
+          requestCountryHintPresent: false,
+          requestStateHintPresent: false,
+          requestPostalHintPresent: false,
+          requestCityHintPresent: false,
+          requestCityMatchesCandidate: false,
+          requestCitySourcedServerSide: false,
+          requestEndpointModeValid: false,
+          requestEncodingValid: false,
+          credentialMechanismValid: false,
+        }, 404);
+      }
+
+      if (!apiKey) throw new Error('GEOCODER_NOT_CONFIGURED');
+      const validation = await validateMarketplaceLocationBackfillProvider(
+        candidate,
+        createGeoapifyMarketplaceGeocoder({
+          apiKey,
+          allowServerCandidateCityFallback: true,
+        })
+      );
+      return jsonResponse(validation, validation.providerValidated ? 200 : 422);
+    }
+
+    const backfillRequest = normalizeMarketplaceLocationBackfillRequest(body);
     stage = 'backfill';
     const report = await runMarketplaceLocationBackfill(backfillRequest, {
-      listCandidates: (limit) => listCandidates(supabaseAdmin, limit),
+      listCandidates: (selection) => listCandidates(supabaseAdmin, selection),
       async lookupCachedLocation(locationRequest) {
         const { data, error } = await supabaseAdmin.rpc(
           'lookup_marketplace_location',
@@ -135,7 +216,10 @@ Deno.serve(async (request: Request) => {
       geocoder: {
         async resolve(locationRequest) {
           if (!apiKey) throw new Error('GEOCODER_NOT_CONFIGURED');
-          return createGeoapifyMarketplaceGeocoder({ apiKey }).resolve(locationRequest);
+          return createGeoapifyMarketplaceGeocoder({
+            apiKey,
+            allowServerCandidateCityFallback: true,
+          }).resolve(locationRequest);
         },
       },
       async cacheLocation(result) {

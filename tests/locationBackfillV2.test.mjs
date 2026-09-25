@@ -4,11 +4,19 @@ import test from 'node:test';
 
 const {
   MarketplaceLocationBackfillRequestError,
+  normalizeMarketplaceLocationProviderValidationRequest,
   normalizeMarketplaceLocationBackfillRequest,
   runMarketplaceLocationBackfill,
   timingSafeSecretEqual,
+  validateMarketplaceLocationBackfillProvider,
 } = await import(new URL(
   '../supabase/functions/_shared/marketplaceLocationBackfill.ts',
+  import.meta.url
+).href);
+const {
+  createGeoapifyMarketplaceGeocoder,
+} = await import(new URL(
+  '../supabase/functions/_shared/geoapifyMarketplaceGeocoder.ts',
   import.meta.url
 ).href);
 
@@ -29,6 +37,10 @@ const correctionMigration = await readFile(
 );
 const functionSource = await readFile(
   new URL('../supabase/functions/backfill-marketplace-locations/index.ts', import.meta.url),
+  'utf8'
+);
+const resolverFunctionSource = await readFile(
+  new URL('../supabase/functions/resolve-marketplace-location/index.ts', import.meta.url),
   'utf8'
 );
 const sharedSource = await readFile(
@@ -82,14 +94,19 @@ function dependencies({
   candidates = [candidate()],
   cached = cachedLocation(),
   providerError,
+  providerLocalitySource,
   attachResult = 'backfilled',
   attachError,
+  selectCandidates,
 } = {}) {
   const calls = { list: [], lookup: [], provider: [], cache: [], attach: [], logs: [] };
   return {
     calls,
     value: {
-      async listCandidates(limit) { calls.list.push(limit); return candidates; },
+      async listCandidates(selection) {
+        calls.list.push(selection);
+        return selectCandidates ? selectCandidates(selection) : candidates;
+      },
       async lookupCachedLocation(request) { calls.lookup.push(request); return cached; },
       geocoder: {
         async resolve(request) {
@@ -98,6 +115,7 @@ function dependencies({
           return {
             countryCode: 'US', stateCode: 'IL', city: 'Cottage Hills', postalCode: '62018',
             latitude: 38.9, longitude: -90.07, resolutionLevel: 'postal_code', provider: 'test',
+            localitySource: providerLocalitySource,
           };
         },
       },
@@ -110,6 +128,34 @@ function dependencies({
       log(entry) { calls.logs.push(entry); },
     },
   };
+}
+
+function providerResult(overrides = {}) {
+  return {
+    country_code: 'us',
+    state_code: 'IL',
+    city: 'Worden',
+    postcode: '62097',
+    lat: 38.9,
+    lon: -89.8,
+    result_type: 'postcode',
+    place_id: 'safe-provider-place-id',
+    datasource: { attribution: 'Provider attribution' },
+    ...overrides,
+  };
+}
+
+function validationGeocoder(result) {
+  return createGeoapifyMarketplaceGeocoder({
+    apiKey: 'test-key',
+    allowServerCandidateCityFallback: true,
+    async fetchImpl() {
+      return new Response(JSON.stringify({ results: [result] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    },
+  });
 }
 
 test('backfill RPC is inaccessible to anon and authenticated roles', () => {
@@ -358,10 +404,383 @@ test('dry-run is the default and execution must be explicit', () => {
   );
 });
 
+test('execute plus candidate identifier normalizes to one targeted real execution', () => {
+  assert.deepEqual(normalizeMarketplaceLocationBackfillRequest({
+    execute: true,
+    candidateListingId: '11111111-1111-4111-8111-111111111111',
+  }), {
+    dryRun: false,
+    execute: true,
+    limit: 1,
+    candidateListingId: '11111111-1111-4111-8111-111111111111',
+  });
+});
+
+test('targeted real execution rejects limit, dry-run, malformed UUID, and client geography', () => {
+  const candidateListingId = '11111111-1111-4111-8111-111111111111';
+  for (const body of [
+    { execute: true, candidateListingId, limit: 1 },
+    { execute: true, candidateListingId, dryRun: true },
+    { execute: true, candidateListingId: 'not-a-uuid' },
+    { execute: true, candidateListingId, city: 'Worden' },
+    { execute: true, candidateListingId, state: 'IL' },
+    { execute: true, candidateListingId, zipCode: '62097' },
+    { execute: true, candidateListingId, latitude: 38.9 },
+    { execute: true, candidateListingId, longitude: -89.8 },
+  ]) {
+    assert.throws(
+      () => normalizeMarketplaceLocationBackfillRequest(body),
+      (error) => error instanceof MarketplaceLocationBackfillRequestError
+        && error.code === 'INVALID_REQUEST'
+    );
+  }
+});
+
+test('global execution and dry-run request behavior remain unchanged', () => {
+  assert.deepEqual(normalizeMarketplaceLocationBackfillRequest({
+    dryRun: false, execute: true, limit: 7,
+  }), { dryRun: false, execute: true, limit: 7 });
+  assert.deepEqual(normalizeMarketplaceLocationBackfillRequest({
+    dryRun: true, limit: 7, ignoredLegacyField: 'preserved behavior',
+  }), { dryRun: true, execute: false, limit: 7 });
+  assert.throws(
+    () => normalizeMarketplaceLocationBackfillRequest({ execute: true }),
+    (error) => error instanceof MarketplaceLocationBackfillRequestError
+      && error.code === 'EXECUTION_NOT_EXPLICIT'
+  );
+});
+
+test('provider validation mode accepts only an existing candidate identifier contract', () => {
+  assert.deepEqual(normalizeMarketplaceLocationProviderValidationRequest({
+    mode: 'validate_provider',
+    candidateListingId: '11111111-1111-4111-8111-111111111111',
+  }), {
+    mode: 'validate_provider',
+    candidateListingId: '11111111-1111-4111-8111-111111111111',
+  });
+  assert.throws(() => normalizeMarketplaceLocationProviderValidationRequest({
+    mode: 'validate_provider',
+    candidateListingId: '11111111-1111-4111-8111-111111111111',
+    city: 'client supplied',
+  }));
+  assert.throws(() => normalizeMarketplaceLocationProviderValidationRequest({
+    mode: 'validate_provider', candidateListingId: 'not-a-uuid',
+  }));
+});
+
+test('provider validation mode calls the adapter and returns sanitized valid evidence', async () => {
+  const report = await validateMarketplaceLocationBackfillProvider(
+    candidate({ city: ' Worden ', state: 'il', zipCode: '62097' }),
+    validationGeocoder(providerResult())
+  );
+
+  assert.deepEqual(report, {
+    mode: 'validate_provider',
+    candidateFound: true,
+    providerCalled: true,
+    providerValidated: true,
+    countryValid: true,
+    stateValid: true,
+    postalCodeValid: true,
+    localityValid: true,
+    resultTypeValid: true,
+    pointValid: true,
+    validationCode: 'VALID',
+    structuralDiagnosticCode: 'NONE',
+    requestCountryHintPresent: true,
+    requestStateHintPresent: true,
+    requestPostalHintPresent: true,
+    requestCityHintPresent: true,
+    requestCityMatchesCandidate: true,
+    requestCitySourcedServerSide: true,
+    requestEndpointModeValid: true,
+    requestEncodingValid: true,
+    credentialMechanismValid: true,
+    countryCode: 'US',
+    state: 'IL',
+    zipCode: '62097',
+    locality: 'Worden',
+    localitySource: 'provider',
+  });
+  assert.equal('latitude' in report, false);
+  assert.equal('longitude' in report, false);
+  assert.equal('raw' in report, false);
+  assert.equal('providerLocationId' in report, false);
+});
+
+test('62097 production-shaped postcode response uses the server candidate only as locality fallback', async () => {
+  const report = await validateMarketplaceLocationBackfillProvider(
+    candidate({ city: ' Worden ', state: 'il', zipCode: '62097' }),
+    validationGeocoder(providerResult({ city: undefined }))
+  );
+
+  assert.equal(report.providerValidated, true);
+  assert.equal(report.countryValid, true);
+  assert.equal(report.stateValid, true);
+  assert.equal(report.postalCodeValid, true);
+  assert.equal(report.resultTypeValid, true);
+  assert.equal(report.pointValid, true);
+  assert.equal(report.localityValid, true);
+  assert.equal(report.locality, 'Worden');
+  assert.equal(report.localitySource, 'server_candidate_fallback');
+  assert.equal(report.validationCode, 'VALID');
+  assert.equal(report.structuralDiagnosticCode, 'NONE');
+  assert.equal('latitude' in report, false);
+  assert.equal('longitude' in report, false);
+  assert.equal('raw' in report, false);
+});
+
+for (const [name, overrides, expectedCode, expectedDiagnosticCode] of [
+  ['wrong country', { country_code: 'ca' }, 'PROVIDER_LOCATION_MISMATCH', 'NOT_APPLICABLE'],
+  ['wrong state', { state_code: 'MO' }, 'PROVIDER_LOCATION_MISMATCH', 'NOT_APPLICABLE'],
+  ['wrong ZIP', { postcode: '62098' }, 'PROVIDER_LOCATION_MISMATCH', 'NOT_APPLICABLE'],
+  [
+    'county only',
+    { city: undefined, county: 'Madison County', result_type: 'county' },
+    'PROVIDER_LOCATION_MISMATCH',
+    'NOT_APPLICABLE',
+  ],
+  ['invalid point', { lat: '38.9' }, 'PROVIDER_MALFORMED_RESPONSE', 'PROVIDER_LATITUDE_INVALID'],
+]) {
+  test(`provider validation mode fails closed for ${name}`, async () => {
+    const report = await validateMarketplaceLocationBackfillProvider(
+      candidate({ city: 'Worden', state: 'IL', zipCode: '62097' }),
+      validationGeocoder(providerResult(overrides))
+    );
+    assert.equal(report.providerValidated, false);
+    assert.equal(report.validationCode, expectedCode);
+    assert.equal(report.structuralDiagnosticCode, expectedDiagnosticCode);
+  });
+}
+
+test('provider validation reports response structure without returning provider data', async () => {
+  const geocoder = createGeoapifyMarketplaceGeocoder({
+    apiKey: 'test-key',
+    async fetchImpl() {
+      return new Response(JSON.stringify({ features: [] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    },
+  });
+  const report = await validateMarketplaceLocationBackfillProvider(
+    candidate({ city: 'Worden', state: 'IL', zipCode: '62097' }),
+    geocoder
+  );
+
+  assert.equal(report.validationCode, 'PROVIDER_MALFORMED_RESPONSE');
+  assert.equal(report.structuralDiagnosticCode, 'PROVIDER_RESULTS_MISSING');
+  assert.equal(report.requestCountryHintPresent, true);
+  assert.equal(report.requestStateHintPresent, true);
+  assert.equal(report.requestPostalHintPresent, true);
+  assert.equal(report.requestCityHintPresent, true);
+  assert.equal(report.requestCityMatchesCandidate, true);
+  assert.equal(report.requestCitySourcedServerSide, true);
+  assert.equal(report.requestEndpointModeValid, true);
+  assert.equal(report.requestEncodingValid, true);
+  assert.equal(report.credentialMechanismValid, true);
+  assert.equal('latitude' in report, false);
+  assert.equal('longitude' in report, false);
+  assert.equal('raw' in report, false);
+  assert.equal('url' in report, false);
+  assert.equal('apiKey' in report, false);
+});
+
+test('provider validation helper has no cache, listing, or mutating RPC dependencies', async () => {
+  let providerCalls = 0;
+  const report = await validateMarketplaceLocationBackfillProvider(candidate({
+    city: 'Worden', state: 'IL', zipCode: '62097',
+  }), {
+    async resolve(request) {
+      providerCalls += 1;
+      return {
+        countryCode: 'US',
+        stateCode: request.stateCode,
+        city: 'Worden',
+        postalCode: request.postalCode,
+        latitude: 38.9,
+        longitude: -89.8,
+        resolutionLevel: 'postal_code',
+        provider: 'test',
+      };
+    },
+  });
+  assert.equal(providerCalls, 1);
+  assert.equal(report.providerValidated, true);
+  assert.equal(validateMarketplaceLocationBackfillProvider.length, 2);
+});
+
+test('endpoint provider-validation branch returns before every mutating backfill dependency', () => {
+  const branch = functionSource.match(
+    /if \(typeof body === 'object'[\s\S]*?return jsonResponse\(validation, validation\.providerValidated \? 200 : 422\);\s*}/
+  )?.[0] ?? '';
+  assert.match(branch, /listCandidates\(supabaseAdmin, \{ limit: 50 \}\)/);
+  assert.match(branch, /validateMarketplaceLocationBackfillProvider/);
+  assert.doesNotMatch(branch, /cache_marketplace_location|backfill_listing_marketplace_location/);
+  assert.doesNotMatch(branch, /cacheLocation|attachLocation|runMarketplaceLocationBackfill/);
+});
+
+test('candidate-city locality fallback is enabled only by the server-controlled backfill', () => {
+  assert.equal(
+    functionSource.match(/allowServerCandidateCityFallback: true/g)?.length,
+    2
+  );
+  assert.doesNotMatch(resolverFunctionSource, /allowServerCandidateCityFallback/);
+});
+
 test('batch limit accepts 1 through 50 and rejects larger scans', () => {
   assert.equal(normalizeMarketplaceLocationBackfillRequest({ limit: 50 }).limit, 50);
   assert.throws(() => normalizeMarketplaceLocationBackfillRequest({ limit: 51 }));
   assert.throws(() => normalizeMarketplaceLocationBackfillRequest({ limit: 0 }));
+});
+
+test('target selection is enforced in the database query before the mutation pipeline', () => {
+  const targetedBranch = functionSource.match(
+    /if \(selection\.candidateListingId\) \{[\s\S]*?^  \}/m
+  )?.[0] ?? '';
+  assert.match(targetedBranch, /\.from\('listings'\)/);
+  assert.match(targetedBranch, /\.eq\('id', selection\.candidateListingId\)/);
+  assert.match(targetedBranch, /\.is\('deleted_at', null\)/);
+  assert.match(targetedBranch, /\.eq\('status', 'active'\)/);
+  assert.match(targetedBranch, /\.is\('marketplace_location_id', null\)/);
+  assert.match(targetedBranch, /\.is\('latitude', null\)/);
+  assert.match(targetedBranch, /\.is\('longitude', null\)/);
+  assert.match(targetedBranch, /\.is\('location_point', null\)/);
+  assert.match(targetedBranch, /\.filter\('zip_code', 'match', '\^\[0-9\]\{5\}\$'\)/);
+  assert.match(targetedBranch, /\.limit\(2\)/);
+  assert.doesNotMatch(targetedBranch, /get_marketplace_location_backfill_candidates/);
+  assert.doesNotMatch(targetedBranch, /cache_marketplace_location/);
+  assert.doesNotMatch(targetedBranch, /backfill_listing_marketplace_location/);
+  assert.doesNotMatch(targetedBranch, /geocoder|cacheLocation|attachLocation/);
+});
+
+test('targeted execution selects exactly the requested eligible candidate before provider or writes', async () => {
+  const targetId = '11111111-1111-4111-8111-111111111111';
+  const otherId = '33333333-3333-4333-8333-333333333333';
+  const deps = dependencies({
+    candidates: [candidate({ listingId: targetId })],
+    selectCandidates(selection) {
+      assert.deepEqual(selection, { limit: 1, candidateListingId: targetId });
+      return [candidate({ listingId: targetId })];
+    },
+  });
+
+  const report = await runMarketplaceLocationBackfill(
+    normalizeMarketplaceLocationBackfillRequest({ execute: true, candidateListingId: targetId }),
+    deps.value
+  );
+
+  assert.equal(report.scannedListings, 1);
+  assert.deepEqual(deps.calls.attach, [{
+    listingId: targetId,
+    locationId: '22222222-2222-4222-8222-222222222222',
+  }]);
+  assert.equal(deps.calls.attach.some((call) => call.listingId === otherId), false);
+});
+
+for (const reason of [
+  'nonexistent',
+  'deleted',
+  'inactive',
+  'sold',
+  'already trusted',
+  'otherwise ineligible',
+]) {
+  test(`${reason} targeted listing fails before provider, cache, location, listing, or mutating RPC work`, async () => {
+    const deps = dependencies({ candidates: [] });
+    await assert.rejects(
+      () => runMarketplaceLocationBackfill(
+        normalizeMarketplaceLocationBackfillRequest({
+          execute: true,
+          candidateListingId: '11111111-1111-4111-8111-111111111111',
+        }),
+        deps.value
+      ),
+      (error) => error instanceof MarketplaceLocationBackfillRequestError
+        && error.code === 'TARGET_NOT_ELIGIBLE'
+    );
+    assert.equal(deps.calls.lookup.length, 0);
+    assert.equal(deps.calls.provider.length, 0);
+    assert.equal(deps.calls.cache.length, 0);
+    assert.equal(deps.calls.attach.length, 0);
+  });
+}
+
+test('target A cannot process candidate B or a multi-row selection', async () => {
+  const targetId = '11111111-1111-4111-8111-111111111111';
+  for (const selected of [
+    [candidate({ listingId: '33333333-3333-4333-8333-333333333333' })],
+    [candidate({ listingId: targetId }), candidate({
+      listingId: '33333333-3333-4333-8333-333333333333',
+    })],
+  ]) {
+    const deps = dependencies({ candidates: selected });
+    await assert.rejects(
+      () => runMarketplaceLocationBackfill(
+        normalizeMarketplaceLocationBackfillRequest({ execute: true, candidateListingId: targetId }),
+        deps.value
+      ),
+      (error) => error instanceof MarketplaceLocationBackfillRequestError
+        && error.code === 'TARGET_SELECTION_INVALID'
+    );
+    assert.equal(deps.calls.lookup.length, 0);
+    assert.equal(deps.calls.provider.length, 0);
+    assert.equal(deps.calls.cache.length, 0);
+    assert.equal(deps.calls.attach.length, 0);
+  }
+});
+
+test('targeted 62097 execution uses the normal pipeline and server candidate locality fallback', async () => {
+  const targetId = '11111111-1111-4111-8111-111111111111';
+  const calls = { list: [], lookup: [], provider: [], cache: [], attach: [] };
+  const geocoder = validationGeocoder(providerResult({ city: undefined }));
+  const report = await runMarketplaceLocationBackfill(
+    normalizeMarketplaceLocationBackfillRequest({ execute: true, candidateListingId: targetId }),
+    {
+      async listCandidates(selection) {
+        calls.list.push(selection);
+        return [candidate({ listingId: targetId, city: 'Worden', zipCode: '62097' })];
+      },
+      async lookupCachedLocation(request) {
+        calls.lookup.push(request);
+        return null;
+      },
+      geocoder: {
+        async resolve(request) {
+          calls.provider.push(request);
+          return geocoder.resolve(request);
+        },
+      },
+      async cacheLocation(result) {
+        calls.cache.push(result);
+        return cachedLocation({ city: result.city, zipCode: '62097' });
+      },
+      async attachLocation(listingId, locationId) {
+        calls.attach.push({ listingId, locationId });
+        return 'backfilled';
+      },
+    }
+  );
+
+  assert.deepEqual(calls.list, [{ limit: 1, candidateListingId: targetId }]);
+  assert.equal(calls.provider.length, 1);
+  assert.equal(calls.cache[0].localitySource, 'server_candidate_fallback');
+  assert.deepEqual(calls.attach, [{
+    listingId: targetId,
+    locationId: '22222222-2222-4222-8222-222222222222',
+  }]);
+  assert.equal(report.backfilledListings, 1);
+});
+
+test('normal global execution still delegates to the existing scanner contract', async () => {
+  const deps = dependencies();
+  await runMarketplaceLocationBackfill(
+    normalizeMarketplaceLocationBackfillRequest({ dryRun: false, execute: true, limit: 7 }),
+    deps.value
+  );
+  assert.deepEqual(deps.calls.list, [{ limit: 7 }]);
+  assert.match(functionSource, /get_marketplace_location_backfill_candidates/);
+  assert.match(functionSource, /requested_limit: selection\.limit/);
 });
 
 test('dry-run with cached location reports eligibility without mutation', async () => {
@@ -387,6 +806,49 @@ test('ZIP grouping produces one cache lookup and provider request per distinct l
   assert.equal(deps.calls.lookup.length, 1);
   assert.equal(deps.calls.provider.length, 1);
   assert.equal(deps.calls.attach.length, 2);
+});
+
+test('uncached ZIP lookup includes the normalized listing city as a provider hint', async () => {
+  const deps = dependencies({
+    candidates: [candidate({ city: ' Worden ', state: 'il', zipCode: '62097' })],
+    cached: null,
+  });
+
+  await runMarketplaceLocationBackfill(
+    normalizeMarketplaceLocationBackfillRequest({ dryRun: false, execute: true, limit: 1 }),
+    deps.value
+  );
+
+  assert.equal(deps.calls.provider.length, 1);
+  assert.deepEqual(deps.calls.provider[0], {
+    countryCode: 'US',
+    stateCode: 'IL',
+    city: 'Worden',
+    postalCode: '62097',
+    resolutionLevel: 'postal_code',
+  });
+});
+
+test('real backfill records safe runtime locality provenance without coordinates in logs', async () => {
+  const deps = dependencies({
+    candidates: [candidate({ city: 'Worden', state: 'IL', zipCode: '62097' })],
+    cached: null,
+    providerLocalitySource: 'server_candidate_fallback',
+  });
+
+  await runMarketplaceLocationBackfill(
+    normalizeMarketplaceLocationBackfillRequest({ dryRun: false, execute: true, limit: 1 }),
+    deps.value
+  );
+
+  assert.deepEqual(deps.calls.logs[0], {
+    stage: 'provider_resolution',
+    affectedListings: 1,
+    localitySource: 'server_candidate_fallback',
+  });
+  assert.equal('localitySource' in deps.calls.cache[0], true);
+  assert.equal('latitude' in deps.calls.logs[0], false);
+  assert.equal('longitude' in deps.calls.logs[0], false);
 });
 
 test('cache hit avoids the provider and cache writer', async () => {

@@ -17,12 +17,24 @@ export type MarketplaceGeocodeResult = {
   longitude: number;
   resolutionLevel: MarketplaceResolutionLevel;
   provider: string;
+  localitySource?: 'provider' | 'server_candidate_fallback';
   providerLocationId?: string;
   providerAttribution?: string;
 };
 
+export type MarketplaceGeocoderRequestDiagnostics = {
+  countryHintPresent: boolean;
+  stateHintPresent: boolean;
+  postalHintPresent: boolean;
+  cityHintPresent: boolean;
+  endpointModeValid: boolean;
+  encodingValid: boolean;
+  credentialMechanismValid: boolean;
+};
+
 export interface MarketplaceGeocoder {
   resolve(request: MarketplaceGeocodeRequest): Promise<MarketplaceGeocodeResult>;
+  inspectRequest?(request: MarketplaceGeocodeRequest): MarketplaceGeocoderRequestDiagnostics;
 }
 
 export type MarketplaceGeocoderErrorCode =
@@ -32,12 +44,30 @@ export type MarketplaceGeocoderErrorCode =
   | 'PROVIDER_TIMEOUT'
   | 'PROVIDER_UNAVAILABLE';
 
+export type MarketplaceGeocoderDiagnosticCode =
+  | 'PROVIDER_RESPONSE_JSON_INVALID'
+  | 'PROVIDER_RESPONSE_NOT_OBJECT'
+  | 'PROVIDER_RESULTS_MISSING'
+  | 'PROVIDER_RESULTS_NOT_ARRAY'
+  | 'PROVIDER_RESULTS_EMPTY'
+  | 'PROVIDER_RESULT_NOT_OBJECT'
+  | 'PROVIDER_LOCALITY_MISSING'
+  | 'PROVIDER_LOCALITY_TOO_LONG'
+  | 'PROVIDER_LATITUDE_INVALID'
+  | 'PROVIDER_LONGITUDE_INVALID'
+  | 'PROVIDER_RESULT_TYPE_MISSING';
+
 export class MarketplaceGeocoderError extends Error {
   readonly code: MarketplaceGeocoderErrorCode;
+  readonly diagnosticCode?: MarketplaceGeocoderDiagnosticCode;
 
-  constructor(code: MarketplaceGeocoderErrorCode) {
+  constructor(
+    code: MarketplaceGeocoderErrorCode,
+    diagnosticCode?: MarketplaceGeocoderDiagnosticCode
+  ) {
     super(code);
     this.name = 'MarketplaceGeocoderError';
     this.code = code;
+    this.diagnosticCode = diagnosticCode;
   }
 }

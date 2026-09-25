@@ -1,7 +1,10 @@
-import type {
-  MarketplaceGeocoder,
-  MarketplaceGeocodeRequest,
-  MarketplaceGeocodeResult,
+import {
+  MarketplaceGeocoderError,
+  type MarketplaceGeocoder,
+  type MarketplaceGeocoderDiagnosticCode,
+  type MarketplaceGeocoderErrorCode,
+  type MarketplaceGeocodeRequest,
+  type MarketplaceGeocodeResult,
 } from './marketplaceGeocoder.ts';
 
 export type MarketplaceLocationBackfillCandidate = {
@@ -48,7 +51,9 @@ export type MarketplaceLocationBackfillReport = {
 };
 
 export type MarketplaceLocationBackfillDependencies = {
-  listCandidates(limit: number): Promise<MarketplaceLocationBackfillCandidate[]>;
+  listCandidates(
+    selection: MarketplaceLocationBackfillSelection
+  ): Promise<MarketplaceLocationBackfillCandidate[]>;
   lookupCachedLocation(request: MarketplaceGeocodeRequest): Promise<SafeCachedMarketplaceLocation | null>;
   geocoder: MarketplaceGeocoder;
   cacheLocation(result: MarketplaceGeocodeResult): Promise<SafeCachedMarketplaceLocation>;
@@ -59,20 +64,86 @@ export type MarketplaceLocationBackfillDependencies = {
   log?(entry: Record<string, string | number | boolean>): void;
 };
 
+export type MarketplaceLocationBackfillSelection = {
+  limit: number;
+  candidateListingId?: string;
+};
+
 export type MarketplaceLocationBackfillRequest = {
   dryRun: boolean;
   execute: boolean;
   limit: number;
+  candidateListingId?: string;
+};
+
+export type MarketplaceLocationProviderValidationRequest = {
+  mode: 'validate_provider';
+  candidateListingId: string;
+};
+
+export type MarketplaceLocationProviderValidationReport = {
+  mode: 'validate_provider';
+  candidateFound: boolean;
+  providerCalled: boolean;
+  providerValidated: boolean;
+  countryValid: boolean;
+  stateValid: boolean;
+  postalCodeValid: boolean;
+  localityValid: boolean;
+  resultTypeValid: boolean;
+  pointValid: boolean;
+  validationCode: 'VALID' | 'INVALID_CANDIDATE' | MarketplaceGeocoderErrorCode;
+  structuralDiagnosticCode: 'NONE' | 'NOT_APPLICABLE' | 'UNKNOWN'
+    | MarketplaceGeocoderDiagnosticCode;
+  requestCountryHintPresent: boolean;
+  requestStateHintPresent: boolean;
+  requestPostalHintPresent: boolean;
+  requestCityHintPresent: boolean;
+  requestCityMatchesCandidate: boolean;
+  requestCitySourcedServerSide: boolean;
+  requestEndpointModeValid: boolean;
+  requestEncodingValid: boolean;
+  credentialMechanismValid: boolean;
+  countryCode?: string;
+  state?: string;
+  zipCode?: string;
+  locality?: string;
+  localitySource?: 'provider' | 'server_candidate_fallback';
 };
 
 export class MarketplaceLocationBackfillRequestError extends Error {
-  readonly code: 'INVALID_REQUEST' | 'EXECUTION_NOT_EXPLICIT';
+  readonly code: 'INVALID_REQUEST' | 'EXECUTION_NOT_EXPLICIT'
+    | 'TARGET_NOT_ELIGIBLE' | 'TARGET_SELECTION_INVALID';
 
   constructor(code: MarketplaceLocationBackfillRequestError['code']) {
     super(code);
     this.name = 'MarketplaceLocationBackfillRequestError';
     this.code = code;
   }
+}
+
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export function normalizeMarketplaceLocationProviderValidationRequest(
+  input: unknown
+): MarketplaceLocationProviderValidationRequest {
+  if (typeof input !== 'object' || input === null || Array.isArray(input)) {
+    throw new MarketplaceLocationBackfillRequestError('INVALID_REQUEST');
+  }
+
+  const body = input as Record<string, unknown>;
+  const keys = Object.keys(body);
+  if (keys.some((key) => key !== 'mode' && key !== 'candidateListingId')
+    || body.mode !== 'validate_provider'
+    || typeof body.candidateListingId !== 'string'
+    || !uuidPattern.test(body.candidateListingId)) {
+    throw new MarketplaceLocationBackfillRequestError('INVALID_REQUEST');
+  }
+
+  return {
+    mode: 'validate_provider',
+    candidateListingId: body.candidateListingId,
+  };
 }
 
 export function normalizeMarketplaceLocationBackfillRequest(
@@ -87,6 +158,26 @@ export function normalizeMarketplaceLocationBackfillRequest(
   }
 
   const body = input as Record<string, unknown>;
+  const targetedExecution = body.candidateListingId !== undefined;
+  if (targetedExecution) {
+    const keys = Object.keys(body);
+    if (keys.some((key) => !['dryRun', 'execute', 'candidateListingId'].includes(key))
+      || Object.prototype.hasOwnProperty.call(body, 'limit')
+      || body.execute !== true
+      || (body.dryRun !== undefined && body.dryRun !== false)
+      || typeof body.candidateListingId !== 'string'
+      || !uuidPattern.test(body.candidateListingId)) {
+      throw new MarketplaceLocationBackfillRequestError('INVALID_REQUEST');
+    }
+
+    return {
+      dryRun: false,
+      execute: true,
+      limit: 1,
+      candidateListingId: body.candidateListingId,
+    };
+  }
+
   const dryRun = body.dryRun === undefined ? true : body.dryRun;
   const execute = body.execute === undefined ? false : body.execute;
   const limit = body.limit === undefined ? 10 : body.limit;
@@ -122,7 +213,9 @@ export function timingSafeSecretEqual(expected: string, received: string): boole
   return difference === 0;
 }
 
-function normalizedCandidate(candidate: MarketplaceLocationBackfillCandidate) {
+export function normalizeMarketplaceLocationBackfillCandidate(
+  candidate: MarketplaceLocationBackfillCandidate
+) {
   return {
     ...candidate,
     city: candidate.city.trim().replace(/\s+/g, ' '),
@@ -131,13 +224,163 @@ function normalizedCandidate(candidate: MarketplaceLocationBackfillCandidate) {
   };
 }
 
-function postalRequest(stateCode: string, postalCode: string): MarketplaceGeocodeRequest {
+function postalRequest(
+  stateCode: string,
+  postalCode: string,
+  city: string
+): MarketplaceGeocodeRequest {
   return {
     countryCode: 'US',
     stateCode,
+    city,
     postalCode,
     resolutionLevel: 'postal_code',
   };
+}
+
+function failedProviderValidation(
+  candidateFound: boolean,
+  providerCalled: boolean,
+  validationCode: MarketplaceLocationProviderValidationReport['validationCode'],
+  structuralDiagnosticCode: MarketplaceLocationProviderValidationReport['structuralDiagnosticCode'],
+  requestEvidence: Pick<
+    MarketplaceLocationProviderValidationReport,
+    | 'requestCountryHintPresent'
+    | 'requestStateHintPresent'
+    | 'requestPostalHintPresent'
+    | 'requestCityHintPresent'
+    | 'requestCityMatchesCandidate'
+    | 'requestCitySourcedServerSide'
+    | 'requestEndpointModeValid'
+    | 'requestEncodingValid'
+    | 'credentialMechanismValid'
+  >
+): MarketplaceLocationProviderValidationReport {
+  return {
+    mode: 'validate_provider',
+    candidateFound,
+    providerCalled,
+    providerValidated: false,
+    countryValid: false,
+    stateValid: false,
+    postalCodeValid: false,
+    localityValid: false,
+    resultTypeValid: false,
+    pointValid: false,
+    validationCode,
+    structuralDiagnosticCode,
+    ...requestEvidence,
+  };
+}
+
+const unavailableRequestEvidence = {
+  requestCountryHintPresent: false,
+  requestStateHintPresent: false,
+  requestPostalHintPresent: false,
+  requestCityHintPresent: false,
+  requestCityMatchesCandidate: false,
+  requestCitySourcedServerSide: false,
+  requestEndpointModeValid: false,
+  requestEncodingValid: false,
+  credentialMechanismValid: false,
+};
+
+export async function validateMarketplaceLocationBackfillProvider(
+  candidate: MarketplaceLocationBackfillCandidate,
+  geocoder: MarketplaceGeocoder
+): Promise<MarketplaceLocationProviderValidationReport> {
+  const normalized = normalizeMarketplaceLocationBackfillCandidate(candidate);
+  if (!/^[A-Z]{2}$/.test(normalized.state) || !/^\d{5}$/.test(normalized.zipCode)) {
+    return failedProviderValidation(
+      true,
+      false,
+      'INVALID_CANDIDATE',
+      'NOT_APPLICABLE',
+      unavailableRequestEvidence
+    );
+  }
+
+  const request = postalRequest(normalized.state, normalized.zipCode, normalized.city);
+  const inspected = geocoder.inspectRequest?.(request);
+  const requestEvidence = {
+    requestCountryHintPresent: inspected?.countryHintPresent ?? request.countryCode === 'US',
+    requestStateHintPresent: inspected?.stateHintPresent ?? request.stateCode.length > 0,
+    requestPostalHintPresent: inspected?.postalHintPresent ?? request.postalCode === normalized.zipCode,
+    requestCityHintPresent: inspected?.cityHintPresent ?? Boolean(request.city),
+    requestCityMatchesCandidate: request.city === normalized.city,
+    requestCitySourcedServerSide: true,
+    requestEndpointModeValid: inspected?.endpointModeValid ?? false,
+    requestEncodingValid: inspected?.encodingValid ?? false,
+    credentialMechanismValid: inspected?.credentialMechanismValid ?? false,
+  };
+
+  try {
+    const result = await geocoder.resolve(request);
+    const countryValid = result.countryCode === 'US';
+    const stateValid = result.stateCode === normalized.state;
+    const postalCodeValid = result.postalCode === normalized.zipCode;
+    const locality = result.city.trim().replace(/\s+/g, ' ');
+    const localityValid = locality.length > 0 && locality.length <= 120;
+    const resultTypeValid = result.resolutionLevel === 'postal_code';
+    const pointValid = Number.isFinite(result.latitude)
+      && result.latitude >= -90
+      && result.latitude <= 90
+      && Number.isFinite(result.longitude)
+      && result.longitude >= -180
+      && result.longitude <= 180;
+    const providerValidated = countryValid
+      && stateValid
+      && postalCodeValid
+      && localityValid
+      && resultTypeValid
+      && pointValid;
+
+    if (!providerValidated) {
+      return failedProviderValidation(
+        true,
+        true,
+        'PROVIDER_LOCATION_MISMATCH',
+        'NONE',
+        requestEvidence
+      );
+    }
+
+    return {
+      mode: 'validate_provider',
+      candidateFound: true,
+      providerCalled: true,
+      providerValidated: true,
+      countryValid,
+      stateValid,
+      postalCodeValid,
+      localityValid,
+      resultTypeValid,
+      pointValid,
+      validationCode: 'VALID',
+      structuralDiagnosticCode: 'NONE',
+      ...requestEvidence,
+      countryCode: result.countryCode,
+      state: result.stateCode,
+      zipCode: result.postalCode,
+      locality,
+      localitySource: result.localitySource,
+    };
+  } catch (error) {
+    const code = error instanceof MarketplaceGeocoderError
+      ? error.code
+      : 'PROVIDER_UNAVAILABLE';
+    const structuralDiagnosticCode = error instanceof MarketplaceGeocoderError
+      ? error.diagnosticCode
+        ?? (error.code === 'PROVIDER_MALFORMED_RESPONSE' ? 'UNKNOWN' : 'NOT_APPLICABLE')
+      : 'NOT_APPLICABLE';
+    return failedProviderValidation(
+      true,
+      true,
+      code,
+      structuralDiagnosticCode,
+      requestEvidence
+    );
+  }
 }
 
 function safeLocationMatches(
@@ -179,7 +422,26 @@ export async function runMarketplaceLocationBackfill(
   request: MarketplaceLocationBackfillRequest,
   dependencies: MarketplaceLocationBackfillDependencies
 ): Promise<MarketplaceLocationBackfillReport> {
-  const candidates = (await dependencies.listCandidates(request.limit)).map(normalizedCandidate);
+  const selection: MarketplaceLocationBackfillSelection = {
+    limit: request.candidateListingId ? 1 : request.limit,
+    ...(request.candidateListingId
+      ? { candidateListingId: request.candidateListingId }
+      : {}),
+  };
+  const selectedCandidates = await dependencies.listCandidates(selection);
+
+  if (request.candidateListingId) {
+    if (selectedCandidates.length === 0) {
+      throw new MarketplaceLocationBackfillRequestError('TARGET_NOT_ELIGIBLE');
+    }
+    if (selectedCandidates.length !== 1
+      || selectedCandidates[0].listingId !== request.candidateListingId) {
+      throw new MarketplaceLocationBackfillRequestError('TARGET_SELECTION_INVALID');
+    }
+  }
+
+  const candidates = selectedCandidates
+    .map(normalizeMarketplaceLocationBackfillCandidate);
   const report: MarketplaceLocationBackfillReport = {
     dryRun: request.dryRun,
     scannedListings: candidates.length,
@@ -224,7 +486,7 @@ export async function runMarketplaceLocationBackfill(
 
   for (const [key, group] of groups) {
     const [stateCode, postalCode] = key.split('|');
-    const geocodeRequest = postalRequest(stateCode, postalCode);
+    const geocodeRequest = postalRequest(stateCode, postalCode, group[0].city);
     let location: SafeCachedMarketplaceLocation | null = null;
 
     try {
@@ -249,6 +511,11 @@ export async function runMarketplaceLocationBackfill(
 
       try {
         const resolved = await dependencies.geocoder.resolve(geocodeRequest);
+        dependencies.log?.({
+          stage: 'provider_resolution',
+          affectedListings: group.length,
+          localitySource: resolved.localitySource ?? 'provider',
+        });
         location = await dependencies.cacheLocation(resolved);
         report.resolvedLocations += 1;
       } catch (error) {
