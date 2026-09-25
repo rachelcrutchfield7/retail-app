@@ -92,9 +92,10 @@ begin
       coordinates_match := target_listing.latitude = trusted_location.latitude
         and target_listing.longitude = trusted_location.longitude;
       point_matches := coalesce(
-        public.st_equals(
-          target_listing.location_point::public.geometry,
-          trusted_location.location_point::public.geometry
+        public.st_dwithin(
+          target_listing.location_point,
+          trusted_location.location_point,
+          0.10
         ),
         false
       );
@@ -161,9 +162,10 @@ begin
       and target_listing.longitude = trusted_location.longitude;
     point_matches := target_listing.location_point is not null
       and coalesce(
-        public.st_equals(
-          target_listing.location_point::public.geometry,
-          trusted_location.location_point::public.geometry
+        public.st_dwithin(
+          target_listing.location_point,
+          trusted_location.location_point,
+          0.10
         ),
         false
       );

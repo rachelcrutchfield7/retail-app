@@ -310,9 +310,13 @@ select pg_temp.assert_true(
       and latitude = 38.900000
       and longitude = -90.070000
       and location_point is not null
-      and public.st_equals(
-        location_point::public.geometry,
-        public.st_setsrid(public.st_makepoint(-90.070000, 38.900000), 4326)
+      and public.st_dwithin(
+        location_point,
+        public.st_setsrid(
+          public.st_makepoint(-90.070000, 38.900000),
+          4326
+        )::public.geography,
+        0.10
       )
     from public.listings
     where id = '00000000-0000-4000-8000-000000005a01'

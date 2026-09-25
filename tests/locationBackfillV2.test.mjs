@@ -218,7 +218,11 @@ test('exact Phase 5 partial state is repaired and has a distinct result', () => 
 
 test('complete state is idempotent only when coordinates and point match the trusted location', () => {
   assert.match(backfillRpc, /coordinates_match := target_listing\.latitude = trusted_location\.latitude[\s\S]*?target_listing\.longitude = trusted_location\.longitude/);
-  assert.match(backfillRpc, /public\.st_equals\([\s\S]*?target_listing\.location_point::public\.geometry[\s\S]*?trusted_location\.location_point::public\.geometry/);
+  assert.equal(
+    (backfillRpc.match(/public\.st_dwithin\([\s\S]*?target_listing\.location_point,[\s\S]*?trusted_location\.location_point,[\s\S]*?0\.10[\s\S]*?\)/g) ?? []).length,
+    2
+  );
+  assert.doesNotMatch(backfillRpc, /public\.st_equals\(/);
   assert.match(backfillRpc, /if not coordinates_match or not point_matches then[\s\S]*?RETAIL_LOCATION_BACKFILL_INCONSISTENT_LOCATION_STATE/);
 });
 
