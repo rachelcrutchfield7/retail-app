@@ -4,7 +4,7 @@ This runbook prepares a controlled rollout. Location v2 is additive: legacy sear
 
 ## Preconditions
 
-- Use the approved production project and a reviewed commit containing Phases 1-5.
+- Use the approved production project and a reviewed commit containing Phases 1-5 plus the approved Phase 5 point-completion correction.
 - Resolve migration-history drift before applying SQL.
 - Apply only explicitly approved migration files. Do not use `supabase db push`.
 - Do not deploy `20260914230150_checkout_payment_intent_strict_enforcement_v1.sql`.
@@ -16,14 +16,14 @@ This runbook prepares a controlled rollout. Location v2 is additive: legacy sear
 1. Run `ops/location-v2-production-audit.sql` through an approved read-only connection and review invalid ZIP/state rows, unresolved ZIP groups, and current trusted coverage.
 2. Confirm the exact authoritative migration versions and SQL for Phases 1-5.
 3. Configure `GEOAPIFY_API_KEY` and `RETAIL_LOCATION_BACKFILL_WEBHOOK_SECRET` in Supabase Edge Function secrets.
-4. Apply the five Location v2 migrations individually in order: foundation, resolver, listing integration, geographic marketplace search, then backfill support.
+4. Apply the six Location v2 migrations individually in order: foundation, resolver, listing integration, geographic marketplace search, backfill support, then backfill point completion.
 5. Verify grants, private-schema access, RPC signatures, indexes, and migration history after each migration.
 6. Deploy `resolve-marketplace-location` and `backfill-marketplace-locations` only.
 7. Smoke-test the resolver with a controlled authenticated account. Confirm responses contain no coordinates or provider payloads.
 8. Invoke `backfill-marketplace-locations` with the default dry-run mode and a batch limit of 10.
 9. Review mismatches, invalid records, provider lookups needed, and unresolved ZIPs. Do not correct listing data automatically.
 10. Execute one explicitly authorized batch with `{ "dryRun": false, "execute": true, "limit": 10 }`.
-11. Verify seller-entered display city, trusted state/ZIP, trusted location ID, NULL public listing coordinate fields, unchanged listing business fields, and legacy search-area compatibility.
+11. Verify seller-entered display city, trusted state/ZIP, trusted location ID, protected coarse listing coordinates with a non-NULL point, unchanged listing business fields, and legacy search-area compatibility.
 12. Verify old marketplace feeds and old clients still work.
 13. Verify the v2 geographic feed for a trusted buyer origin, including a trusted listing whose `search_area_id` is null.
 14. Continue bounded backfill batches only while health checks remain clean.
@@ -46,7 +46,7 @@ Initial Location v2 migration backfill is restricted to active, non-deleted list
 | Cached ZIP while Geoapify unavailable | Cache hit remains usable with zero provider call. |
 | Legacy listing with trusted ZIP cache | Dry-run reports eligible; execution attaches canonical trusted location. |
 | Old-client legacy-area listing | Existing RPC and area-based behavior still work. |
-| Trusted listing with null `search_area_id` | v2 feed joins `marketplace_location_id` to the private trusted point; the public listing row and response expose no coordinates or ZIP. |
+| Trusted listing with null `search_area_id` | v2 feed joins `marketplace_location_id` to the private trusted point; the response exposes no coordinates or ZIP. |
 
 ## Rollback and Pause
 
@@ -60,12 +60,12 @@ Invalid/missing ZIPs, invalid state codes, ZIP/state mismatches, inactive or mal
 
 ## Trusted Location Privacy
 
-- Trusted coordinates live only in `private.marketplace_locations`.
+- Authoritative trusted coordinates live in `private.marketplace_locations`; coarse trusted coordinates may be stored in protected listing columns for server-side geographic operations.
 - Phase 4 performs one bounded, idempotent privacy scrub of deleted, `removed` pre-v2 listings that still contain legacy public coordinates. It does not target active or other non-deleted inventory.
 - The scrub clears only `public.listings.latitude`, `longitude`, and `location_point`; seller locality, ZIP, legacy search area, lifecycle state, timestamps, payment state, shipping state, and trusted location ID remain unchanged.
-- After Phase 4, every `public.listings` row, including deleted history, must have NULL public coordinate fields.
+- Phase 5 completion repopulates protected coordinates only for active listings attached to a validated US postal-code location.
 - `public.listings.marketplace_location_id` is the trusted relationship used by Location v2.
-- Location v2 leaves `public.listings.latitude`, `longitude`, and `location_point` unused and NULL, including after backfill.
-- Production currently grants authenticated users table-level `SELECT` on `public.listings`; Location v2 does not change that old-client compatibility grant and remains private because trusted coordinates are never stored on those rows.
+- Production currently grants authenticated users table-level `SELECT` on `public.listings`; Location v2 does not change that old-client compatibility grant or add coordinates to any public listing RPC or feed response.
+- Coarse listing coordinates must not be added to public RPC or feed outputs, backfill responses, Edge Function responses, application feed models, or logs.
 - Geographic marketplace search joins the listing location ID to the private cache and applies `ST_DWithin` and `ST_Distance` to the private trusted point.
-- Backfill attaches only the trusted location ID and preserves seller display city, state, and ZIP.
+- Backfill atomically attaches the trusted location ID and trusted coarse latitude/longitude; the existing listing trigger derives `location_point` while seller display city, state, and ZIP remain unchanged.

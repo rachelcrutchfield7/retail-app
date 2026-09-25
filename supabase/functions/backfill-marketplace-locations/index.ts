@@ -158,7 +158,9 @@ Deno.serve(async (request: Request) => {
         );
         if (error) throw error;
         const row = Array.isArray(data) ? data[0] as { result?: unknown } | undefined : undefined;
-        if (row?.result === 'backfilled' || row?.result === 'already_complete') return row.result;
+        if (row?.result === 'backfilled'
+          || row?.result === 'repaired'
+          || row?.result === 'already_complete') return row.result;
         throw new Error('BACKFILL_RESULT_INVALID');
       },
       log(entry) {

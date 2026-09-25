@@ -17,14 +17,26 @@ const migrationName = migrations.find((name) =>
   name.endsWith('_location_architecture_v2_backfill_support.sql')
 );
 assert.ok(migrationName, 'Phase 5 backfill support migration should exist');
+const correctionMigrationName = migrations.find((name) =>
+  name.endsWith('_location_architecture_v2_backfill_point_completion.sql')
+);
+assert.ok(correctionMigrationName, 'Phase 5 point-completion migration should exist');
 
 const migration = await readFile(new URL(`../supabase/migrations/${migrationName}`, import.meta.url), 'utf8');
+const correctionMigration = await readFile(
+  new URL(`../supabase/migrations/${correctionMigrationName}`, import.meta.url),
+  'utf8'
+);
 const functionSource = await readFile(
   new URL('../supabase/functions/backfill-marketplace-locations/index.ts', import.meta.url),
   'utf8'
 );
 const sharedSource = await readFile(
   new URL('../supabase/functions/_shared/marketplaceLocationBackfill.ts', import.meta.url),
+  'utf8'
+);
+const rollbackIntegration = await readFile(
+  new URL('./location_backfill_point_completion_live_rollback.sql', import.meta.url),
   'utf8'
 );
 const config = await readFile(new URL('../supabase/config.toml', import.meta.url), 'utf8');
@@ -38,7 +50,7 @@ const phase4 = await readFile(
 const candidateRpc = migration.match(
   /create or replace function public\.get_marketplace_location_backfill_candidates[\s\S]*?comment on function public\.get_marketplace_location_backfill_candidates/
 )?.[0] ?? '';
-const backfillRpc = migration.match(
+const backfillRpc = correctionMigration.match(
   /create or replace function public\.backfill_listing_marketplace_location[\s\S]*?comment on function public\.backfill_listing_marketplace_location/
 )?.[0] ?? '';
 const updateBlock = backfillRpc.match(/update public\.listings as l\s*set([\s\S]*?)where l\.id/)?.[1] ?? '';
@@ -180,23 +192,40 @@ test('existing Worden display city is preserved by the same attachment-only back
   }]);
 });
 
-test('backfill attaches only the trusted location ID and never copies coordinates', () => {
+test('backfill atomically attaches the trusted ID and copies only trusted coarse coordinates', () => {
   assert.match(updateBlock, /marketplace_location_id = trusted_location\.id/);
-  assert.doesNotMatch(updateBlock, /latitude\s*=/);
-  assert.doesNotMatch(updateBlock, /longitude\s*=/);
+  assert.match(updateBlock, /latitude = trusted_location\.latitude/);
+  assert.match(updateBlock, /longitude = trusted_location\.longitude/);
   assert.doesNotMatch(updateBlock, /location_point\s*=/);
-  assert.doesNotMatch(backfillRpc, /latitude = trusted_location\.latitude/);
-  assert.doesNotMatch(backfillRpc, /longitude = trusted_location\.longitude/);
   assert.doesNotMatch(backfillRpc, /requested_(?:latitude|longitude)/);
 });
 
-test('backfill accepts only coordinate-free public listing rows', () => {
+test('scanner remains limited to untouched legacy rows while the RPC fails closed on mixed states', () => {
   assert.match(candidateRpc, /l\.latitude is null/);
   assert.match(candidateRpc, /l\.longitude is null/);
   assert.match(candidateRpc, /l\.location_point is null/);
   assert.match(backfillRpc, /target_listing\.latitude is not null[\s\S]*?target_listing\.longitude is not null[\s\S]*?target_listing\.location_point is not null/);
-  assert.match(backfillRpc, /RETAIL_LOCATION_BACKFILL_PUBLIC_COORDINATES_PRESENT/);
+  assert.match(backfillRpc, /RETAIL_LOCATION_BACKFILL_INCONSISTENT_LOCATION_STATE/);
   assert.doesNotMatch(migration, /create (?:or replace )?function public\.sync_listing_location_point/i);
+  assert.doesNotMatch(correctionMigration, /create (?:or replace )?function public\.sync_listing_location_point/i);
+});
+
+test('exact Phase 5 partial state is repaired and has a distinct result', () => {
+  assert.match(backfillRpc, /target_listing\.marketplace_location_id = trusted_location\.id[\s\S]*?target_listing\.latitude is null[\s\S]*?target_listing\.longitude is null[\s\S]*?target_listing\.location_point is null[\s\S]*?completion_result := 'repaired'/);
+  assert.match(functionSource, /row\?\.result === 'repaired'/);
+  assert.match(sharedSource, /'backfilled' \| 'repaired' \| 'already_complete'/);
+});
+
+test('complete state is idempotent only when coordinates and point match the trusted location', () => {
+  assert.match(backfillRpc, /coordinates_match := target_listing\.latitude = trusted_location\.latitude[\s\S]*?target_listing\.longitude = trusted_location\.longitude/);
+  assert.match(backfillRpc, /public\.st_equals\([\s\S]*?target_listing\.location_point::public\.geometry[\s\S]*?trusted_location\.location_point::public\.geometry/);
+  assert.match(backfillRpc, /if not coordinates_match or not point_matches then[\s\S]*?RETAIL_LOCATION_BACKFILL_INCONSISTENT_LOCATION_STATE/);
+});
+
+test('postconditions require the trusted ID, coordinates, and trigger-generated point', () => {
+  assert.match(backfillRpc, /target_listing\.marketplace_location_id is distinct from trusted_location\.id/);
+  assert.match(backfillRpc, /target_listing\.latitude is null[\s\S]*?target_listing\.longitude is null[\s\S]*?target_listing\.location_point is null/);
+  assert.match(backfillRpc, /RETAIL_LOCATION_BACKFILL_POSTCONDITION_FAILED/);
 });
 
 test('listing status, seller, price, reservation, and shipping fields are preserved', () => {
@@ -210,7 +239,7 @@ test('listing status, seller, price, reservation, and shipping fields are preser
 });
 
 test('already trusted listing cannot be moved to another location', () => {
-  assert.match(backfillRpc, /target_listing\.marketplace_location_id = trusted_location\.id/);
+  assert.match(backfillRpc, /target_listing\.marketplace_location_id <> trusted_location\.id/);
   assert.match(backfillRpc, /RETAIL_LOCATION_BACKFILL_ALREADY_TRUSTED/);
 });
 
@@ -228,7 +257,7 @@ test('listing row is locked before validation and update', () => {
 test('attachment RPC checks active eligibility after acquiring the row lock', () => {
   const rowLock = backfillRpc.indexOf('for update');
   const statusCheck = backfillRpc.indexOf("target_listing.status <> 'active'::public.listing_status");
-  const trustedIdCheck = backfillRpc.indexOf('if target_listing.marketplace_location_id is not null then');
+  const trustedIdCheck = backfillRpc.indexOf('if target_listing.marketplace_location_id is not null');
   assert.ok(rowLock >= 0 && rowLock < statusCheck && statusCheck < trustedIdCheck);
   assert.match(backfillRpc, /target_listing\.deleted_at is not null[\s\S]*?target_listing\.status <> 'active'::public\.listing_status/);
   assert.match(backfillRpc, /RETAIL_MARKETPLACE_LOCATION_BACKFILL_INELIGIBLE/);
@@ -273,6 +302,45 @@ test('trusted backfill context is narrow and cleared on success or exception', (
     2
   );
   assert.match(backfillRpc, /exception\s*when others then[\s\S]*?raise;/);
+});
+
+test('generic migration repair is active-only, trusted, coordinate-empty, and ID-agnostic', () => {
+  const repair = correctionMigration.match(
+    /do \$location_v2_phase_5_point_repair\$[\s\S]*?\$location_v2_phase_5_point_repair\$;/
+  )?.[0] ?? '';
+  assert.match(repair, /l\.deleted_at is null/);
+  assert.match(repair, /l\.status = 'active'::public\.listing_status/);
+  assert.match(repair, /l\.marketplace_location_id is not null/);
+  assert.match(repair, /l\.latitude is null[\s\S]*?l\.longitude is null[\s\S]*?l\.location_point is null/);
+  assert.match(repair, /ml\.is_active = true/);
+  assert.match(repair, /ml\.country_code = 'US'/);
+  assert.match(repair, /ml\.resolution_level = 'postal_code'/);
+  assert.match(repair, /public\.backfill_listing_marketplace_location/);
+  assert.doesNotMatch(repair, /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i);
+});
+
+test('corrective migration keeps all triggers enabled', () => {
+  assert.doesNotMatch(correctionMigration, /disable trigger/i);
+  assert.doesNotMatch(correctionMigration, /location_point\s*=\s*public\.st_/i);
+});
+
+test('rollback-only SQL integration covers runtime trigger, context, repair, and fail-closed states', () => {
+  assert.match(rollbackIntegration, /^begin;/);
+  assert.match(rollbackIntegration, /rollback;\s*$/);
+  assert.match(rollbackIntegration, /direct write without location_backfill_context/);
+  assert.match(rollbackIntegration, /trigger-generated point/);
+  assert.match(rollbackIntegration, /exact Phase 5 partial state repaired/);
+  assert.match(rollbackIntegration, /active-to-sold scan\/attach race/);
+  for (const state of [
+    'latitude-only state',
+    'longitude-only state',
+    'point-without-coordinates state',
+    'coordinates disagree with trusted location',
+    'coordinates-without-point state',
+  ]) assert.match(rollbackIntegration, new RegExp(state));
+  assert.match(rollbackIntegration, /business and reservation fields unchanged/);
+  assert.match(rollbackIntegration, /transaction and payment state unchanged/);
+  assert.match(rollbackIntegration, /generic migration repair completed exact partial row/);
 });
 
 test('dry-run is the default and execution must be explicit', () => {
@@ -375,6 +443,16 @@ test('already trusted race result is handled idempotently', async () => {
   assert.equal(report.backfilledListings, 0);
 });
 
+test('repaired result is counted as a successful completed backfill', async () => {
+  const deps = dependencies({ attachResult: 'repaired' });
+  const report = await runMarketplaceLocationBackfill(
+    normalizeMarketplaceLocationBackfillRequest({ dryRun: false, execute: true }), deps.value
+  );
+  assert.equal(report.backfilledListings, 1);
+  assert.equal(report.failedListings, 0);
+  assert.equal(report.details[0]?.status, 'repaired');
+});
+
 test('listing that becomes non-active after scanning is skipped without aborting the batch', async () => {
   const deps = dependencies({
     attachError: { message: 'RETAIL_MARKETPLACE_LOCATION_BACKFILL_INELIGIBLE' },
@@ -442,11 +520,14 @@ test('safe structured logs contain stages/counts and no secret or coordinate val
 test('old and v2 Nearby RPCs remain present and unmodified by Phase 5', () => {
   assert.match(phase4, /create or replace function public\.get_nearby_listings_v2_sorted/);
   assert.doesNotMatch(migration, /create or replace function public\.get_nearby_listings/i);
+  assert.doesNotMatch(correctionMigration, /create or replace function public\.get_nearby_listings/i);
   assert.doesNotMatch(migration, /drop function[^;]*get_nearby_listings/i);
+  assert.doesNotMatch(correctionMigration, /drop function[^;]*get_nearby_listings/i);
 });
 
 test('Phase 5 leaves ISO, Rescue Hub, checkout, shipping, and Stripe untouched', () => {
   assert.doesNotMatch(migration, /\b(?:iso_|rescue_|stripe|payment_intent|shipping_label|checkout)\b/i);
+  assert.doesNotMatch(correctionMigration, /\b(?:iso_|rescue_|stripe|payment_intent|shipping_label|checkout)\b/i);
   assert.doesNotMatch(functionSource, /stripe|payment_intent|shipping-label|rescue|iso-/i);
 });
 
@@ -475,7 +556,8 @@ test('rollout documents non-destructive fallback and no extra feature-flag requi
 test('rollout documents coordinate privacy without changing the old-client SELECT grant', () => {
   assert.match(rollout, /authenticated users table-level `SELECT` on `public\.listings`/);
   assert.match(rollout, /does not change that old-client compatibility grant/);
-  assert.match(rollout, /trusted coordinates are never stored on those rows/);
+  assert.match(rollout, /coarse trusted coordinates may be stored in protected listing columns/);
+  assert.match(rollout, /must not be added to public RPC or feed outputs/);
 });
 
 test('smoke plan covers provider outage, cached outage path, old clients, and null legacy area', () => {

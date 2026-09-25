@@ -52,7 +52,10 @@ export type MarketplaceLocationBackfillDependencies = {
   lookupCachedLocation(request: MarketplaceGeocodeRequest): Promise<SafeCachedMarketplaceLocation | null>;
   geocoder: MarketplaceGeocoder;
   cacheLocation(result: MarketplaceGeocodeResult): Promise<SafeCachedMarketplaceLocation>;
-  attachLocation(listingId: string, marketplaceLocationId: string): Promise<'backfilled' | 'already_complete'>;
+  attachLocation(
+    listingId: string,
+    marketplaceLocationId: string
+  ): Promise<'backfilled' | 'repaired' | 'already_complete'>;
   log?(entry: Record<string, string | number | boolean>): void;
 };
 
