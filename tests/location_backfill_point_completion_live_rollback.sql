@@ -626,7 +626,7 @@ select pg_temp.make_listing(
   '00000000-0000-4000-8000-000000005a11',
   fixture_location_id => '00000000-0000-4000-8000-000000005c10'
 );
-\ir ../supabase/migrations/20260925010007_location_architecture_v2_backfill_point_completion.sql
+\ir ../supabase/migrations/20260925121933_location_architecture_v2_backfill_point_completion.sql
 
 select pg_temp.assert_true(
   (
