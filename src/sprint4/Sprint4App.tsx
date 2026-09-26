@@ -110,6 +110,7 @@ import {
   IsoDetailScreen,
   IsoScreen,
 } from '../screens/iso/IsoScreens';
+import { EditIsoScreen } from '../screens/iso/EditIsoScreen';
 import {
   calculatePlatformFeeCents,
   getPaymentReadiness,
@@ -203,6 +204,7 @@ type SprintRoute =
   | { name: 'create-listing' }
   | { name: 'edit-listing'; listingId: string }
   | { name: 'create-iso' }
+  | { name: 'edit-iso'; postId: string }
   | { name: 'iso-detail'; postId: string }
   | { name: 'edit-profile' }
   | { name: 'public-profile'; userId: string; returnIsoPostId?: string }
@@ -292,6 +294,7 @@ function Sprint4Experience() {
   const openEditListing = (listingId: string) => setRoute({ name: 'edit-listing', listingId });
   const openCreateIso = () => setRoute({ name: 'create-iso' });
   const openIsoPost = (postId: string) => setRoute({ name: 'iso-detail', postId });
+  const openEditIso = (postId: string) => setRoute({ name: 'edit-iso', postId });
   const openPublicProfile = (userId: string, returnIsoPostId?: string) =>
     setRoute({ name: 'public-profile', userId, returnIsoPostId });
   const openMessages = () => setRoute({ name: 'messages' });
@@ -549,6 +552,17 @@ function Sprint4Experience() {
     );
   }
 
+  if (route.name === 'edit-iso') {
+    return (
+      <EditIsoScreen
+        postId={route.postId}
+        onBack={() => openIsoPost(route.postId)}
+        onSaved={openIsoPost}
+        onOpenLocationSettings={openPreferences}
+      />
+    );
+  }
+
   if (route.name === 'iso-detail') {
     return (
       <IsoDetailScreen
@@ -558,6 +572,8 @@ function Sprint4Experience() {
         onSignIn={() => openTab('profile')}
         onOpenRequesterProfile={(userId) => openPublicProfile(userId, route.postId)}
         onReportRequest={(postId) => openReport('iso_post', postId, 'Report ISO request', route.postId)}
+        onEditRequest={openEditIso}
+        onDeleted={() => openTab('iso')}
       />
     );
   }

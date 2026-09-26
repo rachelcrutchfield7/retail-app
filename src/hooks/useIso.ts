@@ -15,7 +15,9 @@ import {
   getIsoPostImages,
   getIsoResponses,
   getMyIsoPosts,
+  manageIsoPost,
   removeIsoPostImage,
+  replaceIsoPostImage,
   respondToIsoPost,
   setIsoPostStatus,
   updateIsoPost,
@@ -25,6 +27,7 @@ import type {
   IsoFeedParams,
   IsoPost,
   IsoPostImage,
+  IsoOwnerAction,
   IsoPostStatus,
   IsoResponse,
   UpdateIsoPostInput,
@@ -249,6 +252,32 @@ export function useSetIsoPostStatus() {
   };
 }
 
+export function useManageIsoPost() {
+  const { user } = useAuth();
+  const userId = user?.id ?? 'guest';
+  const queryClient = useQueryClient();
+
+  const mutation = useMutation({
+    mutationFn: ({
+      postId,
+      action,
+    }: {
+      postId: string;
+      action: IsoOwnerAction;
+    }) => manageIsoPost(postId, action),
+    onSuccess: async (post) => {
+      await invalidateIsoQueries(queryClient, userId, post.id);
+    },
+  });
+
+  return {
+    manage: mutation.mutateAsync,
+    loading: mutation.isPending,
+    isLoading: mutation.isPending,
+    error: mutation.error ?? null,
+  };
+}
+
 export function useRespondToIsoPost() {
   const { user } = useAuth();
   const userId = user?.id ?? 'guest';
@@ -332,6 +361,38 @@ export function useRemoveIsoPostImage() {
 
   return {
     removeImage: mutation.mutateAsync,
+    loading: mutation.isPending,
+    isLoading: mutation.isPending,
+    error: mutation.error ?? null,
+  };
+}
+
+export function useReplaceIsoPostImage() {
+  const { user } = useAuth();
+  const userId = user?.id ?? 'guest';
+  const queryClient = useQueryClient();
+
+  const mutation = useMutation({
+    mutationFn: ({
+      postId,
+      currentImage,
+      replacementFileUri,
+    }: {
+      postId: string;
+      currentImage?: IsoPostImage;
+      replacementFileUri?: string;
+    }) => replaceIsoPostImage(
+      postId,
+      currentImage,
+      replacementFileUri
+    ),
+    onSuccess: async (_image, { postId }) => {
+      await invalidateIsoQueries(queryClient, userId, postId);
+    },
+  });
+
+  return {
+    replaceImage: mutation.mutateAsync,
     loading: mutation.isPending,
     isLoading: mutation.isPending,
     error: mutation.error ?? null,

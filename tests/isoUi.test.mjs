@@ -44,10 +44,12 @@ test('Sprint 4 exposes ISO as a real sixth navigation tab', () => {
   );
 });
 
-test('Sprint 4 has create and detail routes for ISO', () => {
+test('Sprint 4 has create, edit, and detail routes for ISO', () => {
   assert.match(sprint4, /\{ name: 'create-iso' \}/);
+  assert.match(sprint4, /\{ name: 'edit-iso'; postId: string \}/);
   assert.match(sprint4, /\{ name: 'iso-detail'; postId: string \}/);
   assert.match(sprint4, /<CreateIsoScreen/);
+  assert.match(sprint4, /<EditIsoScreen/);
   assert.match(sprint4, /<IsoDetailScreen/);
 });
 
@@ -89,10 +91,12 @@ test('ImageUploader remains backward compatible while supporting ISO limits', ()
 });
 
 test('ISO detail includes owner lifecycle actions', () => {
-  assert.match(isoScreens, /Mark Fulfilled/);
+  assert.match(isoScreens, /Mark as Found/);
   assert.match(isoScreens, /Close Request/);
   assert.match(isoScreens, /Reopen Request/);
-  assert.match(isoScreens, /useSetIsoPostStatus/);
+  assert.match(isoScreens, /Renew for 30 Days/);
+  assert.match(isoScreens, /Delete Request/);
+  assert.match(isoScreens, /useManageIsoPost/);
 });
 
 test('I Have This uses active trusted ReTail listings from the same category ID', () => {

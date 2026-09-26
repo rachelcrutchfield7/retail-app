@@ -811,7 +811,19 @@ export type RescueHubResult = RescueOrganization[];
 
 export type IsoPostStatus = 'active' | 'fulfilled' | 'expired' | 'closed';
 
-export type IsoDesiredCondition = 'any' | 'new' | 'used';
+export type IsoDesiredCondition =
+  | 'any'
+  | 'good'
+  | 'like_new'
+  | 'new'
+  | 'used';
+
+export type IsoOwnerAction =
+  | 'mark_found'
+  | 'close'
+  | 'reopen'
+  | 'renew'
+  | 'delete';
 
 export type IsoUrgency = 'flexible' | 'soon' | 'urgent';
 

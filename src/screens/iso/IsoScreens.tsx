@@ -11,12 +11,17 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   ChevronLeft,
+  CircleCheck,
   Flag,
   ListChecks,
   MapPin,
+  Pencil,
   Plus,
+  RotateCcw,
   Search,
+  Trash2,
   UserRound,
+  XCircle,
 } from 'lucide-react-native';
 
 import {
@@ -36,9 +41,9 @@ import {
   useIsoPost,
   useIsoPostImages,
   useIsoResponses,
+  useManageIsoPost,
   useMyIsoPosts,
   useRespondToIsoPost,
-  useSetIsoPostStatus,
 } from '../../hooks/useIso';
 import { useMyListings } from '../../hooks/useMyListings';
 import { useMarketplaceSearchLocationPreference } from '../../hooks/useMarketplaceSearchLocation';
@@ -51,6 +56,7 @@ import { useThemeColors } from '../../lib/themePreference';
 import type {
   IsoDesiredCondition,
   IsoFeedParams,
+  IsoOwnerAction,
   IsoPost,
   IsoRadiusMiles,
   IsoUrgency,
@@ -77,6 +83,8 @@ type IsoDetailScreenProps = {
   onSignIn: () => void;
   onOpenRequesterProfile: (userId: string) => void;
   onReportRequest: (postId: string) => void;
+  onEditRequest: (postId: string) => void;
+  onDeleted: () => void;
 };
 
 type IsoView = 'browse' | 'mine';
@@ -88,8 +96,9 @@ const conditionChoices: Array<{
   label: string;
 }> = [
   { value: 'any', label: 'Any' },
-  { value: 'new', label: 'New' },
-  { value: 'used', label: 'Used' },
+  { value: 'good', label: 'Good or better' },
+  { value: 'like_new', label: 'Like new or better' },
+  { value: 'new', label: 'New only' },
 ];
 
 const urgencyChoices: Array<{
@@ -110,8 +119,10 @@ function formatBudget(value?: number): string {
 }
 
 function conditionLabel(value: IsoDesiredCondition): string {
-  if (value === 'new') return 'New';
-  if (value === 'used') return 'Used';
+  if (value === 'good') return 'Good or better';
+  if (value === 'like_new') return 'Like new or better';
+  if (value === 'new') return 'New only';
+  if (value === 'used') return 'Used (legacy)';
   return 'Any condition';
 }
 
@@ -122,10 +133,10 @@ function urgencyLabel(value: IsoUrgency): string {
 }
 
 function statusLabel(status: IsoPost['status']): string {
-  if (status === 'fulfilled') return 'Fulfilled';
+  if (status === 'fulfilled') return 'Found';
   if (status === 'expired') return 'Expired';
   if (status === 'closed') return 'Closed';
-  return 'Active';
+  return 'Looking';
 }
 
 function expiresLabel(expiresAt: string): string {
@@ -138,6 +149,7 @@ function expiresLabel(expiresAt: string): string {
   const dayMs = 24 * 60 * 60 * 1000;
   const days = Math.max(0, Math.ceil((timestamp - Date.now()) / dayMs));
 
+  if (timestamp <= Date.now()) return 'Expired';
   if (days === 0) return 'Expires today';
   if (days === 1) return 'Expires tomorrow';
   return `Expires in ${days} days`;
@@ -971,7 +983,7 @@ export function CreateIsoScreen({
 
           <View style={styles.sectionBlock}>
             <Text style={[styles.fieldLabel, { color: themeColors.textPrimary }]}>
-              Condition
+              Minimum acceptable condition
             </Text>
             <ChoiceRow
               choices={conditionChoices}
@@ -1091,6 +1103,8 @@ export function IsoDetailScreen({
   onSignIn,
   onOpenRequesterProfile,
   onReportRequest,
+  onEditRequest,
+  onDeleted,
 }: IsoDetailScreenProps) {
   const themeColors = useThemeColors();
   const auth = useAuth();
@@ -1099,7 +1113,7 @@ export function IsoDetailScreen({
   const responses = useIsoResponses(postId);
   const myListings = useMyListings();
   const categories = useTopLevelCategories();
-  const statusMutation = useSetIsoPostStatus();
+  const ownerMutation = useManageIsoPost();
   const responseMutation = useRespondToIsoPost();
   const requester = useProfile(post.data?.posterId ?? '');
 
@@ -1196,6 +1210,7 @@ export function IsoDetailScreen({
   const request = post.data;
   const isOwner = request.posterId === auth.user?.id;
   const canRespond = !isOwner && request.status === 'active';
+  const requestExpired = Date.parse(request.expiresAt) <= Date.now();
   const requesterName = requester.data?.display_name ?? 'ReTail member';
   const requesterInitials = requesterName
     .split(/\s+/)
@@ -1204,27 +1219,76 @@ export function IsoDetailScreen({
     .map((part) => part[0]?.toUpperCase())
     .join('') || 'R';
 
-  const changeStatus = async (
-    status: 'active' | 'fulfilled' | 'closed'
-  ) => {
+  const performOwnerAction = async (action: IsoOwnerAction) => {
     try {
-      await statusMutation.setStatus({
+      await ownerMutation.manage({
         postId,
-        status,
+        action,
       });
 
-      setNotice(
-        status === 'fulfilled'
-          ? 'Marked fulfilled.'
-          : status === 'closed'
-            ? 'Request closed.'
-            : 'Request reopened.'
-      );
+      if (action === 'delete') {
+        onDeleted();
+        return;
+      }
+
+      const messages: Record<Exclude<IsoOwnerAction, 'delete'>, string> = {
+        mark_found: 'Marked as Found.',
+        close: 'Request closed.',
+        reopen: 'Request reopened.',
+        renew: 'Request renewed for 30 days.',
+      };
+      setNotice(messages[action]);
 
       await post.refetch();
     } catch (error) {
       setNotice(handleAppError(error).userMessage);
     }
+  };
+
+  const confirmOwnerAction = (action: IsoOwnerAction) => {
+    const confirmation: Record<IsoOwnerAction, {
+      title: string;
+      message: string;
+      confirmLabel: string;
+      destructive?: boolean;
+    }> = {
+      mark_found: {
+        title: 'Mark as Found?',
+        message: 'This ends the search and prevents new responses. Existing responses remain available.',
+        confirmLabel: 'Mark as Found',
+      },
+      close: {
+        title: 'Close this request?',
+        message: 'The request will leave Browse and stop accepting responses without being marked Found.',
+        confirmLabel: 'Close Request',
+      },
+      reopen: {
+        title: 'Reopen this request?',
+        message: 'It will return to Browse until its current expiration date. Reopening does not extend it.',
+        confirmLabel: 'Reopen Request',
+      },
+      renew: {
+        title: 'Renew this request?',
+        message: 'The same request will return to Browse for another 30 days, with its response history preserved.',
+        confirmLabel: 'Renew for 30 Days',
+      },
+      delete: {
+        title: 'Delete this request?',
+        message: 'It will be removed from ReTail and cannot be edited, renewed, or reopened. Safety history will be retained.',
+        confirmLabel: 'Delete Request',
+        destructive: true,
+      },
+    };
+    const copy = confirmation[action];
+
+    Alert.alert(copy.title, copy.message, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: copy.confirmLabel,
+        style: copy.destructive ? 'destructive' : 'default',
+        onPress: () => void performOwnerAction(action),
+      },
+    ]);
   };
 
   const submitResponse = async () => {
@@ -1424,40 +1488,106 @@ export function IsoDetailScreen({
               {request.status === 'active' ? (
                 <View style={styles.buttonStack}>
                   <Button
-                    title="Mark Fulfilled"
-                    onPress={() => void changeStatus('fulfilled')}
-                    loading={statusMutation.loading}
+                    title="Edit Request"
+                    icon={Pencil}
+                    variant="outline"
+                    onPress={() => onEditRequest(request.id)}
+                    disabled={ownerMutation.loading}
+                    fullWidth
+                  />
+                  <Button
+                    title="Mark as Found"
+                    icon={CircleCheck}
+                    onPress={() => confirmOwnerAction('mark_found')}
+                    loading={ownerMutation.loading}
                     fullWidth
                   />
                   <Button
                     title="Close Request"
+                    icon={XCircle}
                     variant="outline"
-                    onPress={() => void changeStatus('closed')}
-                    loading={statusMutation.loading}
+                    onPress={() => confirmOwnerAction('close')}
+                    loading={ownerMutation.loading}
+                    fullWidth
+                  />
+                  <Button
+                    title="Delete Request"
+                    icon={Trash2}
+                    variant="ghost"
+                    onPress={() => confirmOwnerAction('delete')}
+                    loading={ownerMutation.loading}
                     fullWidth
                   />
                 </View>
               ) : null}
 
               {request.status === 'closed' ? (
-                <Button
-                  title="Reopen Request"
-                  onPress={() => void changeStatus('active')}
-                  loading={statusMutation.loading}
-                  fullWidth
-                />
+                <View style={styles.buttonStack}>
+                  {!requestExpired ? (
+                    <Button
+                      title="Reopen Request"
+                      icon={RotateCcw}
+                      onPress={() => confirmOwnerAction('reopen')}
+                      loading={ownerMutation.loading}
+                      fullWidth
+                    />
+                  ) : (
+                    <Button
+                      title="Renew for 30 Days"
+                      icon={RotateCcw}
+                      onPress={() => confirmOwnerAction('renew')}
+                      loading={ownerMutation.loading}
+                      fullWidth
+                    />
+                  )}
+                  <Button
+                    title="Delete Request"
+                    icon={Trash2}
+                    variant="ghost"
+                    onPress={() => confirmOwnerAction('delete')}
+                    loading={ownerMutation.loading}
+                    fullWidth
+                  />
+                </View>
               ) : null}
 
               {request.status === 'fulfilled' ? (
-                <Text style={[styles.bodyText, { color: themeColors.textSecondary }]}>
-                  This request is marked fulfilled.
-                </Text>
+                <View style={styles.buttonStack}>
+                  <Text style={[styles.bodyText, { color: themeColors.textSecondary }]}>
+                    This request is marked Found and remains closed to new responses.
+                  </Text>
+                  <Button
+                    title="Delete Request"
+                    icon={Trash2}
+                    variant="ghost"
+                    onPress={() => confirmOwnerAction('delete')}
+                    loading={ownerMutation.loading}
+                    fullWidth
+                  />
+                </View>
               ) : null}
 
               {request.status === 'expired' ? (
-                <Text style={[styles.bodyText, { color: themeColors.textSecondary }]}>
-                  This request has expired.
-                </Text>
+                <View style={styles.buttonStack}>
+                  <Text style={[styles.bodyText, { color: themeColors.textSecondary }]}>
+                    This request has expired and is no longer visible in Browse.
+                  </Text>
+                  <Button
+                    title="Renew for 30 Days"
+                    icon={RotateCcw}
+                    onPress={() => confirmOwnerAction('renew')}
+                    loading={ownerMutation.loading}
+                    fullWidth
+                  />
+                  <Button
+                    title="Delete Request"
+                    icon={Trash2}
+                    variant="ghost"
+                    onPress={() => confirmOwnerAction('delete')}
+                    loading={ownerMutation.loading}
+                    fullWidth
+                  />
+                </View>
               ) : null}
             </View>
 

@@ -34,7 +34,8 @@ const marketplaceAreaHook = fs.readFileSync(
 
 test('ISO client has first-class typed request models', () => {
   assert.match(types, /export type IsoPostStatus = 'active' \| 'fulfilled' \| 'expired' \| 'closed'/);
-  assert.match(types, /export type IsoDesiredCondition = 'any' \| 'new' \| 'used'/);
+  assert.match(types, /export type IsoDesiredCondition =[\s\S]*'any'[\s\S]*'good'[\s\S]*'like_new'[\s\S]*'new'[\s\S]*'used'/);
+  assert.match(types, /export type IsoOwnerAction =[\s\S]*'mark_found'[\s\S]*'renew'[\s\S]*'delete'/);
   assert.match(types, /export type IsoUrgency = 'flexible' \| 'soon' \| 'urgent'/);
   assert.match(types, /export type IsoRadiusMiles = 10 \| 25 \| 50 \| 100/);
   assert.match(types, /export type CreateIsoPostInput/);
@@ -45,6 +46,7 @@ test('ISO service uses controlled backend RPCs for mutations', () => {
   assert.match(service, /rpc\('create_iso_post_v2'/);
   assert.match(service, /rpc\('update_my_iso_post_v2'/);
   assert.match(service, /rpc\('set_my_iso_post_status'/);
+  assert.match(service, /rpc\('manage_my_iso_post_v2'/);
   assert.match(service, /rpc\('respond_to_iso_post_v2'/);
 
   assert.doesNotMatch(

@@ -15,6 +15,7 @@ import type {
   IsoFeedParams,
   IsoPost,
   IsoPostImage,
+  IsoOwnerAction,
   IsoPostStatus,
   IsoResponse,
   UpdateIsoPostInput,
@@ -131,6 +132,11 @@ function isoErrorMessage(message: string): {
     ['RETAIL_ISO_NOT_FOUND_OR_EXPIRED', 'ISO_NOT_AVAILABLE', 'This ISO request is no longer available.'],
     ['RETAIL_ISO_NOT_FOUND', 'ISO_NOT_FOUND', 'This ISO request could not be found.'],
     ['RETAIL_ISO_NOT_EDITABLE', 'ISO_NOT_EDITABLE', 'This ISO request can no longer be edited.'],
+    ['RETAIL_ISO_CATEGORY_LOCKED', 'ISO_CATEGORY_LOCKED', 'The category cannot change after someone responds.'],
+    ['RETAIL_ISO_ACTION_INVALID', 'ISO_ACTION_INVALID', 'That request action is not available.'],
+    ['RETAIL_ISO_TRANSITION_INVALID', 'ISO_TRANSITION_INVALID', 'That request action is not available in its current state.'],
+    ['RETAIL_ISO_RENEW_REQUIRED', 'ISO_RENEW_REQUIRED', 'Renew this request before making it active again.'],
+    ['RETAIL_ISO_REMOVED', 'ISO_REMOVED', 'This request was removed and cannot be changed.'],
     ['RETAIL_ISO_NOT_AVAILABLE', 'ISO_NOT_AVAILABLE', 'This ISO request is no longer available.'],
     ['RETAIL_ISO_SELF_RESPONSE', 'ISO_SELF_RESPONSE', 'You cannot respond to your own ISO request.'],
     ['RETAIL_ISO_BLOCKED', 'ISO_BLOCKED', 'You cannot respond to this ISO request.'],
@@ -379,6 +385,31 @@ export async function setIsoPostStatus(
   return post;
 }
 
+export async function manageIsoPost(
+  postId: string,
+  action: IsoOwnerAction
+): Promise<IsoPost> {
+  await ensureCurrentProfile();
+
+  const { data, error } = await supabase.rpc('manage_my_iso_post_v2', {
+    target_iso_post_id: postId,
+    requested_action: action,
+  });
+
+  if (error) {
+    throwIsoError(error, 'We could not update that ISO request.');
+  }
+
+  const post = toIsoPost(data as Record<string, unknown>);
+
+  trackEvent('ISO Owner Action Completed', {
+    isoPostId: post.id,
+    action,
+  });
+
+  return post;
+}
+
 export async function respondToIsoPost(
   postId: string,
   listingId: string
@@ -427,4 +458,30 @@ export async function removeIsoPostImage(
   trackEvent('ISO Photo Removed', {
     isoPostId: postId,
   });
+}
+
+export async function replaceIsoPostImage(
+  postId: string,
+  currentImage: IsoPostImage | undefined,
+  replacementFileUri: string | undefined
+): Promise<IsoPostImage | null> {
+  if (!replacementFileUri) {
+    if (currentImage) {
+      await removeIsoPostImage(postId, currentImage.id);
+    }
+
+    return null;
+  }
+
+  if (currentImage?.imageUrl === replacementFileUri) {
+    return currentImage;
+  }
+
+  const replacement = await addIsoPostImage(postId, replacementFileUri);
+
+  if (currentImage) {
+    await removeIsoPostImage(postId, currentImage.id);
+  }
+
+  return replacement;
 }
