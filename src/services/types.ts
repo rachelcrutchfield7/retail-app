@@ -18,9 +18,14 @@ export type AccountType = PrototypeAccountType | 'shelter' | 'business';
 export type ListingType = 'sale' | 'free' | 'donation';
 export type MessageType = 'text' | 'image' | 'system';
 export type SendableMessageType = 'text' | 'image';
-export type ReportType = 'listing' | 'user' | 'message';
+export type ReportType = 'listing' | 'user' | 'message' | 'iso_post';
 export type ReportStatus = 'open' | 'reviewing' | 'resolved' | 'dismissed';
-export type AdminReportModerationAction = 'none' | 'remove_listing' | 'delete_user' | 'remove_message';
+export type AdminReportModerationAction =
+  | 'none'
+  | 'remove_listing'
+  | 'remove_iso_post'
+  | 'delete_user'
+  | 'remove_message';
 export type ReportReason =
   | 'Spam'
   | 'Fraud'
@@ -586,6 +591,7 @@ export type Report = {
   reported_user_id?: string;
   listing_id?: string;
   message_id?: string;
+  iso_post_id?: string;
   report_type: ReportType;
   reason: ReportReason;
   details?: string;
@@ -593,6 +599,7 @@ export type Report = {
   admin_notes?: string;
   created_at: string;
   updated_at: string;
+  evidence?: Record<string, unknown>;
 };
 
 export type AdminListingReport = Report & {
@@ -605,6 +612,8 @@ export type AdminListingReport = Report & {
   listing_location?: string;
   listing_status?: string;
   listing_price?: string;
+  iso_title?: string;
+  iso_status?: string;
   reporter_name?: string;
 };
 

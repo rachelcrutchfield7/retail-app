@@ -44,7 +44,9 @@ async function hasExistingReport(report_type: ReportType, target: Record<string,
     ? 'listing_id'
     : report_type === 'user'
       ? 'reported_user_id'
-      : 'message_id';
+      : report_type === 'message'
+        ? 'message_id'
+        : 'iso_post_id';
   const targetId = target[targetColumn];
 
   if (!targetId) {
@@ -85,7 +87,9 @@ async function createReport(report_type: ReportType, reason: string, details?: s
     ? 'listing_id'
     : report_type === 'user'
       ? 'reported_user_id'
-      : 'message_id';
+      : report_type === 'message'
+        ? 'message_id'
+        : 'iso_post_id';
   const targetId = reportTarget[targetColumn];
 
   if (!targetId) {
@@ -115,7 +119,9 @@ async function createReport(report_type: ReportType, reason: string, details?: s
     ? 'listing_reported'
     : report_type === 'user'
       ? 'user_reported'
-      : 'message_reported';
+      : report_type === 'message'
+        ? 'message_reported'
+        : 'iso_post_reported';
   trackEvent(eventName, { reportType: report_type, reason: normalizedReason });
 }
 
@@ -131,7 +137,11 @@ export async function hasUserReportedTarget(input: {
     return hasExistingReport('user', { reported_user_id: input.targetId });
   }
 
-  return hasExistingReport('message', { message_id: input.targetId });
+  if (input.type === 'message') {
+    return hasExistingReport('message', { message_id: input.targetId });
+  }
+
+  return hasExistingReport('iso_post', { iso_post_id: input.targetId });
 }
 
 export async function hasUserReportedListing(listingId: string): Promise<boolean> {
@@ -144,6 +154,10 @@ export async function hasUserReportedUser(userId: string): Promise<boolean> {
 
 export async function hasUserReportedMessage(messageId: string): Promise<boolean> {
   return hasExistingReport('message', { message_id: messageId });
+}
+
+export async function hasUserReportedIsoPost(postId: string): Promise<boolean> {
+  return hasExistingReport('iso_post', { iso_post_id: postId });
 }
 
 export async function reportListing(listingId: string, reason: string, details?: string): Promise<void> {
@@ -180,4 +194,16 @@ export async function createMessageReport(input: {
   details?: string;
 }): Promise<void> {
   await reportMessage(input.messageId, input.reason, input.details);
+}
+
+export async function reportIsoPost(postId: string, reason: string, details?: string): Promise<void> {
+  await createReport('iso_post', reason, details, { iso_post_id: postId });
+}
+
+export async function createIsoPostReport(input: {
+  postId: string;
+  reason: string;
+  details?: string;
+}): Promise<void> {
+  await reportIsoPost(input.postId, input.reason, input.details);
 }

@@ -94,6 +94,7 @@ import { findManualLocationByZipCode, searchRadiusOptions } from '../constants/l
 import { colors, radius, sizes, spacing, typography } from '../constants/theme';
 import type { ThemeColors } from '../constants/theme';
 import { useAuth } from '../hooks/useAuth';
+import { useBlockUser } from '../hooks/useBlockUser';
 import { useCategories, useTopLevelCategories } from '../hooks/useCategories';
 import { useCompleteTransaction, useEligibleTransactionParticipants } from '../hooks/useCompleteTransaction';
 import { useCreateListing } from '../hooks/useCreateListing';
@@ -3887,6 +3888,7 @@ export function PublicProfileScreen({
   const reviews = useReviews(userId);
   const reviewSummary = useReviewSummary(userId);
   const favorites = useFavorites(Boolean(auth.user));
+  const blockedAccounts = useBlockUser();
   const [notice, setNotice] = useState<Notice | null>(null);
 
   if (profile.isLoading) {
@@ -3906,6 +3908,8 @@ export function PublicProfileScreen({
   }
 
   const publicProfile = profile.data as PublicProfile;
+  const isOwnProfile = auth.user?.id === userId;
+  const isBlocked = blockedAccounts.blockedUsers.some((blockedUser) => blockedUser.blocked_id === userId);
   const activeListings = (listings.data ?? []).filter((listing) => listing.status === 'Active');
   const favoriteIds = (favorites.data ?? []).map((listing) => listing.id);
 
@@ -3925,6 +3929,37 @@ export function PublicProfileScreen({
     } catch (error) {
       setNotice({ title: 'Favorite was not updated', body: handleAppError(error).userMessage });
     }
+  };
+
+  const updateBlockState = async () => {
+    try {
+      if (isBlocked) {
+        await blockedAccounts.unblockUser(userId);
+        setNotice({ title: 'User unblocked', body: 'Their eligible marketplace activity can appear again.' });
+        return;
+      }
+
+      await blockedAccounts.blockUser(userId);
+      setNotice({ title: 'User blocked', body: 'Their marketplace activity is now hidden from you.' });
+    } catch (error) {
+      setNotice({ title: 'Block setting was not updated', body: handleAppError(error).userMessage });
+    }
+  };
+
+  const confirmBlockUpdate = () => {
+    if (isBlocked) {
+      void updateBlockState();
+      return;
+    }
+
+    Alert.alert(
+      'Block this user?',
+      'You will no longer see each other in eligible marketplace and ISO activity.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Block User', style: 'destructive', onPress: () => void updateBlockState() },
+      ]
+    );
   };
 
   return (
@@ -3971,7 +4006,17 @@ export function PublicProfileScreen({
           ]}
         />
         <View style={styles.actionGrid}>
-          {onReportUser ? <Button title="Report User" icon={Flag} variant="ghost" onPress={() => onReportUser(userId)} fullWidth /> : null}
+          {!isOwnProfile && onReportUser ? <Button title="Report User" icon={Flag} variant="ghost" onPress={() => onReportUser(userId)} fullWidth /> : null}
+          {!isOwnProfile ? (
+            <Button
+              title={isBlocked ? 'Unblock User' : 'Block User'}
+              icon={ShieldCheck}
+              variant="ghost"
+              onPress={confirmBlockUpdate}
+              loading={blockedAccounts.isBlocking || blockedAccounts.isUnblocking}
+              fullWidth
+            />
+          ) : null}
         </View>
         {notice ? <NoticeCard notice={notice} /> : null}
         <ReviewSummary summary={reviewSummary.data} />

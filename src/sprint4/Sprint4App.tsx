@@ -205,7 +205,7 @@ type SprintRoute =
   | { name: 'create-iso' }
   | { name: 'iso-detail'; postId: string }
   | { name: 'edit-profile' }
-  | { name: 'public-profile'; userId: string }
+  | { name: 'public-profile'; userId: string; returnIsoPostId?: string }
   | { name: 'my-listings' }
   | { name: 'messages' }
   | { name: 'conversation'; conversationId: string }
@@ -220,7 +220,7 @@ type SprintRoute =
   | { name: 'safety-center' }
   | { name: 'faq' }
   | { name: 'admin'; initialTab?: AdminDashboardTab }
-  | { name: 'report'; targetType: 'listing' | 'user' | 'message'; targetId: string; title: string }
+  | { name: 'report'; targetType: 'listing' | 'user' | 'message' | 'iso_post'; targetId: string; title: string; returnIsoPostId?: string }
   | { name: 'support-case'; transactionId: string; requesterRole: SupportCaseRequesterRole; conversationId?: string }
   | { name: 'review'; listingId: string; revieweeId: string; transactionId?: string };
 
@@ -292,7 +292,8 @@ function Sprint4Experience() {
   const openEditListing = (listingId: string) => setRoute({ name: 'edit-listing', listingId });
   const openCreateIso = () => setRoute({ name: 'create-iso' });
   const openIsoPost = (postId: string) => setRoute({ name: 'iso-detail', postId });
-  const openPublicProfile = (userId: string) => setRoute({ name: 'public-profile', userId });
+  const openPublicProfile = (userId: string, returnIsoPostId?: string) =>
+    setRoute({ name: 'public-profile', userId, returnIsoPostId });
   const openMessages = () => setRoute({ name: 'messages' });
   const openConversation = (conversationId: string) => setRoute({ name: 'conversation', conversationId });
   const openPaymentOptions = (
@@ -317,8 +318,12 @@ function Sprint4Experience() {
   const openSafetyCenter = () => setRoute({ name: 'safety-center' });
   const openFAQ = () => setRoute({ name: 'faq' });
   const openAdmin = () => setRoute({ name: 'admin' });
-  const openReport = (targetType: 'listing' | 'user' | 'message', targetId: string, title: string) =>
-    setRoute({ name: 'report', targetType, targetId, title });
+  const openReport = (
+    targetType: 'listing' | 'user' | 'message' | 'iso_post',
+    targetId: string,
+    title: string,
+    returnIsoPostId?: string
+  ) => setRoute({ name: 'report', targetType, targetId, title, returnIsoPostId });
   const openSupportCase = (transactionId: string, requesterRole: SupportCaseRequesterRole, conversationId?: string) =>
     setRoute({ name: 'support-case', transactionId, requesterRole, conversationId });
   const openReview = (listingId: string, revieweeId: string, transactionId?: string) =>
@@ -550,7 +555,9 @@ function Sprint4Experience() {
         postId={route.postId}
         onBack={() => openTab('iso')}
         onOpenListing={openListing}
-        onOpenProfile={() => openTab('profile')}
+        onSignIn={() => openTab('profile')}
+        onOpenRequesterProfile={(userId) => openPublicProfile(userId, route.postId)}
+        onReportRequest={(postId) => openReport('iso_post', postId, 'Report ISO request', route.postId)}
       />
     );
   }
@@ -563,7 +570,7 @@ function Sprint4Experience() {
     return (
       <PublicProfileScreen
         userId={route.userId}
-        onBack={() => openTab('profile')}
+        onBack={() => route.returnIsoPostId ? openIsoPost(route.returnIsoPostId) : openTab('profile')}
         onOpenListing={openListing}
         onReportUser={(userId) => openReport('user', userId, 'Report user')}
       />
@@ -696,6 +703,7 @@ function Sprint4Experience() {
       <AdminReviewScreen
         onBack={() => openTab('profile')}
         onOpenListing={openListing}
+        onOpenIso={openIsoPost}
         initialTab={route.initialTab}
       />
     );
@@ -707,7 +715,7 @@ function Sprint4Experience() {
         targetType={route.targetType}
         targetId={route.targetId}
         title={route.title}
-        onBack={() => openTab('home')}
+        onBack={() => route.returnIsoPostId ? openIsoPost(route.returnIsoPostId) : openTab('home')}
       />
     );
   }
@@ -2632,7 +2640,7 @@ export function ReportScreen({
   title,
   onBack,
 }: {
-  targetType: 'listing' | 'user' | 'message';
+  targetType: 'listing' | 'user' | 'message' | 'iso_post';
   targetId: string;
   title: string;
   onBack: () => void;
@@ -3752,10 +3760,12 @@ function FAQScreen({ onBack }: { onBack: () => void }) {
 export function AdminReviewScreen({
   onBack,
   onOpenListing,
+  onOpenIso,
   initialTab = 'overview',
 }: {
   onBack: () => void;
   onOpenListing: (listingId: string) => void;
+  onOpenIso: (postId: string) => void;
   initialTab?: AdminDashboardTab;
 }) {
   const auth = useAuth();
@@ -4811,7 +4821,7 @@ export function AdminReviewScreen({
               <Text style={styles.bodyStrong}>{reportCount} {activeReportsSelected ? 'active' : 'archived'}</Text>
               <Text style={styles.body}>
                 {activeReportsSelected
-                  ? 'Open and reviewing reports need action. Removing a listing, message, or account will automatically mark the report resolved.'
+                  ? 'Open and reviewing reports need action. Removing a listing, ISO request, message, or account will automatically mark the report resolved.'
                   : 'Resolved and dismissed reports stay here so you can refer back to moderation decisions later.'}
               </Text>
             </View>
@@ -4823,7 +4833,7 @@ export function AdminReviewScreen({
             <EmptyState
               title={activeReportsSelected ? 'No active reports waiting' : 'No archived reports yet'}
               body={activeReportsSelected
-                ? 'Listings, users, and messages reported by the community will appear here for review.'
+                ? 'Listings, ISO requests, users, and messages reported by the community will appear here for review.'
                 : 'Resolved and dismissed reports will appear here once moderation actions are complete.'}
               icon={Flag}
               actionTitle="Refresh Reports"
@@ -4840,6 +4850,7 @@ export function AdminReviewScreen({
               onAdminNote={(note) => updateReportNote(report.id, note)}
               onPublicMessage={(message) => updateReportMessage(report.id, message)}
               onOpenListing={() => report.listing_id ? onOpenListing(report.listing_id) : undefined}
+              onOpenIso={() => report.iso_post_id ? onOpenIso(report.iso_post_id) : undefined}
               onReviewing={() => void updateReport(report, report.status === 'resolved' || report.status === 'dismissed' ? 'open' : 'reviewing')}
               onResolve={() => void updateReport(report, 'resolved')}
               onDismiss={() => void updateReport(report, 'dismissed')}
@@ -4854,6 +4865,12 @@ export function AdminReviewScreen({
                 'remove_listing',
                 'Remove Listing',
                 'This removes the reported listing from public view and notifies both the reporter and the listing owner.'
+              )}
+              onRemoveIsoPost={() => void moderateReport(
+                report,
+                'remove_iso_post',
+                'Remove ISO Request',
+                'This closes and removes the reported ISO request from Browse while preserving its moderation history.'
               )}
               onDeleteUser={() => void moderateReport(
                 report,
@@ -5097,11 +5114,13 @@ function AdminListingReportCard({
   onAdminNote,
   onPublicMessage,
   onOpenListing,
+  onOpenIso,
   onReviewing,
   onResolve,
   onDismiss,
   onRemoveMessage,
   onRemoveListing,
+  onRemoveIsoPost,
   onDeleteUser,
 }: {
   report: AdminListingReport;
@@ -5111,16 +5130,22 @@ function AdminListingReportCard({
   onAdminNote: (note: string) => void;
   onPublicMessage: (message: string) => void;
   onOpenListing: () => void;
+  onOpenIso: () => void;
   onReviewing: () => void;
   onResolve: () => void;
   onDismiss: () => void;
   onRemoveMessage: () => void;
   onRemoveListing: () => void;
+  onRemoveIsoPost: () => void;
   onDeleteUser: () => void;
 }) {
   const canRemoveListing = Boolean(report.listing_id);
   const canRemoveMessage = Boolean(report.message_id);
-  const canDeleteUser = report.report_type === 'user' || report.report_type === 'message' || Boolean(report.listing_id);
+  const canRemoveIsoPost = Boolean(report.iso_post_id);
+  const canDeleteUser = report.report_type === 'user'
+    || report.report_type === 'message'
+    || Boolean(report.listing_id)
+    || Boolean(report.iso_post_id);
   const archived = report.status === 'resolved' || report.status === 'dismissed';
 
   return (
@@ -5166,6 +5191,7 @@ function AdminListingReportCard({
 
         <View style={styles.conversationOptionGrid}>
           {report.listing_id ? <Button title="Open Listing" variant="outline" onPress={onOpenListing} fullWidth /> : null}
+          {report.iso_post_id ? <Button title="Open ISO Request" variant="outline" onPress={onOpenIso} fullWidth /> : null}
         </View>
 
         <View style={styles.adminActionGroup}>
@@ -5190,6 +5216,7 @@ function AdminListingReportCard({
           <View style={styles.conversationOptionGrid}>
             {canRemoveMessage ? <Button title="Remove Message" icon={Trash2} variant="danger" onPress={onRemoveMessage} disabled={archived || loading} loading={loading} fullWidth /> : null}
             {canRemoveListing ? <Button title="Remove Listing" icon={Trash2} variant="danger" onPress={onRemoveListing} disabled={archived || loading} loading={loading} fullWidth /> : null}
+            {canRemoveIsoPost ? <Button title="Remove ISO Request" icon={Trash2} variant="danger" onPress={onRemoveIsoPost} disabled={archived || loading} loading={loading} fullWidth /> : null}
             {canDeleteUser ? <Button title="Delete Account" icon={Trash2} variant="danger" onPress={onDeleteUser} disabled={archived || loading} loading={loading} fullWidth /> : null}
           </View>
         </View>
@@ -5560,6 +5587,10 @@ function adminReportTypeLabel(type: AdminListingReport['report_type']): string {
     return 'User report';
   }
 
+  if (type === 'iso_post') {
+    return 'ISO Request report';
+  }
+
   return 'Listing report';
 }
 
@@ -5611,6 +5642,13 @@ function adminModerationActionNotice(
     return {
       title: 'Listing removed',
       body: `${target} was resolved, the listing was removed from public view, and the reporter plus listing owner receive an update.`,
+    };
+  }
+
+  if (action === 'remove_iso_post') {
+    return {
+      title: 'ISO request removed',
+      body: `${target} was resolved, the ISO request was removed from Browse, and the reporter plus requester receive an update.`,
     };
   }
 

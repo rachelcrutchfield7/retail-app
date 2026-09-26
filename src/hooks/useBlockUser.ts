@@ -26,6 +26,8 @@ export function useBlockUser() {
       await queryClient.invalidateQueries({ queryKey: queryKeys.blockedUsers(userId) });
       await queryClient.invalidateQueries({ queryKey: queryKeys.conversations(userId) });
       await queryClient.invalidateQueries({ queryKey: queryKeys.unreadMessages(userId) });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.isoFeeds });
+      await queryClient.invalidateQueries({ queryKey: ['iso-post'] });
     },
   });
   const unblockMutation = useMutation({
@@ -40,6 +42,8 @@ export function useBlockUser() {
       await queryClient.invalidateQueries({ queryKey: queryKeys.blockedUsers(userId) });
       await queryClient.invalidateQueries({ queryKey: queryKeys.conversations(userId) });
       await queryClient.invalidateQueries({ queryKey: queryKeys.unreadMessages(userId) });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.isoFeeds });
+      await queryClient.invalidateQueries({ queryKey: ['iso-post'] });
     },
   });
 

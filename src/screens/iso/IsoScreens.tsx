@@ -11,14 +11,18 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   ChevronLeft,
+  Flag,
   ListChecks,
   MapPin,
   Plus,
   Search,
+  UserRound,
 } from 'lucide-react-native';
 
 import {
   Button,
+  Avatar,
+  Badge,
   ImageUploader,
   TextArea,
   TextField,
@@ -38,6 +42,7 @@ import {
 } from '../../hooks/useIso';
 import { useMyListings } from '../../hooks/useMyListings';
 import { useMarketplaceSearchLocationPreference } from '../../hooks/useMarketplaceSearchLocation';
+import { useProfile } from '../../hooks/useProfile';
 import {
   useSubcategories,
   useTopLevelCategories,
@@ -69,7 +74,9 @@ type IsoDetailScreenProps = {
   postId: string;
   onBack: () => void;
   onOpenListing: (listingId: string) => void;
-  onOpenProfile: () => void;
+  onSignIn: () => void;
+  onOpenRequesterProfile: (userId: string) => void;
+  onReportRequest: (postId: string) => void;
 };
 
 type IsoView = 'browse' | 'mine';
@@ -1081,7 +1088,9 @@ export function IsoDetailScreen({
   postId,
   onBack,
   onOpenListing,
-  onOpenProfile,
+  onSignIn,
+  onOpenRequesterProfile,
+  onReportRequest,
 }: IsoDetailScreenProps) {
   const themeColors = useThemeColors();
   const auth = useAuth();
@@ -1092,6 +1101,7 @@ export function IsoDetailScreen({
   const categories = useTopLevelCategories();
   const statusMutation = useSetIsoPostStatus();
   const responseMutation = useRespondToIsoPost();
+  const requester = useProfile(post.data?.posterId ?? '');
 
   const [showListings, setShowListings] = useState(false);
   const [selectedListingId, setSelectedListingId] = useState('');
@@ -1135,7 +1145,7 @@ export function IsoDetailScreen({
             <Text style={[styles.sectionTitle, { color: themeColors.textPrimary }]}>
               Sign in to view this request
             </Text>
-            <Button title="Sign in" onPress={onOpenProfile} fullWidth />
+            <Button title="Sign in" onPress={onSignIn} fullWidth />
           </View>
         </ScrollView>
       </SafeAreaView>
@@ -1186,6 +1196,13 @@ export function IsoDetailScreen({
   const request = post.data;
   const isOwner = request.posterId === auth.user?.id;
   const canRespond = !isOwner && request.status === 'active';
+  const requesterName = requester.data?.display_name ?? 'ReTail member';
+  const requesterInitials = requesterName
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('') || 'R';
 
   const changeStatus = async (
     status: 'active' | 'fulfilled' | 'closed'
@@ -1322,6 +1339,55 @@ export function IsoDetailScreen({
           <Text style={[styles.metaText, { color: themeColors.textSecondary }]}>
             {expiresLabel(request.expiresAt)}
           </Text>
+        </View>
+
+        <View
+          style={[
+            styles.detailCard,
+            {
+              backgroundColor: themeColors.surface,
+              borderColor: themeColors.border,
+            },
+          ]}
+        >
+          <View style={styles.requesterRow}>
+            <Avatar
+              image={requester.data?.avatar_url}
+              initials={requesterInitials}
+              verified={Boolean(requester.data?.is_verified)}
+              size="sm"
+            />
+            <View style={styles.requesterCopy}>
+              <Text style={[styles.bodyStrong, { color: themeColors.textPrimary }]}>
+                {requester.loading ? 'Loading requester...' : requesterName}
+              </Text>
+              <Text style={[styles.metaText, { color: themeColors.textSecondary }]}>Requester</Text>
+            </View>
+            {requester.data?.account_type === 'rescue' ? (
+              <Badge label="Rescue" tone="success" />
+            ) : requester.data?.is_verified ? (
+              <Badge label="Verified" tone="success" />
+            ) : null}
+          </View>
+
+          {!isOwner ? (
+            <View style={styles.buttonStack}>
+              <Button
+                title="View Requester Profile"
+                icon={UserRound}
+                variant="outline"
+                onPress={() => onOpenRequesterProfile(request.posterId)}
+                fullWidth
+              />
+              <Button
+                title="Report Request"
+                icon={Flag}
+                variant="ghost"
+                onPress={() => onReportRequest(request.id)}
+                fullWidth
+              />
+            </View>
+          ) : null}
         </View>
 
         {notice ? (
@@ -1811,5 +1877,14 @@ const styles = StyleSheet.create({
   listingChoiceCopy: {
     flex: 1,
     gap: spacing.xs,
+  },
+  requesterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  requesterCopy: {
+    flex: 1,
+    gap: 2,
   },
 });

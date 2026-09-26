@@ -5,7 +5,7 @@ import { ensureCurrentProfile, throwSupabaseError } from './supabaseData';
 import type { AdminListingReport, ReportReason, ReportStatus, RescueOrgTypeDb, RescueProfile, RescueVerificationStatus } from './types';
 
 type Row = Record<string, unknown>;
-export type AdminReportAction = 'none' | 'remove_listing' | 'remove_message' | 'delete_user';
+export type AdminReportAction = 'none' | 'remove_listing' | 'remove_iso_post' | 'remove_message' | 'delete_user';
 export type FoundingSellerAdminStatus = 'not_enrolled' | 'active' | 'paused' | 'revoked';
 
 export type AdminFoundingSellerSearchResult = {
@@ -532,10 +532,11 @@ function adminHydrationRows(result: { data: unknown[] | null; error: unknown }, 
 async function hydrateListingReports(reports: AdminListingReport[]): Promise<AdminListingReport[]> {
   const listingIds = Array.from(new Set(reports.map((report) => report.listing_id).filter(Boolean))) as string[];
   const messageIds = Array.from(new Set(reports.map((report) => report.message_id).filter(Boolean))) as string[];
+  const isoPostIds = Array.from(new Set(reports.map((report) => report.iso_post_id).filter(Boolean))) as string[];
   const reporterIds = Array.from(new Set(reports.map((report) => report.reporter_id).filter(Boolean))) as string[];
   const reportedUserIds = Array.from(new Set(reports.map((report) => report.reported_user_id).filter(Boolean))) as string[];
 
-  const [listingsResult, messagesResult, reportersResult, reportedUsersResult] = await Promise.all([
+  const [listingsResult, messagesResult, isoPostsResult, reportersResult, reportedUsersResult] = await Promise.all([
     listingIds.length
       ? supabase
           .from('listings')
@@ -547,6 +548,12 @@ async function hydrateListingReports(reports: AdminListingReport[]): Promise<Adm
           .from('messages')
           .select('id,body,message_type,sender_id,conversation_id,created_at')
           .in('id', messageIds)
+      : Promise.resolve({ data: [], error: null }),
+    isoPostIds.length
+      ? supabase
+          .from('iso_posts')
+          .select('id,title,status,poster_id,deleted_at')
+          .in('id', isoPostIds)
       : Promise.resolve({ data: [], error: null }),
     reporterIds.length
       ? supabase
@@ -564,11 +571,13 @@ async function hydrateListingReports(reports: AdminListingReport[]): Promise<Adm
 
   const listingRows = adminHydrationRows(listingsResult, 'listings');
   const messages = adminHydrationRows(messagesResult, 'messages');
+  const isoPostRows = adminHydrationRows(isoPostsResult, 'iso_posts');
   const reporterRows = adminHydrationRows(reportersResult, 'reporters');
   const reportedUserRows = adminHydrationRows(reportedUsersResult, 'reported_users');
   const conversationIds = Array.from(new Set(messages.map((message) => optionalString(message.conversation_id)).filter(Boolean))) as string[];
   let listingsById = new Map(listingRows.map((listing) => [stringValue(listing.id), listing]));
   const messagesById = new Map(messages.map((message) => [stringValue(message.id), message]));
+  const isoPostsById = new Map(isoPostRows.map((post) => [stringValue(post.id), post]));
   const reportersById = new Map(reporterRows.map((reporter) => [stringValue(reporter.id), reporter]));
   const reportedUsersById = new Map(reportedUserRows.map((profile) => [stringValue(profile.id), profile]));
   const conversationsResult = conversationIds.length
@@ -608,16 +617,26 @@ async function hydrateListingReports(reports: AdminListingReport[]): Promise<Adm
     const listing = report.listing_id ? listingsById.get(report.listing_id) : messageListingId ? listingsById.get(messageListingId) : undefined;
     const reporter = report.reporter_id ? reportersById.get(report.reporter_id) : undefined;
     const reportedUser = report.reported_user_id ? reportedUsersById.get(report.reported_user_id) : undefined;
+    const isoPost = report.iso_post_id ? isoPostsById.get(report.iso_post_id) : undefined;
     const listingTitle = listing ? stringValue(listing.title, 'Reported listing') : undefined;
     const reportedUserName = reportedUser
       ? stringValue(reportedUser.display_name, optionalString(reportedUser.username) ?? 'Reported user')
       : undefined;
     const messagePreview = message ? messagePreviewLabel(message) : undefined;
+    const evidenceTitle = optionalString(report.evidence?.title);
+    const isoTitle = isoPost
+      ? stringValue(isoPost.title, 'Reported ISO request')
+      : evidenceTitle;
+    const isoStatus = isoPost
+      ? stringValue(isoPost.status, 'unavailable')
+      : report.report_type === 'iso_post'
+        ? 'removed or unavailable'
+        : undefined;
 
     return {
       ...report,
-      target_title: adminReportTargetTitle(report, listingTitle, reportedUserName),
-      target_subtitle: adminReportTargetSubtitle(report, listing),
+      target_title: adminReportTargetTitle(report, listingTitle, reportedUserName, isoTitle),
+      target_subtitle: adminReportTargetSubtitle(report, listing, isoStatus),
       message_preview: messagePreview,
       message_type: messageTypeValue(message?.message_type),
       reported_user_name: reportedUserName,
@@ -629,6 +648,8 @@ async function hydrateListingReports(reports: AdminListingReport[]): Promise<Adm
         : undefined,
       listing_status: listing ? stringValue(listing.status) : undefined,
       listing_price: listing ? listingPriceLabel(listing) : undefined,
+      iso_title: isoTitle ?? (report.report_type === 'iso_post' ? 'Reported ISO request unavailable' : undefined),
+      iso_status: isoStatus,
       reporter_name: reporter ? stringValue(reporter.display_name, optionalString(reporter.username) ?? 'ReTail user') : undefined,
     };
   });
@@ -641,6 +662,7 @@ function toAdminListingReport(row: Row): AdminListingReport {
     reported_user_id: optionalString(row.reported_user_id),
     listing_id: optionalString(row.listing_id),
     message_id: optionalString(row.message_id),
+    iso_post_id: optionalString(row.iso_post_id),
     report_type: reportTypeValue(row.report_type),
     reason: reportReasonLabels[stringValue(row.reason)] ?? 'Other',
     details: optionalString(row.details),
@@ -648,6 +670,7 @@ function toAdminListingReport(row: Row): AdminListingReport {
     admin_notes: optionalString(row.admin_notes),
     created_at: stringValue(row.created_at),
     updated_at: stringValue(row.updated_at),
+    evidence: objectValue(row.evidence),
   };
 }
 
@@ -685,7 +708,7 @@ function foundingSellerAdminStatusValue(value: unknown): FoundingSellerAdminStat
 }
 
 function reportTypeValue(value: unknown): AdminListingReport['report_type'] {
-  if (value === 'message' || value === 'user') {
+  if (value === 'message' || value === 'user' || value === 'iso_post') {
     return value;
   }
 
@@ -700,7 +723,12 @@ function messageTypeValue(value: unknown): AdminListingReport['message_type'] | 
   return undefined;
 }
 
-function adminReportTargetTitle(report: AdminListingReport, listingTitle?: string, reportedUserName?: string): string {
+function adminReportTargetTitle(
+  report: AdminListingReport,
+  listingTitle?: string,
+  reportedUserName?: string,
+  isoTitle?: string
+): string {
   if (report.report_type === 'message') {
     return 'Reported message';
   }
@@ -709,16 +737,28 @@ function adminReportTargetTitle(report: AdminListingReport, listingTitle?: strin
     return reportedUserName ?? 'Reported user';
   }
 
+  if (report.report_type === 'iso_post') {
+    return isoTitle ?? 'Reported ISO request unavailable';
+  }
+
   return listingTitle ?? 'Reported listing unavailable';
 }
 
-function adminReportTargetSubtitle(report: AdminListingReport, listing?: Row): string | undefined {
+function adminReportTargetSubtitle(
+  report: AdminListingReport,
+  listing?: Row,
+  isoStatus?: string
+): string | undefined {
   if (report.report_type === 'message') {
     return listing ? `Message about ${stringValue(listing.title, 'a listing')}` : 'Conversation message';
   }
 
   if (report.report_type === 'user') {
     return 'User profile report';
+  }
+
+  if (report.report_type === 'iso_post') {
+    return isoStatus ? `ISO Request - ${isoStatus}` : 'ISO Request';
   }
 
   return listing
@@ -820,6 +860,12 @@ function organizationTypeValue(value: unknown): RescueOrgTypeDb {
 
 function arrayValue(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
+}
+
+function objectValue(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : undefined;
 }
 
 function stringValue(value: unknown, fallback = ''): string {
