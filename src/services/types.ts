@@ -819,8 +819,10 @@ export type IsoPost = {
   budgetMax?: number;
   quantity: number;
   urgency: IsoUrgency;
-  searchAreaId: string;
+  searchAreaId?: string;
   searchAreaLabel?: string;
+  displayCity?: string;
+  displayState?: string;
   radiusMiles: IsoRadiusMiles;
   status: IsoPostStatus;
   expiresAt: string;
@@ -851,8 +853,6 @@ export type IsoResponse = {
 };
 
 export type IsoFeedParams = {
-  searchAreaId?: string;
-  radiusMiles?: IsoRadiusMiles;
   categoryId?: string;
   limit?: number;
   offset?: number;
@@ -867,9 +867,8 @@ export type CreateIsoPostInput = {
   budgetMax?: number | null;
   quantity?: number;
   urgency?: IsoUrgency;
-  searchAreaId: string;
+  marketplaceLocationId: string;
   radiusMiles?: IsoRadiusMiles;
-  expiresInDays?: number;
 };
 
 export type UpdateIsoPostInput = {
@@ -882,7 +881,6 @@ export type UpdateIsoPostInput = {
   budgetMax?: number | null;
   quantity?: number;
   urgency?: IsoUrgency;
-  searchAreaId: string;
+  marketplaceLocationId: string;
   radiusMiles?: IsoRadiusMiles;
-  expiresAt?: string | null;
 };

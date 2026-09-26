@@ -31,14 +31,21 @@ import type {
 } from '../services/types';
 import { useAuth } from './useAuth';
 
-export function useIsoFeed(params: IsoFeedParams = {}) {
+export function useIsoFeed(
+  params: IsoFeedParams = {},
+  locationReady = true,
+  locationCacheKey = 'unconfigured'
+) {
   const { user } = useAuth();
-  const queryHash = useMemo(() => JSON.stringify(params), [params]);
+  const queryHash = useMemo(
+    () => JSON.stringify({ params, locationCacheKey }),
+    [locationCacheKey, params]
+  );
 
   const query = useQuery<IsoPost[], Error>({
     queryKey: queryKeys.isoFeed(queryHash),
     queryFn: () => getIsoFeed(params),
-    enabled: Boolean(user),
+    enabled: Boolean(user && locationReady),
     staleTime: cachePolicy.listings.staleTime,
     gcTime: cachePolicy.listings.cacheTime,
   });

@@ -539,6 +539,7 @@ function Sprint4Experience() {
       <CreateIsoScreen
         onBack={() => openTab('iso')}
         onCreated={openIsoPost}
+        onOpenLocationSettings={openPreferences}
       />
     );
   }
@@ -744,6 +745,7 @@ function Sprint4Experience() {
             onOpenPost={openIsoPost}
             onCreatePost={openCreateIso}
             onOpenProfile={() => openTab('profile')}
+            onOpenLocationSettings={openPreferences}
           />
         ) : null}
         {route.tab === 'sell' ? <SellScreen onCreateListing={openCreateListing} onOpenProfile={() => openTab('profile')} /> : null}

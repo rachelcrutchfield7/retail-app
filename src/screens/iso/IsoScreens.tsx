@@ -37,10 +37,7 @@ import {
   useSetIsoPostStatus,
 } from '../../hooks/useIso';
 import { useMyListings } from '../../hooks/useMyListings';
-import {
-  useMarketplaceSearchAreas,
-  useMarketplaceSearchPreference,
-} from '../../hooks/useMarketplaceSearchArea';
+import { useMarketplaceSearchLocationPreference } from '../../hooks/useMarketplaceSearchLocation';
 import {
   useSubcategories,
   useTopLevelCategories,
@@ -59,11 +56,13 @@ type IsoScreenProps = {
   onOpenPost: (postId: string) => void;
   onCreatePost: () => void;
   onOpenProfile: () => void;
+  onOpenLocationSettings: () => void;
 };
 
 type CreateIsoScreenProps = {
   onBack: () => void;
   onCreated: (postId: string) => void;
+  onOpenLocationSettings: () => void;
 };
 
 type IsoDetailScreenProps = {
@@ -94,8 +93,6 @@ const urgencyChoices: Array<{
   { value: 'soon', label: 'Soon' },
   { value: 'urgent', label: 'Urgent' },
 ];
-
-const expiryChoices = [7, 14, 30, 60, 90];
 
 function formatBudget(value?: number): string {
   if (value === undefined) {
@@ -137,6 +134,14 @@ function expiresLabel(expiresAt: string): string {
   if (days === 0) return 'Expires today';
   if (days === 1) return 'Expires tomorrow';
   return `Expires in ${days} days`;
+}
+
+function isoLocationLabel(post: IsoPost): string {
+  if (post.displayCity && post.displayState) {
+    return `${post.displayCity}, ${post.displayState}`;
+  }
+
+  return post.searchAreaLabel ?? 'Marketplace location';
 }
 
 function ChoiceRow<T extends string | number>({
@@ -336,7 +341,7 @@ function IsoPostCard({
             numberOfLines={1}
             style={[styles.metaText, { color: themeColors.textSecondary }]}
           >
-            {post.searchAreaLabel ?? 'Marketplace area'}
+            {isoLocationLabel(post)}
             {post.distanceMiles !== undefined
               ? ` · ${post.distanceMiles.toFixed(1)} mi`
               : ''}
@@ -369,33 +374,32 @@ export function IsoScreen({
   onOpenPost,
   onCreatePost,
   onOpenProfile,
+  onOpenLocationSettings,
 }: IsoScreenProps) {
   const themeColors = useThemeColors();
   const auth = useAuth();
   const [view, setView] = useState<IsoView>('browse');
   const [categoryId, setCategoryId] = useState<string | undefined>();
 
-  const preference = useMarketplaceSearchPreference();
+  const preference = useMarketplaceSearchLocationPreference();
   const categories = useTopLevelCategories();
 
   const feedParams = useMemo<IsoFeedParams>(
     () => ({
-      searchAreaId: preference.data?.search_area_id,
-      radiusMiles: preference.data?.radius_miles as
-        | IsoRadiusMiles
-        | undefined,
       categoryId,
       limit: 50,
       offset: 0,
     }),
-    [
-      categoryId,
-      preference.data?.radius_miles,
-      preference.data?.search_area_id,
-    ]
+    [categoryId]
   );
 
-  const feed = useIsoFeed(feedParams);
+  const feed = useIsoFeed(
+    feedParams,
+    Boolean(preference.data),
+    preference.data
+      ? `${preference.data.marketplaceLocationId}:${preference.data.radiusMiles}`
+      : 'unconfigured'
+  );
   const mine = useMyIsoPosts();
 
   const categoryName = (id: string) =>
@@ -587,9 +591,34 @@ export function IsoScreen({
                     { color: themeColors.textSecondary },
                   ]}
                 >
-                  Showing requests around {preference.data.label} within{' '}
-                  {preference.data.radius_miles} miles
+                  Showing requests around {preference.data.city},{' '}
+                  {preference.data.state} within {preference.data.radiusMiles}{' '}
+                  miles
                 </Text>
+              </View>
+            ) : !preference.isLoading ? (
+              <View
+                style={[
+                  styles.infoCard,
+                  {
+                    backgroundColor: themeColors.surface,
+                    borderColor: themeColors.border,
+                  },
+                ]}
+              >
+                <MapPin size={34} color={themeColors.primary} />
+                <Text style={[styles.sectionTitle, { color: themeColors.textPrimary }]}>
+                  Set your marketplace location
+                </Text>
+                <Text style={[styles.bodyText, { color: themeColors.textSecondary }]}>
+                  ISO requests use your trusted marketplace location to show
+                  nearby demand without exposing exact coordinates.
+                </Text>
+                <Button
+                  title="Set Marketplace Location"
+                  onPress={onOpenLocationSettings}
+                  fullWidth
+                />
               </View>
             ) : null}
           </>
@@ -620,7 +649,9 @@ export function IsoScreen({
           </View>
         ) : null}
 
-        {!loading && !error && posts.length === 0 ? (
+        {!loading && !error && posts.length === 0 && (
+          view !== 'browse' || Boolean(preference.data)
+        ) ? (
           <View
             style={[
               styles.infoCard,
@@ -663,11 +694,11 @@ export function IsoScreen({
 export function CreateIsoScreen({
   onBack,
   onCreated,
+  onOpenLocationSettings,
 }: CreateIsoScreenProps) {
   const themeColors = useThemeColors();
   const categories = useTopLevelCategories();
-  const areas = useMarketplaceSearchAreas();
-  const preference = useMarketplaceSearchPreference();
+  const preference = useMarketplaceSearchLocationPreference();
   const createMutation = useCreateIsoPost();
   const imageMutation = useAddIsoPostImage();
 
@@ -680,30 +711,22 @@ export function CreateIsoScreen({
   const [budget, setBudget] = useState('');
   const [quantity, setQuantity] = useState('1');
   const [urgency, setUrgency] = useState<IsoUrgency>('flexible');
-  const [searchAreaId, setSearchAreaId] = useState('');
   const [radiusMiles, setRadiusMiles] =
     useState<IsoRadiusMiles>(25);
-  const [expiresInDays, setExpiresInDays] = useState(30);
   const [images, setImages] = useState<string[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
 
   const subcategories = useSubcategories(categoryId);
+  const postingLocation =
+    preference.data?.resolutionLevel === 'postal_code'
+      ? preference.data
+      : null;
 
   useEffect(() => {
-    if (!searchAreaId && preference.data?.search_area_id) {
-      setSearchAreaId(preference.data.search_area_id);
+    if (preference.data?.radiusMiles) {
+      setRadiusMiles(preference.data.radiusMiles as IsoRadiusMiles);
     }
-
-    if (preference.data?.radius_miles) {
-      setRadiusMiles(
-        preference.data.radius_miles as IsoRadiusMiles
-      );
-    }
-  }, [
-    preference.data?.radius_miles,
-    preference.data?.search_area_id,
-    searchAreaId,
-  ]);
+  }, [preference.data?.radiusMiles]);
 
   const chooseCategory = (id: string) => {
     setCategoryId(id);
@@ -728,8 +751,8 @@ export function CreateIsoScreen({
       return;
     }
 
-    if (!searchAreaId) {
-      setFormError('Choose a marketplace area.');
+    if (!postingLocation?.marketplaceLocationId) {
+      setFormError('Set a ZIP-based marketplace location before posting an ISO request.');
       return;
     }
 
@@ -766,9 +789,8 @@ export function CreateIsoScreen({
         budgetMax: parsedBudget,
         quantity: parsedQuantity,
         urgency,
-        searchAreaId,
+        marketplaceLocationId: postingLocation.marketplaceLocationId,
         radiusMiles,
-        expiresInDays,
       });
 
       if (images[0]) {
@@ -980,44 +1002,37 @@ export function CreateIsoScreen({
 
           <View style={styles.sectionBlock}>
             <Text style={[styles.fieldLabel, { color: themeColors.textPrimary }]}>
-              Marketplace area
+              Marketplace location
             </Text>
 
-            <View style={styles.choiceRow}>
-              {areas.data.map((area) => (
-                <Pressable
-                  key={area.id}
-                  onPress={() => setSearchAreaId(area.id)}
-                  style={[
-                    styles.choice,
-                    {
-                      borderColor:
-                        searchAreaId === area.id
-                          ? themeColors.primary
-                          : themeColors.border,
-                      backgroundColor:
-                        searchAreaId === area.id
-                          ? themeColors.primarySoft
-                          : themeColors.surface,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.choiceText,
-                      {
-                        color:
-                          searchAreaId === area.id
-                            ? themeColors.primary
-                            : themeColors.textPrimary,
-                      },
-                    ]}
-                  >
-                    {area.label}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
+            {postingLocation ? (
+              <View style={styles.locationRow}>
+                <MapPin size={15} color={themeColors.textSecondary} />
+                <Text style={[styles.bodyText, { color: themeColors.textSecondary }]}>
+                  {postingLocation.city}, {postingLocation.state}
+                </Text>
+              </View>
+            ) : (
+              <View
+                style={[
+                  styles.infoCard,
+                  {
+                    backgroundColor: themeColors.background,
+                    borderColor: themeColors.border,
+                  },
+                ]}
+              >
+                <Text style={[styles.bodyText, { color: themeColors.textSecondary }]}>
+                  Set a trusted ZIP-based marketplace location before posting
+                  an ISO request.
+                </Text>
+                <Button
+                  title="Set Marketplace Location"
+                  onPress={onOpenLocationSettings}
+                  fullWidth
+                />
+              </View>
+            )}
           </View>
 
           <View style={styles.sectionBlock}>
@@ -1031,20 +1046,6 @@ export function CreateIsoScreen({
               }))}
               selected={radiusMiles}
               onSelect={setRadiusMiles}
-            />
-          </View>
-
-          <View style={styles.sectionBlock}>
-            <Text style={[styles.fieldLabel, { color: themeColors.textPrimary }]}>
-              Keep this request active for
-            </Text>
-            <ChoiceRow
-              choices={expiryChoices.map((value) => ({
-                value,
-                label: `${value} days`,
-              }))}
-              selected={expiresInDays}
-              onSelect={setExpiresInDays}
             />
           </View>
 
@@ -1112,7 +1113,8 @@ export function IsoDetailScreen({
     return listings.filter(
       (listing) =>
         listing.status === 'Active' &&
-        listing.categoryId === requestCategoryId
+        listing.categoryId === requestCategoryId &&
+        Boolean(listing.marketplaceLocationId)
     );
   }, [myListings.data, requestCategoryId]);
 
@@ -1312,7 +1314,7 @@ export function IsoDetailScreen({
           <View style={styles.locationRow}>
             <MapPin size={15} color={themeColors.textSecondary} />
             <Text style={[styles.bodyText, { color: themeColors.textSecondary }]}>
-              {request.searchAreaLabel ?? 'Marketplace area'} ·{' '}
+              {isoLocationLabel(request)} ·{' '}
               {request.radiusMiles} mile radius
             </Text>
           </View>

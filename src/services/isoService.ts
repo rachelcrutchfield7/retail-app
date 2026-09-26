@@ -70,8 +70,10 @@ function toIsoPost(row: Record<string, unknown>): IsoPost {
     budgetMax: optionalNumber(row.budget_max),
     quantity: Number(row.quantity ?? 1),
     urgency: String(row.urgency) as IsoPost['urgency'],
-    searchAreaId: String(row.search_area_id),
+    searchAreaId: optionalString(row.search_area_id),
     searchAreaLabel: optionalString(row.search_area_label),
+    displayCity: optionalString(row.display_city),
+    displayState: optionalString(row.display_state),
     radiusMiles: Number(row.radius_miles) as IsoPost['radiusMiles'],
     status: effectiveIsoStatus(rawStatus, expiresAt),
     expiresAt,
@@ -124,15 +126,19 @@ function isoErrorMessage(message: string): {
     ['RETAIL_ISO_RADIUS_INVALID', 'ISO_RADIUS_INVALID', 'Choose a valid search radius.'],
     ['RETAIL_ISO_EXPIRY_INVALID', 'ISO_EXPIRY_INVALID', 'Choose an expiration date within 90 days.'],
     ['RETAIL_ISO_AREA_INVALID', 'ISO_AREA_INVALID', 'Choose an available marketplace area.'],
+    ['RETAIL_ISO_LOCATION_REQUIRED', 'ISO_LOCATION_REQUIRED', 'Set a trusted marketplace location before using ISO.'],
+    ['RETAIL_ISO_LOCATION_INVALID', 'ISO_LOCATION_INVALID', 'Update your marketplace location before using ISO.'],
     ['RETAIL_ISO_NOT_FOUND_OR_EXPIRED', 'ISO_NOT_AVAILABLE', 'This ISO request is no longer available.'],
     ['RETAIL_ISO_NOT_FOUND', 'ISO_NOT_FOUND', 'This ISO request could not be found.'],
     ['RETAIL_ISO_NOT_EDITABLE', 'ISO_NOT_EDITABLE', 'This ISO request can no longer be edited.'],
     ['RETAIL_ISO_NOT_AVAILABLE', 'ISO_NOT_AVAILABLE', 'This ISO request is no longer available.'],
     ['RETAIL_ISO_SELF_RESPONSE', 'ISO_SELF_RESPONSE', 'You cannot respond to your own ISO request.'],
     ['RETAIL_ISO_BLOCKED', 'ISO_BLOCKED', 'You cannot respond to this ISO request.'],
+    ['RETAIL_ISO_REQUESTER_INACTIVE', 'ISO_REQUESTER_INACTIVE', 'This requester is no longer available.'],
     ['RETAIL_ISO_LISTING_NOT_AVAILABLE', 'ISO_LISTING_NOT_AVAILABLE', 'That listing is not available to use for this response.'],
     ['RETAIL_ISO_CATEGORY_MISMATCH', 'ISO_CATEGORY_MISMATCH', 'Choose one of your listings from the same category.'],
     ['RETAIL_ISO_LISTING_AREA_REQUIRED', 'ISO_LISTING_AREA_REQUIRED', 'That listing needs a marketplace area before it can be used here.'],
+    ['RETAIL_ISO_LISTING_LOCATION_REQUIRED', 'ISO_LISTING_LOCATION_REQUIRED', 'That listing needs a verified marketplace location before it can be used here.'],
     ['RETAIL_ISO_LISTING_OUTSIDE_AREA', 'ISO_LISTING_OUTSIDE_AREA', 'That listing is outside this request’s search area.'],
     ['RETAIL_ISO_CONDITION_MISMATCH', 'ISO_CONDITION_MISMATCH', 'That listing does not match the requested condition.'],
   ];
@@ -176,9 +182,7 @@ export async function getIsoFeed(
 ): Promise<IsoPost[]> {
   await ensureCurrentProfile();
 
-  const { data, error } = await supabase.rpc('get_iso_feed', {
-    requested_search_area_id: params.searchAreaId ?? null,
-    requested_radius_miles: params.radiusMiles ?? null,
+  const { data, error } = await supabase.rpc('get_iso_feed_v2', {
     requested_category_id: params.categoryId ?? null,
     requested_limit: params.limit ?? 50,
     requested_offset: params.offset ?? 0,
@@ -192,14 +196,9 @@ export async function getIsoFeed(
 }
 
 export async function getMyIsoPosts(): Promise<IsoPost[]> {
-  const profile = await ensureCurrentProfile();
+  await ensureCurrentProfile();
 
-  const { data, error } = await supabase
-    .from('iso_posts')
-    .select('*')
-    .eq('poster_id', profile.id)
-    .is('deleted_at', null)
-    .order('created_at', { ascending: false });
+  const { data, error } = await supabase.rpc('get_my_iso_posts_v2');
 
   if (error) {
     throwSupabaseError(error, 'We could not load your ISO requests.');
@@ -213,20 +212,16 @@ export async function getIsoPostById(
 ): Promise<IsoPost | null> {
   await ensureCurrentProfile();
 
-  const { data, error } = await supabase
-    .from('iso_posts')
-    .select('*')
-    .eq('id', postId)
-    .is('deleted_at', null)
-    .maybeSingle();
+  const { data, error } = await supabase.rpc('get_iso_post_v2', {
+    target_iso_post_id: postId,
+  });
 
   if (error) {
     throwSupabaseError(error, 'We could not load that ISO request.');
   }
 
-  return data
-    ? toIsoPost(data as Record<string, unknown>)
-    : null;
+  const rows = (data ?? []) as Record<string, unknown>[];
+  return rows[0] ? toIsoPost(rows[0]) : null;
 }
 
 export async function getIsoPostImages(
@@ -271,7 +266,8 @@ export async function createIsoPost(
   await requireCurrentPolicyAcceptance();
   await ensureCurrentProfile();
 
-  const { data, error } = await supabase.rpc('create_iso_post', {
+  const { data, error } = await supabase.rpc('create_iso_post_v2', {
+    requested_marketplace_location_id: input.marketplaceLocationId,
     requested_title: input.title,
     requested_description: input.description,
     requested_category_id: input.categoryId,
@@ -280,16 +276,32 @@ export async function createIsoPost(
     requested_budget_max: input.budgetMax ?? null,
     requested_quantity: input.quantity ?? 1,
     requested_urgency: input.urgency ?? 'flexible',
-    requested_search_area_id: input.searchAreaId,
     requested_radius_miles: input.radiusMiles ?? 25,
-    requested_expires_in_days: input.expiresInDays ?? 30,
   });
 
   if (error) {
     throwIsoError(error, 'We could not create your ISO request.');
   }
 
-  const post = toIsoPost(data as Record<string, unknown>);
+  const postId = String(data ?? '');
+
+  if (!postId) {
+    throw createServiceError(
+      'ISO_CREATE_FAILED',
+      'ISO create RPC returned no identifier',
+      'We could not create your ISO request.'
+    );
+  }
+
+  const post = await getIsoPostById(postId);
+
+  if (!post) {
+    throw createServiceError(
+      'ISO_CREATE_FAILED',
+      'Created ISO request could not be reloaded',
+      'Your request was created, but we could not reload it.'
+    );
+  }
 
   trackEvent('ISO Post Created', {
     isoPostId: post.id,
@@ -306,8 +318,9 @@ export async function updateIsoPost(
   await requireCurrentPolicyAcceptance();
   await ensureCurrentProfile();
 
-  const { data, error } = await supabase.rpc('update_my_iso_post', {
+  const { data, error } = await supabase.rpc('update_my_iso_post_v2', {
     target_iso_post_id: input.postId,
+    requested_marketplace_location_id: input.marketplaceLocationId,
     requested_title: input.title,
     requested_description: input.description,
     requested_category_id: input.categoryId,
@@ -316,16 +329,23 @@ export async function updateIsoPost(
     requested_budget_max: input.budgetMax ?? null,
     requested_quantity: input.quantity ?? 1,
     requested_urgency: input.urgency ?? 'flexible',
-    requested_search_area_id: input.searchAreaId,
     requested_radius_miles: input.radiusMiles ?? 25,
-    requested_expires_at: input.expiresAt ?? null,
   });
 
   if (error) {
     throwIsoError(error, 'We could not update your ISO request.');
   }
 
-  const post = toIsoPost(data as Record<string, unknown>);
+  const postId = String(data ?? '');
+  const post = postId ? await getIsoPostById(postId) : null;
+
+  if (!post) {
+    throw createServiceError(
+      'ISO_UPDATE_FAILED',
+      'Updated ISO request could not be reloaded',
+      'Your request was updated, but we could not reload it.'
+    );
+  }
 
   trackEvent('ISO Post Updated', {
     isoPostId: post.id,
@@ -366,7 +386,7 @@ export async function respondToIsoPost(
   await requireCurrentPolicyAcceptance();
   await ensureCurrentProfile();
 
-  const { data, error } = await supabase.rpc('respond_to_iso_post', {
+  const { data, error } = await supabase.rpc('respond_to_iso_post_v2', {
     target_iso_post_id: postId,
     target_listing_id: listingId,
   });

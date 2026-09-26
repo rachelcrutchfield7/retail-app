@@ -42,10 +42,10 @@ test('ISO client has first-class typed request models', () => {
 });
 
 test('ISO service uses controlled backend RPCs for mutations', () => {
-  assert.match(service, /rpc\('create_iso_post'/);
-  assert.match(service, /rpc\('update_my_iso_post'/);
+  assert.match(service, /rpc\('create_iso_post_v2'/);
+  assert.match(service, /rpc\('update_my_iso_post_v2'/);
   assert.match(service, /rpc\('set_my_iso_post_status'/);
-  assert.match(service, /rpc\('respond_to_iso_post'/);
+  assert.match(service, /rpc\('respond_to_iso_post_v2'/);
 
   assert.doesNotMatch(
     service,
@@ -59,10 +59,9 @@ test('ISO service uses controlled backend RPCs for mutations', () => {
 });
 
 test('ISO feed is loaded through location-aware backend RPC', () => {
-  assert.match(service, /rpc\('get_iso_feed'/);
-  assert.match(service, /requested_search_area_id/);
-  assert.match(service, /requested_radius_miles/);
+  assert.match(service, /rpc\('get_iso_feed_v2'/);
   assert.match(service, /requested_category_id/);
+  assert.doesNotMatch(service, /requested_(latitude|longitude|location_point)/);
 });
 
 test('ISO client preserves backend friendly safety errors', () => {
@@ -70,6 +69,8 @@ test('ISO client preserves backend friendly safety errors', () => {
   assert.match(service, /RETAIL_ISO_BLOCKED/);
   assert.match(service, /RETAIL_ISO_CATEGORY_MISMATCH/);
   assert.match(service, /RETAIL_ISO_LISTING_OUTSIDE_AREA/);
+  assert.match(service, /RETAIL_ISO_LOCATION_REQUIRED/);
+  assert.match(service, /RETAIL_ISO_LISTING_LOCATION_REQUIRED/);
   assert.match(service, /RETAIL_ISO_CONDITION_MISMATCH/);
 });
 

@@ -59,7 +59,7 @@ test('ISO tab supports browse and owner request views', () => {
   assert.match(isoScreens, /useMyIsoPosts/);
 });
 
-test('ISO create form exposes all requested v1 fields', () => {
+test('ISO create form keeps request fields and uses the trusted marketplace location', () => {
   assert.match(isoScreens, /What are you looking for\?/);
   assert.match(isoScreens, /Description/);
   assert.match(isoScreens, /Category/);
@@ -68,9 +68,11 @@ test('ISO create form exposes all requested v1 fields', () => {
   assert.match(isoScreens, /Maximum budget/);
   assert.match(isoScreens, /Quantity/);
   assert.match(isoScreens, /Urgency/);
-  assert.match(isoScreens, /Marketplace area/);
+  assert.match(isoScreens, /Marketplace location/);
   assert.match(isoScreens, /Search radius/);
-  assert.match(isoScreens, /Keep this request active for/);
+  assert.match(isoScreens, /Set Marketplace Location/);
+  assert.doesNotMatch(isoScreens, /Keep this request active for/);
+  assert.doesNotMatch(isoScreens, /useMarketplaceSearchAreas/);
 });
 
 test('ISO photo is optional and limited to one in v1 UI', () => {
@@ -93,11 +95,12 @@ test('ISO detail includes owner lifecycle actions', () => {
   assert.match(isoScreens, /useSetIsoPostStatus/);
 });
 
-test('I Have This uses active ReTail listings from the same category ID', () => {
+test('I Have This uses active trusted ReTail listings from the same category ID', () => {
   assert.match(isoScreens, /I Have This/);
   assert.match(isoScreens, /useMyListings/);
   assert.match(isoScreens, /listing\.status === 'Active'/);
   assert.match(isoScreens, /listing\.categoryId === requestCategoryId/);
+  assert.match(isoScreens, /listing\.marketplaceLocationId/);
   assert.match(isoScreens, /Send This Listing/);
   assert.match(isoScreens, /useRespondToIsoPost/);
 });
