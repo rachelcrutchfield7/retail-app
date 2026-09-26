@@ -80,7 +80,9 @@ test('release build configuration keeps private beta separate from production', 
   assert.equal(eas.build.preview.environment, 'preview');
   assert.equal(eas.build.preview.distribution, 'internal');
   assert.equal(eas.build.production.env.EXPO_PUBLIC_APP_ENV, 'production');
-  assert.equal(eas.build['production-ios'].env.RETAIL_IOS_MARKETING_VERSION, '1.1.2');
+  assert.equal(eas.build['production-ios'].extends, 'production');
+  assert.match(eas.build['production-ios'].env.RETAIL_IOS_MARKETING_VERSION, /^\d+\.\d+\.\d+$/);
+  assert.match(appConfig, /appConfig\.expo\.version = iosMarketingVersion/);
   assert.doesNotMatch(`${appConfig}\n${JSON.stringify(eas)}`, /localhost|127\.0\.0\.1|example\.supabase\.co|ci-placeholder/);
   assert.match(ciWorkflow, /private-beta-\*\*/);
   assert.match(securityWorkflow, /private-beta-\*\*/);

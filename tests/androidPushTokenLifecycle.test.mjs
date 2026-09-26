@@ -96,6 +96,9 @@ test('push registration changes do not alter notification preferences or in-app 
 
   assert.match(service, /get_my_notification_preferences/);
   assert.match(service, /update_my_notification_preferences/);
-  assert.match(edgeFunction, /deliverPushNotifications\(supabaseAdmin, notification\)/);
+  assert.match(
+    edgeFunction,
+    /deliverPushNotifications\([\s\S]*supabaseAdmin,[\s\S]*deliveryNotification[\s\S]*\)/
+  );
   assert.match(edgeFunction, /return jsonResponse\(\{ ok: true/);
 });

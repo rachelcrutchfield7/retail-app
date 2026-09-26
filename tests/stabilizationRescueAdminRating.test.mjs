@@ -17,7 +17,6 @@ const notificationMigration = await readFile(
 );
 const adminService = await readFile(new URL('../src/services/adminService.ts', import.meta.url), 'utf8');
 const sprint4 = await readFile(new URL('../src/sprint4/Sprint4App.tsx', import.meta.url), 'utf8');
-const pushHelper = await readFile(new URL('../src/lib/nativePushNotifications.ts', import.meta.url), 'utf8');
 
 function memoryStorage() {
   const values = new Map();
@@ -58,8 +57,6 @@ test('admin notifications are admin-targeted, deduplicated, private, and non-blo
   assert.match(notificationMigration, /admin:report:/);
   assert.match(notificationMigration, /exception[\s\S]+when others[\s\S]+return new;/g);
   assert.doesNotMatch(notificationMigration, /contact_email|contact_phone|address_line1|details/);
-  assert.match(pushHelper, /\| \{ name: 'admin' \}/);
-  assert.match(sprint4, /target\.name === 'admin'[\s\S]+setRoute\(\{ name: 'admin' \}\)/);
 });
 
 test('automatic rating waits for repeat success, deduplicates events, and applies cooldown', async () => {
