@@ -100,12 +100,13 @@ test('ISO mutations invalidate feed, owner, detail, image, and response caches',
   assert.match(hooks, /queryKeys\.isoResponses\(postId\)/);
 });
 
-test('ISO image uploads reuse hardened image preparation and use dedicated bucket', () => {
-  assert.match(storage, /uploadPublicFile\(\s*'iso-posts'/);
+test('ISO image uploads reuse hardened image preparation and private signed delivery', () => {
+  assert.match(storage, /uploadPrivateIsoFile/);
   assert.match(storage, /prepareListingImageForUpload\(fileUri\)/);
   assert.match(storage, /\.from\('iso_post_images'\)/);
   assert.match(storage, /You can add up to 5 photos/);
-  assert.match(storage, /publicObjectPath\('iso-posts'/);
+  assert.match(storage, /createSignedUrl\(path, ISO_IMAGE_SIGNED_URL_TTL_SECONDS\)/);
+  assert.doesNotMatch(storage, /uploadPublicFile\(\s*'iso-posts'/);
 });
 
 test('ISO image sort positions are chosen from zero through four', () => {

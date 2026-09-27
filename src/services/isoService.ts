@@ -7,6 +7,7 @@ import {
   throwSupabaseError,
 } from './supabaseData';
 import {
+  createIsoPostImageSignedUrl,
   deleteIsoPostImage,
   uploadIsoPostImage,
 } from './storageService';
@@ -87,12 +88,43 @@ function toIsoPost(row: Record<string, unknown>): IsoPost {
   };
 }
 
-function toIsoImage(row: Record<string, unknown>): IsoPostImage {
+async function withSignedIsoPostImage(post: IsoPost): Promise<IsoPost> {
+  if (!post.imageUrl) {
+    return post;
+  }
+
+  try {
+    const signedUrl = await createIsoPostImageSignedUrl(post.imageUrl);
+    return {
+      ...post,
+      imageUrl: signedUrl,
+    };
+  } catch {
+    return {
+      ...post,
+      imageUrl: undefined,
+    };
+  }
+}
+
+async function toIsoImage(row: Record<string, unknown>): Promise<IsoPostImage> {
+  const storedReference = optionalString(row.thumbnail_url)
+    ?? optionalString(row.image_url);
+  const signedUrl = await createIsoPostImageSignedUrl(storedReference);
+
+  if (!signedUrl) {
+    throw createServiceError(
+      'ISO_IMAGE_UNAVAILABLE',
+      'ISO image row did not contain a valid private storage key',
+      'That ISO photo is unavailable. Pull to refresh and try again.'
+    );
+  }
+
   return {
     id: String(row.id),
     isoPostId: String(row.iso_post_id),
-    imageUrl: String(row.image_url),
-    thumbnailUrl: optionalString(row.thumbnail_url),
+    imageUrl: signedUrl,
+    thumbnailUrl: signedUrl,
     sortOrder: Number(row.sort_order ?? 0),
     altText: optionalString(row.alt_text),
     createdAt: String(row.created_at),
@@ -198,7 +230,11 @@ export async function getIsoFeed(
     throwIsoError(error, 'We could not load ISO requests.');
   }
 
-  return ((data ?? []) as Record<string, unknown>[]).map(toIsoPost);
+  return Promise.all(
+    ((data ?? []) as Record<string, unknown>[])
+      .map(toIsoPost)
+      .map(withSignedIsoPostImage)
+  );
 }
 
 export async function getMyIsoPosts(): Promise<IsoPost[]> {
@@ -210,7 +246,11 @@ export async function getMyIsoPosts(): Promise<IsoPost[]> {
     throwSupabaseError(error, 'We could not load your ISO requests.');
   }
 
-  return ((data ?? []) as Record<string, unknown>[]).map(toIsoPost);
+  return Promise.all(
+    ((data ?? []) as Record<string, unknown>[])
+      .map(toIsoPost)
+      .map(withSignedIsoPostImage)
+  );
 }
 
 export async function getIsoPostById(
@@ -227,7 +267,7 @@ export async function getIsoPostById(
   }
 
   const rows = (data ?? []) as Record<string, unknown>[];
-  return rows[0] ? toIsoPost(rows[0]) : null;
+  return rows[0] ? withSignedIsoPostImage(toIsoPost(rows[0])) : null;
 }
 
 export async function getIsoPostImages(
@@ -245,7 +285,9 @@ export async function getIsoPostImages(
     throwSupabaseError(error, 'We could not load those photos.');
   }
 
-  return ((data ?? []) as Record<string, unknown>[]).map(toIsoImage);
+  return Promise.all(
+    ((data ?? []) as Record<string, unknown>[]).map(toIsoImage)
+  );
 }
 
 export async function getIsoResponses(

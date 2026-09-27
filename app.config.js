@@ -33,8 +33,8 @@ const appConfig = {
       ],
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
-        NSCameraUsageDescription: 'ReTail uses the camera so you can add photos to listings and messages.',
-        NSPhotoLibraryUsageDescription: 'ReTail uses your photo library so you can upload listing and message photos.',
+        NSCameraUsageDescription: 'ReTail uses the camera so you can add photos to listings, ISO requests, and messages.',
+        NSPhotoLibraryUsageDescription: 'ReTail uses your photo library so you can upload profile, listing, ISO request, and message photos.',
         NSLocationWhenInUseUsageDescription: 'ReTail uses approximate location to show nearby pet supply listings.',
       },
       privacyManifests: {
@@ -98,7 +98,7 @@ const appConfig = {
       [
         'expo-image-picker',
         {
-          photosPermission: 'ReTail uses your photo library so you can upload profile pictures, listing photos, and message images.',
+          photosPermission: 'ReTail uses your photo library so you can upload profile, listing, ISO request, and message photos.',
           microphonePermission: false,
         },
       ],

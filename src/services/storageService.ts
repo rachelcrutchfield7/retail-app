@@ -15,6 +15,7 @@ import {
 import type { IsoPostImage, ListingImage } from './types';
 
 const LISTING_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
+export const ISO_IMAGE_SIGNED_URL_TTL_SECONDS = 60 * 60;
 
 type StorageUploadClient = {
   upload: (
@@ -180,6 +181,50 @@ function publicObjectPath(bucket: string, publicUrl?: string): string | null {
   return markerIndex >= 0 ? decodeURIComponent(parsedUrl.pathname.slice(markerIndex + marker.length)) : null;
 }
 
+function isoObjectPath(storedReference?: string): string | null {
+  const reference = storedReference?.trim();
+
+  if (!reference) {
+    return null;
+  }
+
+  if (reference.startsWith('http')) {
+    return publicObjectPath('iso-posts', reference);
+  }
+
+  if (
+    reference.startsWith('/')
+    || reference.includes('://')
+    || reference.includes('?')
+    || reference.includes('#')
+    || reference.includes('..')
+  ) {
+    return null;
+  }
+
+  return reference;
+}
+
+export async function createIsoPostImageSignedUrl(
+  storedReference?: string
+): Promise<string | undefined> {
+  const path = isoObjectPath(storedReference);
+
+  if (!path) {
+    return undefined;
+  }
+
+  const { data, error } = await supabase.storage
+    .from('iso-posts')
+    .createSignedUrl(path, ISO_IMAGE_SIGNED_URL_TTL_SECONDS);
+
+  if (error) {
+    throwSupabaseError(error, 'We could not load that ISO photo.');
+  }
+
+  return data?.signedUrl;
+}
+
 async function uploadPublicFile(bucket: string, fileUri: string, folder: string): Promise<string> {
   if (fileUri.startsWith('http')) {
     const existingPath = publicObjectPath(bucket, fileUri);
@@ -210,6 +255,37 @@ async function uploadPublicFile(bucket: string, fileUri: string, folder: string)
 
   const { data } = supabase.storage.from(bucket).getPublicUrl(path);
   return data.publicUrl;
+}
+
+async function uploadPrivateIsoFile(fileUri: string, folder: string): Promise<string> {
+  if (fileUri.startsWith('http')) {
+    throw createServiceError(
+      'EXTERNAL_ISO_IMAGE_BLOCKED',
+      'ISO image upload rejected a remote URL',
+      'Choose a photo from your device before saving this request.'
+    );
+  }
+
+  const { arrayBuffer, extension, mimeType, size } = await prepareListingImageForUpload(fileUri);
+
+  if (size > LISTING_IMAGE_MAX_BYTES) {
+    throw createServiceError(
+      'IMAGE_TOO_LARGE',
+      `ISO image exceeded the configured 10 MB limit: ${size} bytes`,
+      'Choose a photo smaller than 10 MB.'
+    );
+  }
+
+  const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${extension}`;
+  await uploadListingImageBinary(
+    supabase.storage.from('iso-posts'),
+    path,
+    arrayBuffer,
+    mimeType,
+    uriScheme(fileUri)
+  );
+
+  return path;
 }
 
 export async function uploadListingImage(fileUri: string, listingId: string): Promise<ListingImage> {
@@ -279,12 +355,14 @@ export async function deleteListingImage(imageId: string): Promise<void> {
 }
 
 
-function toIsoPostImage(row: Record<string, unknown>): IsoPostImage {
+function toIsoPostImage(
+  row: Record<string, unknown>,
+  displayUrl: string
+): IsoPostImage {
   return {
     id: String(row.id),
     isoPostId: String(row.iso_post_id),
-    imageUrl: String(row.image_url),
-    thumbnailUrl: row.thumbnail_url ? String(row.thumbnail_url) : undefined,
+    imageUrl: displayUrl,
     sortOrder: Number(row.sort_order ?? 0),
     altText: row.alt_text ? String(row.alt_text) : undefined,
     createdAt: String(row.created_at),
@@ -336,8 +414,7 @@ export async function uploadIsoPostImage(
     );
   }
 
-  const imageUrl = await uploadPublicFile(
-    'iso-posts',
+  const storagePath = await uploadPrivateIsoFile(
     fileUri,
     `${profile.id}/${isoPostId}`
   );
@@ -346,8 +423,8 @@ export async function uploadIsoPostImage(
     .from('iso_post_images')
     .insert({
       iso_post_id: isoPostId,
-      image_url: imageUrl,
-      thumbnail_url: imageUrl,
+      image_url: storagePath,
+      thumbnail_url: null,
       sort_order: sortOrder,
       alt_text: 'ISO request photo',
     })
@@ -355,20 +432,16 @@ export async function uploadIsoPostImage(
     .single();
 
   if (error) {
-    const uploadedPath = publicObjectPath('iso-posts', imageUrl);
-
-    if (uploadedPath) {
-      try {
-        await supabase.storage.from('iso-posts').remove([uploadedPath]);
-      } catch {
-        // Preserve the original database error.
-      }
+    try {
+      await supabase.storage.from('iso-posts').remove([storagePath]);
+    } catch {
+      // Preserve the original database error.
     }
 
     throwSupabaseError(error, 'We could not save that ISO photo.');
   }
 
-  return toIsoPostImage(data as Record<string, unknown>);
+  return toIsoPostImage(data as Record<string, unknown>, fileUri);
 }
 
 export async function deleteIsoPostImage(imageId: string): Promise<void> {
@@ -384,18 +457,8 @@ export async function deleteIsoPostImage(imageId: string): Promise<void> {
     throwSupabaseError(loadError, 'This photo is no longer available.');
   }
 
-  const image = toIsoPostImage(data as Record<string, unknown>);
-  const path = publicObjectPath('iso-posts', image.imageUrl);
-
-  if (path) {
-    const { error: storageError } = await supabase.storage
-      .from('iso-posts')
-      .remove([path]);
-
-    if (storageError) {
-      throwSupabaseError(storageError, 'We could not remove that photo.');
-    }
-  }
+  const row = data as Record<string, unknown>;
+  const path = isoObjectPath(String(row.image_url ?? ''));
 
   const { error } = await supabase
     .from('iso_post_images')
@@ -404,5 +467,19 @@ export async function deleteIsoPostImage(imageId: string): Promise<void> {
 
   if (error) {
     throwSupabaseError(error, 'We could not remove that photo.');
+  }
+
+  if (path) {
+    const { error: storageError } = await supabase.storage
+      .from('iso-posts')
+      .remove([path]);
+
+    if (storageError) {
+      logger.warning('Private ISO image cleanup failed after its database row was removed.', {
+        operation: 'ISO image cleanup',
+        bucket: 'iso-posts',
+        ...storageErrorContext(storageError),
+      });
+    }
   }
 }

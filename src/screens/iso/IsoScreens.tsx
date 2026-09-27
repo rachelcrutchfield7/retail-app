@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Image,
@@ -28,6 +28,7 @@ import {
   Button,
   Avatar,
   Badge,
+  ErrorState,
   ImageUploader,
   TextArea,
   TextField,
@@ -183,6 +184,7 @@ function ChoiceRow<T extends string | number>({
           <Pressable
             key={String(choice.value)}
             accessibilityRole="button"
+            accessibilityLabel={choice.label}
             accessibilityState={{ selected: active }}
             onPress={() => onSelect(choice.value)}
             style={[
@@ -294,7 +296,11 @@ function IsoPostCard({
       ]}
     >
       {post.imageUrl ? (
-        <Image source={{ uri: post.imageUrl }} style={styles.postCardImage} />
+        <Image
+          accessibilityLabel={`Reference photo for ${post.title}`}
+          source={{ uri: post.imageUrl }}
+          style={styles.postCardImage}
+        />
       ) : (
         <View
           style={[
@@ -537,6 +543,9 @@ export function IsoScreen({
                 contentContainerStyle={styles.horizontalChoices}
               >
                 <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="All categories"
+                  accessibilityState={{ selected: !categoryId }}
                   onPress={() => setCategoryId(undefined)}
                   style={[
                     styles.choice,
@@ -570,6 +579,9 @@ export function IsoScreen({
                   return (
                     <Pressable
                       key={category.id}
+                      accessibilityRole="button"
+                      accessibilityLabel={category.name}
+                      accessibilityState={{ selected }}
                       onPress={() => setCategoryId(category.id)}
                       style={[
                         styles.choice,
@@ -615,6 +627,12 @@ export function IsoScreen({
                   miles
                 </Text>
               </View>
+            ) : preference.error ? (
+              <ErrorState
+                title="Marketplace location unavailable"
+                message={handleAppError(preference.error).userMessage}
+                onRetry={() => void preference.refetch()}
+              />
             ) : !preference.isLoading ? (
               <View
                 style={[
@@ -665,6 +683,11 @@ export function IsoScreen({
             <Text style={[styles.bodyText, { color: themeColors.textSecondary }]}>
               {handleAppError(error).userMessage}
             </Text>
+            <Button
+              title="Retry"
+              onPress={() => void (view === 'browse' ? feed.refresh() : mine.refresh())}
+              fullWidth
+            />
           </View>
         ) : null}
 
@@ -734,6 +757,7 @@ export function CreateIsoScreen({
     useState<IsoRadiusMiles>(25);
   const [images, setImages] = useState<string[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
+  const createInFlight = useRef(false);
 
   const subcategories = useSubcategories(categoryId);
   const postingLocation =
@@ -753,6 +777,10 @@ export function CreateIsoScreen({
   };
 
   const submit = async () => {
+    if (createInFlight.current) {
+      return;
+    }
+
     setFormError(null);
 
     if (title.trim().length < 3) {
@@ -798,6 +826,8 @@ export function CreateIsoScreen({
       return;
     }
 
+    createInFlight.current = true;
+
     try {
       const post = await createMutation.createIsoPost({
         title: title.trim(),
@@ -829,6 +859,8 @@ export function CreateIsoScreen({
       onCreated(post.id);
     } catch (error) {
       setFormError(handleAppError(error).userMessage);
+    } finally {
+      createInFlight.current = false;
     }
   };
 
@@ -876,6 +908,9 @@ export function CreateIsoScreen({
               {(categories.data ?? []).map((category) => (
                 <Pressable
                   key={category.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={category.name}
+                  accessibilityState={{ selected: categoryId === category.id }}
                   onPress={() => chooseCategory(category.id)}
                   style={[
                     styles.choice,
@@ -917,6 +952,9 @@ export function CreateIsoScreen({
 
               <View style={styles.choiceRow}>
                 <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Any subcategory"
+                  accessibilityState={{ selected: !subcategoryId }}
                   onPress={() => setSubcategoryId('')}
                   style={[
                     styles.choice,
@@ -947,6 +985,9 @@ export function CreateIsoScreen({
                 {(subcategories.data ?? []).map((category) => (
                   <Pressable
                     key={category.id}
+                    accessibilityRole="button"
+                    accessibilityLabel={category.name}
+                    accessibilityState={{ selected: subcategoryId === category.id }}
                     onPress={() => setSubcategoryId(category.id)}
                     style={[
                       styles.choice,
@@ -1079,7 +1120,10 @@ export function CreateIsoScreen({
           />
 
           {formError ? (
-            <Text style={[styles.errorText, { color: themeColors.error }]}>
+            <Text
+              accessibilityRole="alert"
+              style={[styles.errorText, { color: themeColors.error }]}
+            >
               {formError}
             </Text>
           ) : null}
@@ -1120,6 +1164,8 @@ export function IsoDetailScreen({
   const [showListings, setShowListings] = useState(false);
   const [selectedListingId, setSelectedListingId] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
+  const ownerActionInFlight = useRef(false);
+  const responseInFlight = useRef(false);
 
   const requestCategoryId = post.data?.categoryId;
 
@@ -1201,6 +1247,9 @@ export function IsoDetailScreen({
                 ? handleAppError(post.error).userMessage
                 : 'This request may have been removed.'}
             </Text>
+            {post.error ? (
+              <Button title="Retry" onPress={() => void post.refetch()} fullWidth />
+            ) : null}
           </View>
         </ScrollView>
       </SafeAreaView>
@@ -1220,6 +1269,12 @@ export function IsoDetailScreen({
     .join('') || 'R';
 
   const performOwnerAction = async (action: IsoOwnerAction) => {
+    if (ownerActionInFlight.current) {
+      return;
+    }
+
+    ownerActionInFlight.current = true;
+
     try {
       await ownerMutation.manage({
         postId,
@@ -1242,6 +1297,8 @@ export function IsoDetailScreen({
       await post.refetch();
     } catch (error) {
       setNotice(handleAppError(error).userMessage);
+    } finally {
+      ownerActionInFlight.current = false;
     }
   };
 
@@ -1292,10 +1349,16 @@ export function IsoDetailScreen({
   };
 
   const submitResponse = async () => {
+    if (responseInFlight.current) {
+      return;
+    }
+
     if (!selectedListingId) {
       setNotice('Choose one of your listings first.');
       return;
     }
+
+    responseInFlight.current = true;
 
     try {
       await responseMutation.respond({
@@ -1310,6 +1373,8 @@ export function IsoDetailScreen({
       setSelectedListingId('');
     } catch (error) {
       setNotice(handleAppError(error).userMessage);
+    } finally {
+      responseInFlight.current = false;
     }
   };
 
@@ -1327,6 +1392,7 @@ export function IsoDetailScreen({
             {images.data.map((image) => (
               <Image
                 key={image.id}
+                accessibilityLabel={image.altText ?? `Reference photo for ${request.title}`}
                 source={{ uri: image.imageUrl }}
                 style={styles.detailImage}
               />
@@ -1334,8 +1400,17 @@ export function IsoDetailScreen({
           </ScrollView>
         ) : request.imageUrl ? (
           <Image
+            accessibilityLabel={`Reference photo for ${request.title}`}
             source={{ uri: request.imageUrl }}
             style={styles.detailHeroImage}
+          />
+        ) : null}
+
+        {images.error ? (
+          <ErrorState
+            title="Photo unavailable"
+            message={handleAppError(images.error).userMessage}
+            onRetry={() => void images.refetch()}
           />
         ) : null}
 
@@ -1456,6 +1531,7 @@ export function IsoDetailScreen({
 
         {notice ? (
           <View
+            accessibilityRole="alert"
             style={[
               styles.noticeCard,
               {
@@ -1610,7 +1686,15 @@ export function IsoDetailScreen({
                 </Text>
               ) : null}
 
-              {!responses.loading && responses.data.length === 0 ? (
+              {responses.error ? (
+                <ErrorState
+                  title="Responses unavailable"
+                  message={handleAppError(responses.error).userMessage}
+                  onRetry={() => void responses.refetch()}
+                />
+              ) : null}
+
+              {!responses.loading && !responses.error && responses.data.length === 0 ? (
                 <Text style={[styles.bodyText, { color: themeColors.textSecondary }]}>
                   No one has responded with a listing yet.
                 </Text>
@@ -1692,7 +1776,15 @@ export function IsoDetailScreen({
                   </Text>
                 ) : null}
 
-                {!myListings.loading && activeListings.length === 0 ? (
+                {myListings.error ? (
+                  <ErrorState
+                    title="Listings unavailable"
+                    message={handleAppError(myListings.error).userMessage}
+                    onRetry={() => void myListings.refetch()}
+                  />
+                ) : null}
+
+                {!myListings.loading && !myListings.error && activeListings.length === 0 ? (
                   <View style={styles.buttonStack}>
                     <Text
                       style={[
@@ -1715,6 +1807,7 @@ export function IsoDetailScreen({
                       <Pressable
                         key={listing.id}
                         accessibilityRole="button"
+                        accessibilityLabel={`Offer ${listing.title}`}
                         accessibilityState={{ selected }}
                         onPress={() => setSelectedListingId(listing.id)}
                         style={[
@@ -1731,6 +1824,7 @@ export function IsoDetailScreen({
                       >
                         {listing.image ? (
                           <Image
+                            accessibilityLabel={`Photo of ${listing.title}`}
                             source={{ uri: listing.image }}
                             style={styles.listingChoiceImage}
                           />

@@ -34,6 +34,8 @@ import type {
 } from '../services/types';
 import { useAuth } from './useAuth';
 
+const ISO_SIGNED_IMAGE_REFRESH_MS = 45 * 60 * 1000;
+
 export function useIsoFeed(
   params: IsoFeedParams = {},
   locationReady = true,
@@ -51,6 +53,7 @@ export function useIsoFeed(
     enabled: Boolean(user && locationReady),
     staleTime: cachePolicy.listings.staleTime,
     gcTime: cachePolicy.listings.cacheTime,
+    refetchInterval: ISO_SIGNED_IMAGE_REFRESH_MS,
   });
 
   return {
@@ -75,6 +78,7 @@ export function useMyIsoPosts() {
     enabled: Boolean(user),
     staleTime: 60 * 1000,
     gcTime: 10 * 60 * 1000,
+    refetchInterval: ISO_SIGNED_IMAGE_REFRESH_MS,
   });
 
   return {
@@ -98,6 +102,7 @@ export function useIsoPost(postId: string) {
     enabled: Boolean(user && postId),
     staleTime: 60 * 1000,
     gcTime: 10 * 60 * 1000,
+    refetchInterval: ISO_SIGNED_IMAGE_REFRESH_MS,
   });
 
   return {
@@ -121,6 +126,7 @@ export function useIsoPostImages(postId: string) {
     enabled: Boolean(user && postId),
     staleTime: 60 * 1000,
     gcTime: 10 * 60 * 1000,
+    refetchInterval: ISO_SIGNED_IMAGE_REFRESH_MS,
   });
 
   return {

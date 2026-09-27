@@ -5977,7 +5977,7 @@ function createSprint4Styles(themeColors: ThemeColors) {
   tabBadge: {
     position: 'absolute',
     top: -12,
-    right: -18,
+    right: -8,
   },
   tabLabel: {
     color: colors.navInactive,

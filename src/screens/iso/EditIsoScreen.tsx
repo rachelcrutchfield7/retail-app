@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Pressable,
@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
   Button,
+  ErrorState,
   ImageUploader,
   TextArea,
   TextField,
@@ -83,6 +84,7 @@ function ChoiceRow<T extends string | number>({
           <Pressable
             key={String(choice.value)}
             accessibilityRole="button"
+            accessibilityLabel={choice.label}
             accessibilityState={{ selected: active, disabled }}
             disabled={disabled}
             onPress={() => onSelect(choice.value)}
@@ -139,6 +141,7 @@ export function EditIsoScreen({
   const [images, setImages] = useState<string[]>([]);
   const [initialImageUrl, setInitialImageUrl] = useState<string | undefined>();
   const [formError, setFormError] = useState<string | null>(null);
+  const editInFlight = useRef(false);
 
   const subcategories = useSubcategories(categoryId);
   const postingLocation =
@@ -197,6 +200,10 @@ export function EditIsoScreen({
   };
 
   const submit = async () => {
+    if (editInFlight.current) {
+      return;
+    }
+
     setFormError(null);
 
     if (title.trim().length < 3) {
@@ -232,6 +239,8 @@ export function EditIsoScreen({
       return;
     }
 
+    editInFlight.current = true;
+
     try {
       await updateMutation.updateIsoPost({
         postId,
@@ -266,6 +275,8 @@ export function EditIsoScreen({
       onSaved(postId);
     } catch (error) {
       setFormError(handleAppError(error).userMessage);
+    } finally {
+      editInFlight.current = false;
     }
   };
 
@@ -274,6 +285,23 @@ export function EditIsoScreen({
       <SafeAreaView style={[styles.safe, { backgroundColor: themeColors.background }]}>
         <View style={styles.screenContent}>
           <Text style={[styles.bodyText, { color: themeColors.textSecondary }]}>Loading request...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (post.error || existingImages.error) {
+    const error = post.error ?? existingImages.error;
+
+    return (
+      <SafeAreaView style={[styles.safe, { backgroundColor: themeColors.background }]}>
+        <View style={styles.screenContent}>
+          <Button title="Back" icon={ChevronLeft} variant="ghost" onPress={onBack} />
+          <ErrorState
+            title="Request unavailable"
+            message={handleAppError(error).userMessage}
+            onRetry={() => void Promise.all([post.refetch(), existingImages.refetch()])}
+          />
         </View>
       </SafeAreaView>
     );
@@ -376,7 +404,11 @@ export function EditIsoScreen({
           uploading={imageMutation.loading}
         />
 
-        {formError ? <Text style={[styles.errorText, { color: themeColors.error }]}>{formError}</Text> : null}
+        {formError ? (
+          <Text accessibilityRole="alert" style={[styles.errorText, { color: themeColors.error }]}>
+            {formError}
+          </Text>
+        ) : null}
         <Button title="Save Changes" onPress={() => void submit()} loading={saving} fullWidth />
       </ScrollView>
     </SafeAreaView>
