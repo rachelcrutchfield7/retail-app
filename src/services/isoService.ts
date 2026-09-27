@@ -11,6 +11,7 @@ import {
   deleteIsoPostImage,
   uploadIsoPostImage,
 } from './storageService';
+import { replaceRegisteredIsoImage } from './isoImageLifecycle';
 import type {
   CreateIsoPostInput,
   IsoFeedParams,
@@ -507,23 +508,13 @@ export async function replaceIsoPostImage(
   currentImage: IsoPostImage | undefined,
   replacementFileUri: string | undefined
 ): Promise<IsoPostImage | null> {
-  if (!replacementFileUri) {
-    if (currentImage) {
-      await removeIsoPostImage(postId, currentImage.id);
+  return replaceRegisteredIsoImage(
+    postId,
+    currentImage,
+    replacementFileUri,
+    {
+      addImage: addIsoPostImage,
+      removeImage: removeIsoPostImage,
     }
-
-    return null;
-  }
-
-  if (currentImage?.imageUrl === replacementFileUri) {
-    return currentImage;
-  }
-
-  const replacement = await addIsoPostImage(postId, replacementFileUri);
-
-  if (currentImage) {
-    await removeIsoPostImage(postId, currentImage.id);
-  }
-
-  return replacement;
+  );
 }

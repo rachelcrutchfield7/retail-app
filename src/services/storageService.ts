@@ -12,6 +12,7 @@ import {
   throwSupabaseError,
   toListingImage,
 } from './supabaseData';
+import { deleteRegisteredIsoImage } from './isoImageLifecycle';
 import type { IsoPostImage, ListingImage } from './types';
 
 const LISTING_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
@@ -460,26 +461,53 @@ export async function deleteIsoPostImage(imageId: string): Promise<void> {
   const row = data as Record<string, unknown>;
   const path = isoObjectPath(String(row.image_url ?? ''));
 
-  const { error } = await supabase
-    .from('iso_post_images')
-    .delete()
-    .eq('id', imageId);
-
-  if (error) {
-    throwSupabaseError(error, 'We could not remove that photo.');
+  if (!path) {
+    throw createServiceError(
+      'ISO_IMAGE_PATH_INVALID',
+      'The stored ISO image reference was not a valid private object key',
+      'We could not remove that photo.'
+    );
   }
 
-  if (path) {
-    const { error: storageError } = await supabase.storage
-      .from('iso-posts')
-      .remove([path]);
+  const bucket = supabase.storage.from('iso-posts');
 
-    if (storageError) {
-      logger.warning('Private ISO image cleanup failed after its database row was removed.', {
-        operation: 'ISO image cleanup',
-        bucket: 'iso-posts',
-        ...storageErrorContext(storageError),
-      });
-    }
-  }
+  await deleteRegisteredIsoImage(imageId, path, {
+    objectExists: async (objectPath) => {
+      const { data: exists, error } = await bucket.exists(objectPath);
+
+      if (error) {
+        throwSupabaseError(error, 'We could not verify that photo.');
+      }
+
+      if (typeof exists === 'boolean') {
+        return exists;
+      }
+
+      throw createServiceError(
+        'ISO_IMAGE_STORAGE_CHECK_INVALID',
+        `Storage returned no existence result for the registered ISO image: ${objectPath}`,
+        'We could not verify that photo.'
+      );
+    },
+    removeObject: async (objectPath) => {
+      const { error } = await bucket.remove([objectPath]);
+
+      if (error) {
+        throwSupabaseError(error, 'We could not remove that photo.');
+      }
+    },
+    deleteImageRow: async (targetImageId) => {
+      const { data: deletedRows, error } = await supabase
+        .from('iso_post_images')
+        .delete()
+        .eq('id', targetImageId)
+        .select('id');
+
+      if (error) {
+        throwSupabaseError(error, 'We could not finish removing that photo.');
+      }
+
+      return deletedRows?.some((deletedRow) => deletedRow.id === targetImageId) ?? false;
+    },
+  });
 }
