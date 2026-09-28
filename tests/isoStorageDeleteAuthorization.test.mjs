@@ -24,6 +24,7 @@ test('viewer SELECT is limited to authenticated reads and signing', () => {
   assert.match(body, /for select\s+to authenticated/i);
   assert.match(body, /storage\.allow_any_operation\(array\[/i);
   assert.match(body, /'object\.get_authenticated'/);
+  assert.match(body, /'object\.info_authenticated'/);
   assert.match(body, /'object\.get_authenticated_info'/);
   assert.match(body, /'object\.sign'/);
   assert.doesNotMatch(body, /'object\.delete'/);
@@ -64,6 +65,24 @@ test('mutation SELECT requires an exact active ISO path and active account', () 
   assert.match(body, /p\.deleted_at is null/i);
   assert.match(body, /p\.status = 'active'/i);
   assert.match(body, /p\.expires_at > now\(\)/i);
+  assert.match(body, /join public\.iso_post_images as i\s+on i\.iso_post_id = p\.id/i);
+  assert.match(body, /i\.image_url = name/i);
+  assert.match(body, /i\.thumbnail_url = name/i);
+});
+
+test('owner DELETE requires the exact registered image key', () => {
+  const body = policyBody('ISO owners delete post images');
+
+  assert.match(body, /for delete\s+to authenticated/i);
+  assert.match(body, /array_length\(storage\.foldername\(name\), 1\) = 2/i);
+  assert.match(body, /\(storage\.foldername\(name\)\)\[1\] = \(select auth\.uid\(\)\)::text/i);
+  assert.match(body, /p\.poster_id = \(select auth\.uid\(\)\)/i);
+  assert.match(body, /p\.deleted_at is null/i);
+  assert.match(body, /p\.status = 'active'/i);
+  assert.match(body, /p\.expires_at > now\(\)/i);
+  assert.match(body, /join public\.iso_post_images as i\s+on i\.iso_post_id = p\.id/i);
+  assert.match(body, /i\.image_url = name/i);
+  assert.match(body, /i\.thumbnail_url = name/i);
 });
 
 test('the remediation replaces rather than stacks viewer and mutation policies', () => {
@@ -75,12 +94,20 @@ test('the remediation replaces rather than stacks viewer and mutation policies',
     migration,
     /drop policy if exists "ISO owners inspect post images for mutation"\s+on storage\.objects/i
   );
+  assert.match(
+    migration,
+    /drop policy if exists "ISO owners delete post images"\s+on storage\.objects/i
+  );
   assert.equal(
     migration.match(/create policy "ISO authorized users read post images"/g)?.length,
     1
   );
   assert.equal(
     migration.match(/create policy "ISO owners inspect post images for mutation"/g)?.length,
+    1
+  );
+  assert.equal(
+    migration.match(/create policy "ISO owners delete post images"/g)?.length,
     1
   );
 });
