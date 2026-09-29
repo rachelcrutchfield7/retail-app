@@ -44,9 +44,16 @@ as $$
   limit 1;
 $$;
 
+-- Migration backfills run without an end-user JWT. Reuse the existing
+-- transaction-local server update context so the listing write guard does not
+-- reject this narrowly scoped maintenance update.
+select set_config('retail.checkout_reservation_context', 'true', true);
+
 update public.listings l
 set search_area_id = public.marketplace_search_area_for_city_state(l.city, l.state)
 where l.status = 'active'
   and l.deleted_at is null
   and l.search_area_id is null
   and public.marketplace_search_area_for_city_state(l.city, l.state) is not null;
+
+select set_config('retail.checkout_reservation_context', 'false', true);;

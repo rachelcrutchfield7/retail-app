@@ -100,3 +100,4 @@ revoke all on function public.activate_my_listing(uuid) from public;
 revoke all on function public.activate_my_listing(uuid) from anon;
 grant execute on function public.activate_my_listing(uuid) to authenticated;
 grant execute on function public.activate_my_listing(uuid) to service_role;
+;

@@ -796,3 +796,4 @@ grant execute on function public.list_stale_seller_listing_promotion_reservation
   to service_role;
 grant execute on function public.release_stale_seller_listing_promotion_reservation(uuid, text, text)
   to service_role;
+;
