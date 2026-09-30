@@ -12,7 +12,7 @@ const rescueMigration = await readFile(
   'utf8'
 );
 const notificationMigration = await readFile(
-  new URL('../supabase/migrations/20260910031037_admin_actionable_notifications_v1.sql', import.meta.url),
+  new URL('../supabase/migrations/20260920215345_admin_notifications_v2.sql', import.meta.url),
   'utf8'
 );
 const adminService = await readFile(new URL('../src/services/adminService.ts', import.meta.url), 'utf8');
@@ -51,8 +51,9 @@ test('dedicated admin Rescues tab loads all statuses with counts, search, and fi
 
 test('admin notifications are admin-targeted, deduplicated, private, and non-blocking', () => {
   assert.match(notificationMigration, /where p\.is_admin = true/);
-  assert.match(notificationMigration, /p\.is_banned = false/);
-  assert.match(notificationMigration, /private\.create_notification_for_event/g);
+  assert.match(notificationMigration, /private\.is_account_active\(target_admin_id\)/);
+  assert.match(notificationMigration, /private\.is_admin\(target_admin_id\)/);
+  assert.match(notificationMigration, /private\.create_admin_action_notification/g);
   assert.match(notificationMigration, /admin:rescue-pending:/);
   assert.match(notificationMigration, /admin:report:/);
   assert.match(notificationMigration, /exception[\s\S]+when others[\s\S]+return new;/g);

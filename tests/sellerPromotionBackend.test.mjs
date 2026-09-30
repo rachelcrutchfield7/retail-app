@@ -7,7 +7,7 @@ import test from 'node:test';
 const root = fileURLToPath(new URL('..', import.meta.url));
 const read = (path) => readFileSync(join(root, path), 'utf8');
 
-const migration = read('supabase/migrations/20260908120000_seller_listing_fee_free_promotion_v1.sql');
+const migration = read('supabase/migrations/20260908233430_seller_listing_fee_free_promotion_v1.sql');
 const stripeCreate = read('supabase/functions/stripe-create-payment-intent/index.ts');
 const stripeWebhook = read('supabase/functions/stripe-webhook/index.ts');
 

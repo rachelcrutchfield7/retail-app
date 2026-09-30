@@ -60,6 +60,7 @@ import { appLinks } from '../constants/links';
 import { colors, radius, sizes, spacing, typography } from '../constants/theme';
 import type { ThemeColors } from '../constants/theme';
 import { useAdminListingReports } from '../hooks/useAdminListingReports';
+import { useAdminCommunityListingCampaign } from '../hooks/useAdminCommunityListingCampaign';
 import { useAdminDashboardCounts } from '../hooks/useAdminDashboardCounts';
 import { useAdminNotifications } from '../hooks/useAdminNotifications';
 import { useAdminMarketplaceCoverage } from '../hooks/useAdminMarketplaceCoverage';
@@ -138,6 +139,7 @@ import {
 } from '../services/stripeConnectService';
 import type { StripeConnectStatus } from '../services/stripeConnectService';
 import type {
+  CommunityListingCampaignProgress,
   AdminFoundingSellerSearchResult,
   AdminFoundingSellerStatus,
   AdminMarketplaceCoverageArea,
@@ -236,7 +238,7 @@ const tabs: Array<{ key: SprintTab; label: string; icon: typeof Home }> = [
 ];
 
 type AdminReportTab = 'active' | 'archived';
-type AdminDashboardTab = 'overview' | 'users' | 'rescues' | 'foundingSellers' | 'listings' | 'reports' | 'support' | 'notifications';
+type AdminDashboardTab = 'overview' | 'users' | 'rescues' | 'foundingSellers' | 'listings' | 'promotions' | 'reports' | 'support' | 'notifications';
 type AdminRescueStatusFilter = 'all' | RescueVerificationStatus;
 
 async function openAppLink(url: string): Promise<void> {
@@ -3800,6 +3802,11 @@ export function AdminReviewScreen({
   const adminNotifications = useAdminNotifications(isAdmin);
   const approvals = useAdminRescueApprovals(isAdmin && adminTab === 'rescues');
   const listingReports = useAdminListingReports(isAdmin && adminTab === 'reports', reportTab);
+  const communityCampaign = useAdminCommunityListingCampaign(
+    isAdmin && adminTab === 'promotions'
+  );
+  const [campaignStartCentral, setCampaignStartCentral] = useState('');
+  const campaignStartInitialized = useRef(false);
   const supportCases = useAdminSupportCases(isAdmin && adminTab === 'support', reportTab);
   const supportUpdater = useAdminUpdateSupportCase(reportTab);
   const [notice, setNotice] = useState<{ title: string; body: string } | null>(null);
@@ -3824,6 +3831,19 @@ export function AdminReviewScreen({
   const [marketplaceCreatedBefore, setMarketplaceCreatedBefore] = useState('');
   const [marketplacePage, setMarketplacePage] = useState(1);
   const foundingSellers = useAdminFoundingSellers(isAdmin && adminTab === 'foundingSellers', selectedFoundingSellerId);
+
+  useEffect(() => {
+    if (campaignStartInitialized.current || !communityCampaign.progress) {
+      return;
+    }
+
+    setCampaignStartCentral(
+      communityCampaign.progress.startsAt
+        ? formatCentralAdminInput(communityCampaign.progress.startsAt)
+        : ''
+    );
+    campaignStartInitialized.current = true;
+  }, [communityCampaign.progress]);
 
   const marketplaceFilters = useMemo<AdminMarketplaceListingFilters>(() => ({
     areaId: marketplaceAreaId,
@@ -3895,6 +3915,7 @@ export function AdminReviewScreen({
     { key: 'rescues', label: 'Rescues', count: pendingCount },
     { key: 'foundingSellers', label: 'Founding Sellers', count: foundingSellerTotal },
     { key: 'listings', label: 'Listings', count: dashboardCounts.data?.activeListings },
+    { key: 'promotions', label: 'Promotions' },
     { key: 'reports', label: 'Reports', count: dashboardCounts.data?.openReports },
     { key: 'support', label: 'Support', count: dashboardCounts.data?.openSupportCases },
     { key: 'notifications', label: 'Notifications', count: adminNotifications.unreadCount },
@@ -3974,6 +3995,77 @@ export function AdminReviewScreen({
     Alert.alert(title, body, [
       { text: 'Cancel', style: 'cancel' },
       { text: title, style: status === 'revoked' ? 'destructive' : 'default', onPress: () => void runAction() },
+    ]);
+  };
+
+  const configureCommunityCampaign = async () => {
+    const normalizedStart = normalizeCentralAdminInput(campaignStartCentral);
+
+    if (!normalizedStart) {
+      setNotice({
+        title: 'Start time required',
+        body: 'Enter the Central Time start as YYYY-MM-DD HH:mm.',
+      });
+      return;
+    }
+
+    try {
+      await communityCampaign.configure(normalizedStart);
+      setCampaignStartCentral(normalizedStart.replace('T', ' '));
+      setNotice({
+        title: 'Campaign schedule saved',
+        body: 'The 72-hour window is configured in Central Time. The campaign remains inactive until you activate it.',
+      });
+    } catch (error) {
+      setNotice({
+        title: 'Campaign schedule not saved',
+        body: handleAppError(error).userMessage,
+      });
+    }
+  };
+
+  const confirmCommunityCampaignActivation = (activate: boolean) => {
+    const title = activate ? 'Activate Campaign' : 'Deactivate Campaign';
+    const body = activate
+      ? 'Activate the configured 100 Listings in 72 Hours campaign? Activation must happen before the scheduled start, and listings qualify only inside the stored 72-hour window.'
+      : 'Deactivate the campaign? New listing activity will stop qualifying, and this scheduled window cannot be reactivated after it starts.';
+
+    const runAction = async () => {
+      try {
+        if (activate) {
+          await communityCampaign.activate();
+        } else {
+          await communityCampaign.deactivate();
+        }
+
+        setNotice({
+          title: activate ? 'Campaign activated' : 'Campaign deactivated',
+          body: activate
+            ? 'The campaign will qualify listings only during its configured window.'
+            : 'The campaign is inactive. Its configured dates were preserved.',
+        });
+      } catch (error) {
+        setNotice({
+          title: activate ? 'Campaign not activated' : 'Campaign not deactivated',
+          body: handleAppError(error).userMessage,
+        });
+      }
+    };
+
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      if (window.confirm(`${title}\n\n${body}`)) {
+        void runAction();
+      }
+      return;
+    }
+
+    Alert.alert(title, body, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: activate ? 'Activate' : 'Deactivate',
+        style: activate ? 'default' : 'destructive',
+        onPress: () => void runAction(),
+      },
     ]);
   };
 
@@ -4427,6 +4519,149 @@ export function AdminReviewScreen({
             ) : null}
           </View>
         </SectionCard>
+      ) : null}
+
+      {adminTab === 'promotions' ? (
+        <View style={styles.stack}>
+          <SectionCard title="100 Listings in 72 Hours">
+            <Text style={styles.body}>
+              Configure and monitor the community listing campaign. Event times are shown in Central Time.
+            </Text>
+
+            {communityCampaign.loading ? (
+              <Text style={styles.body}>Loading promotion data...</Text>
+            ) : null}
+
+            {communityCampaign.error ? (
+              <Text style={styles.body}>
+                Promotion data could not be loaded.
+              </Text>
+            ) : null}
+
+            {communityCampaign.progress ? (
+              <>
+                <AdminOverviewCard
+                  title="Campaign Progress"
+                  count={communityCampaign.progress.qualifyingListingCount}
+                  body={`of ${communityCampaign.progress.targetListingCount} qualifying listings`}
+                  onPress={() => void communityCampaign.refresh()}
+                />
+
+                <Text style={styles.body}>
+                  Status: {communityCampaignStatus(communityCampaign.progress)}
+                </Text>
+
+                <Text style={styles.body}>
+                  Goal: {communityCampaign.progress.targetListingCount} listings
+                </Text>
+
+                <Text style={styles.body}>
+                  Entry rule: 1 entry per{' '}
+                  {communityCampaign.progress.listingsRequiredForEntry} qualifying listings
+                </Text>
+
+                <Text style={styles.body}>
+                  Maximum: {communityCampaign.progress.maxEntriesPerSeller} entries per seller
+                </Text>
+
+                <Text style={styles.body}>
+                  Participants: {communityCampaign.progress.participantCount}
+                </Text>
+
+                <Text style={styles.body}>
+                  Starts: {formatOptionalCentralAdminDate(communityCampaign.progress.startsAt)}
+                </Text>
+
+                <Text style={styles.body}>
+                  Ends: {formatOptionalCentralAdminDate(communityCampaign.progress.endsAt)}
+                </Text>
+              </>
+            ) : null}
+
+            <TextInput
+              label="Start time (Central Time)"
+              value={campaignStartCentral}
+              onChangeText={setCampaignStartCentral}
+              placeholder="YYYY-MM-DD HH:mm"
+              helperText="The server sets the end exactly 72 hours later. Saving a schedule does not activate the campaign."
+              autoCapitalize="none"
+            />
+
+            {communityCampaign.actionError ? (
+              <Text style={styles.body}>The promotion update could not be completed.</Text>
+            ) : null}
+
+            <Button
+              title="Save 72-Hour Schedule"
+              variant="outline"
+              onPress={() => void configureCommunityCampaign()}
+              loading={communityCampaign.actionLoading}
+              fullWidth
+            />
+
+            {communityCampaign.progress?.isActive ? (
+              <Button
+                title="Deactivate Campaign"
+                variant="danger"
+                onPress={() => confirmCommunityCampaignActivation(false)}
+                loading={communityCampaign.actionLoading}
+                fullWidth
+              />
+            ) : (
+              <Button
+                title="Activate Campaign"
+                onPress={() => confirmCommunityCampaignActivation(true)}
+                disabled={
+                  !communityCampaign.progress?.startsAt ||
+                  !communityCampaign.progress?.endsAt ||
+                  new Date(communityCampaign.progress.startsAt) <= new Date()
+                }
+                loading={communityCampaign.actionLoading}
+                fullWidth
+              />
+            )}
+
+            <Button
+              title="Refresh Promotion Data"
+              variant="outline"
+              onPress={() => void communityCampaign.refresh()}
+              loading={communityCampaign.loading}
+              fullWidth
+            />
+          </SectionCard>
+
+          <SectionCard title="Giveaway Entries">
+            {communityCampaign.entries.length === 0 &&
+            !communityCampaign.loading ? (
+              <Text style={styles.body}>
+                No qualifying entries yet.
+              </Text>
+            ) : null}
+
+            {communityCampaign.entries.map((entry, index) => (
+              <View
+                key={entry.sellerId}
+                style={styles.adminOverviewCard}
+              >
+                <Text style={styles.adminOverviewCount}>
+                  {entry.entryCount} {entry.entryCount === 1 ? 'Entry' : 'Entries'}
+                </Text>
+
+                <Text style={styles.body}>
+                  Seller ID: {entry.sellerId}
+                </Text>
+
+                <Text style={styles.body}>
+                  Qualifying listings: {entry.qualifyingListingCount}
+                </Text>
+
+                <Text style={styles.body}>
+                  Qualified: {formatAdminDate(entry.qualifiedAt)}
+                </Text>
+              </View>
+            ))}
+          </SectionCard>
+        </View>
       ) : null}
 
       {adminTab === 'listings' ? (
@@ -5683,6 +5918,67 @@ function adminModerationActionNotice(
 
 function formatAdminDate(date: string): string {
   return new Date(date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function formatOptionalCentralAdminDate(date: string | null): string {
+  if (!date) {
+    return 'Not configured';
+  }
+
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Chicago',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZoneName: 'short',
+  }).format(new Date(date));
+}
+
+function formatCentralAdminInput(date: string): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Chicago',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date(date));
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((value) => value.type === type)?.value ?? '';
+
+  return `${part('year')}-${part('month')}-${part('day')} ${part('hour')}:${part('minute')}`;
+}
+
+function normalizeCentralAdminInput(value: string): string | null {
+  const normalized = value.trim().replace(' ', 'T');
+  return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(normalized)
+    ? normalized
+    : null;
+}
+
+function communityCampaignStatus(
+  campaign: CommunityListingCampaignProgress,
+  now = new Date()
+): 'Not configured' | 'Configured' | 'Scheduled' | 'Active' | 'Inactive' | 'Ended' {
+  if (!campaign.startsAt || !campaign.endsAt) {
+    return 'Not configured';
+  }
+
+  const startsAt = new Date(campaign.startsAt);
+  const endsAt = new Date(campaign.endsAt);
+
+  if (now >= endsAt) {
+    return 'Ended';
+  }
+
+  if (!campaign.isActive) {
+    return now < startsAt ? 'Configured' : 'Inactive';
+  }
+
+  return now < startsAt ? 'Scheduled' : 'Active';
 }
 
 function formatOrganizationType(type: RescueProfile['organization_type']): string {

@@ -28,6 +28,29 @@ export type AdminFoundingSellerStatus = AdminFoundingSellerSearchResult & {
   notes?: string;
 };
 
+export type CommunityListingCampaignProgress = {
+  qualifyingListingCount: number;
+  targetListingCount: number;
+  participantCount: number;
+  listingsRequiredForEntry: number;
+  maxEntriesPerSeller: number;
+  startsAt: string | null;
+  endsAt: string | null;
+  isActive: boolean;
+};
+
+export type CommunityListingCampaignAction =
+  | 'configure'
+  | 'activate'
+  | 'deactivate';
+
+export type AdminCommunityListingCampaignEntry = {
+  sellerId: string;
+  qualifyingListingCount: number;
+  entryCount: number;
+  qualifiedAt: string;
+};
+
 export type AdminDashboardCounts = {
   users: number;
   rescuesTotal: number;
@@ -119,6 +142,101 @@ const reportReasonLabels: Record<string, ReportReason> = {
   duplicate_listing: 'Duplicate Listing',
   other: 'Other',
 };
+
+export async function getCommunityListingCampaignProgress(
+  campaignKey: string
+): Promise<CommunityListingCampaignProgress | null> {
+  await requireAdminProfile();
+
+  const { data, error } = await supabase.rpc('community_listing_campaign_progress', {
+    p_campaign_key: campaignKey,
+  });
+
+  if (error) {
+    throwSupabaseError(error, 'We could not load promotion progress.');
+  }
+
+  const rows = (data ?? []) as Row[];
+  const row = rows[0];
+
+  if (!row) {
+    return null;
+  }
+
+  return toCommunityListingCampaignProgress(row);
+}
+
+export async function manageCommunityListingCampaign(
+  campaignKey: string,
+  action: CommunityListingCampaignAction,
+  startLocal?: string
+): Promise<CommunityListingCampaignProgress> {
+  await requireAdminProfile();
+
+  const { data, error } = await supabase.rpc(
+    'admin_manage_community_listing_campaign',
+    {
+      p_campaign_key: campaignKey,
+      p_action: action,
+      p_start_local: startLocal ?? null,
+    }
+  );
+
+  if (error) {
+    throwSupabaseError(error, 'We could not update the promotion schedule.');
+  }
+
+  const row = ((data ?? []) as Row[])[0];
+
+  if (!row) {
+    throw createServiceError(
+      'PROMOTION_UPDATE_FAILED',
+      'Campaign control RPC returned no campaign row.',
+      'We could not confirm the promotion update.'
+    );
+  }
+
+  return toCommunityListingCampaignProgress(row);
+}
+
+export async function getAdminCommunityListingCampaignEntries(
+  campaignKey: string
+): Promise<AdminCommunityListingCampaignEntry[]> {
+  await requireAdminProfile();
+
+  const { data, error } = await supabase.rpc(
+    'admin_community_listing_campaign_entries',
+    {
+      p_campaign_key: campaignKey,
+    }
+  );
+
+  if (error) {
+    throwSupabaseError(error, 'We could not load promotion entries.');
+  }
+
+  return ((data ?? []) as Row[]).map((row) => ({
+    sellerId: String(row.seller_id ?? ''),
+    qualifyingListingCount: Number(row.qualifying_listing_count ?? 0),
+    entryCount: Number(row.entry_count ?? 0),
+    qualifiedAt: String(row.qualified_at ?? ''),
+  }));
+}
+
+function toCommunityListingCampaignProgress(
+  row: Row
+): CommunityListingCampaignProgress {
+  return {
+    qualifyingListingCount: Number(row.qualifying_listing_count ?? 0),
+    targetListingCount: Number(row.target_listing_count ?? 0),
+    participantCount: Number(row.participant_count ?? 0),
+    listingsRequiredForEntry: Number(row.listings_required_for_entry ?? 0),
+    maxEntriesPerSeller: Number(row.max_entries_per_seller ?? 0),
+    startsAt: row.starts_at ? String(row.starts_at) : null,
+    endsAt: row.ends_at ? String(row.ends_at) : null,
+    isActive: Boolean(row.is_active),
+  };
+}
 
 export async function getAdminMarketplaceCoverage(): Promise<AdminMarketplaceCoverageArea[]> {
   await requireAdminProfile();

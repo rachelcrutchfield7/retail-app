@@ -48,13 +48,14 @@ test('Founding Seller admin grant is idempotent and preserves prior usage histor
 });
 
 test('Admin UI supports Not enrolled, Active, Paused, and Revoked Founding Seller states', () => {
-  assert.match(sprint4, /type AdminDashboardTab = 'overview' \| 'users' \| 'rescues' \| 'foundingSellers' \| 'listings' \| 'reports' \| 'support'/);
+  assert.match(sprint4, /type AdminDashboardTab = 'overview' \| 'users' \| 'rescues' \| 'foundingSellers' \| 'listings' \| 'promotions' \| 'reports' \| 'support' \| 'notifications'/);
   assert.match(sprint4, /AdminDashboardTabs/);
   assert.match(sprint4, /selectedTab=\{adminTab\}/);
   assert.match(sprint4, /\{ key: 'overview', label: 'Overview' \}/);
   assert.match(sprint4, /\{ key: 'users', label: 'Users'/);
   assert.match(sprint4, /\{ key: 'foundingSellers', label: 'Founding Sellers'/);
   assert.match(sprint4, /\{ key: 'listings', label: 'Listings'/);
+  assert.match(sprint4, /\{ key: 'promotions', label: 'Promotions' \}/);
   assert.match(sprint4, /\{ key: 'reports', label: 'Reports'/);
   assert.match(sprint4, /\{ key: 'support', label: 'Support'/);
   assert.match(sprint4, /SectionCard title="Founding Sellers"/);
