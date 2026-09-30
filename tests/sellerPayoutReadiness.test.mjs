@@ -21,7 +21,7 @@ const readSellerPayoutGuardMigration = () =>
     'supabase/migrations/20260812152900_prelaunch_current_schema_baseline_created_20260813.sql'
   );
 const readListingPayoutDecouplingMigration = () =>
-  read('supabase/migrations/20260905073500_decouple_listing_payout_readiness.sql');
+  read('supabase/migrations/20260905180531_decouple_listing_payout_readiness.sql');
 
 test('payout readiness requires account id, details submitted, charges enabled, and payouts enabled', () => {
   const stripeService = read('src/services/stripeConnectService.ts');

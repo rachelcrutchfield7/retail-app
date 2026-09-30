@@ -3,6 +3,7 @@ import { HeartHandshake, MessageCircle, PackageSearch, ShieldCheck } from 'lucid
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { IconComponent } from '../../types';
 import { colors, radius, sizes, spacing, typography } from '../../constants/theme';
+import { featureFlags } from '../../config/featureFlags';
 import { Button } from '../ui/Button';
 
 const tutorialPages: Array<{ title: string; body: string; icon: IconComponent }> = [
@@ -23,7 +24,9 @@ const tutorialPages: Array<{ title: string; body: string; icon: IconComponent }>
   },
   {
     title: 'Connect safely',
-    body: 'Use ReTail messages to ask questions and arrange pickup, meetup, shipping, or rescue donation details.',
+    body: featureFlags.integratedShipping
+      ? 'Use ReTail messages to ask questions and arrange pickup, meetup, shipping, or rescue donation details.'
+      : 'Use ReTail messages to ask questions and arrange pickup, meetup, or rescue donation details.',
     icon: MessageCircle,
   },
 ];

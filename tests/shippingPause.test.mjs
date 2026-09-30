@@ -33,8 +33,8 @@ test('listing create and edit paths reject shipping while paused', () => {
 });
 
 test('listing form hides shipping controls while shipping is paused', () => {
-  assert.match(sprint3, /featureFlags\.integratedShipping/);
-  assert.match(sprint3, /Integrated shipping is temporarily unavailable/);
+  assert.match(sprint3, /featureFlags\.integratedShipping \? \(\s*<ToggleSwitch\s*label="Shipping"/);
+  assert.doesNotMatch(sprint3, /Integrated shipping is temporarily unavailable\. Choose porch pickup or meet up for now\./);
   assert.match(
     sprint3,
     /shipping_available:\s*featureFlags\.integratedShipping\s*&&\s*item\.shipping/

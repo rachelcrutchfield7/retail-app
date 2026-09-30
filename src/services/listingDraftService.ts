@@ -65,6 +65,7 @@ export function hasMeaningfulListingDraft(form: CreateListingInput): boolean {
     || form.brand?.trim()
     || form.item_dimensions?.trim()
     || form.pet_size?.trim()
+    || form.pet_size_class
     || form.condition_notes?.trim()
     || form.availability_notes?.trim()
     || form.reason_for_listing?.trim()

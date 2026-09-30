@@ -20,6 +20,10 @@ import type {
   User,
 } from './types';
 import {
+  isMarketplacePetSizeClass,
+  type MarketplacePetSizeClass,
+} from '../constants/marketplacePetSizes';
+import {
   CURRENT_COMMUNITY_GUIDELINES_VERSION,
   CURRENT_PRIVACY_VERSION,
   CURRENT_TERMS_VERSION,
@@ -538,6 +542,7 @@ export function toListing(
     brand: optionalString(row.brand),
     itemDimensions: optionalString(row.item_dimensions),
     petSize: optionalString(row.pet_size),
+    petSizeClass: optionalMarketplacePetSizeClass(row.pet_size_class),
     conditionNotes: optionalString(row.condition_notes),
     availabilityNotes: optionalString(row.availability_notes),
     reasonForListing: optionalString(row.reason_for_listing),
@@ -782,6 +787,10 @@ function relativeDate(value: unknown): string {
 
 function optionalString(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+function optionalMarketplacePetSizeClass(value: unknown): MarketplacePetSizeClass | undefined {
+  return isMarketplacePetSizeClass(value) ? value : undefined;
 }
 
 function optionalNumber(value: unknown): number | undefined {

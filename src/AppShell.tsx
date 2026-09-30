@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthModal, ReportListingModal, TabBar } from './components';
 import type { AuthModalSubmission, AuthPrompt } from './components';
 import { colors } from './constants/theme';
+import { featureFlags } from './config/featureFlags';
 import { emptyListingForm } from './data/mockData';
 import { AuthProvider, useAuth } from './auth';
 import { PolicyConsentBoundary } from './auth/PolicyConsentBoundary';
@@ -525,7 +526,9 @@ function AppExperience() {
           onSignIn={() =>
             requestAuth({
               title: 'Message sellers',
-              body: 'Log in or create an account to ask questions and coordinate pickup, meetup, or shipping.',
+              body: featureFlags.integratedShipping
+                ? 'Log in or create an account to ask questions and coordinate pickup, meetup, or shipping.'
+                : 'Log in or create an account to ask questions and coordinate pickup or meetup.',
             })
           }
         />

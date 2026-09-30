@@ -2,6 +2,7 @@ import { MessageCircle, Send } from 'lucide-react-native';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { conversations } from '../data/mockData';
 import { colors, radius, sizes, spacing, typography } from '../constants/theme';
+import { featureFlags } from '../config/featureFlags';
 import { ConversationCard, LockedScreen } from '../components';
 import { useThemeColors } from '../lib/themePreference';
 import { initials } from '../utils/format';
@@ -28,7 +29,9 @@ export function MessagesScreen({
       <LockedScreen
         icon={MessageCircle}
         title="Message sellers"
-        body="Sign in to ask questions, coordinate pickup, meetup, shipping, and receive read receipts."
+        body={featureFlags.integratedShipping
+          ? 'Sign in to ask questions, coordinate pickup, meetup, shipping, and receive read receipts.'
+          : 'Sign in to ask questions, coordinate pickup or meetup, and receive read receipts.'}
         action="Sign in to message"
         onPress={onSignIn}
       />

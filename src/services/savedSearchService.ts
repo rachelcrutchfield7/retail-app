@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { isMarketplacePetSizeClass } from '../constants/marketplacePetSizes';
 import { createServiceError } from './errors';
 import {
   conditionFromDb,
@@ -25,6 +26,7 @@ function toSavedSearch(row: SavedSearchRow): SavedSearch {
     max_price: optionalNumber(row.max_price),
     condition: row.condition ? conditionFromDb(row.condition) : undefined,
     listing_type: row.listing_type === 'free' || row.listing_type === 'donation' ? row.listing_type : row.listing_type === 'sale' ? 'sale' : undefined,
+    pet_size_class: isMarketplacePetSizeClass(row.pet_size_class) ? row.pet_size_class : undefined,
     radius_miles: optionalNumber(row.radius_miles) ?? 25,
     city: optionalString(row.city),
     state: optionalString(row.state),
@@ -80,6 +82,7 @@ function buildSavedSearchPayload(profileId: string, input: CreateSavedSearchInpu
     max_price: priceNumber(input.max_price) ?? null,
     condition: conditionToDb(input.condition) ?? null,
     listing_type: input.listing_type ?? null,
+    pet_size_class: input.pet_size_class ?? null,
     radius_miles: input.radius_miles ?? 25,
     city: input.city?.trim() || null,
     state: input.state?.trim() || null,
@@ -103,6 +106,7 @@ function buildSavedSearchUpdatePayload(input: Partial<CreateSavedSearchInput>, c
   if (input.max_price !== undefined) updates.max_price = priceNumber(input.max_price) ?? null;
   if (input.condition !== undefined) updates.condition = conditionToDb(input.condition) ?? null;
   if (input.listing_type !== undefined) updates.listing_type = input.listing_type ?? null;
+  if (input.pet_size_class !== undefined) updates.pet_size_class = input.pet_size_class ?? null;
   if (input.radius_miles !== undefined) updates.radius_miles = input.radius_miles;
   if (input.city !== undefined) updates.city = input.city?.trim() || null;
   if (input.state !== undefined) updates.state = input.state?.trim() || null;

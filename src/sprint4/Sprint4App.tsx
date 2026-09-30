@@ -31,6 +31,7 @@ import {
 } from 'lucide-react-native';
 import { AuthProvider } from '../auth';
 import {
+  Avatar,
   Button,
   Badge,
   Card,
@@ -190,6 +191,8 @@ import type { PushNavigationTarget } from '../lib/nativePushNotifications';
 import type { RescueOrganization } from '../types';
 import type { ProtectedCheckoutSetup } from '../types/payment';
 import { handleAppError } from '../utils/errorHandler';
+import { initials } from '../utils/format';
+import { getConversationProfileTargetId } from '../utils/conversationProfileNavigation';
 import { hasMeaningfulListingDraft, loadListingDraft } from '../services/listingDraftService';
 import { recordSuccessfulMarketplaceExperience, requestStoreReviewManually } from '../services/storeReviewService';
 import {
@@ -209,7 +212,7 @@ type SprintRoute =
   | { name: 'edit-iso'; postId: string }
   | { name: 'iso-detail'; postId: string }
   | { name: 'edit-profile' }
-  | { name: 'public-profile'; userId: string; returnIsoPostId?: string }
+  | { name: 'public-profile'; userId: string; returnIsoPostId?: string; returnConversationId?: string }
   | { name: 'my-listings' }
   | { name: 'messages' }
   | { name: 'conversation'; conversationId: string }
@@ -297,8 +300,8 @@ function Sprint4Experience() {
   const openCreateIso = () => setRoute({ name: 'create-iso' });
   const openIsoPost = (postId: string) => setRoute({ name: 'iso-detail', postId });
   const openEditIso = (postId: string) => setRoute({ name: 'edit-iso', postId });
-  const openPublicProfile = (userId: string, returnIsoPostId?: string) =>
-    setRoute({ name: 'public-profile', userId, returnIsoPostId });
+  const openPublicProfile = (userId: string, returnIsoPostId?: string, returnConversationId?: string) =>
+    setRoute({ name: 'public-profile', userId, returnIsoPostId, returnConversationId });
   const openMessages = () => setRoute({ name: 'messages' });
   const openConversation = (conversationId: string) => setRoute({ name: 'conversation', conversationId });
   const openPaymentOptions = (
@@ -467,6 +470,21 @@ function Sprint4Experience() {
         return true;
       }
 
+      if (route.name === 'public-profile') {
+        if (route.returnConversationId) {
+          setRoute({ name: 'conversation', conversationId: route.returnConversationId });
+          return true;
+        }
+
+        if (route.returnIsoPostId) {
+          setRoute({ name: 'iso-detail', postId: route.returnIsoPostId });
+          return true;
+        }
+
+        setRoute({ name: 'tabs', tab: 'profile' });
+        return true;
+      }
+
       if (route.name === 'support-case') {
         if (route.conversationId) {
           setRoute({ name: 'conversation', conversationId: route.conversationId });
@@ -588,7 +606,11 @@ function Sprint4Experience() {
     return (
       <PublicProfileScreen
         userId={route.userId}
-        onBack={() => route.returnIsoPostId ? openIsoPost(route.returnIsoPostId) : openTab('profile')}
+        onBack={() => route.returnConversationId
+          ? openConversation(route.returnConversationId)
+          : route.returnIsoPostId
+            ? openIsoPost(route.returnIsoPostId)
+            : openTab('profile')}
         onOpenListing={openListing}
         onReportUser={(userId) => openReport('user', userId, 'Report user')}
       />
@@ -617,6 +639,7 @@ function Sprint4Experience() {
         conversationId={route.conversationId}
         onBack={openMessages}
         onOpenListing={openListing}
+        onOpenProfile={(userId) => openPublicProfile(userId, undefined, route.conversationId)}
         onPaymentOptions={(listingId, acceptedOfferId, offerDisplayAmount) =>
           openPaymentOptions(
             listingId,
@@ -1305,7 +1328,11 @@ export function MessagesScreen({
         <Card>
           <View style={styles.stack}>
             <Text style={styles.cardTitle}>Log in to message sellers.</Text>
-            <Text style={styles.body}>Create an account to coordinate pickup, meetup, shipping, send photos, and receive read receipts.</Text>
+            <Text style={styles.body}>
+              {featureFlags.integratedShipping
+                ? 'Create an account to coordinate pickup, meetup, shipping, send photos, and receive read receipts.'
+                : 'Create an account to coordinate pickup or meetup, send photos, and receive read receipts.'}
+            </Text>
             <Button title="Log In or Create Account" onPress={onOpenProfile} fullWidth />
           </View>
         </Card>
@@ -1341,6 +1368,7 @@ export function ConversationScreen({
   conversationId,
   onBack,
   onOpenListing,
+  onOpenProfile,
   onPaymentOptions,
   onSupportCase,
   onReportMessage,
@@ -1349,6 +1377,7 @@ export function ConversationScreen({
   conversationId: string;
   onBack: () => void;
   onOpenListing: (listingId: string) => void;
+  onOpenProfile: (userId: string) => void;
   onPaymentOptions?: (
     listingId: string,
     acceptedOfferId?: string,
@@ -1554,6 +1583,21 @@ export function ConversationScreen({
   const canReview = ['Sold', 'Donated'].includes(conversationDetail.listingSummary.status);
   const transaction = transactionByListing.data;
   const messagingBlocked = Boolean(conversationDetail.messagingBlocked);
+  const otherProfileTargetId = getConversationProfileTargetId(conversationDetail.otherUser, auth.user?.id);
+  const conversationIdentity = (
+    <>
+      <Avatar
+        image={conversationDetail.otherUser.avatar_url}
+        initials={initials(conversationDetail.otherUser.display_name)}
+        verified={conversationDetail.otherUser.is_verified}
+        size="sm"
+      />
+      <View style={styles.conversationHeaderText}>
+        <Text style={styles.cardTitle}>{conversationDetail.otherUser.display_name}</Text>
+        <Text numberOfLines={1} style={styles.body}>{conversationDetail.listingSummary.title}</Text>
+      </View>
+    </>
+  );
   const messageListHeader = (
     <View style={styles.messageListHeader}>
       {messages.isError ? <ErrorState message={handleAppError(messages.error).userMessage} onRetry={messages.refetch} /> : null}
@@ -1685,11 +1729,19 @@ export function ConversationScreen({
         <View style={styles.conversationHeader}>
           <BackButton onPress={onBack} />
           <View style={styles.conversationListingRow}>
-            <Image source={{ uri: conversationDetail.listingThumbnail ?? conversationDetail.listingSummary.image }} style={styles.listingThumb} />
-            <View style={styles.conversationHeaderText}>
-              <Text style={styles.cardTitle}>{conversationDetail.otherUser.display_name}</Text>
-              <Text numberOfLines={1} style={styles.body}>{conversationDetail.listingSummary.title}</Text>
-            </View>
+            {otherProfileTargetId ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`View ${conversationDetail.otherUser.display_name}'s public profile`}
+                accessibilityHint="Opens this user's public profile"
+                onPress={() => onOpenProfile(otherProfileTargetId)}
+                style={styles.conversationIdentity}
+              >
+                {conversationIdentity}
+              </Pressable>
+            ) : (
+              <View style={styles.conversationIdentity}>{conversationIdentity}</View>
+            )}
             <View style={styles.conversationActions}>
               {hasListing ? (
                 <Button title="View Listing" variant="outline" onPress={() => onOpenListing(conversationDetail.listingId)} />
@@ -1877,7 +1929,13 @@ export function ConversationScreen({
           removeClippedSubviews={Platform.OS !== 'web'}
           ListHeaderComponent={messageListHeader}
           ListEmptyComponent={
-            <EmptyState title="No messages yet" body="Send the first message to coordinate pickup, meetup, or shipping." icon={MessageCircle} />
+            <EmptyState
+              title="No messages yet"
+              body={featureFlags.integratedShipping
+                ? 'Send the first message to coordinate pickup, meetup, or shipping.'
+                : 'Send the first message to coordinate pickup or meetup.'}
+              icon={MessageCircle}
+            />
           }
         />
         <TypingIndicator visible={false} name={conversation.data.otherUser.display_name} />
@@ -2040,7 +2098,12 @@ function DealFlowCard({
       { label: 'Message about condition, timing, and pickup options', complete: true },
       { label: acceptedAmount ? `Offer accepted at ${acceptedAmount}` : isSeller ? 'Review offers from the buyer' : 'Make an offer when details feel right', complete: Boolean(acceptedAmount) },
       { label: 'Place the order with ReTail protected checkout', complete: false },
-      { label: 'Confirm pickup, meetup, or shipping plan', complete: false },
+      {
+        label: featureFlags.integratedShipping
+          ? 'Confirm pickup, meetup, or shipping plan'
+          : 'Confirm pickup or meetup plan',
+        complete: false,
+      },
       { label: 'Mark complete and leave a review', complete: false },
     ]
     : [
@@ -2380,7 +2443,11 @@ export function PaymentOptionsScreen({
       <View style={styles.stackLarge}>
         <View style={styles.stack}>
           <Text style={styles.title}>Checkout</Text>
-          <Text style={styles.body}>Review the order for {item.title}. Payment stays on ReTail for shipped orders and local pickup.</Text>
+          <Text style={styles.body}>
+            {featureFlags.integratedShipping
+              ? `Review the order for ${item.title}. Payment stays on ReTail for shipped orders and local pickup.`
+              : `Review the order for ${item.title}. Payment stays on ReTail for protected local pickup orders.`}
+          </Text>
         </View>
 
         {notice ? (
@@ -3052,7 +3119,7 @@ export function SettingsScreen({
   useEffect(() => {
     let mounted = true;
 
-    if (auth.isGuest || !settings.data) {
+    if (!featureFlags.integratedShipping || auth.isGuest || !settings.data) {
       return () => {
         mounted = false;
       };
@@ -3458,26 +3525,28 @@ export function SettingsScreen({
         ) : null}
       </SectionCard>
 
-      <SectionCard title="Shipping Address">
-        <Text style={styles.body}>
-          This address is used to calculate shipping and create labels. It is not shown publicly on your listings.
-        </Text>
-        {shippingOriginLoading ? <LoadingSpinner /> : null}
-        <TextInput label="Full name" value={shippingOrigin.name} onChangeText={(value) => updateShippingOrigin('name', value)} />
-        <TextInput label="Address line 1" value={shippingOrigin.addressLine1} onChangeText={(value) => updateShippingOrigin('addressLine1', value)} />
-        <TextInput label="Address line 2" value={shippingOrigin.addressLine2 ?? ''} onChangeText={(value) => updateShippingOrigin('addressLine2', value)} />
-        <TextInput label="City" value={shippingOrigin.city} onChangeText={(value) => updateShippingOrigin('city', value)} />
-        <TextInput label="State" value={shippingOrigin.state} onChangeText={(value) => updateShippingOrigin('state', value)} />
-        <TextInput label="ZIP code" value={shippingOrigin.postalCode} onChangeText={(value) => updateShippingOrigin('postalCode', value)} keyboardType="number-pad" />
-        <TextInput
-          label="Phone Number *"
-          value={shippingOrigin.phone ?? ''}
-          onChangeText={(value) => updateShippingOrigin('phone', value)}
-          keyboardType="phone-pad"
-          helperText="Required by shipping carriers for delivery and label creation. Buyers will not see your phone number."
-        />
-        <Button title="Save Shipping Address" icon={MapPin} onPress={() => void saveShippingOrigin()} loading={shippingOriginSaving} fullWidth />
-      </SectionCard>
+      {featureFlags.integratedShipping ? (
+        <SectionCard title="Shipping Address">
+          <Text style={styles.body}>
+            This address is used to calculate shipping and create labels. It is not shown publicly on your listings.
+          </Text>
+          {shippingOriginLoading ? <LoadingSpinner /> : null}
+          <TextInput label="Full name" value={shippingOrigin.name} onChangeText={(value) => updateShippingOrigin('name', value)} />
+          <TextInput label="Address line 1" value={shippingOrigin.addressLine1} onChangeText={(value) => updateShippingOrigin('addressLine1', value)} />
+          <TextInput label="Address line 2" value={shippingOrigin.addressLine2 ?? ''} onChangeText={(value) => updateShippingOrigin('addressLine2', value)} />
+          <TextInput label="City" value={shippingOrigin.city} onChangeText={(value) => updateShippingOrigin('city', value)} />
+          <TextInput label="State" value={shippingOrigin.state} onChangeText={(value) => updateShippingOrigin('state', value)} />
+          <TextInput label="ZIP code" value={shippingOrigin.postalCode} onChangeText={(value) => updateShippingOrigin('postalCode', value)} keyboardType="number-pad" />
+          <TextInput
+            label="Phone Number *"
+            value={shippingOrigin.phone ?? ''}
+            onChangeText={(value) => updateShippingOrigin('phone', value)}
+            keyboardType="phone-pad"
+            helperText="Required by shipping carriers for delivery and label creation. Buyers will not see your phone number."
+          />
+          <Button title="Save Shipping Address" icon={MapPin} onPress={() => void saveShippingOrigin()} loading={shippingOriginSaving} fullWidth />
+        </SectionCard>
+      ) : null}
 
       <SectionCard title="Account Settings">
         <TextInput
@@ -3562,7 +3631,7 @@ export function SettingsScreen({
         <Text style={styles.body}>{appLinks.supportPhone}</Text>
         <Text style={styles.body}>
           ReTail support can help with account access, listings, messages, safety reports, orders, payments, refunds,
-          returns, shipping, seller payouts, and rescue support.{' '}
+          returns, historical shipping issues, seller payouts, and rescue support.{' '}
           Call or text ReTail Support at {appLinks.supportPhone}.
         </Text>
         <Button title="Email Support" icon={HelpCircle} variant="outline" onPress={() => void openAppLink(appLinks.supportMailto)} fullWidth />
@@ -3708,7 +3777,9 @@ function FAQScreen({ onBack }: { onBack: () => void }) {
   const faqs = [
     {
       question: 'How does ReTail work?',
-      answer: 'Browse nearby pet supplies, message the seller, agree on pickup, meetup, shipping, donation, or price, then choose ReTail Protected Checkout when it is available. Rescue Hub helps local rescues share urgent needs, wishlist items, addresses when public, and donation instructions.',
+      answer: featureFlags.integratedShipping
+        ? 'Browse nearby pet supplies, message the seller, agree on pickup, meetup, shipping, donation, or price, then choose ReTail Protected Checkout when it is available. Rescue Hub helps local rescues share urgent needs, wishlist items, addresses when public, and donation instructions.'
+        : 'Browse nearby pet supplies, message the seller, agree on pickup, meetup, donation, or price, then choose ReTail Protected Checkout when it is available. Rescue Hub helps local rescues share urgent needs, wishlist items, addresses when public, and donation instructions.',
     },
     {
       question: 'Why does ReTail charge a fee for payments through the app?',
@@ -3718,18 +3789,20 @@ function FAQScreen({ onBack }: { onBack: () => void }) {
       question: 'Should I pay inside ReTail or outside the app?',
       answer: 'Use ReTail Protected Checkout for card payment, a receipt, an in-app payment record, and ReTail payment/refund protection. Payments made outside ReTail are not covered by ReTail payment support.',
     },
-    {
-      question: 'How does shipping work?',
-      answer: 'When shipping is offered, the seller enters package weight, dimensions, and ship-from ZIP code. ReTail will calculate a tracked shipping rate during checkout after shipping provider setup is complete. The label will be created after payment succeeds, and tracking will be added to the order automatically.',
-    },
-    {
-      question: 'What should sellers know about shipping?',
-      answer: 'Sellers should enter accurate package measurements, print the label when it is ready, and get the package accepted by the carrier within 5 calendar days. If a no-printer or QR option is available from the carrier, ReTail will show it.',
-    },
-    {
-      question: 'What if there is a shipping problem?',
-      answer: 'Use Get Help With This Order or Get Help With This Sale. ReTail support can review cancellations, missing packages, damaged items, returns, refunds, label issues, and shipping exceptions. Delivered orders have a 48-hour window to report significant item problems.',
-    },
+    ...(featureFlags.integratedShipping ? [
+      {
+        question: 'How does shipping work?',
+        answer: 'When shipping is offered, the seller enters package weight, dimensions, and ship-from ZIP code. ReTail will calculate a tracked shipping rate during checkout after shipping provider setup is complete. The label will be created after payment succeeds, and tracking will be added to the order automatically.',
+      },
+      {
+        question: 'What should sellers know about shipping?',
+        answer: 'Sellers should enter accurate package measurements, print the label when it is ready, and get the package accepted by the carrier within 5 calendar days. If a no-printer or QR option is available from the carrier, ReTail will show it.',
+      },
+      {
+        question: 'What if there is a shipping problem?',
+        answer: 'Use Get Help With This Order or Get Help With This Sale. ReTail support can review cancellations, missing packages, damaged items, returns, refunds, label issues, and shipping exceptions. Delivered orders have a 48-hour window to report significant item problems.',
+      },
+    ] : []),
     {
       question: 'Can I donate items to rescues?',
       answer: 'Yes. Use donation listings and Rescue Hub to see nearby organizations, urgent needs, wishlist items, and donation instructions.',
@@ -6427,6 +6500,13 @@ function createSprint4Styles(themeColors: ThemeColors) {
     minHeight: 0,
   },
   conversationListingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  conversationIdentity: {
+    flex: 1,
+    minHeight: sizes.touchTarget,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,

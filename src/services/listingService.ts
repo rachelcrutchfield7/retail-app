@@ -491,6 +491,7 @@ async function getNearbyListingsFromRpc({
   limit: number;
 }): Promise<PaginatedListings> {
   const nearbyArguments = {
+    pet_size_class_filter: params.petSizeClass ?? null,
     page_number: page,
     page_size: limit,
     category_filter: categoryId ?? null,
@@ -503,12 +504,26 @@ async function getNearbyListingsFromRpc({
   };
   let { data, error } = await supabase.rpc('get_nearby_listings_v2_sorted', nearbyArguments);
 
-  if (error && isMissingRpcError(error)) {
-    ({ data, error } = await supabase.rpc('get_nearby_listings_sorted', nearbyArguments));
+  if (error && isMissingRpcError(error) && !params.petSizeClass) {
+    const { pet_size_class_filter: _petSizeClassFilter, ...legacyNearbyArguments } = nearbyArguments;
+    ({ data, error } = await supabase.rpc('get_nearby_listings_v2_sorted', legacyNearbyArguments));
+  }
+
+  if (error && isMissingRpcError(error) && !params.petSizeClass) {
+    const { pet_size_class_filter: _petSizeClassFilter, ...legacyNearbyArguments } = nearbyArguments;
+    ({ data, error } = await supabase.rpc('get_nearby_listings_sorted', legacyNearbyArguments));
   }
 
   if (error) {
     if (isMissingRpcError(error)) {
+      if (params.petSizeClass) {
+        throw createServiceError(
+          'RETAIL_SIZE_FILTER_UNAVAILABLE',
+          'The normalized marketplace size search contract is unavailable.',
+          'Size filtering is temporarily unavailable. Please try again shortly.'
+        );
+      }
+
       if (params.sort === 'distance') {
         throw createServiceError(
           'RETAIL_DISTANCE_SORT_UNAVAILABLE',
@@ -584,7 +599,8 @@ async function getPublicListingFeedFromRpc({
   page: number;
   limit: number;
 }): Promise<PaginatedListings> {
-  const { data, error } = await supabase.rpc('get_public_listing_feed_sorted', {
+  const publicArguments = {
+    pet_size_class_filter: params.petSizeClass ?? null,
     page_number: page,
     page_size: limit,
     category_filter: categoryId ?? null,
@@ -596,10 +612,24 @@ async function getPublicListingFeedFromRpc({
     city_filter: null,
     state_filter: null,
     sort_order: sortParam(params),
-  });
+  };
+  let { data, error } = await supabase.rpc('get_public_listing_feed_sorted', publicArguments);
+
+  if (error && isMissingRpcError(error) && !params.petSizeClass) {
+    const { pet_size_class_filter: _petSizeClassFilter, ...legacyPublicArguments } = publicArguments;
+    ({ data, error } = await supabase.rpc('get_public_listing_feed_sorted', legacyPublicArguments));
+  }
 
   if (error) {
     if (isMissingRpcError(error)) {
+      if (params.petSizeClass) {
+        throw createServiceError(
+          'RETAIL_SIZE_FILTER_UNAVAILABLE',
+          'The normalized public marketplace size search contract is unavailable.',
+          'Size filtering is temporarily unavailable. Please try again shortly.'
+        );
+      }
+
       const fallback = await supabase.rpc('get_public_listing_feed', {
         page_number: page,
         page_size: limit,
@@ -719,6 +749,21 @@ export async function getListingById(listingId: string): Promise<ListingDetail> 
     }
   }
 
+  if (listingRow) {
+    const { data: sizeData, error: sizeError } = await supabase.rpc('get_listing_pet_size_class_v1', {
+      target_listing_id: listingId,
+    });
+
+    if (sizeError) {
+      throwSupabaseError(sizeError, 'We could not load this listing size.');
+    }
+
+    const sizeRow = Array.isArray(sizeData)
+      ? sizeData[0] as Record<string, unknown> | undefined
+      : sizeData as Record<string, unknown> | null;
+    listingRow = { ...listingRow, pet_size_class: sizeRow?.pet_size_class ?? null };
+  }
+
   if (listingRow && userId) {
     const sellerRow = listingRow.seller as Record<string, unknown> | undefined;
     const sellerId = listingRow.seller_id ?? sellerRow?.id;
@@ -788,7 +833,7 @@ export async function createListing(input: CreateListingInput): Promise<Listing>
     zipCode: input.zip_code?.trim() ?? '',
   });
 
-  const { data, error } = await supabase.rpc('create_listing_v2', {
+  const createArguments = {
     requested_marketplace_location_id: marketplaceLocation.marketplaceLocationId,
     requested_city: input.city.trim(),
     requested_state: input.state.trim(),
@@ -816,11 +861,18 @@ export async function createListing(input: CreateListingInput): Promise<Listing>
     requested_package_height_in: input.shipping_available ? normalizePositiveDecimal(input.package_height_in) : null,
     requested_item_dimensions: input.item_dimensions?.trim() || null,
     requested_pet_size: input.pet_size?.trim() || null,
+    requested_pet_size_class: input.pet_size_class ?? null,
     requested_condition_notes: input.condition_notes?.trim() || null,
     requested_availability_notes: input.availability_notes?.trim() || null,
     requested_reason_for_listing: input.reason_for_listing?.trim() || null,
     requested_safety_confirmed: Boolean(input.safety_confirmed),
-  });
+  };
+  let { data, error } = await supabase.rpc('create_listing_v3', createArguments);
+
+  if (error && isMissingRpcError(error) && !input.pet_size_class) {
+    const { requested_pet_size_class: _petSizeClass, ...legacyCreateArguments } = createArguments;
+    ({ data, error } = await supabase.rpc('create_listing_v2', legacyCreateArguments));
+  }
 
   if (error) {
     throwSupabaseError(error, 'We could not publish your listing.');
@@ -876,8 +928,9 @@ export async function updateListing(listingId: string, input: UpdateListingInput
     categoryId = await resolveCategoryId(input.category_id, input.category);
   }
   const marketplaceLocation = await marketplaceLocationForUpdate(listingId, input);
+  const includesPetSizeClass = Object.prototype.hasOwnProperty.call(input, 'pet_size_class');
 
-  const { error } = await runListingMutationWithExpiredCheckoutRecovery(listingId, () => supabase.rpc('update_my_listing_v2', {
+  const updateArguments = {
     target_listing_id: listingId,
     requested_marketplace_location_id: marketplaceLocation.marketplaceLocationId,
     requested_city: marketplaceLocation.city,
@@ -906,11 +959,22 @@ export async function updateListing(listingId: string, input: UpdateListingInput
     requested_package_height_in: input.package_height_in !== undefined ? normalizePositiveDecimal(input.package_height_in) : null,
     requested_item_dimensions: input.item_dimensions !== undefined ? input.item_dimensions?.trim() || '' : null,
     requested_pet_size: input.pet_size !== undefined ? input.pet_size?.trim() || '' : null,
+    requested_pet_size_class: includesPetSizeClass ? input.pet_size_class ?? '' : null,
     requested_condition_notes: input.condition_notes !== undefined ? input.condition_notes?.trim() || '' : null,
     requested_availability_notes: input.availability_notes !== undefined ? input.availability_notes?.trim() || '' : null,
     requested_reason_for_listing: input.reason_for_listing !== undefined ? input.reason_for_listing?.trim() || '' : null,
     requested_safety_confirmed: input.safety_confirmed ?? null,
-  }));
+  };
+  const { error } = await runListingMutationWithExpiredCheckoutRecovery(listingId, async () => {
+    let result = await supabase.rpc('update_my_listing_v3', updateArguments);
+
+    if (result.error && isMissingRpcError(result.error) && !input.pet_size_class) {
+      const { requested_pet_size_class: _petSizeClass, ...legacyUpdateArguments } = updateArguments;
+      result = await supabase.rpc('update_my_listing_v2', legacyUpdateArguments);
+    }
+
+    return result;
+  });
 
   if (error) {
     throwSupabaseError(error, 'We could not update this listing.');

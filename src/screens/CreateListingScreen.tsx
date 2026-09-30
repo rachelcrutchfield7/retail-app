@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { CATEGORIES, CONDITIONS } from '../constants/categories';
 import { colors, radius, sizes, spacing, typography } from '../constants/theme';
+import { featureFlags } from '../config/featureFlags';
 import { Chip, formStyles, ImageUploader, LockedScreen, PriceInput, TextArea, TextField, ToggleSwitch } from '../components';
 import { useThemeColors } from '../lib/themePreference';
 import type { Category, ListingCondition, ListingForm } from '../types.ts';
@@ -120,7 +121,9 @@ export function CreateListingScreen({
 
         <ToggleSwitch
           label="Pickup available"
-          helperText="Use the current listing flow to choose porch pickup, meet up, or shipping."
+          helperText={featureFlags.integratedShipping
+            ? 'Use the current listing flow to choose porch pickup, meet up, or shipping.'
+            : 'Use the current listing flow to choose porch pickup or meet up.'}
           value={form.pickup}
           onValueChange={(value) => update('pickup', value)}
         />

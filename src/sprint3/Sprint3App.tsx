@@ -90,6 +90,12 @@ import {
   UserListingGrid,
 } from '../components';
 import { CONDITIONS } from '../constants/categories';
+import {
+  categorySupportsMarketplacePetSize,
+  MARKETPLACE_PET_SIZE_OPTIONS,
+  marketplacePetSizeLabel,
+} from '../constants/marketplacePetSizes';
+import type { MarketplacePetSizeClass } from '../constants/marketplacePetSizes';
 import { findManualLocationByZipCode, searchRadiusOptions } from '../constants/location';
 import { colors, radius, sizes, spacing, typography } from '../constants/theme';
 import type { ThemeColors } from '../constants/theme';
@@ -331,6 +337,7 @@ const emptyCreateListing: CreateListingInput = {
   brand: '',
   item_dimensions: '',
   pet_size: '',
+  pet_size_class: undefined,
   condition_notes: '',
   availability_notes: '',
   reason_for_listing: '',
@@ -814,6 +821,7 @@ export function SearchScreen({
   const [categoryId, setCategoryId] = useState<string | undefined>();
   const [condition, setCondition] = useState<ListingCondition | undefined>();
   const [listingType, setListingType] = useState<ListingType | undefined>();
+  const [petSizeClass, setPetSizeClass] = useState<MarketplacePetSizeClass | undefined>();
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -852,15 +860,17 @@ export function SearchScreen({
   const params = useMemo<ListingQueryParams>(
     () => ({
       search,
+      categoryId,
       condition,
       listingType,
+      petSizeClass,
       scope: hasMarketplaceSearchLocation ? 'nearby' : 'public',
       radiusMiles: hasMarketplaceSearchLocation ? marketplaceRadiusMiles : undefined,
       minPrice: parsedMinPrice,
       maxPrice: parsedMaxPrice,
       limit: 50,
     }),
-    [condition, hasMarketplaceSearchLocation, listingType, marketplaceRadiusMiles, parsedMaxPrice, parsedMinPrice, search]
+    [categoryId, condition, hasMarketplaceSearchLocation, listingType, marketplaceRadiusMiles, parsedMaxPrice, parsedMinPrice, petSizeClass, search]
   );
   const listings = useListings(params);
   const filteredItems = useMemo(
@@ -881,6 +891,7 @@ export function SearchScreen({
       categoryName: selectedCategory?.name,
       listingType,
       condition,
+      petSizeClass,
       minPrice: parsedMinPrice,
       maxPrice: parsedMaxPrice,
       city: marketplaceCity,
@@ -890,6 +901,7 @@ export function SearchScreen({
     category_name: selectedCategory?.name,
     condition,
     listing_type: listingType,
+    pet_size_class: petSizeClass,
     min_price: parsedMinPrice,
     max_price: parsedMaxPrice,
     radius_miles: marketplaceRadiusMiles,
@@ -1016,6 +1028,11 @@ export function SearchScreen({
       setManualLocation(confirmedLocation);
       setSearch(savedSearch.search_query ?? '');
       setCategoryId(savedSearch.category_slug);
+      setPetSizeClass(
+        categorySupportsMarketplacePetSize(savedSearch.category_slug ?? savedSearch.category_name)
+          ? savedSearch.pet_size_class
+          : undefined
+      );
       setCondition(savedSearch.condition);
       setListingType(savedSearch.listing_type);
       setMinPrice(savedSearch.min_price === undefined ? '' : String(savedSearch.min_price));
@@ -1051,6 +1068,7 @@ export function SearchScreen({
     setCategoryId(undefined);
     setCondition(undefined);
     setListingType(undefined);
+    setPetSizeClass(undefined);
     setMinPrice('');
     setMaxPrice('');
     void updateMarketplaceRadius(50);
@@ -1116,16 +1134,44 @@ export function SearchScreen({
             />
           ) : null}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipScroller}>
-            <CategoryChip label="All" selected={!categoryId} onPress={() => setCategoryId(undefined)} />
+            <CategoryChip
+              label="All"
+              selected={!categoryId}
+              onPress={() => {
+                setCategoryId(undefined);
+                setPetSizeClass(undefined);
+              }}
+            />
             {(categories.data ?? []).map((category) => (
               <CategoryChip
                 key={category.id}
                 label={category.name}
                 selected={categoryId === category.slug}
-                onPress={() => setCategoryId(category.slug)}
+                onPress={() => {
+                  setCategoryId(category.slug);
+                  if (!categorySupportsMarketplacePetSize(category.slug)) {
+                    setPetSizeClass(undefined);
+                  }
+                }}
               />
             ))}
           </ScrollView>
+          {categorySupportsMarketplacePetSize(selectedCategory?.slug) ? (
+            <>
+              <Text style={styles.filterLabel}>Size</Text>
+              <View style={styles.wrapRow}>
+                <FilterChip label="Any Size" selected={!petSizeClass} onPress={() => setPetSizeClass(undefined)} />
+                {MARKETPLACE_PET_SIZE_OPTIONS.map((option) => (
+                  <FilterChip
+                    key={option.value}
+                    label={option.label}
+                    selected={petSizeClass === option.value}
+                    onPress={() => setPetSizeClass(option.value)}
+                  />
+                ))}
+              </View>
+            </>
+          ) : null}
           <View style={styles.priceFilterStack}>
             <View style={styles.priceFilterField}>
               <TextInput label="Min Price" value={minPrice} onChangeText={setMinPrice} placeholder="$0" keyboardType="numeric" />
@@ -1263,6 +1309,7 @@ function savedSearchName(input: {
   categoryName?: string;
   listingType?: ListingType;
   condition?: ListingCondition;
+  petSizeClass?: MarketplacePetSizeClass;
   minPrice?: number;
   maxPrice?: number;
   city?: string;
@@ -1272,6 +1319,7 @@ function savedSearchName(input: {
     input.categoryName,
     input.listingType ? listingTypeLabel(input.listingType) : undefined,
     input.condition,
+    marketplacePetSizeLabel(input.petSizeClass),
   ].filter(Boolean);
 
   if (input.minPrice !== undefined || input.maxPrice !== undefined) {
@@ -1288,6 +1336,7 @@ function savedSearchSummary(savedSearch: SavedSearch): string {
     savedSearch.category_name,
     savedSearch.listing_type ? listingTypeLabel(savedSearch.listing_type) : undefined,
     savedSearch.condition,
+    marketplacePetSizeLabel(savedSearch.pet_size_class),
     savedSearch.min_price !== undefined || savedSearch.max_price !== undefined
       ? priceRangeLabel(savedSearch.min_price, savedSearch.max_price)
       : undefined,
@@ -1368,7 +1417,13 @@ export function SellScreen({
           </View>
           <View style={styles.sellStepList}>
             <SellStep icon={Camera} title="Add clear photos" body="Show the full item, condition, and any size details." />
-            <SellStep icon={ClipboardCheck} title="Pick the right exchange" body="Choose sale, free, donation, pickup, meetup, or shipping." />
+            <SellStep
+              icon={ClipboardCheck}
+              title="Pick the right exchange"
+              body={featureFlags.integratedShipping
+                ? 'Choose sale, free, donation, pickup, meetup, or shipping.'
+                : 'Choose sale, free, donation, pickup, or meetup.'}
+            />
             <SellStep icon={ShieldCheck} title="Keep it comfortable" body="Use messages to confirm timing and safe handoff details." />
           </View>
           <Button title="Start Listing" onPress={onCreateListing} fullWidth />
@@ -1588,7 +1643,13 @@ export function CreateListingScreen({
   }, [auth.profile?.city, auth.profile?.state, auth.profile?.zip_code]);
 
   const update = <FieldName extends keyof CreateListingInput>(field: FieldName, value: CreateListingInput[FieldName]) => {
-    const next = { ...formRef.current, [field]: value };
+    const next = {
+      ...formRef.current,
+      [field]: value,
+      ...(field === 'category' && !categorySupportsMarketplacePetSize(String(value))
+        ? { pet_size_class: undefined }
+        : {}),
+    };
     formRef.current = next;
     setForm(next);
     draftSessionRef.current?.update(next);
@@ -1726,7 +1787,14 @@ export function CreateListingScreen({
           <NoticeCard notice={{ title: 'Draft not saved', body: 'Recent listing changes may not be saved on this device.' }} />
         ) : null}
         {paidListingRequiresPayout && verifiedRescueBenefit ? (
-          <NoticeCard notice={{ title: 'Verified Rescue benefit', body: '$0 ReTail seller fee while your rescue verification is active at checkout. Shipping and taxes are separate.' }} />
+          <NoticeCard
+            notice={{
+              title: 'Verified Rescue benefit',
+              body: featureFlags.integratedShipping
+                ? '$0 ReTail seller fee while your rescue verification is active at checkout. Shipping and taxes are separate.'
+                : '$0 ReTail seller fee while your rescue verification is active at checkout. Taxes are separate.',
+            }}
+          />
         ) : null}
         {paidListingRequiresPayout && !payoutsReady && !payoutNotice ? (
           <NoticeCard
@@ -2027,7 +2095,11 @@ function ListingDetailContent({
                 );
               })}
             </View>
-            <Text style={styles.body}>Message the seller to confirm exact timing, address, meetup spot, or shipping details.</Text>
+            <Text style={styles.body}>
+              {featureFlags.integratedShipping
+                ? 'Message the seller to confirm exact timing, address, meetup spot, or shipping details.'
+                : 'Message the seller to confirm exact timing, address, or meetup spot.'}
+            </Text>
           </View>
         </Card>
 
@@ -2728,7 +2800,9 @@ export function ProfileScreen({
           notice={{
             title: 'Founding Seller',
             body: foundingSellerBenefit.data.remainingFeeFreeSales > 0
-              ? `${foundingSellerBenefit.data.remainingFeeFreeSales} of ${foundingSellerBenefit.data.freeSalesLimit} fee-free ReTail sales remaining. Stripe processing, tax, and shipping are not waived.`
+              ? featureFlags.integratedShipping
+                ? `${foundingSellerBenefit.data.remainingFeeFreeSales} of ${foundingSellerBenefit.data.freeSalesLimit} fee-free ReTail sales remaining. Stripe processing, tax, and shipping are not waived.`
+                : `${foundingSellerBenefit.data.remainingFeeFreeSales} of ${foundingSellerBenefit.data.freeSalesLimit} fee-free ReTail sales remaining. Stripe processing and tax are not waived.`
               : `Your first ${foundingSellerBenefit.data.freeSalesLimit} Founding Seller fee-free ReTail sales have been used. Normal ReTail seller fees now apply.`,
           }}
         />
@@ -3303,7 +3377,11 @@ function RescueDashboardScreen({
               : 'Your rescue profile is saved. Public Rescue Hub visibility begins after verification approval.'}
           </Text>
           {rescueProfile.is_active && rescueProfile.is_verified && rescueProfile.verification_status === 'verified' && !rescueProfile.deleted_at ? (
-            <Text style={styles.body}>Verified Rescue benefit: $0 ReTail seller fee on eligible sales. Shipping and taxes are separate.</Text>
+            <Text style={styles.body}>
+              {featureFlags.integratedShipping
+                ? 'Verified Rescue benefit: $0 ReTail seller fee on eligible sales. Shipping and taxes are separate.'
+                : 'Verified Rescue benefit: $0 ReTail seller fee on eligible sales. Taxes are separate.'}
+            </Text>
           ) : null}
           <Text style={styles.bodyStrong}>
             {rescueOrganizationTypeLabel(rescueProfile.organization_type)} - {rescueProfile.has_501c3 ? '501(c)(3)' : '501(c)(3) not confirmed'}
@@ -4450,6 +4528,7 @@ function EditListingForm({
     brand: item.brand ?? '',
     item_dimensions: item.itemDimensions ?? '',
     pet_size: item.petSize ?? '',
+    pet_size_class: item.petSizeClass,
     condition_notes: item.conditionNotes ?? '',
     availability_notes: item.availabilityNotes ?? '',
     reason_for_listing: item.reasonForListing ?? '',
@@ -4460,7 +4539,13 @@ function EditListingForm({
   const [shippingOriginReady, setShippingOriginReady] = useState(false);
 
   const update = <FieldName extends keyof CreateListingInput>(field: FieldName, value: CreateListingInput[FieldName]) => {
-    setForm((current) => ({ ...current, [field]: value }));
+    setForm((current) => ({
+      ...current,
+      [field]: value,
+      ...(field === 'category' && !categorySupportsMarketplacePetSize(String(value))
+        ? { pet_size_class: undefined }
+        : {}),
+    }));
   };
 
   const updateShippingOriginReady = useCallback((ready: boolean) => {
@@ -4672,12 +4757,34 @@ function ListingForm({
         onChangeText={(value) => onChange('item_dimensions', value)}
         placeholder="36 in crate, 20 gal tank, medium harness..."
       />
-      <TextInput
-        label="Pet size fit"
-        value={form.pet_size ?? ''}
-        onChangeText={(value) => onChange('pet_size', value)}
-        placeholder="Small dogs, kittens, bearded dragons..."
-      />
+      {categorySupportsMarketplacePetSize(form.category) ? (
+        <>
+          <Text style={styles.filterLabel}>Pet Size (optional)</Text>
+          <View style={styles.wrapRow}>
+            <FilterChip
+              label="Not size-specific"
+              selected={!form.pet_size_class}
+              onPress={() => onChange('pet_size_class', undefined)}
+            />
+            {MARKETPLACE_PET_SIZE_OPTIONS.map((option) => (
+              <FilterChip
+                key={option.value}
+                label={option.label}
+                selected={form.pet_size_class === option.value}
+                onPress={() => onChange('pet_size_class', option.value)}
+              />
+            ))}
+          </View>
+          <Text style={styles.body}>Choose the dog size this item is designed to fit.</Text>
+        </>
+      ) : (
+        <TextInput
+          label="Pet size fit"
+          value={form.pet_size ?? ''}
+          onChangeText={(value) => onChange('pet_size', value)}
+          placeholder="Kittens, bearded dragons, dwarf rabbits..."
+        />
+      )}
       <TextArea
         label="Condition notes"
         value={form.condition_notes ?? ''}
@@ -4753,11 +4860,7 @@ function ListingForm({
           value={Boolean(form.shipping_available)}
           onValueChange={(value) => onChange('shipping_available', value)}
         />
-      ) : (
-        <Text style={styles.metaText}>
-          Integrated shipping is temporarily unavailable. Choose porch pickup or meet up for now.
-        </Text>
-      )}
+      ) : null}
       {featureFlags.integratedShipping && form.shipping_available ? (
         <>
           <Text style={styles.filterLabel}>Shipping details</Text>
@@ -5062,9 +5165,14 @@ function ShippingOriginSetupCard({
 function ListingQualityChecklist({ form }: { form: CreateListingInput }) {
   const checklist = [
     { label: 'Add at least one clear photo', complete: (form.images ?? []).length > 0 },
-    { label: 'Include size, dimensions, or pet fit', complete: Boolean(((form.item_dimensions ?? '') || (form.pet_size ?? '')).trim()) },
+    { label: 'Include size, dimensions, or pet fit', complete: Boolean(((form.item_dimensions ?? '') || (form.pet_size ?? '')).trim() || form.pet_size_class) },
     { label: 'Describe condition honestly', complete: Boolean((form.condition_notes ?? '').trim() || form.description.trim().length >= 40) },
-    { label: 'Share pickup, meetup, or shipping availability', complete: Boolean(form.porch_pickup_available || form.meetup_available || form.shipping_available) },
+    {
+      label: featureFlags.integratedShipping
+        ? 'Share pickup, meetup, or shipping availability'
+        : 'Share pickup or meetup availability',
+      complete: Boolean(form.porch_pickup_available || form.meetup_available || (featureFlags.integratedShipping && form.shipping_available)),
+    },
   ];
   const completedCount = checklist.filter((item) => item.complete).length;
 
@@ -5421,6 +5529,7 @@ function listingItemDetailRows(item: Listing): Array<{ label: string; value: str
   return [
     { label: 'Brand', value: item.brand },
     { label: 'Size / dimensions', value: item.itemDimensions },
+    { label: 'Pet size', value: marketplacePetSizeLabel(item.petSizeClass) },
     { label: 'Pet size fit', value: item.petSize },
     { label: 'Condition notes', value: item.conditionNotes },
     { label: 'Availability', value: item.availabilityNotes },
@@ -5447,7 +5556,7 @@ function listingGettingOptions(item: Listing): Array<{ title: string; descriptio
     });
   }
 
-  if (item.shipping) {
+  if (featureFlags.integratedShipping && item.shipping) {
     options.push({
       title: 'Shipping',
       description: shippingDescription(item),

@@ -12,7 +12,7 @@ test('public listing CTA uses the installed-app scheme while canonical stays on 
 
 test('feed repair maps Fosterburg to Metro East and backfills active null-area listings only', async () => {
   const migration = await readFile(
-    new URL('../supabase/migrations/20260913130500_listing_search_area_fosterburg_v1.sql', import.meta.url),
+    new URL('../supabase/migrations/20260913132310_20260913130500_listing_search_area_fosterburg_v1.sql', import.meta.url),
     'utf8'
   );
 

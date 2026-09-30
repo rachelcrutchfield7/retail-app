@@ -47,13 +47,13 @@ test('Rescue Hub has explicit back behavior and matching urgent need totals', ()
   assert.match(headerBar, /backLabel\?: string/);
 });
 
-test('animal type chips filter against visible listing category labels', () => {
+test('animal type chips preserve visible labels and canonical category filtering', () => {
   const sprint3App = read('src/sprint3/Sprint3App.tsx');
 
   assert.match(sprint3App, /filteredMarketplaceListings = \(listings\.data\?\.items \?\? \[\]\)\.filter/);
   assert.match(sprint3App, /const filteredItems = useMemo\([\s\S]+\(listings\.data\?\.items \?\? \[\]\)\.filter/);
   assert.match(sprint3App, /listingCategorySlug\(listing\) === filters\.categorySlug/);
-  assert.doesNotMatch(sprint3App, /categoryId,\s*\n\s*condition,/);
+  assert.match(sprint3App, /const params = useMemo<ListingQueryParams>[\s\S]*?categoryId,[\s\S]*?condition,/);
 });
 
 test('safe-area context owns mobile screen insets', () => {

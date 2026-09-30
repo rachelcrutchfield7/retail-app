@@ -7,7 +7,7 @@ import test from 'node:test';
 const root = fileURLToPath(new URL('..', import.meta.url));
 const read = (path) => readFileSync(join(root, path), 'utf8');
 
-const migration = read('supabase/migrations/20260905073500_decouple_listing_payout_readiness.sql');
+const migration = read('supabase/migrations/20260905180531_decouple_listing_payout_readiness.sql');
 const baseline = read('supabase/migrations/20260812152900_prelaunch_current_schema_baseline_created_20260813.sql');
 const checkoutReservation = read('supabase/migrations/20260821013000_accepted_offer_checkout_reservation.sql');
 const offerMigration = read('supabase/migrations/20260821010000_authoritative_marketplace_offers.sql');

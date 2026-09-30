@@ -13,6 +13,7 @@ import type {
   RescueOrganization,
   RescueOrganizationType,
 } from '../types.ts';
+import type { MarketplacePetSizeClass } from '../constants/marketplacePetSizes';
 
 export type AccountType = PrototypeAccountType | 'shelter' | 'business';
 export type ListingType = 'sale' | 'free' | 'donation';
@@ -146,6 +147,7 @@ export type ListingQueryParams = {
   maxPrice?: number;
   condition?: ListingCondition;
   listingType?: ListingType;
+  petSizeClass?: MarketplacePetSizeClass;
   sort?: ListingSort;
   page?: number;
   limit?: number;
@@ -175,6 +177,7 @@ export type SavedSearch = {
   max_price?: number;
   condition?: ListingCondition;
   listing_type?: ListingType;
+  pet_size_class?: MarketplacePetSizeClass;
   radius_miles: number;
   city?: string;
   state?: string;
@@ -196,6 +199,7 @@ export type CreateSavedSearchInput = {
   max_price?: number;
   condition?: ListingCondition;
   listing_type?: ListingType;
+  pet_size_class?: MarketplacePetSizeClass;
   radius_miles?: number;
   city?: string;
   state?: string;
@@ -281,6 +285,7 @@ export type CreateListingInput = {
   brand?: string;
   item_dimensions?: string;
   pet_size?: string;
+  pet_size_class?: MarketplacePetSizeClass;
   condition_notes?: string;
   availability_notes?: string;
   reason_for_listing?: string;

@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { FlatList, StyleSheet, View } from 'react-native';
 import { spacing } from '../../constants/theme';
+import { featureFlags } from '../../config/featureFlags';
 import type { ConversationSummary } from '../../services/types';
 import { EmptyState } from '../ui/EmptyState';
 import { MessageCircle } from 'lucide-react-native';
@@ -36,7 +37,9 @@ export function ConversationList({ conversations, onOpenConversation, onBrowse }
       ListEmptyComponent={
         <EmptyState
           title="No conversations yet"
-          body="Message a seller from a listing to start a conversation about pickup, meetup, shipping, or payment."
+          body={featureFlags.integratedShipping
+            ? 'Message a seller from a listing to start a conversation about pickup, meetup, shipping, or payment.'
+            : 'Message a seller from a listing to start a conversation about pickup, meetup, or payment.'}
           icon={MessageCircle}
           actionTitle={onBrowse ? 'Browse Listings' : undefined}
           onAction={onBrowse}

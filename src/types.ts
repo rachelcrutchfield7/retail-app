@@ -5,6 +5,7 @@ import type {
   LISTING_STATUSES,
 } from './constants/categories';
 import type { ComponentType } from 'react';
+import type { MarketplacePetSizeClass } from './constants/marketplacePetSizes';
 
 export type Category = (typeof CATEGORIES)[number];
 export type CategoryFilter = (typeof CATEGORY_FILTERS)[number];
@@ -67,6 +68,7 @@ export type Listing = {
   brand?: string;
   itemDimensions?: string;
   petSize?: string;
+  petSizeClass?: MarketplacePetSizeClass;
   conditionNotes?: string;
   availabilityNotes?: string;
   reasonForListing?: string;
