@@ -17,7 +17,7 @@ const appConfig = {
     name: 'ReTail',
     slug: 'retail',
     scheme: 'retail',
-    version: '1.1.1',
+    version: '1.2.0',
     orientation: 'portrait',
     userInterfaceStyle: 'light',
     icon: './assets/app-icon.png',
