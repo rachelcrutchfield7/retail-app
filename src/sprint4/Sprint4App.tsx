@@ -4843,200 +4843,195 @@ export function AdminReviewScreen({
                 placeholder="Search listing, seller, city, state, or ID..."
               />
 
-              <Text style={styles.bodyStrong}>Marketplace Area</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.adminTabBar}
-              >
-                <FilterChip
-                  label="All Areas"
-                  selected={!marketplaceAreaId}
-                  onPress={() => {
-                    setMarketplaceAreaId(undefined);
-                    setMarketplacePage(1);
-                  }}
-                />
+              <View style={styles.adminListingFilterGroup}>
+                <Text style={styles.bodyStrong}>Marketplace Area</Text>
+                <View style={styles.wrapRow}>
+                  <FilterChip
+                    label="All Areas"
+                    selected={!marketplaceAreaId}
+                    onPress={() => {
+                      setMarketplaceAreaId(undefined);
+                      setMarketplacePage(1);
+                    }}
+                  />
 
-                {marketplaceCoverage.coverage
-                  .filter((area) => Boolean(area.searchAreaId))
-                  .map((area) => (
+                  {marketplaceCoverage.coverage
+                    .filter((area) => Boolean(area.searchAreaId))
+                    .map((area) => (
+                      <FilterChip
+                        key={area.searchAreaId}
+                        label={area.areaLabel}
+                        selected={marketplaceAreaId === area.searchAreaId}
+                        onPress={() => {
+                          setMarketplaceAreaId(area.searchAreaId);
+                          setMarketplacePage(1);
+                        }}
+                      />
+                    ))}
+                </View>
+              </View>
+
+              <View style={styles.adminListingFilterGroup}>
+                <Text style={styles.bodyStrong}>State</Text>
+                <View style={styles.wrapRow}>
+                  <FilterChip
+                    label="All States"
+                    selected={!marketplaceState}
+                    onPress={() => {
+                      setMarketplaceState(undefined);
+                      setMarketplacePage(1);
+                    }}
+                  />
+
+                  {marketplaceStates.map((state) => (
                     <FilterChip
-                      key={area.searchAreaId}
-                      label={area.areaLabel}
-                      selected={marketplaceAreaId === area.searchAreaId}
+                      key={state}
+                      label={state}
+                      selected={marketplaceState === state}
                       onPress={() => {
-                        setMarketplaceAreaId(area.searchAreaId);
+                        setMarketplaceState(state);
                         setMarketplacePage(1);
                       }}
                     />
                   ))}
-              </ScrollView>
-
-              <Text style={styles.bodyStrong}>State</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.adminTabBar}
-              >
-                <FilterChip
-                  label="All States"
-                  selected={!marketplaceState}
-                  onPress={() => {
-                    setMarketplaceState(undefined);
-                    setMarketplacePage(1);
-                  }}
-                />
-
-                {marketplaceStates.map((state) => (
-                  <FilterChip
-                    key={state}
-                    label={state}
-                    selected={marketplaceState === state}
-                    onPress={() => {
-                      setMarketplaceState(state);
-                      setMarketplacePage(1);
-                    }}
-                  />
-                ))}
-              </ScrollView>
-
-              <Text style={styles.bodyStrong}>Status</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.adminTabBar}
-              >
-                {[
-                  ['all', 'All'],
-                  ['active', 'Active'],
-                  ['pending', 'Pending'],
-                  ['draft', 'Draft'],
-                  ['sold', 'Sold'],
-                  ['archived', 'Archived'],
-                ].map(([value, label]) => (
-                  <FilterChip
-                    key={value}
-                    label={label}
-                    selected={
-                      value === 'all'
-                        ? !marketplaceStatus
-                        : marketplaceStatus === value
-                    }
-                    onPress={() => {
-                      setMarketplaceStatus(value === 'all' ? undefined : value);
-                      setMarketplacePage(1);
-                    }}
-                  />
-                ))}
-              </ScrollView>
-
-              <Text style={styles.bodyStrong}>Category</Text>
-
-              {marketplaceCoverage.categoriesLoading ? <LoadingSpinner /> : null}
-
-              {marketplaceCoverage.categoriesError ? (
-                <NoticeCard
-                  title="Categories unavailable"
-                  body={marketplaceCoverage.categoriesError}
-                />
-              ) : null}
-
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.adminTabBar}
-              >
-                <FilterChip
-                  label="All Categories"
-                  selected={!marketplaceCategoryId}
-                  onPress={() => {
-                    setMarketplaceCategoryId(undefined);
-                    setMarketplacePage(1);
-                  }}
-                />
-
-                {marketplaceCoverage.categories.map((category) => (
-                  <FilterChip
-                    key={category.id}
-                    label={category.name}
-                    selected={marketplaceCategoryId === category.id}
-                    onPress={() => {
-                      setMarketplaceCategoryId(category.id);
-                      setMarketplacePage(1);
-                    }}
-                  />
-                ))}
-              </ScrollView>
-
-              <Text style={styles.bodyStrong}>Seller Type</Text>
-              <View style={styles.wrapRow}>
-                <FilterChip
-                  label="All Sellers"
-                  selected={!marketplaceRescueOnly}
-                  onPress={() => {
-                    setMarketplaceRescueOnly(false);
-                    setMarketplacePage(1);
-                  }}
-                />
-                <FilterChip
-                  label="Verified Rescues"
-                  selected={marketplaceRescueOnly}
-                  onPress={() => {
-                    setMarketplaceRescueOnly(true);
-                    setMarketplacePage(1);
-                  }}
-                />
+                </View>
               </View>
 
-              <Text style={styles.bodyStrong}>Sort</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.adminTabBar}
-              >
-                {[
-                  ['newest', 'Newest'],
-                  ['updated', 'Recently Updated'],
-                  ['oldest', 'Oldest'],
-                  ['price_low', 'Price Low'],
-                  ['price_high', 'Price High'],
-                  ['title', 'Title'],
-                ].map(([value, label]) => (
+              <View style={styles.adminListingFilterGroup}>
+                <Text style={styles.bodyStrong}>Status</Text>
+                <View style={styles.wrapRow}>
+                  {[
+                    ['all', 'All'],
+                    ['active', 'Active'],
+                    ['pending', 'Pending'],
+                    ['draft', 'Draft'],
+                    ['sold', 'Sold'],
+                    ['archived', 'Archived'],
+                  ].map(([value, label]) => (
+                    <FilterChip
+                      key={value}
+                      label={label}
+                      selected={
+                        value === 'all'
+                          ? !marketplaceStatus
+                          : marketplaceStatus === value
+                      }
+                      onPress={() => {
+                        setMarketplaceStatus(value === 'all' ? undefined : value);
+                        setMarketplacePage(1);
+                      }}
+                    />
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.adminListingFilterGroup}>
+                <Text style={styles.bodyStrong}>Category</Text>
+
+                {marketplaceCoverage.categoriesLoading ? <LoadingSpinner /> : null}
+
+                {marketplaceCoverage.categoriesError ? (
+                  <NoticeCard
+                    title="Categories unavailable"
+                    body={marketplaceCoverage.categoriesError}
+                  />
+                ) : null}
+
+                <View style={styles.wrapRow}>
                   <FilterChip
-                    key={value}
-                    label={label}
-                    selected={marketplaceSort === value}
+                    label="All Categories"
+                    selected={!marketplaceCategoryId}
                     onPress={() => {
-                      setMarketplaceSort(value as AdminMarketplaceListingSort);
+                      setMarketplaceCategoryId(undefined);
                       setMarketplacePage(1);
                     }}
                   />
-                ))}
-              </ScrollView>
 
-              <View style={styles.stack}>
-                <TextInput
-                  label="Created after"
-                  value={marketplaceCreatedAfter}
-                  onChangeText={(value) => {
-                    setMarketplaceCreatedAfter(value);
-                    setMarketplacePage(1);
-                  }}
-                  placeholder="YYYY-MM-DD"
-                  autoCapitalize="none"
-                />
+                  {marketplaceCoverage.categories.map((category) => (
+                    <FilterChip
+                      key={category.id}
+                      label={category.name}
+                      selected={marketplaceCategoryId === category.id}
+                      onPress={() => {
+                        setMarketplaceCategoryId(category.id);
+                        setMarketplacePage(1);
+                      }}
+                    />
+                  ))}
+                </View>
+              </View>
 
-                <TextInput
-                  label="Created before"
-                  value={marketplaceCreatedBefore}
-                  onChangeText={(value) => {
-                    setMarketplaceCreatedBefore(value);
-                    setMarketplacePage(1);
-                  }}
-                  placeholder="YYYY-MM-DD"
-                  autoCapitalize="none"
-                />
+              <View style={styles.adminListingFilterGroup}>
+                <Text style={styles.bodyStrong}>Seller Type</Text>
+                <View style={styles.wrapRow}>
+                  <FilterChip
+                    label="All Sellers"
+                    selected={!marketplaceRescueOnly}
+                    onPress={() => {
+                      setMarketplaceRescueOnly(false);
+                      setMarketplacePage(1);
+                    }}
+                  />
+                  <FilterChip
+                    label="Verified Rescues"
+                    selected={marketplaceRescueOnly}
+                    onPress={() => {
+                      setMarketplaceRescueOnly(true);
+                      setMarketplacePage(1);
+                    }}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.adminListingFilterGroup}>
+                <Text style={styles.bodyStrong}>Sort</Text>
+                <View style={styles.wrapRow}>
+                  {[
+                    ['newest', 'Newest'],
+                    ['updated', 'Recently Updated'],
+                    ['oldest', 'Oldest'],
+                    ['price_low', 'Price Low'],
+                    ['price_high', 'Price High'],
+                    ['title', 'Title'],
+                  ].map(([value, label]) => (
+                    <FilterChip
+                      key={value}
+                      label={label}
+                      selected={marketplaceSort === value}
+                      onPress={() => {
+                        setMarketplaceSort(value as AdminMarketplaceListingSort);
+                        setMarketplacePage(1);
+                      }}
+                    />
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.adminListingFilterGroup}>
+                <Text style={styles.bodyStrong}>Created Date</Text>
+                <View style={styles.stack}>
+                  <TextInput
+                    label="Created after"
+                    value={marketplaceCreatedAfter}
+                    onChangeText={(value) => {
+                      setMarketplaceCreatedAfter(value);
+                      setMarketplacePage(1);
+                    }}
+                    placeholder="YYYY-MM-DD"
+                    autoCapitalize="none"
+                  />
+
+                  <TextInput
+                    label="Created before"
+                    value={marketplaceCreatedBefore}
+                    onChangeText={(value) => {
+                      setMarketplaceCreatedBefore(value);
+                      setMarketplacePage(1);
+                    }}
+                    placeholder="YYYY-MM-DD"
+                    autoCapitalize="none"
+                  />
+                </View>
               </View>
 
               <View style={styles.wrapRow}>
@@ -6527,6 +6522,9 @@ function createSprint4Styles(themeColors: ThemeColors) {
     borderTopWidth: 1,
     borderTopColor: colors.border,
     paddingTop: spacing.md,
+  },
+  adminListingFilterGroup: {
+    gap: spacing.sm,
   },
   adminTabBar: {
     gap: spacing.sm,
