@@ -66,4 +66,3 @@ test('client preserves stale-auth error and requires another explicit delete con
   assert.ok(explicitConfirmResetIndex > staleAuthIndex);
   assert.ok(signOutIndex > explicitConfirmResetIndex);
 });
-

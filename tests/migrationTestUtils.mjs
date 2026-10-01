@@ -60,4 +60,3 @@ export function readMigrationFile(fileName) {
 
   return readRepo(archivedPath);
 }
-

@@ -3,7 +3,7 @@ import { join, relative } from 'node:path';
 
 const root = process.cwd();
 const fix = process.argv.includes('--fix');
-const ignoredDirs = new Set(['.git', '.expo', 'dist', 'node_modules', 'web-build']);
+const ignoredDirs = new Set(['.git', '.expo', '.temp', 'dist', 'node_modules', 'web-build']);
 const scannedExtensions = new Set(['.js', '.mjs', '.ts', '.tsx', '.json', '.sql', '.md', '.txt']);
 
 function extensionFor(filePath) {
