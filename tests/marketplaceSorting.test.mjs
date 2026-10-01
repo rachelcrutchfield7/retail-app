@@ -231,7 +231,7 @@ test('Home uses global inventory while Nearby and area-scoped Search remain loca
     /sort === 'nearby' \? locationLabel \|\| 'Choose a location' : 'Across ReTail'/
   );
 
-  assert.match(
+  assert.doesNotMatch(
     sprint3App,
     /available across ReTail/
   );
