@@ -171,6 +171,53 @@ test('released ISO contracts remain isolated from commerce and preserve prior ba
 
 test('release permission copy includes ISO reference images without changing versions', () => {
   assert.match(appConfig, /ISO request/);
-  assert.match(appConfig, /version: '1\.1\.1'/);
+  assert.match(appConfig, /version: '1\.2\.0'/);
   assert.match(appConfig, /scheme: 'retail'/);
+});
+
+test('ISO marketplace preferences return to the originating ISO screen', () => {
+  assert.match(
+    app,
+    /name: 'preferences';[\s\S]*?returnTo\?:[\s\S]*?\{ name: 'iso-tab' \}[\s\S]*?\{ name: 'create-iso' \}[\s\S]*?\{ name: 'edit-iso'; postId: string \}/,
+  );
+
+  assert.match(
+    app,
+    /<CreateIsoScreen[\s\S]*?onOpenLocationSettings=\{\(\) =>[\s\S]*?openPreferences\(\{ name: 'create-iso' \}\)/,
+  );
+
+  assert.match(
+    app,
+    /<EditIsoScreen[\s\S]*?onOpenLocationSettings=\{\(\) =>[\s\S]*?openPreferences\(\{ name: 'edit-iso', postId: route\.postId \}\)/,
+  );
+
+  assert.match(
+    app,
+    /<IsoScreen[\s\S]*?onOpenLocationSettings=\{\(\) =>[\s\S]*?openPreferences\(\{ name: 'iso-tab' \}\)/,
+  );
+
+  assert.match(
+    app,
+    /route\.name === 'preferences'[\s\S]*?onBack=\{\(\) =>[\s\S]*?route\.returnTo\?\.name === 'iso-tab'[\s\S]*?openTab\('iso'\)/,
+  );
+
+  assert.match(
+    app,
+    /route\.returnTo\?\.name === 'create-iso'[\s\S]*?setRoute\(\{ name: 'create-iso' \}\)/,
+  );
+
+  assert.match(
+    app,
+    /route\.returnTo\?\.name === 'edit-iso'[\s\S]*?setRoute\(\{ name: 'edit-iso', postId: route\.returnTo\.postId \}\)/,
+  );
+
+  assert.match(
+    app,
+    /<SettingsScreen[\s\S]*?onPreferences=\{openPreferences\}/,
+  );
+
+  assert.match(
+    app,
+    /<ProfileScreen[\s\S]*?onPreferences=\{openPreferences\}/,
+  );
 });

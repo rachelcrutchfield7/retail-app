@@ -223,7 +223,13 @@ type SprintRoute =
   | { name: 'rescue-profile'; rescue: RescueOrganization }
   | { name: 'settings' }
   | { name: 'password-reset'; error?: string }
-  | { name: 'preferences' }
+  | {
+      name: 'preferences';
+      returnTo?:
+        | { name: 'iso-tab' }
+        | { name: 'create-iso' }
+        | { name: 'edit-iso'; postId: string };
+    }
   | { name: 'safety-center' }
   | { name: 'faq' }
   | { name: 'admin'; initialTab?: AdminDashboardTab }
@@ -322,7 +328,9 @@ function Sprint4Experience() {
   const openRescueHub = () => setRoute({ name: 'rescue-hub' });
   const openRescueProfile = (rescue: RescueOrganization) => setRoute({ name: 'rescue-profile', rescue });
   const openSettings = () => setRoute({ name: 'settings' });
-  const openPreferences = () => setRoute({ name: 'preferences' });
+  const openPreferences = (
+    returnTo?: Extract<SprintRoute, { name: 'preferences' }>['returnTo']
+  ) => setRoute({ name: 'preferences', returnTo });
   const openSafetyCenter = () => setRoute({ name: 'safety-center' });
   const openFAQ = () => setRoute({ name: 'faq' });
   const openAdmin = () => setRoute({ name: 'admin' });
@@ -567,7 +575,9 @@ function Sprint4Experience() {
       <CreateIsoScreen
         onBack={() => openTab('iso')}
         onCreated={openIsoPost}
-        onOpenLocationSettings={openPreferences}
+        onOpenLocationSettings={() =>
+          openPreferences({ name: 'create-iso' })
+        }
       />
     );
   }
@@ -578,7 +588,9 @@ function Sprint4Experience() {
         postId={route.postId}
         onBack={() => openIsoPost(route.postId)}
         onSaved={openIsoPost}
-        onOpenLocationSettings={openPreferences}
+        onOpenLocationSettings={() =>
+          openPreferences({ name: 'edit-iso', postId: route.postId })
+        }
       />
     );
   }
@@ -728,7 +740,31 @@ function Sprint4Experience() {
   }
 
   if (route.name === 'preferences') {
-    return <OnboardingPreferencesScreen onBack={() => openTab('profile')} onOpenSearch={() => openTab('search')} />;
+    const returnFromPreferences = () => {
+      if (route.returnTo?.name === 'iso-tab') {
+        openTab('iso');
+        return;
+      }
+
+      if (route.returnTo?.name === 'create-iso') {
+        setRoute({ name: 'create-iso' });
+        return;
+      }
+
+      if (route.returnTo?.name === 'edit-iso') {
+        setRoute({ name: 'edit-iso', postId: route.returnTo.postId });
+        return;
+      }
+
+      openTab('profile');
+    };
+
+    return (
+      <OnboardingPreferencesScreen
+        onBack={returnFromPreferences}
+        onOpenSearch={() => openTab('search')}
+      />
+    );
   }
 
   if (route.name === 'safety-center') {
@@ -794,7 +830,9 @@ function Sprint4Experience() {
             onOpenPost={openIsoPost}
             onCreatePost={openCreateIso}
             onOpenProfile={() => openTab('profile')}
-            onOpenLocationSettings={openPreferences}
+            onOpenLocationSettings={() =>
+              openPreferences({ name: 'iso-tab' })
+            }
           />
         ) : null}
         {route.tab === 'sell' ? <SellScreen onCreateListing={openCreateListing} onOpenProfile={() => openTab('profile')} /> : null}
