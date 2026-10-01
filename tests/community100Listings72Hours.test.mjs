@@ -13,6 +13,10 @@ const migrationName = readdirSync(join(root, 'supabase/migrations'))
 
 assert.ok(migrationName, 'community campaign migration not found');
 
+function read(relativePath) {
+  return readFileSync(relativePath, 'utf8');
+}
+
 const migration = readFileSync(
   join(root, 'supabase/migrations', migrationName),
   'utf8',
@@ -224,6 +228,162 @@ test('campaign tables are protected from direct authenticated access', () => {
       new RegExp(
         `revoke all on table public\\.${table}\\s+from public, anon, authenticated`,
       ),
+    );
+  }
+});
+
+test('public campaign status RPC exposes aggregate campaign fields only', () => {
+  const sql = read(
+    'supabase/migrations/20260930235500_community_listing_campaign_public_status_v1.sql',
+  );
+
+  assert.match(
+    sql,
+    /community_listing_campaign_public_status\s*\(\s*p_campaign_key text\s*\)/,
+  );
+
+  for (const field of [
+    'qualifying_listing_count',
+    'target_listing_count',
+    'listings_required_for_entry',
+    'max_entries_per_seller',
+    'starts_at',
+    'ends_at',
+    'is_active',
+  ]) {
+    assert.match(sql, new RegExp(`\\b${field}\\b`));
+  }
+
+  for (const forbidden of [
+    'participant_count',
+    'seller_id',
+    'entry_count',
+    'profile_id',
+    'email',
+  ]) {
+    assert.doesNotMatch(sql, new RegExp(`\\b${forbidden}\\b`));
+  }
+});
+
+test('public campaign status RPC is read-only and executable by anon and authenticated', () => {
+  const sql = read(
+    'supabase/migrations/20260930235500_community_listing_campaign_public_status_v1.sql',
+  );
+
+  assert.match(sql, /\blanguage sql\b/i);
+  assert.match(sql, /\bstable\b/i);
+  assert.match(sql, /\bsecurity definer\b/i);
+
+  assert.match(
+    sql,
+    /grant execute[\s\S]*community_listing_campaign_public_status\(text\)[\s\S]*to anon/i,
+  );
+  assert.match(
+    sql,
+    /grant execute[\s\S]*community_listing_campaign_public_status\(text\)[\s\S]*to authenticated/i,
+  );
+
+  assert.doesNotMatch(sql, /\binsert\s+into\b/i);
+  assert.doesNotMatch(sql, /\bupdate\s+public\./i);
+  assert.doesNotMatch(sql, /\bdelete\s+from\b/i);
+});
+
+test('public campaign status does not weaken protected campaign tables or admin RPCs', () => {
+  const publicSql = read(
+    'supabase/migrations/20260930235500_community_listing_campaign_public_status_v1.sql',
+  );
+  const campaignSql = read(
+    'supabase/migrations/20260929152422_community_100_listings_72_hours_v1.sql',
+  );
+
+  assert.doesNotMatch(
+    publicSql,
+    /grant\s+(select|insert|update|delete|all)[\s\S]*community_listing_campaign/i,
+  );
+
+  assert.match(
+    campaignSql,
+    /community_listing_campaign_progress/,
+  );
+  assert.match(
+    campaignSql,
+    /admin_community_listing_campaign_entries/,
+  );
+});
+
+test('Home campaign status uses the public service and never the admin campaign service', () => {
+  const home = read('src/sprint3/Sprint3App.tsx');
+  const service = read('src/services/communityCampaignService.ts');
+  const hook = read('src/hooks/useCommunityListingCampaign.ts');
+
+  assert.match(home, /useCommunityListingCampaign/);
+  assert.match(home, /CommunityListingCampaignCard/);
+
+  assert.match(
+    service,
+    /community_listing_campaign_public_status/,
+  );
+
+  assert.doesNotMatch(
+    `${home}\n${service}\n${hook}`,
+    /admin_community_listing_campaign_entries/,
+  );
+
+  assert.doesNotMatch(
+    `${service}\n${hook}`,
+    /adminService/,
+  );
+});
+
+test('Home campaign card supports scheduled active and ended display states', () => {
+  const home = read('src/sprint3/Sprint3App.tsx');
+
+  assert.match(
+    home,
+    /if\s*\(\s*!campaign\?\.startsAt\s*\|\|\s*!campaign\.endsAt\s*\|\|\s*!campaign\.isActive\s*\)/,
+  );
+
+  assert.match(home, /const hasStarted = now >= startsAtMs/);
+  assert.match(home, /now >= endsAtMs/);
+
+  assert.match(home, /Starts \$\{formatCentralTime\(startsAt\)\}/);
+  assert.match(home, /\{qualifyingCount\} \/ \{campaign\.targetListingCount\} listings/);
+  assert.match(home, /Ends \{formatCentralTime\(endsAt\)\}/);
+});
+
+test('Home campaign progress is capped at 100 percent', () => {
+  const home = read('src/sprint3/Sprint3App.tsx');
+
+  assert.match(
+    home,
+    /Math\.min\(\s*100,\s*Math\.max\(\s*0,\s*\(qualifyingCount \/ target\) \* 100\s*\),?\s*\)/,
+  );
+
+  assert.match(
+    home,
+    /width:\s*`\$\{progressPercent\}%`/,
+  );
+});
+
+test('Home campaign card exposes no participant or seller information', () => {
+  const home = read('src/sprint3/Sprint3App.tsx');
+  const service = read('src/services/communityCampaignService.ts');
+
+  const campaignComponent =
+    home.split('function CommunityListingCampaignCard')[1]
+      ?.split('function SectionTitle')[0] ?? '';
+
+  for (const forbidden of [
+    'participantCount',
+    'participant_count',
+    'sellerId',
+    'seller_id',
+    'entryCount',
+    'entry_count',
+  ]) {
+    assert.doesNotMatch(
+      `${campaignComponent}\n${service}`,
+      new RegExp(forbidden),
     );
   }
 });

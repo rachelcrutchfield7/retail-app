@@ -103,6 +103,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useBlockUser } from '../hooks/useBlockUser';
 import { useCategories, useTopLevelCategories } from '../hooks/useCategories';
 import { useCompleteTransaction, useEligibleTransactionParticipants } from '../hooks/useCompleteTransaction';
+import { useCommunityListingCampaign } from '../hooks/useCommunityListingCampaign';
 import { useCreateListing } from '../hooks/useCreateListing';
 import { useFavorites } from '../hooks/useFavorites';
 import { useFavoriteStatus } from '../hooks/useFavoriteStatus';
@@ -525,6 +526,7 @@ export function HomeScreen({
     searchLocationPreference.data?.marketplaceLocationId || searchPreference.data?.search_area_id
   );
   const categories = useTopLevelCategories();
+  const communityCampaign = useCommunityListingCampaign();
   const favorites = useFavorites(Boolean(auth.user));
   const notifications = useNotifications(Boolean(auth.user) && Boolean(onNotifications));
   const params = useMemo<ListingQueryParams>(
@@ -706,6 +708,10 @@ export function HomeScreen({
             />
           ) : null}
 
+          <CommunityListingCampaignCard
+            campaign={communityCampaign.data ?? null}
+          />
+
           <SearchBar value={search} onChangeText={setSearch} onClear={() => setSearch('')} />
 
           {onOpenSearch ? (
@@ -767,7 +773,7 @@ export function HomeScreen({
             hint={
               sort === 'nearby' && hasMarketplaceSearchLocation
                 ? `${sortedItems.length} within ${marketplaceRadiusMiles} mi`
-                : `${sortedItems.length} available across ReTail`
+                : undefined
             }
           />
           {listings.isLoading ? <LoadingCards /> : null}
@@ -5351,6 +5357,108 @@ function HeaderShortcut({
   );
 }
 
+function CommunityListingCampaignCard({
+  campaign,
+}: {
+  campaign: {
+    qualifyingListingCount: number;
+    targetListingCount: number;
+    listingsRequiredForEntry: number;
+    maxEntriesPerSeller: number;
+    startsAt: string | null;
+    endsAt: string | null;
+    isActive: boolean;
+  } | null;
+}) {
+  if (!campaign?.startsAt || !campaign.endsAt || !campaign.isActive) {
+    return null;
+  }
+
+  const now = Date.now();
+  const startsAt = new Date(campaign.startsAt);
+  const endsAt = new Date(campaign.endsAt);
+  const startsAtMs = startsAt.getTime();
+  const endsAtMs = endsAt.getTime();
+
+  if (
+    !Number.isFinite(startsAtMs) ||
+    !Number.isFinite(endsAtMs) ||
+    now >= endsAtMs
+  ) {
+    return null;
+  }
+
+  const hasStarted = now >= startsAtMs;
+  const target = Math.max(1, campaign.targetListingCount);
+  const qualifyingCount = Math.max(0, campaign.qualifyingListingCount);
+  const progressPercent = Math.min(
+    100,
+    Math.max(0, (qualifyingCount / target) * 100),
+  );
+
+  const formatCentralTime = (date: Date) =>
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Chicago',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZoneName: 'short',
+    }).format(date);
+
+  const ruleCopy =
+    `Every ${campaign.listingsRequiredForEntry} qualifying listings earns an entry, ` +
+    `up to ${campaign.maxEntriesPerSeller}.`;
+
+  return (
+    <View style={styles.communityCampaignCard}>
+      <View style={styles.communityCampaignHeader}>
+        <View style={styles.communityCampaignIconFrame}>
+          <ListChecks size={22} color={colors.logoOrange} />
+        </View>
+
+        <View style={styles.communityCampaignCopy}>
+          <Text style={styles.cardTitle}>100 Listings in 72 Hours</Text>
+
+          <Text style={styles.body}>
+            {hasStarted
+              ? 'Help ReTail reach 100 new listings in 72 hours.'
+              : `Starts ${formatCentralTime(startsAt)}`}
+          </Text>
+        </View>
+      </View>
+
+      {hasStarted ? (
+        <View style={styles.communityCampaignProgressBlock}>
+          <View style={styles.communityCampaignProgressHeader}>
+            <Text style={styles.communityCampaignProgressCount}>
+              {qualifyingCount} / {campaign.targetListingCount} listings
+            </Text>
+            <Text style={styles.metaText}>
+              Ends {formatCentralTime(endsAt)}
+            </Text>
+          </View>
+
+          <View style={styles.communityCampaignProgressTrack}>
+            <View
+              style={[
+                styles.communityCampaignProgressFill,
+                { width: `${progressPercent}%` },
+              ]}
+            />
+          </View>
+        </View>
+      ) : (
+        <Text style={styles.body}>
+          Help ReTail reach 100 new listings in 72 hours.
+        </Text>
+      )}
+
+      <Text style={styles.metaText}>{ruleCopy}</Text>
+    </View>
+  );
+}
+
 function SectionTitle({ title, hint }: { title: string; hint?: string }) {
   return (
     <View style={[styles.sectionTitleRow, Platform.OS === 'ios' && styles.iosSectionTitleRow]}>
@@ -5795,6 +5903,57 @@ function createSprint3Styles(themeColors: ThemeColors) {
   },
   cardStack: {
     gap: spacing.md,
+  },
+  communityCampaignCard: {
+    gap: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.large,
+    backgroundColor: colors.surfaceWarm,
+    borderWidth: 1,
+    borderColor: colors.logoOrange,
+  },
+  communityCampaignHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  communityCampaignIconFrame: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.medium,
+    backgroundColor: colors.logoOrangeSoft,
+  },
+  communityCampaignCopy: {
+    flex: 1,
+    gap: spacing.xs,
+  },
+  communityCampaignProgressBlock: {
+    gap: spacing.sm,
+  },
+  communityCampaignProgressHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    flexWrap: 'wrap',
+  },
+  communityCampaignProgressCount: {
+    color: colors.textPrimary,
+    ...typography.body,
+    fontWeight: '600',
+  },
+  communityCampaignProgressTrack: {
+    height: 8,
+    overflow: 'hidden',
+    borderRadius: radius.pill,
+    backgroundColor: colors.border,
+  },
+  communityCampaignProgressFill: {
+    height: '100%',
+    borderRadius: radius.pill,
+    backgroundColor: colors.logoOrange,
   },
   featureCallout: {
     flexDirection: 'row',
