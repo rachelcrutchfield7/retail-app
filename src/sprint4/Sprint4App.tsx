@@ -3126,7 +3126,7 @@ export function SettingsScreen({
   });
   const [shippingOriginLoading, setShippingOriginLoading] = useState(false);
   const [shippingOriginSaving, setShippingOriginSaving] = useState(false);
-  const version = '1.0.0';
+  const version = '1.2.0';
   const profileStripeStatus = {
     accountId: auth.profile?.stripe_connect_account_id,
     chargesEnabled: auth.profile?.stripe_connect_charges_enabled === true,

@@ -142,3 +142,22 @@ test('release-like logging uses the redacting logger and avoids direct service c
   assert.match(logger, /isReleaseLikeEnvironment/);
   assert.deepEqual(directConsoleFiles, []);
 });
+
+test('Settings displays the current ReTail 1.2.0 marketing version', () => {
+  const sprint4App = read('src/sprint4/Sprint4App.tsx');
+
+  assert.match(
+    sprint4App,
+    /const version = '1\.2\.0';/
+  );
+
+  assert.match(
+    sprint4App,
+    /Version \{version\}/
+  );
+
+  assert.doesNotMatch(
+    sprint4App,
+    /const version = '1\.0\.0';/
+  );
+});
