@@ -67,6 +67,15 @@ import { useAdminNotifications } from '../hooks/useAdminNotifications';
 import { useAdminMarketplaceCoverage } from '../hooks/useAdminMarketplaceCoverage';
 import { useAdminFoundingSellers } from '../hooks/useAdminFoundingSellers';
 import { useAdminRescueApprovals } from '../hooks/useAdminRescueApprovals';
+import {
+  useUpdateUserMarketplacePreferences,
+  useUserMarketplacePreferences,
+} from '../hooks/useUserMarketplacePreferences';
+import {
+  useMarketplaceSearchLocationPreference,
+  useSetMarketplaceSearchLocation,
+} from '../hooks/useMarketplaceSearchLocation';
+import type { MarketplaceSearchRadius } from '../types';
 import { useAuth } from '../hooks/useAuth';
 import { useBlockUser } from '../hooks/useBlockUser';
 import { useTransactionByListing } from '../hooks/useCompleteTransaction';
@@ -3742,45 +3751,177 @@ function OnboardingPreferencesScreen({
   onBack: () => void;
   onOpenSearch: () => void;
 }) {
-  const [selectedPets, setSelectedPets] = useState(['Dogs', 'Cats']);
+  const preferences = useUserMarketplacePreferences();
+  const preferencesUpdate = useUpdateUserMarketplacePreferences();
+  const searchLocationPreference = useMarketplaceSearchLocationPreference();
+  const searchLocationUpdate = useSetMarketplaceSearchLocation();
+
+  const [selectedPets, setSelectedPets] = useState<string[]>(['Dogs', 'Cats']);
   const [defaultRadius, setDefaultRadius] = useState('25');
   const [showRescueMatches, setShowRescueMatches] = useState(true);
   const [searchAlerts, setSearchAlerts] = useState(true);
   const [notice, setNotice] = useState<string | null>(null);
-  const petOptions = ['Dogs', 'Cats', 'Birds', 'Fish & Aquatic', 'Reptiles', 'Small Pets', 'Farm Animals', 'Horses', 'General Pet Supplies'];
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const petOptions = [
+    'Dogs',
+    'Cats',
+    'Birds',
+    'Fish & Aquatic',
+    'Reptiles',
+    'Small Pets',
+    'Farm Animals',
+    'Horses',
+    'General Pet Supplies',
+  ];
+
+  useEffect(() => {
+    if (!preferences.data) {
+      return;
+    }
+
+    setSelectedPets(preferences.data.petInterests);
+    setShowRescueMatches(preferences.data.showRescueDonationMatches);
+    setSearchAlerts(preferences.data.savedSearchAlertsDefault);
+  }, [preferences.data]);
+
+  useEffect(() => {
+    const radiusMiles = searchLocationPreference.data?.radiusMiles;
+
+    if (radiusMiles) {
+      setDefaultRadius(String(radiusMiles));
+    }
+  }, [searchLocationPreference.data?.radiusMiles]);
 
   const togglePet = (pet: string) => {
     setSelectedPets((current) =>
-      current.includes(pet) ? current.filter((item) => item !== pet) : [...current, pet]
+      current.includes(pet)
+        ? current.filter((item) => item !== pet)
+        : [...current, pet]
     );
   };
+
+  const savePreferences = async () => {
+    setNotice(null);
+    setSaveError(null);
+
+    const parsedRadius = Number(defaultRadius);
+    const supportedRadius =
+      parsedRadius === 10 ||
+      parsedRadius === 25 ||
+      parsedRadius === 50 ||
+      parsedRadius === 100;
+
+    if (!supportedRadius) {
+      setSaveError('Choose a default distance of 10, 25, 50, or 100 miles.');
+      return;
+    }
+
+    try {
+      await preferencesUpdate.mutateAsync({
+        petInterests: selectedPets,
+        showRescueDonationMatches: showRescueMatches,
+        savedSearchAlertsDefault: searchAlerts,
+      });
+
+      const marketplaceLocationId =
+        searchLocationPreference.data?.marketplaceLocationId;
+
+      if (
+        marketplaceLocationId &&
+        searchLocationPreference.data?.radiusMiles !== parsedRadius
+      ) {
+        await searchLocationUpdate.setRadius(
+          marketplaceLocationId,
+          parsedRadius as MarketplaceSearchRadius
+        );
+      }
+
+      setNotice(
+        marketplaceLocationId
+          ? `ReTail will prioritize ${selectedPets.join(', ') || 'all pets'} within ${parsedRadius} miles.`
+          : `Your pet, rescue, and alert preferences are saved. Choose a marketplace location before setting a default distance.`
+      );
+    } catch (error) {
+      setSaveError(
+        error instanceof Error
+          ? error.message
+          : 'Preferences could not be saved. Please try again.'
+      );
+    }
+  };
+
+  const isSaving =
+    preferencesUpdate.isPending || searchLocationUpdate.isLoading;
 
   return (
     <ScreenFrame>
       <BackButton onPress={onBack} />
       <View style={styles.headerBlock}>
         <Text style={styles.title}>Preferences</Text>
-        <Text style={styles.body}>Tune ReTail around the pets, distance, alerts, and rescue opportunities you care about.</Text>
+        <Text style={styles.body}>
+          Tune ReTail around the pets, distance, alerts, and rescue opportunities you care about.
+        </Text>
       </View>
+
       {notice ? <NoticeCard title="Preferences saved" body={notice} /> : null}
+      {saveError ? <NoticeCard title="Preferences not saved" body={saveError} /> : null}
+
       <SectionCard title="Pets you shop for">
         <View style={styles.wrapRow}>
           {petOptions.map((pet) => (
-            <FilterChip key={pet} label={pet} selected={selectedPets.includes(pet)} onPress={() => togglePet(pet)} />
+            <FilterChip
+              key={pet}
+              label={pet}
+              selected={selectedPets.includes(pet)}
+              onPress={() => togglePet(pet)}
+            />
           ))}
         </View>
       </SectionCard>
+
       <SectionCard title="Marketplace defaults">
-        <TextInput label="Default distance" value={defaultRadius} onChangeText={setDefaultRadius} keyboardType="number-pad" placeholder="25" />
-        <ToggleSwitch label="Show rescue donation matches" value={showRescueMatches} onValueChange={setShowRescueMatches} />
-        <ToggleSwitch label="Turn on saved search alerts by default" value={searchAlerts} onValueChange={setSearchAlerts} />
+        <TextInput
+          label="Default distance"
+          value={defaultRadius}
+          onChangeText={setDefaultRadius}
+          keyboardType="number-pad"
+          placeholder="25"
+        />
+
+        {!searchLocationPreference.data?.marketplaceLocationId ? (
+          <Text style={styles.body}>
+            Choose a marketplace location before changing your default distance.
+          </Text>
+        ) : null}
+
+        <ToggleSwitch
+          label="Show rescue donation matches"
+          value={showRescueMatches}
+          onValueChange={setShowRescueMatches}
+        />
+
+        <ToggleSwitch
+          label="Turn on saved search alerts by default"
+          value={searchAlerts}
+          onValueChange={setSearchAlerts}
+        />
+
         <Button
-          title="Save Preferences"
+          title={isSaving ? 'Saving...' : 'Save Preferences'}
           icon={ListChecks}
-          onPress={() => setNotice(`ReTail will prioritize ${selectedPets.join(', ') || 'all pets'} within ${defaultRadius || '25'} miles.`)}
+          onPress={() => void savePreferences()}
+          disabled={isSaving || preferences.isLoading}
           fullWidth
         />
-        <Button title="Create a Search Alert" icon={Search} variant="outline" onPress={onOpenSearch} fullWidth />
+
+        <Button
+          title="Create a Search Alert"
+          icon={Search}
+          variant="outline"
+          onPress={onOpenSearch}
+          fullWidth
+        />
       </SectionCard>
     </ScreenFrame>
   );
