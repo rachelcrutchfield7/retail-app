@@ -134,9 +134,10 @@ test('refunds and disputes resolve transactions from Stripe identifiers, not cli
   assert.doesNotMatch(webhook, /body\.(transactionId|refund|dispute|amount|charge)/);
 });
 
-test('Stripe fee logic, checkout reservation, and mobile code remain outside Task 3D', () => {
-  assert.match(stripeShared, /RETAIL_PLATFORM_FEE_PERCENT'\) \?\? '10'/);
-  assert.match(stripeShared, /RETAIL_PLATFORM_MIN_FEE_CENTS'\) \?\? '0'/);
-  assert.match(stripeShared, /RETAIL_PLATFORM_FEE_THRESHOLD_CENTS'\) \?\? '500'/);
+test('refund and dispute handling preserves the fixed server-authoritative fee boundary', () => {
+  assert.match(stripeShared, /RETAIL_FEE_MODEL_VERSION = 'seller10_buyer5_min50_max1000_v1'/);
+  assert.match(stripeShared, /calculateSellerFeeCents\(amountCents: number\): number \{\s*return roundHalfUpBasisPoints\(amountCents, 1_000\);\s*\}/s);
+  assert.match(stripeShared, /return Math\.min\(Math\.max\(roundHalfUpBasisPoints\(amountCents, 500\), 50\), 1_000\)/);
+  assert.doesNotMatch(stripeShared, /RETAIL_PLATFORM_(FEE_PERCENT|MIN_FEE_CENTS|FEE_THRESHOLD_CENTS)/);
   assert.doesNotMatch(webhook, /calculatePlatformFeeCents|paymentIntents\.create|refunds\.create/);
 });

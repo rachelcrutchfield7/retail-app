@@ -37,20 +37,25 @@ test('payment intent creation derives amount, buyer, seller, destination, and fe
   assert.match(stripeCreate, /reserve_stripe_checkout_listing/);
   assert.match(stripeCreate, /p_buyer_id: user\.id/);
   assert.match(stripeCreate, /p_requested_amount_cents: canonicalAmountCents/);
-  assert.match(stripeCreate, /calculatePlatformFeeCents\(itemAmountCents\)/);
+  assert.match(stripeCreate, /const normalSellerFeeCents = calculateSellerFeeCents\(itemAmountCents\)/);
+  assert.match(stripeCreate, /const buyerServiceFeeCents = calculateBuyerServiceFeeCents\(itemAmountCents\)/);
+  assert.match(stripeCreate, /const stripeApplicationFeeCents = retailFeeTotalCents \+ shipping\.shippingCollectedCents \+ taxAmountCents/);
   assert.match(stripeCreate, /paymentIntents\.create\(\{\s*amount: checkoutTotalCents/s);
+  assert.match(stripeCreate, /application_fee_amount: stripeApplicationFeeCents/);
   assert.match(stripeCreate, /destination: String\(reservation\.stripe_connect_account_id\)/);
   assert.match(stripeCreate, /retail_seller_id: String\(reservation\.seller_id\)/);
   assert.match(stripeCreate, /hooks:\s*\{\s*inputs:\s*\{\s*tax:\s*\{\s*calculation: String\(taxCalculation\.id\)/s);
   assert.doesNotMatch(stripeCreate, /body\.(buyerId|sellerId|seller_id|stripe_connect_account_id)/);
   assert.doesNotMatch(stripeCreate, /body\.amountCents/);
+  assert.doesNotMatch(stripeCreate, /body\.(platformFeeCents|sellerFeeCents|buyerServiceFeeCents|applicationFeeCents)/);
   assert.doesNotMatch(stripeCreate, /destinationAccountId|sellerStripeAccountId|connectedAccountId/);
 });
 
-test('Stripe fee defaults remain server-side and unchanged by this audit', () => {
-  assert.match(stripeShared, /RETAIL_PLATFORM_FEE_PERCENT'\) \?\? '10'/);
-  assert.match(stripeShared, /RETAIL_PLATFORM_MIN_FEE_CENTS'\) \?\? '0'/);
-  assert.match(stripeShared, /RETAIL_PLATFORM_FEE_THRESHOLD_CENTS'\) \?\? '500'/);
+test('Stripe fee model remains fixed and server-authoritative', () => {
+  assert.match(stripeShared, /RETAIL_FEE_MODEL_VERSION = 'seller10_buyer5_min50_max1000_v1'/);
+  assert.match(stripeShared, /calculateSellerFeeCents\(amountCents: number\): number \{\s*return roundHalfUpBasisPoints\(amountCents, 1_000\);\s*\}/s);
+  assert.match(stripeShared, /return Math\.min\(Math\.max\(roundHalfUpBasisPoints\(amountCents, 500\), 50\), 1_000\)/);
+  assert.doesNotMatch(stripeShared, /RETAIL_PLATFORM_(FEE_PERCENT|MIN_FEE_CENTS|FEE_THRESHOLD_CENTS)/);
   assert.match(localPaymentService, /supabase\.functions\.invoke\('stripe-create-payment-intent'/);
 });
 

@@ -78,7 +78,7 @@ test('Stripe identifiers are unique and format constrained when present', () => 
   assert.match(migration, /\^pi_/);
 });
 
-test('payment field constraints match current Stripe architecture without changing fees', () => {
+test('payment field constraints match current Stripe architecture and fixed server fee model', () => {
   assert.match(migration, /transactions_payment_method_known/);
   assert.match(migration, /payment_method in \('stripe', 'outside_app'\)/);
   assert.match(migration, /transactions_payment_status_known/);
@@ -99,9 +99,10 @@ test('payment field constraints match current Stripe architecture without changi
   assert.match(migration, /currency text default 'usd'/);
   assert.match(migration, /currency ~ '\^\[a-z\]\{3\}\$'/);
 
-  assert.match(stripeShared, /RETAIL_PLATFORM_FEE_PERCENT'\) \?\? '10'/);
-  assert.match(stripeShared, /RETAIL_PLATFORM_MIN_FEE_CENTS'\) \?\? '0'/);
-  assert.match(stripeShared, /RETAIL_PLATFORM_FEE_THRESHOLD_CENTS'\) \?\? '500'/);
+  assert.match(stripeShared, /RETAIL_FEE_MODEL_VERSION = 'seller10_buyer5_min50_max1000_v1'/);
+  assert.match(stripeShared, /calculateSellerFeeCents\(amountCents: number\): number \{\s*return roundHalfUpBasisPoints\(amountCents, 1_000\);\s*\}/s);
+  assert.match(stripeShared, /return Math\.min\(Math\.max\(roundHalfUpBasisPoints\(amountCents, 500\), 50\), 1_000\)/);
+  assert.doesNotMatch(stripeShared, /RETAIL_PLATFORM_(FEE_PERCENT|MIN_FEE_CENTS|FEE_THRESHOLD_CENTS)/);
 });
 
 test('ordinary profile writes cannot directly change Stripe Connect fields', () => {
