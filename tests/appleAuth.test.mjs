@@ -71,7 +71,7 @@ function createAppleAuth(responseOrError) {
 function createDependencies({
   appleResponse = {
     identityToken: 'apple-id-token',
-    authorizationCode: 'apple-authorization-code',
+    authorizationCode: 'apple-auth-code',
     email: 'relay@example.privaterelay.appleid.com',
     fullName: {
       givenName: 'Apple',
@@ -149,7 +149,7 @@ test('missing Apple identity token produces a safe error', async () => {
   const { dependencies } = createDependencies({
     appleResponse: {
       identityToken: null,
-      authorizationCode: 'apple-authorization-code',
+      authorizationCode: 'apple-auth-code',
       email: null,
       fullName: null,
     },
@@ -176,7 +176,7 @@ test('successful Apple auth uses Supabase ID-token flow and preserves first-logi
     provider: 'apple',
     token: 'apple-id-token',
     nonce: 'apple-nonce',
-    access_token: 'apple-authorization-code',
+    access_token: 'apple-auth-code',
   }]);
   assert.deepEqual(calls.updateUser, [{
     data: {

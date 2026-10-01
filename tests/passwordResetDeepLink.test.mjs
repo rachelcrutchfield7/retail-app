@@ -99,7 +99,7 @@ test('password recovery callback accepts Supabase PKCE code callbacks', async ()
       return {
         data: {
           session: recoverySession({
-            access_token: 'pkce-recovery-access-token',
+            access_token: 'pkce-token',
           }),
         },
         error: null,
@@ -108,7 +108,7 @@ test('password recovery callback accepts Supabase PKCE code callbacks', async ()
   });
 
   assert.deepEqual(exchangeCalls, ['recovery-code']);
-  assert.equal(session?.accessToken, 'pkce-recovery-access-token');
+  assert.equal(session?.accessToken, 'pkce-token');
 });
 
 test('password recovery callback accepts app-scheme reset links', async () => {
