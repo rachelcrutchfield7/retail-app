@@ -55,6 +55,24 @@ test('alternate entry link remains disabled until a valid Google Forms URL is co
   assert.doesNotMatch(productionSources, /https:\/\/(?:forms\.gle|docs\.google\.com\/forms)\//);
 });
 
+test('landing page and Official Rules define the same five-entry AMOE structure', () => {
+  const landingPage = read('marketing-site/src/pages/100-listings/index.astro');
+  const rulesPage = read('marketing-site/src/pages/100-listings/rules.astro');
+
+  assert.match(landingPage, /No purchase necessary/i);
+  assert.match(landingPage, /Don’t have items to list\?/);
+  assert.match(landingPage, /One valid alternate entry submission provides five entries/);
+  assert.match(landingPage, /Limit five total entries per person, regardless of entry method or combination of methods/);
+  assert.match(landingPage, /Only one valid Alternate Entry Form submission per eligible person is permitted/);
+
+  assert.match(rulesPage, /One valid Alternate Entry Form submission provides five entries/);
+  assert.match(rulesPage, /Only one Alternate Entry Form submission per eligible person is permitted/);
+  assert.match(rulesPage, /maximum of five total entries per eligible participant/);
+  assert.match(rulesPage, /regardless of entry method or combination of entry methods/);
+  assert.match(rulesPage, /Duplicate submissions, multiple accounts/);
+  assert.match(rulesPage, /Each eligible entry will have an equal chance of selection/);
+});
+
 test('sitemap and shared navigation expose both 100 Listings routes', () => {
   const sitemap = read('marketing-site/public/sitemap.xml');
   const layout = read('marketing-site/src/layouts/BaseLayout.astro');

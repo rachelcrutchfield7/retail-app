@@ -603,6 +603,26 @@ li {
   margin-bottom: 0;
 }
 
+.alternate-entry-summary {
+  display: grid;
+  gap: 6px;
+  margin: 20px 0;
+  padding: 16px 18px;
+  border-left: 5px solid #f1b743;
+  border-radius: 0 16px 16px 0;
+  background: var(--cream);
+}
+
+.alternate-entry-summary strong {
+  color: var(--primary-deep);
+  font-size: 1.08rem;
+}
+
+.alternate-entry-summary span {
+  color: var(--muted);
+  line-height: 1.55;
+}
+
 .alternate-entry-card a:not(.button),
 .rules-document a:not(.button),
 .back-link {
