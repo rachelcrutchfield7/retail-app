@@ -24,7 +24,7 @@ test('native Supabase sessions use SecureStore and auth state clears private cac
   const supabaseClient = read('src/lib/supabase.ts');
   const authContext = read('src/auth/AuthContext.tsx');
 
-  assert.equal(packageJson.dependencies['expo-secure-store'], '57.0.3');
+  assert.equal(packageJson.dependencies['expo-secure-store'], '57.0.4');
   assert.match(supabaseClient, /expo-secure-store/);
   assert.match(supabaseClient, /AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY/);
   assert.match(supabaseClient, /product === 'ReactNative'/);

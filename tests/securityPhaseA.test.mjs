@@ -17,6 +17,10 @@ import {
   isClientSafeSupabaseKey,
   readConfigFromEnv,
 } from '../src/constants/config.ts';
+import {
+  evaluateDependencyAdvisories,
+  reviewedAdvisoryExceptions,
+} from '../scripts/dependency-audit-policy.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const read = (path) => readFileSync(join(root, path), 'utf8');
@@ -159,15 +163,75 @@ test('auth listener covers session changes and removes private realtime/cache st
   assert.match(realtimeService, /removeAllRealtimeSubscriptions/);
 });
 
-test('Phase A dependency audit gate blocks high and critical production findings only', () => {
+test('Phase A dependency audit gate blocks unreviewed high and critical production findings', () => {
   const packageJson = JSON.parse(read('package.json'));
   const auditScript = read('scripts/dependency-audit.mjs');
+  const auditPolicy = read('scripts/dependency-audit-policy.mjs');
 
   assert.equal(packageJson.scripts['security:audit'], 'node scripts/dependency-audit.mjs');
   assert.match(auditScript, /pnpm', \['audit', '--prod', '--json'\]/);
-  assert.match(auditScript, /failSeverities = new Set\(\['high', 'critical'\]\)/);
+  assert.match(auditPolicy, /failSeverities = new Set\(\['high', 'critical'\]\)/);
+  assert.match(auditPolicy, /GHSA-86w9-cpqp-85rv/);
   assert.match(auditScript, /Production dependency security gate passed/);
   assert.doesNotMatch(packageJson.scripts['security:audit'], /\|\| true/);
+});
+
+test('dependency audit exception is exact to reviewed node-forge Expo CLI tooling paths', () => {
+  const reviewedFinding = {
+    module_name: 'node-forge',
+    severity: 'high',
+    github_advisory_id: 'GHSA-86w9-cpqp-85rv',
+    findings: [
+      {
+        version: '1.4.0',
+        paths: [
+          '.>expo>@expo/cli>node-forge',
+          '.>expo>@expo/cli>@expo/code-signing-certificates>node-forge',
+        ],
+      },
+    ],
+  };
+
+  assert.equal(reviewedAdvisoryExceptions.length, 1);
+  assert.equal(reviewedAdvisoryExceptions[0].packageName, 'node-forge');
+  assert.equal(reviewedAdvisoryExceptions[0].advisoryId, 'GHSA-86w9-cpqp-85rv');
+
+  const accepted = evaluateDependencyAdvisories([reviewedFinding]);
+  assert.equal(accepted.reviewedExceptions.length, 1);
+  assert.equal(accepted.blockingAdvisories.length, 0);
+
+  const variantsThatMustBlock = [
+    { ...reviewedFinding, github_advisory_id: 'GHSA-different-advisory' },
+    { ...reviewedFinding, module_name: 'different-package' },
+    { ...reviewedFinding, severity: 'critical' },
+    {
+      ...reviewedFinding,
+      findings: [{ version: '1.4.0', paths: ['.>application-runtime>node-forge'] }],
+    },
+    {
+      ...reviewedFinding,
+      findings: [{ version: '1.4.1', paths: ['.>expo>@expo/cli>node-forge'] }],
+    },
+  ];
+
+  for (const variant of variantsThatMustBlock) {
+    const result = evaluateDependencyAdvisories([variant]);
+    assert.equal(result.reviewedExceptions.length, 0);
+    assert.equal(result.blockingAdvisories.length, 1);
+  }
+
+  const unrelatedHigh = evaluateDependencyAdvisories([
+    reviewedFinding,
+    {
+      module_name: 'another-package',
+      severity: 'high',
+      github_advisory_id: 'GHSA-another-high',
+      findings: [{ version: '1.0.0', paths: ['.>another-package'] }],
+    },
+  ]);
+
+  assert.equal(unrelatedHigh.reviewedExceptions.length, 1);
+  assert.equal(unrelatedHigh.blockingAdvisories.length, 1);
 });
 
 test('Phase A workflow runs custom and established secret scans on security branches', () => {

@@ -1,7 +1,11 @@
 import { spawnSync } from 'node:child_process';
 
+import {
+  evaluateDependencyAdvisories,
+  failSeverities,
+} from './dependency-audit-policy.mjs';
+
 const severityOrder = ['info', 'low', 'moderate', 'high', 'critical'];
-const failSeverities = new Set(['high', 'critical']);
 
 const audit = spawnSync('pnpm', ['audit', '--prod', '--json'], {
   encoding: 'utf8',
@@ -41,7 +45,9 @@ if (!auditReport) {
 const vulnerabilities = auditReport.metadata?.vulnerabilities ?? {};
 const advisories = Object.values(auditReport.advisories ?? {});
 const counts = Object.fromEntries(severityOrder.map((severity) => [severity, vulnerabilities[severity] ?? 0]));
-const blockingCount = [...failSeverities].reduce((total, severity) => total + counts[severity], 0);
+const reportedHighOrCriticalCount = [...failSeverities].reduce((total, severity) => total + counts[severity], 0);
+const { blockingAdvisories, reviewedExceptions } = evaluateDependencyAdvisories(advisories);
+const classifiedHighOrCriticalCount = blockingAdvisories.length + reviewedExceptions.length;
 
 console.info('Production dependency audit summary:');
 for (const severity of severityOrder) {
@@ -60,6 +66,11 @@ if (advisories.length > 0) {
     console.info(`  vulnerable: ${advisory.vulnerable_versions ?? 'unknown'}; patched: ${advisory.patched_versions ?? 'unknown'}`);
     console.info(`  paths: ${pathCount}`);
 
+    const reviewedException = reviewedExceptions.find((entry) => entry.advisory === advisory);
+    if (reviewedException) {
+      console.info(`  disposition: temporary reviewed exception (${reviewedException.exception.documentation})`);
+    }
+
     if (samplePath) {
       console.info(`  sample path: ${samplePath}`);
     }
@@ -70,8 +81,22 @@ if (advisories.length > 0) {
   }
 }
 
-if (blockingCount > 0) {
-  console.error('\nProduction dependency audit failed because High or Critical advisories are present.');
+if (reviewedExceptions.length > 0) {
+  console.warn('\nTemporary reviewed High advisory exceptions:');
+  for (const { advisory, exception } of reviewedExceptions) {
+    console.warn(`- ${exception.advisoryId}: ${advisory.module_name} ${advisory.findings?.[0]?.version ?? 'unknown'}`);
+    console.warn(`  scope: Expo CLI/build tooling paths only`);
+    console.warn(`  documentation: ${exception.documentation}`);
+  }
+}
+
+if (reportedHighOrCriticalCount !== classifiedHighOrCriticalCount) {
+  console.error('\nProduction dependency audit failed because High/Critical findings could not be classified safely.');
+  process.exit(1);
+}
+
+if (blockingAdvisories.length > 0) {
+  console.error('\nProduction dependency audit failed because unreviewed High or Critical advisories are present.');
   process.exit(1);
 }
 
@@ -83,4 +108,4 @@ if (audit.status !== 0 && advisories.length === 0) {
   process.exit(audit.status ?? 1);
 }
 
-console.info('\nProduction dependency security gate passed. No High or Critical advisories were found.');
+console.info('\nProduction dependency security gate passed. No unreviewed High or Critical advisories were found.');

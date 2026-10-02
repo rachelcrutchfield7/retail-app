@@ -4,6 +4,7 @@ import { join, relative } from 'node:path';
 const root = process.cwd();
 const fix = process.argv.includes('--fix');
 const ignoredDirs = new Set(['.git', '.expo', '.temp', 'dist', 'node_modules', 'web-build']);
+const ignoredGeneratedDirs = new Set([join(root, 'marketing-site', '.astro')]);
 const scannedExtensions = new Set(['.js', '.mjs', '.ts', '.tsx', '.json', '.sql', '.md', '.txt']);
 
 function extensionFor(filePath) {
@@ -21,6 +22,10 @@ function walk(dir, files = []) {
     const stats = statSync(fullPath);
 
     if (stats.isDirectory()) {
+      if (ignoredGeneratedDirs.has(fullPath)) {
+        continue;
+      }
+
       walk(fullPath, files);
       continue;
     }
