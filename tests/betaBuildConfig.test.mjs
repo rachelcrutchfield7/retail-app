@@ -15,6 +15,8 @@ const approvedEnv = {
   EXPO_PUBLIC_APP_ENV: 'beta',
   EXPO_PUBLIC_SUPABASE_URL: 'https://ycwgsdigvpmprqreoqiz.supabase.co',
   EXPO_PUBLIC_SUPABASE_ANON_KEY: ['sb', 'publishable_valid_public_test_key'].join('_'),
+  EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY: 'pk_test_public',
+  EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED: 'false',
 };
 
 function expectFailure(env, messagePattern) {
@@ -35,14 +37,45 @@ test('beta build configuration gate accepts valid preview configuration', () => 
   assert.equal(result.checks.supabasePublicKeyAccepted, true);
 });
 
-test('beta build configuration gate accepts the isolated payments test Supabase project', () => {
+test('beta build configuration gate rejects production Supabase when payments are enabled', () => {
+  expectFailure(
+    {
+      EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED: 'true',
+    },
+    /payments test Supabase/
+  );
+});
+
+test('beta build configuration gate accepts production Supabase when payments are disabled', () => {
+  const result = validateBetaBuildConfig(approvedEnv);
+
+  assert.equal(result.ok, true);
+  assert.equal(result.checks.stripePaymentsEnabled, false);
+  assert.equal(result.checks.stripePublishableKeyMode, 'test');
+});
+
+test('beta build configuration gate accepts payments-test Supabase with payments enabled and a test Stripe key', () => {
   const result = validateBetaBuildConfig({
     ...approvedEnv,
     EXPO_PUBLIC_SUPABASE_URL: 'https://jqzaxzylijbwjdzoqsen.supabase.co',
+    EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED: 'true',
   });
 
   assert.equal(result.ok, true);
   assert.equal(result.checks.supabaseProjectMatches, true);
+  assert.equal(result.checks.stripePaymentsEnabled, true);
+  assert.equal(result.checks.stripePublishableKeyMode, 'test');
+});
+
+test('beta build configuration gate rejects payments-test Supabase with payments enabled and the wrong Stripe key mode', () => {
+  expectFailure(
+    {
+      EXPO_PUBLIC_SUPABASE_URL: 'https://jqzaxzylijbwjdzoqsen.supabase.co',
+      EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED: 'true',
+      EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY: 'pk_live_public',
+    },
+    /Stripe test publishable key/
+  );
 });
 
 test('beta build configuration gate rejects missing or non-beta app environment', () => {

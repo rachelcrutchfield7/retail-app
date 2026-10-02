@@ -30,6 +30,11 @@ export function validateBetaBuildConfig(env = process.env) {
   const appEnv = env.EXPO_PUBLIC_APP_ENV ?? '';
   const supabaseUrl = env.EXPO_PUBLIC_SUPABASE_URL ?? '';
   const publicKey = env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
+  const stripePublishableKey = env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? '';
+  const stripePaymentsEnabled =
+    isEnabledEnvFlag(env.EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED) ||
+    isEnabledEnvFlag(env.EXPO_PUBLIC_ENABLE_STRIPE_CHECKOUT);
+  const stripePublishableKeyMode = getStripePublishableMode(stripePublishableKey);
   const urlResult = validateSupabaseUrl(supabaseUrl);
   const keyResult = validatePublicKey(publicKey);
 
@@ -49,6 +54,24 @@ export function validateBetaBuildConfig(env = process.env) {
     failures.push(...keyResult.failures);
   }
 
+  const normalizedSupabaseUrl = supabaseUrl.trim().toLowerCase();
+
+  if (stripePaymentsEnabled) {
+    if (normalizedSupabaseUrl !== approvedPaymentsTestSupabaseUrl) {
+      failures.push(
+        'Beta builds with Stripe payments enabled must use the approved ReTail payments test Supabase project URL.'
+      );
+    }
+
+    if (stripePublishableKeyMode !== 'test') {
+      failures.push('Beta builds with Stripe payments enabled must use a Stripe test publishable key.');
+    }
+  } else if (normalizedSupabaseUrl !== approvedSupabaseUrl) {
+    failures.push(
+      'Beta builds with Stripe payments disabled must use the approved ReTail production Supabase project URL.'
+    );
+  }
+
   return {
     ok: failures.length === 0,
     failures,
@@ -60,6 +83,8 @@ export function validateBetaBuildConfig(env = process.env) {
       supabaseProjectMatches: urlResult.projectMatches,
       supabasePublicKeyPresent: Boolean(publicKey),
       supabasePublicKeyAccepted: keyResult.ok,
+      stripePaymentsEnabled,
+      stripePublishableKeyMode,
     },
   };
 }
@@ -158,6 +183,28 @@ function validatePublicKey(value) {
   return { ok: failures.length === 0, failures };
 }
 
+function isEnabledEnvFlag(value) {
+  return value?.trim().toLowerCase() === 'true';
+}
+
+function getStripePublishableMode(value) {
+  const normalized = value.trim();
+
+  if (!normalized) {
+    return 'missing';
+  }
+
+  if (normalized.startsWith('pk_test_')) {
+    return 'test';
+  }
+
+  if (normalized.startsWith('pk_live_')) {
+    return 'live';
+  }
+
+  return 'unknown';
+}
+
 function printSafeResult(result) {
   console.info(`Supabase URL present: ${result.checks.supabaseUrlPresent ? 'yes' : 'no'}`);
   console.info(`Supabase URL is HTTPS: ${result.checks.supabaseUrlIsHttps ? 'yes' : 'no'}`);
@@ -165,6 +212,8 @@ function printSafeResult(result) {
   console.info(`Supabase public key present: ${result.checks.supabasePublicKeyPresent ? 'yes' : 'no'}`);
   console.info(`Supabase public key accepted: ${result.checks.supabasePublicKeyAccepted ? 'yes' : 'no'}`);
   console.info(`App environment is beta: ${result.checks.appEnvironmentIsBeta ? 'yes' : 'no'}`);
+  console.info(`Stripe payments enabled: ${result.checks.stripePaymentsEnabled ? 'yes' : 'no'}`);
+  console.info(`Stripe publishable key mode: ${result.checks.stripePublishableKeyMode}`);
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
