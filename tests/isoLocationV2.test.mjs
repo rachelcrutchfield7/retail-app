@@ -177,7 +177,7 @@ test('client ISO flow uses v2 RPCs and trusted location without exposing coordin
   assert.match(screens, /useMarketplaceSearchLocationPreference/i);
   assert.match(screens, /marketplaceLocationId: postingLocation\.marketplaceLocationId/i);
   assert.match(screens, /resolutionLevel === 'postal_code'/i);
-  assert.match(screens, /Set Marketplace Location/i);
+  assert.match(screens, /Set Marketplace Area/i);
   assert.doesNotMatch(service, /requested_(latitude|longitude|location_point|geography)/i);
 });
 

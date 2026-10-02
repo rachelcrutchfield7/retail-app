@@ -652,7 +652,7 @@ export function IsoScreen({
                   nearby demand without exposing exact coordinates.
                 </Text>
                 <Button
-                  title="Set Marketplace Location"
+                  title="Set Marketplace Area"
                   onPress={onOpenLocationSettings}
                   fullWidth
                 />
@@ -1087,7 +1087,7 @@ export function CreateIsoScreen({
                   an ISO request.
                 </Text>
                 <Button
-                  title="Set Marketplace Location"
+                  title="Set Marketplace Area"
                   onPress={onOpenLocationSettings}
                   fullWidth
                 />

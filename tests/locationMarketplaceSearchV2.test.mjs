@@ -260,10 +260,12 @@ test('resolver and marketplace client contain no direct provider call or key', (
   }
 });
 
-test('successful location changes invalidate only trusted preference and listing queries', () => {
+test('successful location changes update the trusted preference and refresh location-aware results', () => {
+  assert.match(searchLocationHook, /setQueryData\([\s\S]*?queryKeys\.marketplaceSearchLocation\(userId\)[\s\S]*?preference/);
   assert.match(searchLocationHook, /invalidateQueries\(\{ queryKey: queryKeys\.marketplaceSearchLocation\(userId\) \}\)/);
   assert.match(searchLocationHook, /invalidateQueries\(\{ queryKey: queryKeys\.listings \}\)/);
-  assert.doesNotMatch(searchLocationHook, /isoFeeds|rescue-hub|payment|account/);
+  assert.match(searchLocationHook, /invalidateQueries\(\{ queryKey: queryKeys\.isoFeeds \}\)/);
+  assert.doesNotMatch(searchLocationHook, /payment|account/);
 });
 
 test('resolver failure cannot overwrite the existing preference', () => {

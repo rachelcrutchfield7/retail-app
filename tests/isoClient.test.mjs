@@ -28,7 +28,7 @@ const storage = fs.readFileSync(
 );
 
 const marketplaceAreaHook = fs.readFileSync(
-  new URL('../src/hooks/useMarketplaceSearchArea.ts', import.meta.url),
+  new URL('../src/hooks/useMarketplaceSearchLocation.ts', import.meta.url),
   'utf8'
 );
 
@@ -116,6 +116,10 @@ test('ISO image sort positions are chosen from zero through four', () => {
 
 
 test('changing marketplace area invalidates location-aware ISO feeds', () => {
+  assert.match(
+    marketplaceAreaHook,
+    /setQueryData\([\s\S]*?queryKeys\.marketplaceSearchLocation\(userId\)[\s\S]*?preference/
+  );
   assert.match(
     marketplaceAreaHook,
     /invalidateQueries\(\{ queryKey: queryKeys\.isoFeeds \}\)/

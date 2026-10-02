@@ -178,6 +178,7 @@ import type {
 import type { Category, IconComponent, Listing, ListingCondition, ListingStatus, MarketplaceSearchRadius, RescueNeedUrgency, RescueOrganization, RescueOrganizationType } from '../types';
 import { handleAppError } from '../utils/errorHandler';
 import { listingLocationLabel } from '../utils/format';
+import { getCommunityListingCampaignPresentation } from '../utils/communityCampaignPresentation';
 import {
   homeListingSortQueryValue,
   sortHomeListings,
@@ -698,6 +699,10 @@ export function HomeScreen({
             </View>
           </View>
 
+          <CommunityListingCampaignCard
+            campaign={communityCampaign.data ?? null}
+          />
+
           {notice ? <NoticeCard notice={notice} actionLabel="Profile" onAction={onOpenProfile} /> : null}
 
           {onOpenRescueHub ? (
@@ -707,10 +712,6 @@ export function HomeScreen({
               onPress={onOpenRescueHub}
             />
           ) : null}
-
-          <CommunityListingCampaignCard
-            campaign={communityCampaign.data ?? null}
-          />
 
           <SearchBar value={search} onChangeText={setSearch} onClear={() => setSearch('')} />
 
@@ -5370,31 +5371,21 @@ function CommunityListingCampaignCard({
     isActive: boolean;
   } | null;
 }) {
-  if (!campaign?.startsAt || !campaign.endsAt || !campaign.isActive) {
+  const presentation = getCommunityListingCampaignPresentation(campaign);
+
+  if (!campaign || !presentation) {
     return null;
   }
 
-  const now = Date.now();
-  const startsAt = new Date(campaign.startsAt);
-  const endsAt = new Date(campaign.endsAt);
-  const startsAtMs = startsAt.getTime();
-  const endsAtMs = endsAt.getTime();
-
-  if (
-    !Number.isFinite(startsAtMs) ||
-    !Number.isFinite(endsAtMs) ||
-    now >= endsAtMs
-  ) {
-    return null;
-  }
-
-  const hasStarted = now >= startsAtMs;
-  const target = Math.max(1, campaign.targetListingCount);
-  const qualifyingCount = Math.max(0, campaign.qualifyingListingCount);
-  const progressPercent = Math.min(
-    100,
-    Math.max(0, (qualifyingCount / target) * 100),
-  );
+  const {
+    state,
+    qualifyingListingCount,
+    targetListingCount,
+    progressPercent,
+    accessibleProgressValue,
+    startsAt,
+    endsAt,
+  } = presentation;
 
   const formatCentralTime = (date: Date) =>
     new Intl.DateTimeFormat('en-US', {
@@ -5409,9 +5400,29 @@ function CommunityListingCampaignCard({
   const ruleCopy =
     `Every ${campaign.listingsRequiredForEntry} qualifying listings earns an entry, ` +
     `up to ${campaign.maxEntriesPerSeller}.`;
+  const showsProgress = state !== 'upcoming';
+  const statusLabel = state === 'upcoming'
+    ? 'UPCOMING'
+    : state === 'goal-reached'
+      ? 'GOAL REACHED'
+      : state === 'ended'
+        ? 'ENDED'
+        : 'LIVE NOW';
+  const campaignMessage = state === 'upcoming'
+    ? `Starts ${formatCentralTime(startsAt)}`
+    : state === 'goal-reached'
+      ? 'Goal reached! The community can keep the momentum going.'
+      : state === 'ended'
+        ? `Campaign ended ${formatCentralTime(endsAt)}. Final progress is shown below.`
+        : `Help ReTail reach ${targetListingCount} new listings in 72 hours.`;
 
   return (
     <View style={styles.communityCampaignCard}>
+      <View style={styles.communityCampaignAccent} />
+      <View style={styles.communityCampaignStatusRow}>
+        <Text style={styles.communityCampaignStatus}>{statusLabel}</Text>
+      </View>
+
       <View style={styles.communityCampaignHeader}>
         <View style={styles.communityCampaignIconFrame}>
           <ListChecks size={22} color={colors.logoOrange} />
@@ -5420,26 +5431,35 @@ function CommunityListingCampaignCard({
         <View style={styles.communityCampaignCopy}>
           <Text style={styles.cardTitle}>100 Listings in 72 Hours</Text>
 
-          <Text style={styles.body}>
-            {hasStarted
-              ? 'Help ReTail reach 100 new listings in 72 hours.'
-              : `Starts ${formatCentralTime(startsAt)}`}
-          </Text>
+          <Text style={styles.body}>{campaignMessage}</Text>
         </View>
       </View>
 
-      {hasStarted ? (
+      {showsProgress ? (
         <View style={styles.communityCampaignProgressBlock}>
           <View style={styles.communityCampaignProgressHeader}>
             <Text style={styles.communityCampaignProgressCount}>
-              {qualifyingCount} / {campaign.targetListingCount} listings
+              {qualifyingListingCount} of {targetListingCount} listings
             </Text>
             <Text style={styles.metaText}>
-              Ends {formatCentralTime(endsAt)}
+              {state === 'ended'
+                ? 'Final total'
+                : `Ends ${formatCentralTime(endsAt)}`}
             </Text>
           </View>
 
-          <View style={styles.communityCampaignProgressTrack}>
+          <View
+            accessible
+            accessibilityRole="progressbar"
+            accessibilityLabel="100 Listings in 72 Hours progress"
+            accessibilityValue={{
+              min: 0,
+              max: targetListingCount,
+              now: accessibleProgressValue,
+              text: `${qualifyingListingCount} of ${targetListingCount} listings`,
+            }}
+            style={styles.communityCampaignProgressTrack}
+          >
             <View
               style={[
                 styles.communityCampaignProgressFill,
@@ -5448,11 +5468,7 @@ function CommunityListingCampaignCard({
             />
           </View>
         </View>
-      ) : (
-        <Text style={styles.body}>
-          Help ReTail reach 100 new listings in 72 hours.
-        </Text>
-      )}
+      ) : null}
 
       <Text style={styles.metaText}>{ruleCopy}</Text>
     </View>
@@ -5906,11 +5922,39 @@ function createSprint3Styles(themeColors: ThemeColors) {
   },
   communityCampaignCard: {
     gap: spacing.md,
-    padding: spacing.md,
+    padding: spacing.lg,
+    paddingTop: spacing.lg + spacing.xs,
     borderRadius: radius.large,
     backgroundColor: colors.surfaceWarm,
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: colors.logoOrange,
+    overflow: 'hidden',
+    shadowColor: colors.textPrimary,
+    shadowOpacity: 0.14,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 5,
+  },
+  communityCampaignAccent: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: spacing.xs,
+    backgroundColor: colors.logoOrange,
+  },
+  communityCampaignStatusRow: {
+    flexDirection: 'row',
+  },
+  communityCampaignStatus: {
+    color: colors.textPrimary,
+    backgroundColor: colors.logoOrangeSoft,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    ...typography.caption,
+    fontWeight: '700',
+    letterSpacing: 0.7,
   },
   communityCampaignHeader: {
     flexDirection: 'row',
@@ -5927,6 +5971,7 @@ function createSprint3Styles(themeColors: ThemeColors) {
   },
   communityCampaignCopy: {
     flex: 1,
+    minWidth: 0,
     gap: spacing.xs,
   },
   communityCampaignProgressBlock: {
@@ -5941,11 +5986,13 @@ function createSprint3Styles(themeColors: ThemeColors) {
   },
   communityCampaignProgressCount: {
     color: colors.textPrimary,
-    ...typography.body,
-    fontWeight: '600',
+    fontSize: 20,
+    lineHeight: 26,
+    fontWeight: '700',
   },
   communityCampaignProgressTrack: {
-    height: 8,
+    width: '100%',
+    height: 12,
     overflow: 'hidden',
     borderRadius: radius.pill,
     backgroundColor: colors.border,

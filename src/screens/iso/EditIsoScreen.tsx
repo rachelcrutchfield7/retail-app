@@ -385,7 +385,7 @@ export function EditIsoScreen({
               <Text style={[styles.bodyText, { color: themeColors.textSecondary }]}>{postingLocation.city}, {postingLocation.state}</Text>
             </View>
           ) : (
-            <Button title="Set Marketplace Location" onPress={onOpenLocationSettings} fullWidth />
+            <Button title="Set Marketplace Area" onPress={onOpenLocationSettings} fullWidth />
           )}
         </View>
 

@@ -72,7 +72,7 @@ test('ISO create form keeps request fields and uses the trusted marketplace loca
   assert.match(isoScreens, /Urgency/);
   assert.match(isoScreens, /Marketplace location/);
   assert.match(isoScreens, /Search radius/);
-  assert.match(isoScreens, /Set Marketplace Location/);
+  assert.match(isoScreens, /Set Marketplace Area/);
   assert.doesNotMatch(isoScreens, /Keep this request active for/);
   assert.doesNotMatch(isoScreens, /useMarketplaceSearchAreas/);
 });

@@ -3,6 +3,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import { getCommunityListingCampaignPresentation } from '../src/utils/communityCampaignPresentation.ts';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 
@@ -335,34 +336,102 @@ test('Home campaign status uses the public service and never the admin campaign 
   );
 });
 
-test('Home campaign card supports scheduled active and ended display states', () => {
+test('Home campaign card supports accessible scheduled, active, goal reached, and ended display states', () => {
   const home = read('src/sprint3/Sprint3App.tsx');
 
-  assert.match(
-    home,
-    /if\s*\(\s*!campaign\?\.startsAt\s*\|\|\s*!campaign\.endsAt\s*\|\|\s*!campaign\.isActive\s*\)/,
-  );
-
-  assert.match(home, /const hasStarted = now >= startsAtMs/);
-  assert.match(home, /now >= endsAtMs/);
-
+  assert.match(home, /getCommunityListingCampaignPresentation\(campaign\)/);
   assert.match(home, /Starts \$\{formatCentralTime\(startsAt\)\}/);
-  assert.match(home, /\{qualifyingCount\} \/ \{campaign\.targetListingCount\} listings/);
-  assert.match(home, /Ends \{formatCentralTime\(endsAt\)\}/);
+  assert.match(home, /GOAL REACHED/);
+  assert.match(home, /Campaign ended \$\{formatCentralTime\(endsAt\)\}/);
+  assert.match(home, /Help ReTail reach \$\{targetListingCount\} new listings/);
+  assert.match(home, /\{qualifyingListingCount\} of \{targetListingCount\} listings/);
+  assert.match(home, /accessibilityRole="progressbar"/);
+  assert.match(home, /accessibilityValue=\{\{/);
 });
 
-test('Home campaign progress is capped at 100 percent', () => {
+test('campaign presentation preserves authoritative counts and clamps only visual progress', () => {
   const home = read('src/sprint3/Sprint3App.tsx');
-
-  assert.match(
-    home,
-    /Math\.min\(\s*100,\s*Math\.max\(\s*0,\s*\(qualifyingCount \/ target\) \* 100\s*\),?\s*\)/,
-  );
-
   assert.match(
     home,
     /width:\s*`\$\{progressPercent\}%`/,
   );
+
+  const presentation = getCommunityListingCampaignPresentation({
+    qualifyingListingCount: 142,
+    targetListingCount: 100,
+    startsAt: '2026-10-01T12:00:00.000Z',
+    endsAt: '2026-10-04T12:00:00.000Z',
+    isActive: true,
+  }, Date.parse('2026-10-02T12:00:00.000Z'));
+
+  assert.equal(presentation?.state, 'goal-reached');
+  assert.equal(presentation?.qualifyingListingCount, 142);
+  assert.equal(presentation?.targetListingCount, 100);
+  assert.equal(presentation?.progressPercent, 100);
+  assert.equal(presentation?.accessibleProgressValue, 100);
+});
+
+test('campaign lifecycle derives upcoming, active, and ended states without changing server status', () => {
+  const campaign = {
+    qualifyingListingCount: 42,
+    targetListingCount: 100,
+    startsAt: '2026-10-02T12:00:00.000Z',
+    endsAt: '2026-10-05T12:00:00.000Z',
+    isActive: true,
+  };
+
+  assert.equal(
+    getCommunityListingCampaignPresentation(
+      campaign,
+      Date.parse('2026-10-01T12:00:00.000Z'),
+    )?.state,
+    'upcoming',
+  );
+  assert.equal(
+    getCommunityListingCampaignPresentation(
+      campaign,
+      Date.parse('2026-10-03T12:00:00.000Z'),
+    )?.state,
+    'active',
+  );
+  assert.equal(
+    getCommunityListingCampaignPresentation(
+      { ...campaign, isActive: false },
+      Date.parse('2026-10-03T12:00:00.000Z'),
+    ),
+    null,
+  );
+
+  const ended = getCommunityListingCampaignPresentation(
+    campaign,
+    Date.parse('2026-10-06T12:00:00.000Z'),
+  );
+  assert.equal(ended?.state, 'ended');
+  assert.equal(ended?.qualifyingListingCount, 42);
+
+  assert.equal(
+    getCommunityListingCampaignPresentation(
+      { ...campaign, isActive: false },
+      Date.parse('2026-10-06T12:00:00.000Z'),
+    ),
+    null,
+  );
+});
+
+test('campaign card is directly below the essential Home header and before discovery content', () => {
+  const home = read('src/sprint3/Sprint3App.tsx');
+  const homeScreen = home.slice(
+    home.indexOf('export function HomeScreen'),
+    home.indexOf('export function SearchScreen'),
+  );
+  const headerIndex = homeScreen.indexOf('styles.headerBlock');
+  const campaignIndex = homeScreen.indexOf('<CommunityListingCampaignCard');
+  const rescueIndex = homeScreen.indexOf('<RescueHubBanner');
+  const searchIndex = homeScreen.indexOf('<SearchBar');
+
+  assert.ok(headerIndex >= 0 && headerIndex < campaignIndex);
+  assert.ok(campaignIndex < rescueIndex);
+  assert.ok(campaignIndex < searchIndex);
 });
 
 test('Home campaign card exposes no participant or seller information', () => {

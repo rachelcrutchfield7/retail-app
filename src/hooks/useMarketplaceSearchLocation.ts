@@ -47,9 +47,14 @@ export function useSetMarketplaceSearchLocation() {
           request.marketplaceLocationId,
           request.radiusMiles
         ),
-    onSuccess: async () => {
+    onSuccess: async (preference) => {
+      queryClient.setQueryData(
+        queryKeys.marketplaceSearchLocation(userId),
+        preference
+      );
       await queryClient.invalidateQueries({ queryKey: queryKeys.marketplaceSearchLocation(userId) });
       await queryClient.invalidateQueries({ queryKey: queryKeys.listings });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.isoFeeds });
     },
   });
 

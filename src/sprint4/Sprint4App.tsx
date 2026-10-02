@@ -42,6 +42,7 @@ import {
   ErrorState,
   FilterChip,
   LoadingSpinner,
+  MarketplaceLocationFilter,
   Metric,
   MessageInput,
   OfferMessageCard,
@@ -232,8 +233,9 @@ type SprintRoute =
   | { name: 'rescue-profile'; rescue: RescueOrganization }
   | { name: 'settings' }
   | { name: 'password-reset'; error?: string }
+  | { name: 'preferences' }
   | {
-      name: 'preferences';
+      name: 'marketplace-area';
       returnTo?:
         | { name: 'iso-tab' }
         | { name: 'create-iso' }
@@ -245,6 +247,27 @@ type SprintRoute =
   | { name: 'report'; targetType: 'listing' | 'user' | 'message' | 'iso_post'; targetId: string; title: string; returnIsoPostId?: string }
   | { name: 'support-case'; transactionId: string; requesterRole: SupportCaseRequesterRole; conversationId?: string }
   | { name: 'review'; listingId: string; revieweeId: string; transactionId?: string };
+
+type MarketplaceAreaReturnTo = Extract<
+  SprintRoute,
+  { name: 'marketplace-area' }
+>['returnTo'];
+
+function routeAfterMarketplaceArea(returnTo?: MarketplaceAreaReturnTo): SprintRoute {
+  if (returnTo?.name === 'iso-tab') {
+    return { name: 'tabs', tab: 'iso' };
+  }
+
+  if (returnTo?.name === 'create-iso') {
+    return { name: 'create-iso' };
+  }
+
+  if (returnTo?.name === 'edit-iso') {
+    return { name: 'edit-iso', postId: returnTo.postId };
+  }
+
+  return { name: 'tabs', tab: 'profile' };
+}
 
 const tabs: Array<{ key: SprintTab; label: string; icon: typeof Home }> = [
   { key: 'home', label: 'Home', icon: Home },
@@ -337,9 +360,10 @@ function Sprint4Experience() {
   const openRescueHub = () => setRoute({ name: 'rescue-hub' });
   const openRescueProfile = (rescue: RescueOrganization) => setRoute({ name: 'rescue-profile', rescue });
   const openSettings = () => setRoute({ name: 'settings' });
-  const openPreferences = (
-    returnTo?: Extract<SprintRoute, { name: 'preferences' }>['returnTo']
-  ) => setRoute({ name: 'preferences', returnTo });
+  const openPreferences = () => setRoute({ name: 'preferences' });
+  const openMarketplaceArea = (
+    returnTo?: Extract<SprintRoute, { name: 'marketplace-area' }>['returnTo']
+  ) => setRoute({ name: 'marketplace-area', returnTo });
   const openSafetyCenter = () => setRoute({ name: 'safety-center' });
   const openFAQ = () => setRoute({ name: 'faq' });
   const openAdmin = () => setRoute({ name: 'admin' });
@@ -524,6 +548,11 @@ function Sprint4Experience() {
         return true;
       }
 
+      if (route.name === 'marketplace-area') {
+        setRoute(routeAfterMarketplaceArea(route.returnTo));
+        return true;
+      }
+
       if (route.name === 'favorites') {
         setRoute({ name: 'tabs', tab: 'home' });
         return true;
@@ -585,7 +614,7 @@ function Sprint4Experience() {
         onBack={() => openTab('iso')}
         onCreated={openIsoPost}
         onOpenLocationSettings={() =>
-          openPreferences({ name: 'create-iso' })
+          openMarketplaceArea({ name: 'create-iso' })
         }
       />
     );
@@ -598,7 +627,7 @@ function Sprint4Experience() {
         onBack={() => openIsoPost(route.postId)}
         onSaved={openIsoPost}
         onOpenLocationSettings={() =>
-          openPreferences({ name: 'edit-iso', postId: route.postId })
+          openMarketplaceArea({ name: 'edit-iso', postId: route.postId })
         }
       />
     );
@@ -748,29 +777,18 @@ function Sprint4Experience() {
     );
   }
 
+  if (route.name === 'marketplace-area') {
+    return (
+      <MarketplaceAreaScreen
+        onBack={() => setRoute(routeAfterMarketplaceArea(route.returnTo))}
+      />
+    );
+  }
+
   if (route.name === 'preferences') {
-    const returnFromPreferences = () => {
-      if (route.returnTo?.name === 'iso-tab') {
-        openTab('iso');
-        return;
-      }
-
-      if (route.returnTo?.name === 'create-iso') {
-        setRoute({ name: 'create-iso' });
-        return;
-      }
-
-      if (route.returnTo?.name === 'edit-iso') {
-        setRoute({ name: 'edit-iso', postId: route.returnTo.postId });
-        return;
-      }
-
-      openTab('profile');
-    };
-
     return (
       <OnboardingPreferencesScreen
-        onBack={returnFromPreferences}
+        onBack={() => openTab('profile')}
         onOpenSearch={() => openTab('search')}
       />
     );
@@ -840,7 +858,7 @@ function Sprint4Experience() {
             onCreatePost={openCreateIso}
             onOpenProfile={() => openTab('profile')}
             onOpenLocationSettings={() =>
-              openPreferences({ name: 'iso-tab' })
+              openMarketplaceArea({ name: 'iso-tab' })
             }
           />
         ) : null}
@@ -3739,6 +3757,97 @@ export function SettingsScreen({
         currentStatus={stripeStatus}
         onClose={() => setPayoutOnboardingVisible(false)}
         onStatusChange={handlePayoutStatusChange}
+      />
+    </ScreenFrame>
+  );
+}
+
+function MarketplaceAreaScreen({ onBack }: { onBack: () => void }) {
+  const searchLocationPreference = useMarketplaceSearchLocationPreference();
+  const searchLocationUpdate = useSetMarketplaceSearchLocation();
+  const [notice, setNotice] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const radiusMiles = searchLocationPreference.data?.radiusMiles ?? 25;
+
+  const updateMarketplaceLocation = async ({
+    state,
+    zipCode,
+  }: {
+    state: string;
+    zipCode: string;
+  }) => {
+    setNotice(null);
+    setSaveError(null);
+
+    try {
+      const updated = await searchLocationUpdate.setLocation({
+        state,
+        zipCode,
+        radiusMiles,
+      });
+      setNotice(
+        `Marketplace area saved: ${updated.city}, ${updated.state} within ${updated.radiusMiles} miles.`
+      );
+    } catch (error) {
+      setSaveError(handleAppError(error).userMessage);
+    }
+  };
+
+  const updateMarketplaceRadius = async (
+    nextRadius: MarketplaceSearchRadius
+  ) => {
+    setNotice(null);
+    setSaveError(null);
+
+    const marketplaceLocationId =
+      searchLocationPreference.data?.marketplaceLocationId;
+
+    if (!marketplaceLocationId) {
+      setSaveError('Choose a marketplace area before changing the distance.');
+      return;
+    }
+
+    try {
+      const updated = await searchLocationUpdate.setRadius(
+        marketplaceLocationId,
+        nextRadius
+      );
+      setNotice(
+        `Marketplace distance saved at ${updated.radiusMiles} miles.`
+      );
+    } catch (error) {
+      setSaveError(handleAppError(error).userMessage);
+    }
+  };
+
+  return (
+    <ScreenFrame>
+      <BackButton onPress={onBack} />
+      <View style={styles.headerBlock}>
+        <Text style={styles.title}>Marketplace Area</Text>
+        <Text style={styles.body}>
+          This saved area and distance are shared across Marketplace, Search,
+          ISO, and Rescue Hub.
+        </Text>
+      </View>
+
+      {notice ? <NoticeCard title="Marketplace area updated" body={notice} /> : null}
+
+      <MarketplaceLocationFilter
+        city={searchLocationPreference.data?.city}
+        state={searchLocationPreference.data?.state}
+        zipCode={searchLocationPreference.data?.zipCode}
+        radiusMiles={radiusMiles}
+        loading={
+          searchLocationPreference.isLoading || searchLocationUpdate.isLoading
+        }
+        error={
+          saveError
+          ?? searchLocationPreference.error?.message
+          ?? searchLocationUpdate.error?.message
+        }
+        onLocationSubmit={(input) => void updateMarketplaceLocation(input)}
+        onRadiusChange={(nextRadius) => void updateMarketplaceRadius(nextRadius)}
       />
     </ScreenFrame>
   );

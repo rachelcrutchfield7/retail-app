@@ -178,37 +178,37 @@ test('release permission copy includes ISO reference images without changing ver
 test('ISO marketplace preferences return to the originating ISO screen', () => {
   assert.match(
     app,
-    /name: 'preferences';[\s\S]*?returnTo\?:[\s\S]*?\{ name: 'iso-tab' \}[\s\S]*?\{ name: 'create-iso' \}[\s\S]*?\{ name: 'edit-iso'; postId: string \}/,
+    /name: 'marketplace-area';[\s\S]*?returnTo\?:[\s\S]*?\{ name: 'iso-tab' \}[\s\S]*?\{ name: 'create-iso' \}[\s\S]*?\{ name: 'edit-iso'; postId: string \}/,
   );
 
   assert.match(
     app,
-    /<CreateIsoScreen[\s\S]*?onOpenLocationSettings=\{\(\) =>[\s\S]*?openPreferences\(\{ name: 'create-iso' \}\)/,
+    /<CreateIsoScreen[\s\S]*?onOpenLocationSettings=\{\(\) =>[\s\S]*?openMarketplaceArea\(\{ name: 'create-iso' \}\)/,
   );
 
   assert.match(
     app,
-    /<EditIsoScreen[\s\S]*?onOpenLocationSettings=\{\(\) =>[\s\S]*?openPreferences\(\{ name: 'edit-iso', postId: route\.postId \}\)/,
+    /<EditIsoScreen[\s\S]*?onOpenLocationSettings=\{\(\) =>[\s\S]*?openMarketplaceArea\(\{ name: 'edit-iso', postId: route\.postId \}\)/,
   );
 
   assert.match(
     app,
-    /<IsoScreen[\s\S]*?onOpenLocationSettings=\{\(\) =>[\s\S]*?openPreferences\(\{ name: 'iso-tab' \}\)/,
+    /<IsoScreen[\s\S]*?onOpenLocationSettings=\{\(\) =>[\s\S]*?openMarketplaceArea\(\{ name: 'iso-tab' \}\)/,
   );
 
   assert.match(
     app,
-    /route\.name === 'preferences'[\s\S]*?onBack=\{\(\) =>[\s\S]*?route\.returnTo\?\.name === 'iso-tab'[\s\S]*?openTab\('iso'\)/,
+    /route\.name === 'marketplace-area'[\s\S]*?<MarketplaceAreaScreen[\s\S]*?onBack=\{\(\) => setRoute\(routeAfterMarketplaceArea\(route\.returnTo\)\)\}/,
   );
 
   assert.match(
     app,
-    /route\.returnTo\?\.name === 'create-iso'[\s\S]*?setRoute\(\{ name: 'create-iso' \}\)/,
+    /returnTo\?\.name === 'create-iso'[\s\S]*?return \{ name: 'create-iso' \}/,
   );
 
   assert.match(
     app,
-    /route\.returnTo\?\.name === 'edit-iso'[\s\S]*?setRoute\(\{ name: 'edit-iso', postId: route\.returnTo\.postId \}\)/,
+    /returnTo\?\.name === 'edit-iso'[\s\S]*?return \{ name: 'edit-iso', postId: returnTo\.postId \}/,
   );
 
   assert.match(

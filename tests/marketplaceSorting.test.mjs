@@ -141,7 +141,8 @@ test('every rendered marketplace radius control persists the authoritative serve
   assert.match(searchAreaHook, /invalidateQueries\(\{ queryKey: \['rescue-hub'\] \}\)/);
   assert.match(searchLocationHook, /invalidateQueries\(\{ queryKey: queryKeys\.marketplaceSearchLocation/);
   assert.match(searchLocationHook, /invalidateQueries\(\{ queryKey: queryKeys\.listings \}\)/);
-  assert.doesNotMatch(searchLocationHook, /rescue-hub|iso/);
+  assert.match(searchLocationHook, /invalidateQueries\(\{ queryKey: queryKeys\.isoFeeds \}\)/);
+  assert.doesNotMatch(searchLocationHook, /rescue-hub/);
 });
 
 test('distance never falls back to the legacy unsorted nearby RPC', async () => {
