@@ -1,0 +1,122 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { getValidAlternateEntryFormUrl } from '../../config/promotion';
+
+const title = '100 Listings in 72 Hours Giveaway | ReTail';
+const description = 'Join ReTail’s 100 Listings in 72 Hours Giveaway from October 2 through October 5, 2026. Publish qualifying pet-supply listings for entries and a chance to win a $50 prize.';
+const alternateEntryFormUrl = getValidAlternateEntryFormUrl();
+const entryTiers = [
+  { listings: '3–5', entries: '1 entry' },
+  { listings: '6–8', entries: '2 entries' },
+  { listings: '9–11', entries: '3 entries' },
+  { listings: '12–14', entries: '4 entries' },
+  { listings: '15+', entries: '5 entries' },
+];
+const prizeOptions = [
+  '$50 Chewy gift card',
+  '$50 PetSmart gift card',
+  '$50 Petco gift card',
+  '$50 donation to an eligible animal rescue organization',
+];
+---
+<BaseLayout title={title} description={description} path="/100-listings/">
+  <section class="event-hero">
+    <div class="section event-hero-grid">
+      <div class="event-hero-copy">
+        <span class="event-kicker">ReTail community giveaway</span>
+        <h1><span>100 Listings</span> in 72 Hours</h1>
+        <p class="lead">List pet supplies, help the ReTail marketplace grow, and earn entries for a chance to choose a $50 gift card or a $50 rescue donation.</p>
+        <div class="event-date-card" aria-label="Promotion dates">
+          <span>Starts</span>
+          <strong>October 2, 2026 at 8:00 AM CT</strong>
+          <span>Ends</span>
+          <strong>October 5, 2026 at 8:00 AM CT</strong>
+        </div>
+        <div class="actions">
+          <a class="button event-button" href="/download">Open or download ReTail</a>
+          <a class="button secondary" href="/100-listings/rules/">Read the Official Rules</a>
+        </div>
+      </div>
+      <aside class="event-goal-card" aria-label="Community listing goal">
+        <img src="/assets/retail-logo-header.png" alt="ReTail" width="991" height="443" />
+        <span class="goal-number">100</span>
+        <strong>qualifying listings</strong>
+        <p>One community. Three days. More pet supplies finding a useful second life.</p>
+        <div class="goal-window">72-hour community goal</div>
+      </aside>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-header centered">
+      <span class="eyebrow">How listing entries work</span>
+      <h2>The more qualifying listings you publish, the more entries you earn.</h2>
+      <p>Publish legitimate pet-related sale listings in ReTail during the Promotion Period. A maximum of five entries is available per eligible participant.</p>
+    </div>
+    <div class="entry-tier-grid" aria-label="Listing entry tiers">
+      {entryTiers.map((tier) => (
+        <article class="entry-tier-card">
+          <strong>{tier.listings}</strong>
+          <span>qualifying listings</span>
+          <b>{tier.entries}</b>
+        </article>
+      ))}
+    </div>
+    <div class="event-note">
+      <strong>What qualifies?</strong>
+      <p>Listings must be legitimate pet-related sale listings and comply with ReTail’s applicable terms and listing rules. Duplicate, fraudulent, misleading, spam, prohibited, or otherwise invalid listings do not qualify.</p>
+    </div>
+  </section>
+
+  <section class="section event-prize-section">
+    <div class="event-prize-copy">
+      <span class="eyebrow light">One winner · $50 value</span>
+      <h2>The winner chooses the prize.</h2>
+      <p>Choose a $50 gift card from one of three pet-supply retailers, or direct a $50 Sponsor donation to an eligible animal rescue organization.</p>
+    </div>
+    <div class="prize-option-grid">
+      {prizeOptions.map((prize, index) => (
+        <div class="prize-option">
+          <span>{index + 1}</span>
+          <strong>{prize}</strong>
+        </div>
+      ))}
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="community-goal-band">
+      <div>
+        <span class="eyebrow">Community goal</span>
+        <h2>Let’s reach 100 qualifying listings together.</h2>
+      </div>
+      <p>The goal celebrates marketplace growth and encourages participation. Reaching 100 listings is not required for the prize to be awarded. The Sponsor’s records determine the official qualifying-listing count.</p>
+    </div>
+  </section>
+
+  <section class="section" id="alternate-entry">
+    <div class="alternate-entry-card">
+      <div>
+        <span class="eyebrow">Free alternate method of entry</span>
+        <h2>No purchase, sale, or ReTail listing is required to enter.</h2>
+        <p>Eligible participants may enter without creating listings or completing a transaction using the Official Alternate Entry Form available through this Promotion webpage.</p>
+        <p>See the <a href="/100-listings/rules/">Official Rules</a> for eligibility, timing, entry limits, and all Promotion terms.</p>
+      </div>
+      {alternateEntryFormUrl && (
+        <a class="button event-button" href={alternateEntryFormUrl} target="_blank" rel="noreferrer">Open the Official Alternate Entry Form</a>
+      )}
+    </div>
+  </section>
+
+  <section class="section event-final-cta">
+    <div>
+      <span class="eyebrow">Ready to list?</span>
+      <h2>Give pet supplies another life.</h2>
+      <p>Open ReTail, publish qualifying sale listings during the Promotion Period, and help the community work toward 100.</p>
+    </div>
+    <div class="actions">
+      <a class="button event-button" href="/download">Open or download ReTail</a>
+      <a class="button secondary" href="/100-listings/rules/">Official Rules</a>
+    </div>
+  </section>
+</BaseLayout>
