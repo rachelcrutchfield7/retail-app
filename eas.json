@@ -73,6 +73,10 @@
         "track": "internal"
       }
     },
-    "production": {}
+    "production": {
+      "android": {
+        "track": "production"
+      }
+    }
   }
 }
