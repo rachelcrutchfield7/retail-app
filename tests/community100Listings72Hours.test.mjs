@@ -22,6 +22,17 @@ const migration = readFileSync(
   join(root, 'supabase/migrations', migrationName),
   'utf8',
 );
+const rescheduleMigration = readFileSync(
+  join(
+    root,
+    'supabase/migrations',
+    readdirSync(join(root, 'supabase/migrations'))
+      .filter((name) => name.endsWith('_reschedule_100_listings_campaign.sql'))
+      .sort()
+      .at(-1),
+  ),
+  'utf8',
+);
 const adminService = readFileSync(
   join(root, 'src/services/adminService.ts'),
   'utf8',
@@ -36,6 +47,18 @@ test('campaign is installed inactive and configured for 100 listings', () => {
   assert.match(migration, /false,\s*null,\s*null,\s*100,\s*3/);
   assert.match(migration, /target_listing_count integer not null default 100/);
   assert.match(migration, /listings_required_for_entry integer not null default 3/);
+});
+
+test('campaign reschedule preserves mechanics and moves only the official window', () => {
+  assert.match(rescheduleMigration, /2026-10-09T13:00:00Z/);
+  assert.match(rescheduleMigration, /2026-10-12T13:00:00Z/);
+  assert.match(rescheduleMigration, /target_listing_count <> 100/);
+  assert.match(rescheduleMigration, /listings_required_for_entry <> 3/);
+  assert.match(rescheduleMigration, /max_entries_per_seller <> 5/);
+  assert.match(rescheduleMigration, /community_listing_campaign_qualifying_listings/);
+  assert.match(rescheduleMigration, /community_listing_campaign_entries/);
+  assert.match(rescheduleMigration, /RETAIL_CAMPAIGN_RESCHEDULE_PARTICIPATION_EXISTS/);
+  assert.doesNotMatch(rescheduleMigration, /delete from/i);
 });
 
 test('only active sale listings inside the campaign window qualify', () => {
@@ -340,13 +363,16 @@ test('Home campaign card supports accessible scheduled, active, goal reached, an
   const home = read('src/sprint3/Sprint3App.tsx');
 
   assert.match(home, /getCommunityListingCampaignPresentation\(campaign\)/);
-  assert.match(home, /Starts \$\{formatCentralTime\(startsAt\)\}/);
+  assert.match(home, /Can we hit \$\{targetListingCount\}\?/);
+  assert.match(home, /starting \$\{formatCentralDate\(startsAt\)\}/);
   assert.match(home, /GOAL REACHED/);
   assert.match(home, /Campaign ended \$\{formatCentralTime\(endsAt\)\}/);
   assert.match(home, /Help ReTail reach \$\{targetListingCount\} new listings/);
   assert.match(home, /\{qualifyingListingCount\} of \{targetListingCount\} listings/);
   assert.match(home, /accessibilityRole="progressbar"/);
   assert.match(home, /accessibilityValue=\{\{/);
+  assert.match(home, /title="Learn More"/);
+  assert.match(home, /appLinks\.promotion100ListingsUrl/);
 });
 
 test('campaign presentation preserves authoritative counts and clamps only visual progress', () => {
@@ -373,46 +399,46 @@ test('campaign presentation preserves authoritative counts and clamps only visua
 
 test('campaign lifecycle derives upcoming, active, and ended states without changing server status', () => {
   const campaign = {
-    qualifyingListingCount: 42,
+    qualifyingListingCount: 0,
     targetListingCount: 100,
-    startsAt: '2026-10-02T12:00:00.000Z',
-    endsAt: '2026-10-05T12:00:00.000Z',
+    startsAt: '2026-10-09T13:00:00.000Z',
+    endsAt: '2026-10-12T13:00:00.000Z',
     isActive: true,
   };
 
   assert.equal(
     getCommunityListingCampaignPresentation(
       campaign,
-      Date.parse('2026-10-01T12:00:00.000Z'),
+      Date.parse('2026-10-09T12:59:59.999Z'),
     )?.state,
     'upcoming',
   );
   assert.equal(
     getCommunityListingCampaignPresentation(
       campaign,
-      Date.parse('2026-10-03T12:00:00.000Z'),
+      Date.parse('2026-10-09T13:00:00.000Z'),
     )?.state,
     'active',
   );
   assert.equal(
     getCommunityListingCampaignPresentation(
       { ...campaign, isActive: false },
-      Date.parse('2026-10-03T12:00:00.000Z'),
+      Date.parse('2026-10-09T13:00:00.000Z'),
     ),
     null,
   );
 
   const ended = getCommunityListingCampaignPresentation(
     campaign,
-    Date.parse('2026-10-06T12:00:00.000Z'),
+    Date.parse('2026-10-12T13:00:00.000Z'),
   );
   assert.equal(ended?.state, 'ended');
-  assert.equal(ended?.qualifyingListingCount, 42);
+  assert.equal(ended?.qualifyingListingCount, 0);
 
   assert.equal(
     getCommunityListingCampaignPresentation(
       { ...campaign, isActive: false },
-      Date.parse('2026-10-06T12:00:00.000Z'),
+      Date.parse('2026-10-12T13:00:00.000Z'),
     ),
     null,
   );

@@ -1,9 +1,9 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
-import { getValidAlternateEntryFormUrl } from '../../config/promotion';
+import { getValidAlternateEntryFormUrl, promotion } from '../../config/promotion';
 
 const title = '100 Listings in 72 Hours Giveaway | ReTail';
-const description = 'Join ReTail’s 100 Listings in 72 Hours Giveaway from October 2 through October 5, 2026. Publish qualifying pet-supply listings for entries and a chance to win a $50 prize.';
+const description = `Join ReTail’s 100 Listings in 72 Hours Giveaway from ${promotion.startDisplay} through ${promotion.endDisplay}. Publish qualifying pet-supply listings for entries and a chance to win a $50 prize.`;
 const alternateEntryFormUrl = getValidAlternateEntryFormUrl();
 const entryTiers = [
   { listings: '3–5', entries: '1 entry' },
@@ -23,14 +23,14 @@ const prizeOptions = [
   <section class="event-hero">
     <div class="section event-hero-grid">
       <div class="event-hero-copy">
-        <span class="event-kicker">ReTail community giveaway</span>
+        <span class="event-kicker">Starts October 9</span>
         <h1><span>100 Listings</span> in 72 Hours</h1>
         <p class="lead">List pet supplies, help the ReTail marketplace grow, and earn entries for a chance to choose a $50 gift card or a $50 rescue donation.</p>
         <div class="event-date-card" aria-label="Promotion dates">
           <span>Starts</span>
-          <strong>October 2, 2026 at 8:00 AM CT</strong>
+          <strong><time datetime={promotion.startUtc}>{promotion.startDisplay}</time></strong>
           <span>Ends</span>
-          <strong>October 5, 2026 at 8:00 AM CT</strong>
+          <strong><time datetime={promotion.endUtc}>{promotion.endDisplay}</time></strong>
         </div>
         <div class="actions">
           <a class="button event-button" href="/download">Open or download ReTail</a>
@@ -39,7 +39,7 @@ const prizeOptions = [
       </div>
       <aside class="event-goal-card" aria-label="Community listing goal">
         <img src="/assets/retail-logo-header.png" alt="ReTail" width="991" height="443" />
-        <span class="goal-number">100</span>
+        <span class="goal-number">{promotion.targetListingCount}</span>
         <strong>qualifying listings</strong>
         <p>One community. Three days. More pet supplies finding a useful second life.</p>
         <div class="goal-window">72-hour community goal</div>

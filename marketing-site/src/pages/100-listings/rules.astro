@@ -1,9 +1,9 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
-import { getValidAlternateEntryFormUrl } from '../../config/promotion';
+import { getValidAlternateEntryFormUrl, promotion } from '../../config/promotion';
 
 const title = 'Official Rules | ReTail 100 Listings in 72 Hours Giveaway';
-const description = 'Official Rules for the ReTail 100 Listings in 72 Hours Giveaway, running October 2, 2026 at 8:00 AM Central Time through October 5, 2026 at 8:00 AM Central Time.';
+const description = `Official Rules for the ReTail 100 Listings in 72 Hours Giveaway, running ${promotion.startDisplayLong} through ${promotion.endDisplayLong}.`;
 const alternateEntryFormUrl = getValidAlternateEntryFormUrl();
 ---
 <BaseLayout title={title} description={description} path="/100-listings/rules/">
@@ -19,7 +19,7 @@ const alternateEntryFormUrl = getValidAlternateEntryFormUrl();
   <article class="section narrow rules-document">
     <section>
       <h2>1. Promotion Period</h2>
-      <p>The ReTail “100 Listings in 72 Hours” Giveaway (“Promotion”) begins on October 2, 2026 at 8:00 AM Central Time and ends on October 5, 2026 at 8:00 AM Central Time (“Promotion Period”).</p>
+      <p>The ReTail “100 Listings in 72 Hours” Giveaway (“Promotion”) begins on <time datetime={promotion.startUtc}>{promotion.startDisplayLong}</time> and ends on <time datetime={promotion.endUtc}>{promotion.endDisplayLong}</time> (“Promotion Period”).</p>
       <p>Entries must be received during the Promotion Period to be eligible.</p>
     </section>
 

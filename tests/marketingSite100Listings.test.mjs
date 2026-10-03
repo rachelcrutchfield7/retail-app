@@ -8,10 +8,15 @@ function read(relativePath) {
 
 test('100 Listings landing page includes the approved dates, entry tiers, prize, and rules link', () => {
   const page = read('marketing-site/src/pages/100-listings/index.astro');
+  const config = read('marketing-site/src/config/promotion.ts');
 
   assert.match(page, /100 Listings/);
-  assert.match(page, /October 2, 2026 at 8:00 AM CT/);
-  assert.match(page, /October 5, 2026 at 8:00 AM CT/);
+  assert.match(page, /Starts October 9/);
+  assert.match(config, /startUtc: '2026-10-09T13:00:00Z'/);
+  assert.match(config, /endUtc: '2026-10-12T13:00:00Z'/);
+  assert.match(config, /startDisplay: 'October 9, 2026 at 8:00 AM CT'/);
+  assert.match(config, /endDisplay: 'October 12, 2026 at 8:00 AM CT'/);
+  assert.match(config, /targetListingCount: 100/);
   assert.match(page, /3–5/);
   assert.match(page, /6–8/);
   assert.match(page, /9–11/);
@@ -28,8 +33,8 @@ test('100 Listings rules page includes all approved sections and official timing
   const page = read('marketing-site/src/pages/100-listings/rules.astro');
 
   assert.match(page, /NO PURCHASE NECESSARY TO ENTER OR WIN/);
-  assert.match(page, /October 2, 2026 at 8:00 AM Central Time/);
-  assert.match(page, /October 5, 2026 at 8:00 AM Central Time/);
+  assert.match(page, /promotion\.startDisplayLong/);
+  assert.match(page, /promotion\.endDisplayLong/);
   assert.match(page, /maximum of five entries per eligible participant/);
   assert.match(page, /Crutchfield Interactive LLC, DBA ReTail Pet App/);
   assert.match(page, /contact@retailpetapp\.com/);
@@ -37,6 +42,19 @@ test('100 Listings rules page includes all approved sections and official timing
   for (let section = 1; section <= 16; section += 1) {
     assert.match(page, new RegExp(`<h2>${section}\\.`));
   }
+});
+
+test('current public promotion content contains no stale October 2–5 dates', () => {
+  const publicPromotionSources = [
+    read('marketing-site/src/config/promotion.ts'),
+    read('marketing-site/src/pages/100-listings/index.astro'),
+    read('marketing-site/src/pages/100-listings/rules.astro'),
+  ].join('\n');
+
+  assert.doesNotMatch(publicPromotionSources, /October 2, 2026/);
+  assert.doesNotMatch(publicPromotionSources, /October 5, 2026/);
+  assert.doesNotMatch(publicPromotionSources, /2026-10-02/);
+  assert.doesNotMatch(publicPromotionSources, /2026-10-05/);
 });
 
 test('alternate entry link remains disabled until a valid Google Forms URL is configured', () => {

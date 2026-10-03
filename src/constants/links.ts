@@ -6,6 +6,7 @@ export const appLinks = {
   termsUrl: 'https://retailpetapp.com/terms',
   communityGuidelinesUrl: 'https://retailpetapp.com/community-guidelines',
   accountDeletionUrl: 'https://retailpetapp.com/account-deletion',
+  promotion100ListingsUrl: 'https://www.retailpetapp.com/100-listings/',
   contactEmail: 'contact@retailpetapp.com',
   contactMailto: 'mailto:contact@retailpetapp.com',
   supportEmail: 'support@retailpetapp.com',

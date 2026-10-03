@@ -7,6 +7,7 @@ import {
   AppState,
   FlatList,
   Image,
+  Linking,
   Modal,
   Platform,
   Pressable,
@@ -90,6 +91,7 @@ import {
   UserListingGrid,
 } from '../components';
 import { CONDITIONS } from '../constants/categories';
+import { appLinks } from '../constants/links';
 import {
   categorySupportsMarketplacePetSize,
   MARKETPLACE_PET_SIZE_OPTIONS,
@@ -5398,6 +5400,12 @@ function CommunityListingCampaignCard({
       minute: '2-digit',
       timeZoneName: 'short',
     }).format(date);
+  const formatCentralDate = (date: Date) =>
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Chicago',
+      month: 'long',
+      day: 'numeric',
+    }).format(date);
 
   const ruleCopy =
     `Every ${campaign.listingsRequiredForEntry} qualifying listings earns an entry, ` +
@@ -5411,7 +5419,7 @@ function CommunityListingCampaignCard({
         ? 'ENDED'
         : 'LIVE NOW';
   const campaignMessage = state === 'upcoming'
-    ? `Starts ${formatCentralTime(startsAt)}`
+    ? `Can we hit ${targetListingCount}? Join the ReTail community challenge starting ${formatCentralDate(startsAt)}.`
     : state === 'goal-reached'
       ? 'Goal reached! The community can keep the momentum going.'
       : state === 'ended'
@@ -5473,6 +5481,24 @@ function CommunityListingCampaignCard({
       ) : null}
 
       <Text style={styles.metaText}>{ruleCopy}</Text>
+      <Button
+        title="Learn More"
+        variant="outline"
+        onPress={() => {
+          if (Platform.OS === 'web' && typeof window !== 'undefined') {
+            window.open(appLinks.promotion100ListingsUrl, '_blank', 'noopener,noreferrer');
+            return;
+          }
+
+          void Linking.openURL(appLinks.promotion100ListingsUrl).catch(() => {
+            Alert.alert(
+              'Link unavailable',
+              'We could not open the promotion page right now. You can visit retailpetapp.com from your browser.',
+            );
+          });
+        }}
+        fullWidth
+      />
     </View>
   );
 }
