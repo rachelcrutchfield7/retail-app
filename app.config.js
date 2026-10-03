@@ -68,9 +68,12 @@ const appConfig = {
       ],
       permissions: [
         'CAMERA',
-        'READ_MEDIA_IMAGES',
         'ACCESS_COARSE_LOCATION',
         'POST_NOTIFICATIONS',
+      ],
+      blockedPermissions: [
+        'android.permission.READ_MEDIA_IMAGES',
+        'android.permission.READ_MEDIA_VIDEO',
       ],
       adaptiveIcon: {
         foregroundImage: './assets/adaptive-icon.png',

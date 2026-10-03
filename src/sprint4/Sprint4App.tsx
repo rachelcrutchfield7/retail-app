@@ -1499,11 +1499,13 @@ export function ConversationScreen({
       return;
     }
 
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (Platform.OS === 'ios') {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
-    if (!permission.granted) {
-      setNotice('Allow ReTail to access your photos so you can attach an image.');
-      return;
+      if (!permission.granted) {
+        setNotice('Allow ReTail to access your photos so you can attach an image.');
+        return;
+      }
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({

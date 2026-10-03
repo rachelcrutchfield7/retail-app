@@ -3806,14 +3806,16 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
       return;
     }
 
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (Platform.OS === 'ios') {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
-    if (!permission.granted) {
-      setNotice({
-        title: 'Photo access needed',
-        body: 'Allow ReTail to access your photos so you can upload a profile picture.',
-      });
-      return;
+      if (!permission.granted) {
+        setNotice({
+          title: 'Photo access needed',
+          body: 'Allow ReTail to access your photos so you can upload a profile picture.',
+        });
+        return;
+      }
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({

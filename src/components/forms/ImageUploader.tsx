@@ -60,12 +60,14 @@ export function ImageUploader({
       return;
     }
 
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (Platform.OS === 'ios') {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
-    if (!permission.granted) {
-      Alert.alert('Photo access needed', 'Allow photo library access to add photos.');
-      setPickerError('Allow ReTail to access your photos so you can add an image.');
-      return;
+      if (!permission.granted) {
+        Alert.alert('Photo access needed', 'Allow photo library access to add photos.');
+        setPickerError('Allow ReTail to access your photos so you can add an image.');
+        return;
+      }
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
