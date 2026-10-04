@@ -18,6 +18,22 @@
     {
       "pattern": "retailpetapp.com/auth/reset-password*",
       "zone_name": "retailpetapp.com"
+    },
+    {
+      "pattern": "retailpetapp.com/100-listings*",
+      "zone_name": "retailpetapp.com"
+    },
+    {
+      "pattern": "www.retailpetapp.com/100-listings*",
+      "zone_name": "retailpetapp.com"
+    },
+    {
+      "pattern": "retailpetapp.com/api/100-listings/status",
+      "zone_name": "retailpetapp.com"
+    },
+    {
+      "pattern": "www.retailpetapp.com/api/100-listings/status",
+      "zone_name": "retailpetapp.com"
     }
   ],
   "vars": {

@@ -47,6 +47,40 @@ const prizeOptions = [
     </div>
   </section>
 
+  <section class="section" aria-labelledby="campaign-progress-title">
+    <div
+      class="campaign-progress-card"
+      data-campaign-progress
+      data-status-endpoint="/api/100-listings/status"
+      data-start={promotion.startUtc}
+      data-end={promotion.endUtc}
+      data-target={promotion.targetListingCount}
+    >
+      <div>
+        <span class="eyebrow">Authoritative campaign progress</span>
+        <h2 id="campaign-progress-title">Community progress toward 100</h2>
+        <p data-progress-message aria-live="polite">The campaign starts October 9. The live qualifying-listing count will appear here when the event begins.</p>
+      </div>
+      <div class="campaign-progress-meter">
+        <strong data-progress-count>0 of {promotion.targetListingCount}</strong>
+        <span>qualifying listings recorded</span>
+        <div
+          class="campaign-progress-track"
+          data-progress-track
+          role="progressbar"
+          aria-label="Qualifying listing progress"
+          aria-valuemin="0"
+          aria-valuemax={promotion.targetListingCount}
+          aria-valuenow="0"
+          hidden
+        >
+          <span data-progress-fill></span>
+        </div>
+      </div>
+    </div>
+    <p class="campaign-progress-note">The 100-listing count is a community goal. Individual sweepstakes entries are awarded separately under the Official Rules.</p>
+  </section>
+
   <section class="section">
     <div class="section-header centered">
       <span class="eyebrow">How listing entries work</span>
@@ -124,3 +158,67 @@ const prizeOptions = [
     </div>
   </section>
 </BaseLayout>
+
+<script>
+  const campaignProgress = document.querySelector<HTMLElement>('[data-campaign-progress]');
+
+  if (campaignProgress) {
+    const endpoint = campaignProgress.dataset.statusEndpoint;
+    const fallbackStart = campaignProgress.dataset.start;
+    const fallbackEnd = campaignProgress.dataset.end;
+    const fallbackTarget = Number(campaignProgress.dataset.target || '100');
+    const message = campaignProgress.querySelector<HTMLElement>('[data-progress-message]');
+    const count = campaignProgress.querySelector<HTMLElement>('[data-progress-count]');
+    const track = campaignProgress.querySelector<HTMLElement>('[data-progress-track]');
+    const fill = campaignProgress.querySelector<HTMLElement>('[data-progress-fill]');
+
+    const updateProgress = (status: {
+      qualifyingListingCount: number;
+      targetListingCount: number;
+      startsAt: string;
+      endsAt: string;
+      isActive: boolean;
+    }) => {
+      const qualifyingCount = Math.max(0, Math.floor(status.qualifyingListingCount));
+      const target = Math.max(1, Math.floor(status.targetListingCount || fallbackTarget));
+      const startsAt = new Date(status.startsAt || fallbackStart || '');
+      const endsAt = new Date(status.endsAt || fallbackEnd || '');
+      const now = Date.now();
+      const percent = Math.min(100, (qualifyingCount / target) * 100);
+
+      if (count) count.textContent = `${qualifyingCount} of ${target}`;
+      if (track) {
+        track.setAttribute('aria-valuemax', String(target));
+        track.setAttribute('aria-valuenow', String(qualifyingCount));
+      }
+      if (fill) fill.style.width = `${percent}%`;
+
+      if (Number.isFinite(startsAt.getTime()) && now < startsAt.getTime()) {
+        if (message) message.textContent = 'The campaign starts October 9. No pre-event listings count toward the new campaign.';
+        if (track) track.hidden = true;
+      } else if (Number.isFinite(endsAt.getTime()) && now >= endsAt.getTime()) {
+        if (message) message.textContent = 'The Promotion Period has ended. This is the final recorded community progress.';
+        if (track) track.hidden = false;
+      } else if (!status.isActive) {
+        if (message) message.textContent = 'Campaign progress is currently unavailable.';
+        if (track) track.hidden = true;
+      } else {
+        if (message) message.textContent = 'The event is live. This count comes from ReTail’s authoritative campaign records.';
+        if (track) track.hidden = false;
+      }
+    };
+
+    if (endpoint) {
+      fetch(endpoint, { headers: { Accept: 'application/json' } })
+        .then((response) => {
+          if (!response.ok) throw new Error(`Campaign status returned ${response.status}`);
+          return response.json();
+        })
+        .then(updateProgress)
+        .catch(() => {
+          if (message) message.textContent = 'Live progress is temporarily unavailable. Entry rules and the Promotion Period are unaffected.';
+          if (track) track.hidden = true;
+        });
+    }
+  }
+</script>

@@ -7,6 +7,9 @@ interface Env {
 
 const BUNDLE_ID = "com.raecrutchfield.retail";
 const ANDROID_PACKAGE = "com.raecrutchfield.retail";
+const PROMOTION_CAMPAIGN_KEY = "community_100_listings_72_hours_v1";
+const PROMOTION_SITE_ORIGIN = "https://retail-prelaunch.pages.dev";
+const PROMOTION_ASSET_PREFIX = "/100-listings-static";
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -61,6 +64,26 @@ export default {
       return html(passwordResetPage(url));
     }
 
+    if (url.pathname === "/api/100-listings/status") {
+      try {
+        return json(await getCampaignStatus(env), 200, "public, max-age=30, s-maxage=30");
+      } catch (error) {
+        console.error("Public campaign status lookup failed", {
+          error: error instanceof Error ? error.message : "Unknown error"
+        });
+
+        return json({ error: "Campaign status is temporarily unavailable." }, 503, "no-store");
+      }
+    }
+
+    if (
+      url.pathname === "/100-listings" ||
+      url.pathname.startsWith("/100-listings/") ||
+      url.pathname.startsWith(`${PROMOTION_ASSET_PREFIX}/`)
+    ) {
+      return proxyPromotionSite(request, url);
+    }
+
     const match = url.pathname.match(/^\/listing\/([^/]+)\/?$/);
 
     if (!match) {
@@ -92,6 +115,80 @@ export default {
   }
 };
 
+async function getCampaignStatus(env: Env) {
+  const endpoint =
+    env.SUPABASE_URL.replace(/\/$/, "") +
+    "/rest/v1/rpc/community_listing_campaign_public_status";
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: supabasePublicHeaders(env.SUPABASE_ANON_KEY),
+    body: JSON.stringify({
+      p_campaign_key: PROMOTION_CAMPAIGN_KEY
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`Supabase returned ${response.status}`);
+  }
+
+  const rows = (await response.json()) as any[];
+  const status = Array.isArray(rows) ? rows[0] : null;
+
+  if (!status) {
+    throw new Error("Campaign status was not found");
+  }
+
+  return {
+    qualifyingListingCount: Number(status.qualifying_listing_count) || 0,
+    targetListingCount: Number(status.target_listing_count) || 100,
+    listingsRequiredForEntry: Number(status.listings_required_for_entry) || 3,
+    maximumEntries: Number(status.max_entries_per_seller) || 5,
+    startsAt: String(status.starts_at || ""),
+    endsAt: String(status.ends_at || ""),
+    isActive: status.is_active === true
+  };
+}
+
+async function proxyPromotionSite(request: Request, requestUrl: URL) {
+  if (requestUrl.pathname === "/100-listings") {
+    const target = new URL(requestUrl.toString());
+    target.pathname = "/100-listings/";
+    return Response.redirect(target.toString(), 308);
+  }
+
+  const upstreamPath = requestUrl.pathname.startsWith(`${PROMOTION_ASSET_PREFIX}/`)
+    ? requestUrl.pathname.slice(PROMOTION_ASSET_PREFIX.length)
+    : requestUrl.pathname;
+  const upstreamUrl = new URL(upstreamPath + requestUrl.search, PROMOTION_SITE_ORIGIN);
+  const upstreamResponse = await fetch(new Request(upstreamUrl, request));
+  const headers = new Headers(upstreamResponse.headers);
+
+  headers.delete("content-length");
+  headers.delete("content-encoding");
+  headers.delete("x-robots-tag");
+  headers.set("X-Content-Type-Options", "nosniff");
+
+  if (!headers.get("content-type")?.includes("text/html")) {
+    return new Response(upstreamResponse.body, {
+      status: upstreamResponse.status,
+      headers
+    });
+  }
+
+  const body = (await upstreamResponse.text())
+    .replaceAll('href="/_astro/', `href="${PROMOTION_ASSET_PREFIX}/_astro/`)
+    .replaceAll('src="/_astro/', `src="${PROMOTION_ASSET_PREFIX}/_astro/`)
+    .replaceAll('href="/assets/', `href="${PROMOTION_ASSET_PREFIX}/assets/`)
+    .replaceAll('src="/assets/', `src="${PROMOTION_ASSET_PREFIX}/assets/`)
+    .replaceAll('content="https://retailpetapp.com/og-image.svg"', `content="https://retailpetapp.com${PROMOTION_ASSET_PREFIX}/og-image.svg"`);
+
+  return new Response(body, {
+    status: upstreamResponse.status,
+    headers
+  });
+}
+
 async function getListing(env: Env, listingId: string) {
   const endpoint =
     env.SUPABASE_URL.replace(/\/$/, "") +
@@ -109,7 +206,7 @@ async function getListing(env: Env, listingId: string) {
     throw new Error(`Supabase returned ${response.status}`);
   }
 
-  const rows = await response.json<any[]>();
+  const rows = (await response.json()) as any[];
 
   return Array.isArray(rows) && rows.length > 0
     ? rows[0]
@@ -329,11 +426,13 @@ function formatPrice(value: unknown) {
     : value;
 }
 
-function json(value: unknown) {
+function json(value: unknown, status = 200, cacheControl = "public, max-age=300") {
   return new Response(JSON.stringify(value), {
+    status,
     headers: {
       "Content-Type": "application/json; charset=utf-8",
-      "Cache-Control": "public, max-age=300"
+      "Cache-Control": cacheControl,
+      "X-Content-Type-Options": "nosniff"
     }
   });
 }

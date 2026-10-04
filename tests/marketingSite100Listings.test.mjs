@@ -27,6 +27,9 @@ test('100 Listings landing page includes the approved dates, entry tiers, prize,
   assert.match(page, /\$50 Petco gift card/);
   assert.match(page, /\$50 donation to an eligible animal rescue organization/);
   assert.match(page, /href="\/100-listings\/rules\/"/);
+  assert.match(page, /data-status-endpoint="\/api\/100-listings\/status"/);
+  assert.match(page, /Community progress toward 100/);
+  assert.match(page, /The 100-listing count is a community goal/);
 });
 
 test('100 Listings rules page includes all approved sections and official timing', () => {
@@ -36,7 +39,11 @@ test('100 Listings rules page includes all approved sections and official timing
   assert.match(page, /promotion\.startDisplayLong/);
   assert.match(page, /promotion\.endDisplayLong/);
   assert.match(page, /maximum of five entries per eligible participant/);
-  assert.match(page, /Crutchfield Interactive LLC, DBA ReTail Pet App/);
+  assert.match(page, /Crutchfield Interactive LLC d\/b\/a ReTail Pet App, an Illinois limited liability company/);
+  assert.match(page, /VOID WHERE PROHIBITED/);
+  assert.match(page, /respond within 72 hours/);
+  assert.match(page, /cross-method entry reconciliation/);
+  assert.match(page, /randomly selected from the reconciled final pool/);
   assert.match(page, /contact@retailpetapp\.com/);
 
   for (let section = 1; section <= 16; section += 1) {
@@ -57,20 +64,17 @@ test('current public promotion content contains no stale October 2–5 dates', (
   assert.doesNotMatch(publicPromotionSources, /2026-10-05/);
 });
 
-test('alternate entry link remains disabled until a valid Google Forms URL is configured', () => {
+test('alternate entry link uses the approved Google Forms URL', () => {
   const config = read('marketing-site/src/config/promotion.ts');
   const landingPage = read('marketing-site/src/pages/100-listings/index.astro');
   const rulesPage = read('marketing-site/src/pages/100-listings/rules.astro');
 
-  assert.match(config, /export const alternateEntryFormUrl = '';/);
+  assert.match(config, /export const alternateEntryFormUrl = 'https:\/\/forms\.gle\/rXzXM4TGuoRUNBfcA';/);
   assert.match(config, /url\.protocol === 'https:'/);
   assert.match(config, /url\.hostname === 'forms\.gle'/);
   assert.match(config, /url\.hostname === 'docs\.google\.com'/);
   assert.match(landingPage, /alternateEntryFormUrl &&/);
   assert.match(rulesPage, /alternateEntryFormUrl &&/);
-
-  const productionSources = `${config}\n${landingPage}\n${rulesPage}`;
-  assert.doesNotMatch(productionSources, /https:\/\/(?:forms\.gle|docs\.google\.com\/forms)\//);
 });
 
 test('landing page and Official Rules define the same five-entry AMOE structure', () => {
@@ -89,6 +93,8 @@ test('landing page and Official Rules define the same five-entry AMOE structure'
   assert.match(rulesPage, /regardless of entry method or combination of entry methods/);
   assert.match(rulesPage, /Duplicate submissions, multiple accounts/);
   assert.match(rulesPage, /Each eligible entry will have an equal chance of selection/);
+  assert.doesNotMatch(`${landingPage}\n${rulesPage}`, /one entry total/i);
+  assert.doesNotMatch(`${landingPage}\n${rulesPage}`, /one valid (?:alternate|AMOE) (?:entry|submission) (?:receives|provides) one entry/i);
 });
 
 test('sitemap and shared navigation expose both 100 Listings routes', () => {

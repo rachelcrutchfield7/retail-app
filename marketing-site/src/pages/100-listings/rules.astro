@@ -2,8 +2,8 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import { getValidAlternateEntryFormUrl, promotion } from '../../config/promotion';
 
-const title = 'Official Rules | ReTail 100 Listings in 72 Hours Giveaway';
-const description = `Official Rules for the ReTail 100 Listings in 72 Hours Giveaway, running ${promotion.startDisplayLong} through ${promotion.endDisplayLong}.`;
+const title = 'ReTail 100 Listings in 72 Hours Promotion — Official Rules';
+const description = `Official Rules for the ReTail 100 Listings in 72 Hours Promotion, running ${promotion.startDisplayLong} through ${promotion.endDisplayLong}.`;
 const alternateEntryFormUrl = getValidAlternateEntryFormUrl();
 ---
 <BaseLayout title={title} description={description} path="/100-listings/rules/">
@@ -11,8 +11,8 @@ const alternateEntryFormUrl = getValidAlternateEntryFormUrl();
     <div class="section narrow">
       <a class="back-link" href="/100-listings/">← Back to 100 Listings in 72 Hours</a>
       <span class="eyebrow">Official Rules</span>
-      <h1>ReTail “100 Listings in 72 Hours” Giveaway</h1>
-      <p class="rules-intro">NO PURCHASE NECESSARY TO ENTER OR WIN. A PURCHASE WILL NOT INCREASE YOUR CHANCES OF WINNING.</p>
+      <h1>ReTail 100 Listings in 72 Hours Promotion — Official Rules</h1>
+      <p class="rules-intro">NO PURCHASE NECESSARY TO ENTER OR WIN. A PURCHASE WILL NOT INCREASE YOUR CHANCES OF WINNING. VOID WHERE PROHIBITED.</p>
     </div>
   </section>
 
@@ -25,14 +25,14 @@ const alternateEntryFormUrl = getValidAlternateEntryFormUrl();
 
     <section>
       <h2>2. Sponsor</h2>
-      <p>The Promotion is sponsored by Crutchfield Interactive LLC, DBA ReTail Pet App (“Sponsor”).</p>
-      <p>This Promotion is not sponsored, endorsed, administered by, or associated with Apple Inc., Google LLC, Facebook/Meta, Chewy, PetSmart, Petco, or any animal rescue organization.</p>
+      <p>The Promotion is sponsored by Crutchfield Interactive LLC d/b/a ReTail Pet App, an Illinois limited liability company (“Sponsor”).</p>
+      <p>This Promotion is not sponsored, endorsed, administered by, or associated with Apple Inc., Google LLC, Meta Platforms, Inc./Facebook, Chewy, PetSmart, Petco, or any animal rescue organization. References to gift-card companies identify prize options only and do not imply sponsorship.</p>
     </section>
 
     <section>
       <h2>3. Eligibility</h2>
       <p>The Promotion is open to legal residents of the United States who are 18 years of age or older at the time of entry.</p>
-      <p>Employees, contractors, representatives, and immediate family members of the Sponsor are not eligible to enter.</p>
+      <p>Employees, contractors, and representatives of the Sponsor, and their immediate family or household members, are not eligible to enter.</p>
       <p>Void where prohibited or restricted by law.</p>
     </section>
 
@@ -48,18 +48,19 @@ const alternateEntryFormUrl = getValidAlternateEntryFormUrl();
         <li><strong>15 or more qualifying listings:</strong> 5 entries</li>
       </ul>
       <p>There is a maximum of five entries per eligible participant, regardless of entry method or number of listings submitted.</p>
-      <p>A qualifying listing must be a legitimate listing for a pet-related item offered through ReTail and must comply with ReTail’s <a href="/terms">Terms of Service</a>, <a href="/community-guidelines">Community Guidelines</a>, and listing requirements.</p>
-      <p>Duplicate, fraudulent, misleading, prohibited, spam, or otherwise invalid listings do not qualify and may be removed from the Promotion.</p>
+      <p>A qualifying listing must be a legitimate pet-supply sale listing published during the Promotion Period, remain active and not deleted when evaluated, be owned by a non-deleted eligible seller, and comply with ReTail’s <a href="/terms">Terms of Service</a>, <a href="/community-guidelines">Community Guidelines</a>, and listing requirements.</p>
+      <p>Duplicate, fraudulent, misleading, placeholder, prohibited, spam, sham, or otherwise invalid listings do not qualify and may be removed from the Promotion.</p>
       <p>Creating additional ReTail accounts to obtain additional entries is prohibited.</p>
     </section>
 
     <section id="alternate-entry">
       <h2>5. Free Alternate Method of Entry</h2>
-      <p>No purchase, sale, or ReTail listing is required to enter.</p>
-      <p>Eligible participants may enter without creating listings or completing a transaction by submitting the Official Alternate Entry Form during the Promotion Period.</p>
+      <p>No purchase, sale, ReTail listing, marketplace transaction, or payment is required to enter.</p>
+      <p>Eligible participants may enter by submitting the Official Alternate Entry Form during the Promotion Period.</p>
       <p>One valid Alternate Entry Form submission provides five entries, equal to the maximum number of entries available through the listing method.</p>
       <p>Only one Alternate Entry Form submission per eligible person is permitted.</p>
       <p>There is a maximum of five total entries per eligible participant, regardless of entry method or combination of entry methods.</p>
+      <p>A participant who qualifies through ReTail and also submits the Alternate Entry Form cannot receive more than five total entries.</p>
       <p>Duplicate submissions, multiple accounts, or other attempts to exceed the five-entry limit may be disqualified.</p>
       {alternateEntryFormUrl && (
         <p><a class="button event-button" href={alternateEntryFormUrl} target="_blank" rel="noreferrer">Open the Official Alternate Entry Form</a></p>
@@ -69,7 +70,7 @@ const alternateEntryFormUrl = getValidAlternateEntryFormUrl();
     <section>
       <h2>6. Community Goal</h2>
       <p>The Promotion includes a community goal of 100 qualifying ReTail listings in 72 hours.</p>
-      <p>The community goal is intended to encourage participation and celebrate marketplace growth.</p>
+      <p>The community goal is intended to encourage participation and celebrate marketplace growth. Community progress and an individual participant’s sweepstakes entry eligibility are separate concepts.</p>
       <p>Reaching the 100-listing goal is not required for the prize to be awarded.</p>
       <p>The Sponsor’s records will determine the official number of qualifying listings received during the Promotion Period.</p>
     </section>
@@ -82,12 +83,13 @@ const alternateEntryFormUrl = getValidAlternateEntryFormUrl();
       <p>A $50 donation made by the Sponsor to the winner’s selected eligible animal rescue organization.</p>
       <p>Approximate Retail Value: $50 USD.</p>
       <p>If the winner selects the rescue donation option, the selected organization must be a legitimate animal rescue or animal welfare organization that the Sponsor can reasonably verify and to which the Sponsor can legally make the donation.</p>
-      <p>The prize is non-transferable. No cash substitution will be provided except at the Sponsor’s discretion if a stated prize becomes unavailable, in which case a prize of equal or greater value may be substituted.</p>
+      <p>The prize is non-transferable, and no cash alternative is available. If a stated prize becomes unavailable, the Sponsor may substitute a prize of equal or greater value.</p>
+      <p>The winner is responsible for any applicable federal, state, or local taxes associated with the prize.</p>
     </section>
 
     <section>
       <h2>8. Winner Selection and Odds</h2>
-      <p>After the Promotion Period ends, one potential winner will be selected at random from all eligible entries received during the Promotion Period.</p>
+      <p>After the Promotion Period ends, one potential winner will be randomly selected from the reconciled final pool of eligible listing-method and alternate-method entries.</p>
       <p>Each eligible entry will have an equal chance of selection.</p>
       <p>Odds of winning depend on the total number of eligible entries received.</p>
       <p>The Sponsor’s determination regarding eligible entries and the random drawing will be final, subject to applicable law.</p>
@@ -96,29 +98,30 @@ const alternateEntryFormUrl = getValidAlternateEntryFormUrl();
     <section>
       <h2>9. Winner Notification</h2>
       <p>The potential winner will be contacted using the contact information associated with their ReTail account or, for an alternate-method entrant, the contact information provided through the Alternate Entry Form.</p>
-      <p>The potential winner must respond within 48 hours of the initial notification.</p>
-      <p>If the potential winner cannot be contacted, does not respond within the required time, is determined to be ineligible, or fails to comply with these Official Rules, the potential winner may be disqualified and an alternate potential winner may be selected at random from the remaining eligible entries.</p>
+      <p>The potential winner must respond within 72 hours of the initial notification.</p>
+      <p>If the potential winner cannot be contacted, does not respond within the required time, is determined to be ineligible, declines the prize, or fails to comply with these Official Rules, the potential winner may be disqualified and an alternate potential winner may be selected at random from the remaining eligible entries.</p>
       <p>The Sponsor may require reasonable verification of eligibility before awarding the prize.</p>
     </section>
 
     <section>
       <h2>10. General Conditions</h2>
       <p>By participating, entrants agree to comply with these Official Rules.</p>
-      <p>The Sponsor reserves the right to disqualify entries or participants who attempt to manipulate, abuse, disrupt, or fraudulently participate in the Promotion.</p>
+      <p>The Sponsor reserves the right to disqualify entries or participants involving fraud, duplicate or sham listings, false information, automated entries or bots, manipulation, interference, multiple accounts used to evade limits, or violations of ReTail rules.</p>
       <p>The Sponsor reserves the right, to the extent permitted by law, to cancel, suspend, modify, or terminate the Promotion if fraud, technical problems, unauthorized intervention, or circumstances outside the Sponsor’s reasonable control materially affect the integrity or proper administration of the Promotion.</p>
       <p>If the Promotion is modified or terminated, the Sponsor will handle eligible entries received before the modification or termination in a manner it determines to be fair and consistent with applicable law.</p>
     </section>
 
     <section>
       <h2>11. Technical Issues</h2>
-      <p>The Sponsor is not responsible for entries that are lost, late, incomplete, corrupted, misdirected, or not received because of technical failures, internet or mobile service interruptions, device problems, or other circumstances outside the Sponsor’s reasonable control.</p>
+      <p>The Sponsor is not responsible for entries that are lost, late, incomplete, corrupted, misdirected, or not received because of technical failures, internet or mobile service interruptions, device problems, platform outages, or other circumstances outside the Sponsor’s reasonable control.</p>
+      <p>Subject to applicable law, the Sponsor may modify, suspend, or terminate the Promotion if a technical failure or other circumstance materially compromises its integrity or proper administration.</p>
       <p>ReTail’s records and systems will be used to determine whether an in-app listing was published within the Promotion Period.</p>
     </section>
 
     <section>
       <h2>12. Privacy</h2>
-      <p>Information collected in connection with the Promotion will be used to administer the Promotion, verify eligibility, contact the potential winner, award the prize, and as otherwise described in ReTail’s <a href="/privacy">Privacy Policy</a>.</p>
-      <p>Submitting an entry does not, by itself, constitute consent to receive marketing communications where separate consent is required by law.</p>
+      <p>Information collected in connection with the Promotion may be used for Promotion administration, eligibility verification, cross-method entry reconciliation, winner contact, prize fulfillment, fraud prevention, and as otherwise described in ReTail’s <a href="/privacy">Privacy Policy</a>.</p>
+      <p>Submitting an alternate entry does not automatically constitute consent to receive unrelated marketing communications.</p>
     </section>
 
     <section>

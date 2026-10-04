@@ -8,9 +8,7 @@ export const promotion = {
   targetListingCount: 100,
 } as const;
 
-// REQUIRED BEFORE DEPLOYMENT: add the live Google Forms URL between the quotes.
-// Leave this empty until Rachel supplies the real URL. Never use a placeholder or old form URL.
-export const alternateEntryFormUrl = '';
+export const alternateEntryFormUrl = 'https://forms.gle/rXzXM4TGuoRUNBfcA';
 
 export function getValidAlternateEntryFormUrl(value = alternateEntryFormUrl): string | null {
   if (!value) {

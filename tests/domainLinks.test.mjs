@@ -99,6 +99,11 @@ test('public link worker supports listing and auth callback app links', () => {
   assert.match(worker, /retail:\/\/auth\/reset-password/);
   assert.match(workerRoutes, /retailpetapp\.com\/auth\/callback\*/);
   assert.match(workerRoutes, /retailpetapp\.com\/auth\/reset-password\*/);
+  assert.match(workerRoutes, /retailpetapp\.com\/100-listings\*/);
+  assert.match(workerRoutes, /www\.retailpetapp\.com\/100-listings\*/);
+  assert.match(workerRoutes, /retailpetapp\.com\/api\/100-listings\/status/);
+  assert.match(worker, /community_listing_campaign_public_status/);
+  assert.match(worker, /retail-prelaunch\.pages\.dev/);
   assert.match(aasa, /"\/": "\/auth\/callback"/);
   assert.match(aasa, /"\/": "\/auth\/reset-password"/);
   assert.match(assetlinks, /delegate_permission\/common\.handle_all_urls/);

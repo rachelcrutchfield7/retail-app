@@ -455,6 +455,74 @@ li {
   font-weight: 900;
 }
 
+.campaign-progress-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.7fr);
+  gap: clamp(24px, 5vw, 56px);
+  align-items: center;
+  margin-top: 34px;
+  padding: clamp(24px, 5vw, 42px);
+  border: 1px solid rgba(63, 143, 107, 0.22);
+  border-radius: 28px;
+  background: linear-gradient(135deg, #ffffff, #eef7f2);
+  box-shadow: 0 12px 34px rgba(31, 41, 51, 0.08);
+}
+
+.campaign-progress-card h2 {
+  margin: 8px 0 10px;
+}
+
+.campaign-progress-card p {
+  margin-bottom: 0;
+}
+
+.campaign-progress-meter {
+  display: grid;
+  gap: 6px;
+  padding: 20px;
+  border-radius: 20px;
+  background: #ffffff;
+}
+
+.campaign-progress-meter > strong {
+  color: var(--primary-deep);
+  font-size: clamp(2rem, 6vw, 3.5rem);
+  line-height: 1;
+}
+
+.campaign-progress-meter > span {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.campaign-progress-track {
+  height: 16px;
+  margin-top: 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #dfe9e3;
+}
+
+.campaign-progress-track[hidden] {
+  display: none;
+}
+
+.campaign-progress-track > span {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--primary), #f1b743);
+  transition: width 240ms ease;
+}
+
+.campaign-progress-note {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+  text-align: center;
+}
+
 .entry-tier-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -1408,6 +1476,7 @@ li {
   .hero-grid,
   .download-hero-grid,
   .event-hero-grid,
+  .campaign-progress-card,
   .event-prize-section,
   .community-goal-band,
   .footer-inner,
