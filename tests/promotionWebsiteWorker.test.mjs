@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import worker from '../web-worker/src/index.ts';
+import worker, { deriveCampaignLifecycle } from '../web-worker/src/index.ts';
 
 const env = {
   SUPABASE_URL: 'https://example.supabase.co',
@@ -12,7 +12,10 @@ const env = {
 
 test('public campaign status endpoint exposes aggregate campaign data only', async (context) => {
   const originalFetch = globalThis.fetch;
+  const originalNow = Date.now;
   context.after(() => { globalThis.fetch = originalFetch; });
+  context.after(() => { Date.now = originalNow; });
+  Date.now = () => Date.parse('2026-10-05T12:00:00Z');
   globalThis.fetch = async (request, init) => {
     assert.equal(String(request), 'https://example.supabase.co/rest/v1/rpc/community_listing_campaign_public_status');
     assert.equal(init.method, 'POST');
@@ -39,7 +42,23 @@ test('public campaign status endpoint exposes aggregate campaign data only', asy
   assert.equal(body.startsAt, '2026-10-09T13:00:00Z');
   assert.equal(body.endsAt, '2026-10-12T13:00:00Z');
   assert.equal(body.isActive, true);
+  assert.equal(body.lifecycle, 'upcoming');
+  assert.equal(body.goalReached, false);
   assert.doesNotMatch(JSON.stringify(body), /seller|participant|email/i);
+});
+
+test('campaign lifecycle uses authoritative dates with exact start and end boundaries', () => {
+  const status = {
+    startsAt: '2026-10-09T13:00:00Z',
+    endsAt: '2026-10-12T13:00:00Z',
+    isActive: true,
+  };
+
+  assert.equal(deriveCampaignLifecycle(status, Date.parse('2026-10-09T12:59:59.999Z')), 'upcoming');
+  assert.equal(deriveCampaignLifecycle(status, Date.parse('2026-10-09T13:00:00Z')), 'active');
+  assert.equal(deriveCampaignLifecycle(status, Date.parse('2026-10-12T12:59:59.999Z')), 'active');
+  assert.equal(deriveCampaignLifecycle(status, Date.parse('2026-10-12T13:00:00Z')), 'ended');
+  assert.equal(deriveCampaignLifecycle({ ...status, isActive: false }, Date.parse('2026-10-10T13:00:00Z')), 'disabled');
 });
 
 test('promotion route safely proxies the existing Pages project with scoped assets', async (context) => {

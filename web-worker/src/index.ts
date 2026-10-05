@@ -11,6 +11,8 @@ const PROMOTION_CAMPAIGN_KEY = "community_100_listings_72_hours_v1";
 const PROMOTION_SITE_ORIGIN = "https://retail-prelaunch.pages.dev";
 const PROMOTION_ASSET_PREFIX = "/100-listings-static";
 
+type CampaignLifecycle = "disabled" | "upcoming" | "active" | "ended" | "unavailable";
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
@@ -139,15 +141,37 @@ async function getCampaignStatus(env: Env) {
     throw new Error("Campaign status was not found");
   }
 
+  const qualifyingListingCount = Number(status.qualifying_listing_count) || 0;
+  const targetListingCount = Number(status.target_listing_count) || 100;
+  const startsAt = String(status.starts_at || "");
+  const endsAt = String(status.ends_at || "");
+  const isActive = status.is_active === true;
+
   return {
-    qualifyingListingCount: Number(status.qualifying_listing_count) || 0,
-    targetListingCount: Number(status.target_listing_count) || 100,
+    qualifyingListingCount,
+    targetListingCount,
     listingsRequiredForEntry: Number(status.listings_required_for_entry) || 3,
     maximumEntries: Number(status.max_entries_per_seller) || 5,
-    startsAt: String(status.starts_at || ""),
-    endsAt: String(status.ends_at || ""),
-    isActive: status.is_active === true
+    startsAt,
+    endsAt,
+    isActive,
+    lifecycle: deriveCampaignLifecycle({ startsAt, endsAt, isActive }),
+    goalReached: qualifyingListingCount >= targetListingCount
   };
+}
+
+export function deriveCampaignLifecycle(
+  status: { startsAt: string; endsAt: string; isActive: boolean },
+  now = Date.now()
+): CampaignLifecycle {
+  if (!status.isActive) return "disabled";
+
+  const startsAt = Date.parse(status.startsAt);
+  const endsAt = Date.parse(status.endsAt);
+  if (!Number.isFinite(startsAt) || !Number.isFinite(endsAt)) return "unavailable";
+  if (now < startsAt) return "upcoming";
+  if (now >= endsAt) return "ended";
+  return "active";
 }
 
 async function proxyPromotionSite(request: Request, requestUrl: URL) {

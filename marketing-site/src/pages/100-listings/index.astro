@@ -164,8 +164,6 @@ const prizeOptions = [
 
   if (campaignProgress) {
     const endpoint = campaignProgress.dataset.statusEndpoint;
-    const fallbackStart = campaignProgress.dataset.start;
-    const fallbackEnd = campaignProgress.dataset.end;
     const fallbackTarget = Number(campaignProgress.dataset.target || '100');
     const message = campaignProgress.querySelector<HTMLElement>('[data-progress-message]');
     const count = campaignProgress.querySelector<HTMLElement>('[data-progress-count]');
@@ -175,15 +173,11 @@ const prizeOptions = [
     const updateProgress = (status: {
       qualifyingListingCount: number;
       targetListingCount: number;
-      startsAt: string;
-      endsAt: string;
-      isActive: boolean;
+      lifecycle: 'disabled' | 'upcoming' | 'active' | 'ended' | 'unavailable';
+      goalReached: boolean;
     }) => {
       const qualifyingCount = Math.max(0, Math.floor(status.qualifyingListingCount));
       const target = Math.max(1, Math.floor(status.targetListingCount || fallbackTarget));
-      const startsAt = new Date(status.startsAt || fallbackStart || '');
-      const endsAt = new Date(status.endsAt || fallbackEnd || '');
-      const now = Date.now();
       const percent = Math.min(100, (qualifyingCount / target) * 100);
 
       if (count) count.textContent = `${qualifyingCount} of ${target}`;
@@ -193,15 +187,18 @@ const prizeOptions = [
       }
       if (fill) fill.style.width = `${percent}%`;
 
-      if (Number.isFinite(startsAt.getTime()) && now < startsAt.getTime()) {
+      if (status.lifecycle === 'upcoming') {
         if (message) message.textContent = 'The campaign starts October 9. No pre-event listings count toward the new campaign.';
         if (track) track.hidden = true;
-      } else if (Number.isFinite(endsAt.getTime()) && now >= endsAt.getTime()) {
+      } else if (status.lifecycle === 'ended') {
         if (message) message.textContent = 'The Promotion Period has ended. This is the final recorded community progress.';
         if (track) track.hidden = false;
-      } else if (!status.isActive) {
+      } else if (status.lifecycle !== 'active') {
         if (message) message.textContent = 'Campaign progress is currently unavailable.';
         if (track) track.hidden = true;
+      } else if (status.goalReached) {
+        if (message) message.textContent = 'The community reached the 100-listing goal! Entries remain open through the end of the Promotion Period.';
+        if (track) track.hidden = false;
       } else {
         if (message) message.textContent = 'The event is live. This count comes from ReTail’s authoritative campaign records.';
         if (track) track.hidden = false;

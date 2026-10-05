@@ -30,6 +30,10 @@ test('100 Listings landing page includes the approved dates, entry tiers, prize,
   assert.match(page, /data-status-endpoint="\/api\/100-listings\/status"/);
   assert.match(page, /Community progress toward 100/);
   assert.match(page, /The 100-listing count is a community goal/);
+  assert.match(page, /status\.lifecycle === 'upcoming'/);
+  assert.match(page, /status\.lifecycle === 'ended'/);
+  assert.match(page, /status\.goalReached/);
+  assert.match(page, /The community reached the 100-listing goal!/);
 });
 
 test('100 Listings rules page includes all approved sections and official timing', () => {
