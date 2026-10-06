@@ -98,13 +98,13 @@ const structuredData = {
           </a>
           <nav class="desktop-nav" aria-label="Primary navigation">
             {navLinks.map((link) => <a href={link.href}>{link.label}</a>)}
-            <a class="beta-pill" href="/private-beta">Private Beta</a>
+            <a class="nav-download-pill" href="/download/">Get ReTail</a>
           </nav>
           <details class="mobile-nav">
             <summary>Menu</summary>
             <nav class="mobile-menu" aria-label="Mobile navigation">
               {navLinks.map((link) => <a href={link.href}>{link.label}</a>)}
-              <a href="/private-beta">Private Beta</a>
+              <a href="/download/">Get ReTail</a>
             </nav>
           </details>
         </div>
@@ -118,7 +118,6 @@ const structuredData = {
         <div>
           <img class="footer-logo" src="/assets/retail-logo-header.png" alt="ReTail" width="991" height="443" />
           <p>ReTail is owned and operated by Crutchfield Interactive LLC.</p>
-          <p class="footer-note">ReTail is currently in private beta. Public marketplace access and payment services are not yet available.</p>
         </div>
         <div>
           <div class="footer-links" aria-label="Company contact">

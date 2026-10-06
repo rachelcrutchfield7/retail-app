@@ -164,7 +164,7 @@ img {
   filter: brightness(0.94);
 }
 
-.beta-pill,
+.nav-download-pill,
 .status-pill,
 .tag {
   display: inline-flex;
@@ -1078,10 +1078,11 @@ li {
   opacity: 0.78;
 }
 
-.store-badge.placeholder {
-  cursor: default;
-  background: linear-gradient(135deg, #1f2933, #2f7256);
-  opacity: 1;
+.store-badge:hover,
+.store-badge:focus-visible {
+  color: #ffffff;
+  text-decoration: none;
+  transform: translateY(-1px);
 }
 
 .store-icon {
@@ -1437,7 +1438,7 @@ li {
   width: min(100%, 240px);
 }
 
-.beta-card {
+.homepage-availability-card {
   border: 1px solid rgba(242, 139, 101, 0.24);
   background:
     radial-gradient(circle at 88% 18%, rgba(241, 183, 67, 0.18), transparent 28%),

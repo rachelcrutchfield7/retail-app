@@ -23,22 +23,22 @@ export type SitePage = {
 
 const updated = `Last updated: ${formatPolicyVersion(CURRENT_TERMS_VERSION)}`;
 const privacyUpdated = `Last updated: ${formatPolicyVersion(CURRENT_PRIVACY_VERSION)}`;
-const betaPaymentNotice = 'Wave 1 beta testers may create real listings. ReTail support policies apply to ReTail-processed payments when protected checkout is enabled; outside payments are not covered by ReTail payment protection.';
+const paymentNotice = 'ReTail support policies apply to ReTail-processed payments when protected checkout is enabled; outside payments are not covered by ReTail payment protection.';
 
 export const pages: SitePage[] = [
   {
     slug: 'how-it-works',
     title: 'How ReTail Works | ReTail',
-    description: 'Learn how ReTail helps people browse, sell, give away, and donate secondhand pet supplies during private beta.',
+    description: 'Learn how ReTail helps people browse, sell, give away, and donate secondhand pet supplies.',
     eyebrow: 'Marketplace basics',
     heading: 'How ReTail works',
-    intro: 'ReTail is being built as a focused marketplace for pet supplies, local coordination, and rescue support.',
+    intro: 'ReTail is a focused marketplace for pet supplies, local coordination, and rescue support.',
     sections: [
       { heading: 'Browse', body: ['Browse pet supplies available near you and narrow the results by location, category, condition, listing type, price, or other filters.'] },
       { heading: 'Sell', body: ['Create a listing, set a price, add photos, and explain how buyers can receive the item.'] },
       { heading: 'Give away', body: ['Offer an item free to another ReTail user without classifying it as a rescue-specific donation.'] },
-      { heading: 'Donate to a rescue', body: ['Offer physical pet-supply goods specifically to verified animal rescue organizations. ReTail does not facilitate monetary donations to rescues at launch.'] },
-      { heading: 'Payments during private beta', body: ['Wave 1 beta testers may create real listings. When ReTail Protected Checkout is enabled, payment records and support cases stay connected to the transaction.'] },
+      { heading: 'Donate to a rescue', body: ['Offer physical pet-supply goods specifically to verified animal rescue organizations. ReTail does not facilitate monetary donations to rescues.'] },
+      { heading: 'Payments and protection', body: ['When ReTail Protected Checkout is enabled, payment records and support cases stay connected to the transaction.'] },
     ],
     contact: 'general',
   },
@@ -50,13 +50,13 @@ export const pages: SitePage[] = [
     heading: 'Rescue Hub',
     intro: 'Rescue Hub is designed to help community members understand what nearby animal rescues need most.',
     sections: [
-      { heading: 'Verified rescue profiles', body: ['ReTail is being built to support organization profiles for eligible rescue groups. Verification helps separate real rescue participation from ordinary user accounts.'] },
+      { heading: 'Verified rescue profiles', body: ['ReTail supports organization profiles for eligible rescue groups. Verification helps separate real rescue participation from ordinary user accounts.'] },
       { heading: 'Urgent supply needs', body: ['Rescues can identify high-priority supplies such as crates, carriers, bedding, food bowls, leashes, litter boxes, and other pet-supply needs.'] },
       { heading: 'Rescue wishlists', body: ['Wishlists are intended to give community members a clearer way to understand ongoing supply needs before contacting a rescue.'] },
-      { heading: 'Available rescue donations', body: ['A Rescue Donation listing is different from a general free listing. Rescue Donation items are physical goods offered specifically to eligible verified rescue organizations. ReTail does not facilitate monetary rescue donations at launch.'] },
+      { heading: 'Available rescue donations', body: ['A Rescue Donation listing is different from a general free listing. Rescue Donation items are physical goods offered specifically to eligible verified rescue organizations. ReTail does not facilitate monetary rescue donations.'] },
       { heading: 'Public address privacy', body: ['A rescue may store a physical address privately. Public display of that address is optional and off by default; when it is off, public users see city and state only.'] },
       { heading: 'Donation receipts and tax questions', body: ['ReTail does not determine whether a contribution is tax deductible. Donors should ask the receiving organization whether it can provide a donation receipt.'] },
-      { heading: 'Before public launch', body: ['Rescues interested in future participation can contact ReTail. ReTail does not claim any specific rescue is already a partner unless that partnership is documented.'] },
+      { heading: 'Rescue participation', body: ['Rescues interested in participating can contact ReTail. ReTail does not claim any specific rescue is a partner unless that partnership is documented.'] },
     ],
     contact: 'general',
   },
@@ -79,7 +79,7 @@ export const pages: SitePage[] = [
   {
     slug: 'about',
     title: 'About ReTail | ReTail',
-    description: 'Learn about ReTail, a private-beta secondhand pet-supply marketplace owned and operated by Crutchfield Interactive LLC.',
+    description: 'Learn about ReTail, a public secondhand pet-supply marketplace owned and operated by Crutchfield Interactive LLC.',
     eyebrow: 'About',
     heading: 'A marketplace built for pet supplies',
     intro: 'ReTail was created to help pet owners save money, reduce waste, and support animal rescues through a focused secondhand marketplace.',
@@ -87,42 +87,20 @@ export const pages: SitePage[] = [
       { heading: 'Why ReTail exists', body: ['Many useful pet supplies are outgrown, upgraded, duplicated, or no longer needed. ReTail gives those items a more focused place to be reused.'] },
       { heading: 'Rescue-aware by design', body: ['ReTail includes Rescue Hub and rescue-specific donation workflows so people can support verified animal rescues without turning the marketplace into a social network.'] },
       { heading: 'Company ownership', body: ['ReTail is owned and operated by Crutchfield Interactive LLC.'] },
-      { heading: 'Current stage', body: ['ReTail is currently in private beta. Public marketplace access and payment services are not yet available.'] },
+      { heading: 'Available now', body: ['ReTail is publicly available on iOS and Android.'] },
     ],
     contact: 'general',
   },
   {
     slug: 'contact',
     title: 'Contact ReTail | ReTail',
-    description: 'Contact ReTail for general questions, rescue participation, support, account issues, safety reports, and future payment questions.',
+    description: 'Contact ReTail for general questions, rescue participation, support, account issues, safety reports, and payment questions.',
     eyebrow: 'Contact',
     heading: 'Contact ReTail',
     intro: 'For the first public website, direct email links are preferred. ReTail does not use a public contact form that silently stores personal data.',
     sections: [
-      { heading: 'General questions and partnerships', body: ['Use contact@retailpetapp.com for general business questions, rescue participation, partnerships, media or community inquiries, and public-launch questions.'] },
+      { heading: 'General questions and partnerships', body: ['Use contact@retailpetapp.com for general business questions, rescue participation, partnerships, media or community inquiries, and product questions.'] },
       { heading: 'Support and safety', body: ['ReTail Customer Support, Crutchfield Interactive LLC: support@retailpetapp.com or (877) 514-3697. Use support for account issues, listing concerns, payment questions, reports, refunds/returns, seller payouts, rescue support, safety concerns, and technical support.'] },
-    ],
-    contact: 'both',
-  },
-  {
-    slug: 'private-beta',
-    title: 'Private Beta | ReTail',
-    description: 'ReTail is currently undergoing limited private beta testing before public marketplace access becomes available.',
-    eyebrow: 'Private beta',
-    heading: 'ReTail is currently in private beta',
-    intro: 'ReTail is being tested with a limited group of users before its public launch. The marketplace is not yet open to the general public.',
-    sections: [
-      {
-        heading: 'What private beta means',
-        list: [
-          'Features may change based on beta feedback.',
-          'Payments are not yet publicly available.',
-          'Beta data and test listings may be removed before launch.',
-          'Beta participation does not guarantee continued access.',
-          'Private APK links, EAS build URLs, test credentials, and beta passwords are not published on this website.',
-        ],
-      },
-      { heading: 'Reporting issues', body: ['Wave 1 beta testers may create real listings and should follow ReTail safety and prohibited-item rules. Beta users can report issues to support@retailpetapp.com or (877) 514-3697.'] },
     ],
     contact: 'both',
   },
@@ -189,17 +167,17 @@ export const pages: SitePage[] = [
       { heading: 'Pet supplies only', body: ['Do not list live animals. This includes animals for sale, adoption, fostering, rehoming, breeding, stud services, trades, or giveaways.'] },
       { heading: 'Communicate respectfully', body: ['Do not harass, threaten, pressure, spam, scam, send offensive content, or repeatedly contact someone who does not want to continue.'] },
       { heading: 'Meet safely', body: ['Meet in public, well-lit places when possible. Do not share exact home addresses publicly in listings. Keep communication in ReTail when possible, inspect items before completing a transaction, and use caution when meeting strangers.'] },
-      { heading: 'Support rescues responsibly', body: ['Verified rescue accounts may solicit physical-goods donations such as food, crates, carriers, bedding, litter, supplies, and enrichment items. ReTail does not facilitate monetary rescue donations at launch.'] },
+      { heading: 'Support rescues responsibly', body: ['Verified rescue accounts may solicit physical-goods donations such as food, crates, carriers, bedding, litter, supplies, and enrichment items. ReTail does not facilitate monetary rescue donations.'] },
     ],
     contact: 'support',
   },
   {
     slug: 'refunds-and-disputes',
     title: 'Refunds and Disputes | ReTail',
-    description: 'Understand ReTail pre-launch payment language, future transaction disputes, outside payments, free items, and rescue donations.',
+    description: 'Understand ReTail payment language, transaction disputes, outside payments, free items, and rescue donations.',
     eyebrow: 'Policy',
     heading: 'Refunds and Disputes',
-    intro: betaPaymentNotice,
+    intro: paymentNotice,
     updated,
     sections: [
       { heading: 'ReTail protected checkout', body: ['When ReTail Protected Checkout is enabled, ReTail keeps a transaction record and support path for order, payment, refund, cancellation, return, shipping, and payout issues. Submitting a support case does not automatically issue a refund.'] },
@@ -210,7 +188,7 @@ export const pages: SitePage[] = [
       { heading: 'Partial refunds and return shipping', body: ['Partial refunds may be handled by ReTail support/admin where appropriate. If the seller materially misrepresented the item, return shipping should generally be the seller’s responsibility; other cases may be reviewed case by case.'] },
       { heading: 'Payments arranged outside ReTail', body: ['If users choose to pay outside ReTail, those payments are arranged at their own discretion. ReTail payment/refund protection does not apply because ReTail did not process the payment.'] },
       { heading: 'Free items', body: ['Free listings do not involve a ReTail-processed payment. Users should still communicate clearly about item condition, pickup, meetup, shipping, or timing.'] },
-      { heading: 'Rescue donations', body: ['Rescue Donation listings are physical goods offered free to eligible verified rescue organizations. ReTail does not facilitate monetary rescue donations at launch and does not determine whether a contribution is tax deductible.'] },
+      { heading: 'Rescue donations', body: ['Rescue Donation listings are physical goods offered free to eligible verified rescue organizations. ReTail does not facilitate monetary rescue donations and does not determine whether a contribution is tax deductible.'] },
       { heading: 'Support', body: ['Payment, refund, return, user, payout, and safety concerns should be sent to support@retailpetapp.com or (877) 514-3697.'] },
     ],
     contact: 'support',
@@ -221,7 +199,7 @@ export const pages: SitePage[] = [
     description: 'Review ReTail shipping and fulfillment guidance for pickup, meetup, shipping method, cost, packaging, address, timing, and condition.',
     eyebrow: 'Policy',
     heading: 'Shipping and Fulfillment',
-    intro: betaPaymentNotice,
+    intro: paymentNotice,
     updated,
     sections: [
       { heading: 'Shipping deadline', body: ['Sellers should ship within 5 calendar days of purchase unless a shorter stated handling time applies. Buyers may request cancellation or refund review if the seller has not shipped within the allowed window.'] },
