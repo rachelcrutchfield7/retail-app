@@ -140,6 +140,30 @@ img {
   text-underline-offset: 5px;
 }
 
+.promotion-nav {
+  gap: 20px;
+}
+
+.promotion-nav-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 9px 16px;
+  border-radius: 999px;
+  background: var(--primary);
+  color: #ffffff;
+  font-weight: 800;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.desktop-nav .promotion-nav-cta:hover {
+  color: #ffffff;
+  text-decoration: none;
+  filter: brightness(0.94);
+}
+
 .beta-pill,
 .status-pill,
 .tag {
@@ -206,6 +230,18 @@ img {
 
 .mobile-menu a:hover {
   background: var(--cream);
+}
+
+.promotion-mobile-menu .promotion-nav-cta {
+  color: #ffffff;
+}
+
+.promotion-mobile-menu .promotion-nav-cta:hover {
+  background: var(--primary-dark);
+}
+
+#how-it-works {
+  scroll-margin-top: 96px;
 }
 
 main {

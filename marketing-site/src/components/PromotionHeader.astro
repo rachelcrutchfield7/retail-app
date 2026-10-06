@@ -1,0 +1,43 @@
+---
+import { getValidAlternateEntryFormUrl } from '../config/promotion';
+
+const alternateEntryFormUrl = getValidAlternateEntryFormUrl();
+const promotionLinks = [
+  { href: '/100-listings/#how-it-works', label: 'How It Works' },
+  { href: '/100-listings/rules/', label: 'Official Rules' },
+];
+---
+<header class="site-header promotion-header">
+  <div class="nav-shell">
+    <a class="brand" href="/100-listings/" aria-label="ReTail promotion home">
+      <img src="/assets/retail-logo-header.png" alt="ReTail" width="991" height="443" />
+    </a>
+    <nav class="desktop-nav promotion-nav" aria-label="Promotion navigation">
+      {promotionLinks.map((link) => <a href={link.href}>{link.label}</a>)}
+      {alternateEntryFormUrl && (
+        <a href={alternateEntryFormUrl} target="_blank" rel="noreferrer">Enter Without Listing</a>
+      )}
+      <a class="promotion-nav-cta" href="/download/">Get ReTail</a>
+    </nav>
+    <details class="mobile-nav">
+      <summary>Menu</summary>
+      <nav class="mobile-menu promotion-mobile-menu" aria-label="Mobile promotion navigation">
+        {promotionLinks.map((link) => <a href={link.href}>{link.label}</a>)}
+        {alternateEntryFormUrl && (
+          <a href={alternateEntryFormUrl} target="_blank" rel="noreferrer">Enter Without Listing</a>
+        )}
+        <a class="promotion-nav-cta" href="/download/">Get ReTail</a>
+      </nav>
+    </details>
+  </div>
+</header>
+
+<script>
+  const promotionMobileMenu = document.querySelector<HTMLElement>('.promotion-mobile-menu');
+
+  promotionMobileMenu?.querySelectorAll('a').forEach((link) => {
+    link.addEventListener('click', () => {
+      promotionMobileMenu.closest('details')?.removeAttribute('open');
+    });
+  });
+</script>

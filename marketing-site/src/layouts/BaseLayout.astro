@@ -1,11 +1,13 @@
 ---
 import '../styles/global.css';
+import PromotionHeader from '../components/PromotionHeader.astro';
 
 type Props = {
   title: string;
   description: string;
   path?: string;
   noindex?: boolean;
+  promotionHeader?: boolean;
 };
 
 const {
@@ -13,6 +15,7 @@ const {
   description,
   path = '/',
   noindex = false,
+  promotionHeader = false,
 } = Astro.props;
 
 const canonical = new URL(path, 'https://retailpetapp.com').toString();
@@ -85,24 +88,28 @@ const structuredData = {
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
-    <header class="site-header">
-      <div class="nav-shell">
-        <a class="brand" href="/" aria-label="ReTail home">
-          <img src="/assets/retail-logo-header.png" alt="ReTail" width="991" height="443" />
-        </a>
-        <nav class="desktop-nav" aria-label="Primary navigation">
-          {navLinks.map((link) => <a href={link.href}>{link.label}</a>)}
-          <a class="beta-pill" href="/private-beta">Private Beta</a>
-        </nav>
-        <details class="mobile-nav">
-          <summary>Menu</summary>
-          <nav class="mobile-menu" aria-label="Mobile navigation">
+    {promotionHeader ? (
+      <PromotionHeader />
+    ) : (
+      <header class="site-header">
+        <div class="nav-shell">
+          <a class="brand" href="/" aria-label="ReTail home">
+            <img src="/assets/retail-logo-header.png" alt="ReTail" width="991" height="443" />
+          </a>
+          <nav class="desktop-nav" aria-label="Primary navigation">
             {navLinks.map((link) => <a href={link.href}>{link.label}</a>)}
-            <a href="/private-beta">Private Beta</a>
+            <a class="beta-pill" href="/private-beta">Private Beta</a>
           </nav>
-        </details>
-      </div>
-    </header>
+          <details class="mobile-nav">
+            <summary>Menu</summary>
+            <nav class="mobile-menu" aria-label="Mobile navigation">
+              {navLinks.map((link) => <a href={link.href}>{link.label}</a>)}
+              <a href="/private-beta">Private Beta</a>
+            </nav>
+          </details>
+        </div>
+      </header>
+    )}
     <main id="main">
       <slot />
     </main>

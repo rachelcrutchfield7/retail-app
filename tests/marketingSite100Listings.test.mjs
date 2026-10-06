@@ -110,3 +110,21 @@ test('sitemap and shared navigation expose both 100 Listings routes', () => {
   assert.match(layout, /href: '\/100-listings\/'/);
   assert.match(layout, /href: '\/100-listings\/rules\/'/);
 });
+
+test('promotion pages use a focused shared header with approved destinations only', () => {
+  const landingPage = read('marketing-site/src/pages/100-listings/index.astro');
+  const rulesPage = read('marketing-site/src/pages/100-listings/rules.astro');
+  const header = read('marketing-site/src/components/PromotionHeader.astro');
+
+  assert.match(landingPage, /<BaseLayout[^>]+promotionHeader>/);
+  assert.match(rulesPage, /<BaseLayout[^>]+promotionHeader>/);
+  assert.match(landingPage, /<section class="section" id="how-it-works">/);
+  assert.match(header, /href="\/100-listings\/" aria-label="ReTail promotion home"/);
+  assert.match(header, /href: '\/100-listings\/#how-it-works'/);
+  assert.match(header, /href: '\/100-listings\/rules\/'/);
+  assert.match(header, /Enter Without Listing/);
+  assert.match(header, /href="\/download\/">Get ReTail/);
+  assert.match(header, /getValidAlternateEntryFormUrl/);
+  assert.match(header, /promotionMobileMenu\.closest\('details'\)\?\.removeAttribute\('open'\)/);
+  assert.doesNotMatch(header, /\/rescue-hub|\/safety|\/about|\/contact|\/private-beta/);
+});
