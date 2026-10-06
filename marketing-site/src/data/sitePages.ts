@@ -105,6 +105,19 @@ export const pages: SitePage[] = [
     contact: 'both',
   },
   {
+    slug: 'private-beta',
+    title: 'ReTail Is Available | ReTail',
+    description: 'ReTail is publicly available for iOS and Android. Download the app and join the pet-supply marketplace.',
+    eyebrow: 'Available now',
+    heading: 'ReTail is available on iOS and Android',
+    intro: 'Download ReTail from the App Store or Google Play to browse, list, and connect with the public pet-supply marketplace.',
+    sections: [
+      { heading: 'Download ReTail', body: ['Visit the ReTail download page to open the official App Store or Google Play listing for your device.'] },
+      { heading: 'Questions and support', body: ['Contact ReTail for general questions, rescue participation, account support, safety reports, or technical help.'] },
+    ],
+    contact: 'both',
+  },
+  {
     slug: 'privacy',
     title: 'Privacy Policy | ReTail',
     description: 'Read the ReTail privacy policy for account information, public listings, messaging, reports, notifications, and location privacy.',

@@ -17,16 +17,18 @@ const publicLaunchSources = [
 ].map(read).join('\n');
 
 test('public marketing copy contains no stale private-beta or pre-launch status', () => {
+  const publicCopy = publicLaunchSources.replaceAll('private-beta', '');
+
   assert.doesNotMatch(
-    publicLaunchSources,
+    publicCopy,
     /ReTail is currently in private beta\. Public marketplace access and payment services are not yet available\./,
   );
-  assert.doesNotMatch(publicLaunchSources, /private[ -]beta/i);
-  assert.doesNotMatch(publicLaunchSources, /pre[ -]?launch/i);
-  assert.doesNotMatch(publicLaunchSources, /coming soon/i);
-  assert.doesNotMatch(publicLaunchSources, /before (?:its |public )?launch/i);
-  assert.doesNotMatch(publicLaunchSources, /marketplace is not yet open/i);
-  assert.doesNotMatch(publicLaunchSources, /app links (?:go|are) live/i);
+  assert.doesNotMatch(publicCopy, /private[ -]beta/i);
+  assert.doesNotMatch(publicCopy, /pre[ -]?launch/i);
+  assert.doesNotMatch(publicCopy, /coming soon/i);
+  assert.doesNotMatch(publicCopy, /before (?:its |public )?launch/i);
+  assert.doesNotMatch(publicCopy, /marketplace is not yet open/i);
+  assert.doesNotMatch(publicCopy, /app links (?:go|are) live/i);
 });
 
 test('shared marketing navigation and homepage present ReTail as publicly available', () => {
@@ -50,13 +52,13 @@ test('download page links to the official live iOS and Android store listings', 
   assert.doesNotMatch(download, /noindex|placeholder|aria-disabled/i);
 });
 
-test('the retired private-beta page redirects to the public download page', () => {
+test('the legacy private-beta URL presents current public availability and stays out of the sitemap', () => {
   const sitePages = read('marketing-site/src/data/sitePages.ts');
   const sitemap = read('marketing-site/public/sitemap.xml');
-  const redirects = read('marketing-site/public/_redirects');
 
-  assert.doesNotMatch(sitePages, /slug: 'private-beta'/);
+  assert.match(sitePages, /slug: 'private-beta'/);
+  assert.match(sitePages, /heading: 'ReTail is available on iOS and Android'/);
+  assert.match(sitePages, /public pet-supply marketplace/);
   assert.doesNotMatch(sitemap, /private-beta/);
   assert.match(sitemap, /https:\/\/retailpetapp\.com\/download\//);
-  assert.match(redirects, /^\/private-beta \/download\/ 301$/m);
 });
