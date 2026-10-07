@@ -79,3 +79,13 @@ test('utility, legacy, callback, 404, and Official Rules pages are noindex', () 
   assert.match(read('marketing-site/src/pages/100-listings/rules.astro'), /noindex/);
   assert.match(read('marketing-site/src/data/sitePages.ts'), /slug: 'private-beta'[\s\S]{0,600}noindex: true/);
 });
+
+test('Pages deployment is noindex while public Workers remove the staging header', () => {
+  const pagesHeaders = read('marketing-site/public/_headers');
+  const publicWorker = read('web-worker/src/index.ts');
+  const downloadWorker = read('download-worker/src/index.ts');
+
+  assert.match(pagesHeaders, /X-Robots-Tag: noindex/);
+  assert.match(publicWorker, /headers\.delete\("x-robots-tag"\)/);
+  assert.match(downloadWorker, /headers\.delete\("x-robots-tag"\)/);
+});
