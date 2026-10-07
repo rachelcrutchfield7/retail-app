@@ -14,7 +14,6 @@ const RETAIL_SITE_STATIC_PREFIX = "/retail-site-static";
 const RETAIL_SITE_ASSET_PREFIX = "/retail-site-assets";
 const PRIMARY_HOST = "www.retailpetapp.com";
 const MARKETING_PAGE_PATHS = new Set([
-  "/download",
   "/how-it-works",
   "/rescue-hub",
   "/safety",

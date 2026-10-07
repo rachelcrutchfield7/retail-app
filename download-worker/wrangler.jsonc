@@ -1,0 +1,15 @@
+{
+  "name": "retail-download-page",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-16",
+  "routes": [
+    {
+      "pattern": "retailpetapp.com/download*",
+      "zone_name": "retailpetapp.com"
+    },
+    {
+      "pattern": "www.retailpetapp.com/download*",
+      "zone_name": "retailpetapp.com"
+    }
+  ]
+}

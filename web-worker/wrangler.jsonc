@@ -28,14 +28,6 @@
       "zone_name": "retailpetapp.com"
     },
     {
-      "pattern": "retailpetapp.com/download*",
-      "zone_name": "retailpetapp.com"
-    },
-    {
-      "pattern": "www.retailpetapp.com/download*",
-      "zone_name": "retailpetapp.com"
-    },
-    {
       "pattern": "retailpetapp.com/how-it-works*",
       "zone_name": "retailpetapp.com"
     },

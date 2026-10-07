@@ -122,8 +122,8 @@ test('known marketing pages proxy on www and redirect apex URLs to their canonic
   const originalFetch = globalThis.fetch;
   context.after(() => { globalThis.fetch = originalFetch; });
   globalThis.fetch = async (request) => {
-    assert.equal(request.url, 'https://retail-prelaunch.pages.dev/download/');
-    return new Response('<link href="/_astro/site.css"><h1>Download ReTail</h1>', {
+    assert.equal(request.url, 'https://retail-prelaunch.pages.dev/about/');
+    return new Response('<link href="/_astro/site.css"><h1>About ReTail</h1>', {
       status: 200,
       headers: {
         'Content-Type': 'text/html; charset=utf-8',
@@ -132,13 +132,13 @@ test('known marketing pages proxy on www and redirect apex URLs to their canonic
     });
   };
 
-  const proxied = await worker.fetch(new Request('https://www.retailpetapp.com/download/'), env);
+  const proxied = await worker.fetch(new Request('https://www.retailpetapp.com/about/'), env);
   const body = await proxied.text();
   assert.equal(proxied.status, 200);
   assert.equal(proxied.headers.get('x-robots-tag'), null);
   assert.match(body, /href="\/retail-site-static\/_astro\/site\.css"/);
 
-  const redirected = await worker.fetch(new Request('https://retailpetapp.com/download'), env);
+  const redirected = await worker.fetch(new Request('https://retailpetapp.com/about'), env);
   assert.equal(redirected.status, 308);
-  assert.equal(redirected.headers.get('location'), 'https://www.retailpetapp.com/download/');
+  assert.equal(redirected.headers.get('location'), 'https://www.retailpetapp.com/about/');
 });
