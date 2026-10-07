@@ -37,8 +37,8 @@ test('root app shell keeps application markup while receiving canonical SEO meta
   assert.match(body, /<div id="root"><\/div><script src="\.\/_expo\/app\.js"><\/script>/);
 
   const apex = await worker.fetch(new Request('https://retailpetapp.com/'), env);
-  assert.equal(apex.status, 308);
-  assert.equal(apex.headers.get('location'), 'https://www.retailpetapp.com/');
+  assert.equal(apex.status, 200);
+  assert.match(await apex.text(), /rel="canonical" href="https:\/\/www\.retailpetapp\.com\/"/);
 });
 
 test('public campaign status endpoint exposes aggregate campaign data only', async (context) => {
@@ -116,19 +116,22 @@ test('promotion route safely proxies the existing Pages project with scoped asse
   assert.match(body, /content="https:\/\/www\.retailpetapp\.com\/og-image\.png"/);
 });
 
-test('marketing SEO files and assets proxy from Pages while apex marketing URLs redirect to www', async (context) => {
+test('marketing SEO files and assets proxy on both hosts without reversing cached redirects', async (context) => {
   const originalFetch = globalThis.fetch;
   context.after(() => { globalThis.fetch = originalFetch; });
   globalThis.fetch = async (request) => {
     const isAsset = request.url.endsWith('/assets/app-icon.png');
+    const isSeoFile =
+      request.url === 'https://retail-prelaunch.pages.dev/sitemap.xml' ||
+      request.url === 'https://retail-prelaunch.pages.dev/robots.txt';
     assert.ok(
-      request.url === 'https://retail-prelaunch.pages.dev/sitemap.xml' || isAsset,
+      isSeoFile || isAsset,
       `unexpected Pages request: ${request.url}`,
     );
-    return new Response(isAsset ? 'png' : '<?xml version="1.0"?><urlset></urlset>', {
+    return new Response(isAsset ? 'png' : request.url.endsWith('/robots.txt') ? 'User-agent: *' : '<?xml version="1.0"?><urlset></urlset>', {
       status: 200,
       headers: {
-        'Content-Type': isAsset ? 'image/png' : 'application/xml; charset=utf-8',
+        'Content-Type': isAsset ? 'image/png' : request.url.endsWith('/robots.txt') ? 'text/plain; charset=utf-8' : 'application/xml; charset=utf-8',
         'X-Robots-Tag': 'noindex',
       },
     });
@@ -144,9 +147,9 @@ test('marketing SEO files and assets proxy from Pages while apex marketing URLs 
   assert.equal(asset.headers.get('content-type'), 'image/png');
   assert.equal(asset.headers.get('x-robots-tag'), null);
 
-  const redirected = await worker.fetch(new Request('https://retailpetapp.com/robots.txt'), env);
-  assert.equal(redirected.status, 308);
-  assert.equal(redirected.headers.get('location'), 'https://www.retailpetapp.com/robots.txt');
+  const apexRobots = await worker.fetch(new Request('https://retailpetapp.com/robots.txt'), env);
+  assert.equal(apexRobots.status, 200);
+  assert.equal(apexRobots.headers.get('x-robots-tag'), null);
 });
 
 test('known marketing pages proxy on www while apex remains compatible with cached redirects', async (context) => {

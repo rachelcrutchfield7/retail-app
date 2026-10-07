@@ -13,7 +13,6 @@ const WEB_APP_ORIGIN = "https://retail-web-app-ckv.pages.dev";
 const PROMOTION_ASSET_PREFIX = "/100-listings-static";
 const RETAIL_SITE_STATIC_PREFIX = "/retail-site-static";
 const RETAIL_SITE_ASSET_PREFIX = "/retail-site-assets";
-const PRIMARY_HOST = "www.retailpetapp.com";
 const MARKETING_PAGE_PATHS = new Set([
   "/how-it-works",
   "/rescue-hub",
@@ -102,31 +101,17 @@ export default {
     }
 
     if (url.pathname === "/") {
-      if (url.hostname === "retailpetapp.com") {
-        url.hostname = PRIMARY_HOST;
-        return Response.redirect(url.toString(), 308);
-      }
-
       return proxyAppHome(request);
     }
 
     if (isMarketingProxyPath(url.pathname)) {
       if (url.hostname === "retailpetapp.com") {
-        if (isStaticMarketingPagePath(url.pathname)) {
-          if (!url.pathname.endsWith("/")) {
-            url.pathname = `${url.pathname}/`;
-            return Response.redirect(url.toString(), 308);
-          }
-
-          return proxyPromotionSite(request, url);
+        if (isStaticMarketingPagePath(url.pathname) && !url.pathname.endsWith("/")) {
+          url.pathname = `${url.pathname}/`;
+          return Response.redirect(url.toString(), 308);
         }
 
-        url.hostname = PRIMARY_HOST;
-        if (url.pathname === "/100-listings") {
-          url.pathname = "/100-listings/";
-        }
-
-        return Response.redirect(url.toString(), 308);
+        return proxyPromotionSite(request, url);
       }
 
       return proxyPromotionSite(request, url);
