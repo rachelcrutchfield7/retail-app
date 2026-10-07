@@ -1,6 +1,14 @@
 ---
 import '../styles/global.css';
 import PromotionHeader from '../components/PromotionHeader.astro';
+import {
+  APP_STORE_URL,
+  getCanonicalUrl,
+  getSocialImageUrl,
+  GOOGLE_PLAY_URL,
+  SITE_NAME,
+  SITE_ORIGIN,
+} from '../config/seo';
 
 type Props = {
   title: string;
@@ -8,6 +16,7 @@ type Props = {
   path?: string;
   noindex?: boolean;
   promotionHeader?: boolean;
+  includeAppSchema?: boolean;
 };
 
 const {
@@ -16,52 +25,88 @@ const {
   path = '/',
   noindex = false,
   promotionHeader = false,
+  includeAppSchema = false,
 } = Astro.props;
 
-const canonical = new URL(path, 'https://retailpetapp.com').toString();
+const canonical = getCanonicalUrl(path);
+const socialImage = getSocialImageUrl();
 const navLinks = [
   { href: '/100-listings/', label: '100 Listings' },
-  { href: '/how-it-works', label: 'How It Works' },
-  { href: '/rescue-hub', label: 'Rescue Hub' },
-  { href: '/safety', label: 'Safety' },
-  { href: '/about', label: 'About' },
-  { href: '/contact', label: 'Contact' },
+  { href: '/how-it-works/', label: 'How It Works' },
+  { href: '/rescue-hub/', label: 'Rescue Hub' },
+  { href: '/safety/', label: 'Safety' },
+  { href: '/about/', label: 'About' },
+  { href: '/contact/', label: 'Contact' },
 ];
 const legalLinks = [
   { href: '/100-listings/rules/', label: 'Giveaway Rules' },
-  { href: '/privacy', label: 'Privacy' },
-  { href: '/terms', label: 'Terms' },
-  { href: '/community-guidelines', label: 'Community Guidelines' },
-  { href: '/account-deletion', label: 'Account Deletion' },
-  { href: '/refunds-and-disputes', label: 'Refunds & Disputes' },
-  { href: '/shipping-and-fulfillment', label: 'Shipping' },
-  { href: '/prohibited-items', label: 'Prohibited Items' },
+  { href: '/privacy/', label: 'Privacy' },
+  { href: '/terms/', label: 'Terms' },
+  { href: '/community-guidelines/', label: 'Community Guidelines' },
+  { href: '/account-deletion/', label: 'Account Deletion' },
+  { href: '/refunds-and-disputes/', label: 'Refunds & Disputes' },
+  { href: '/shipping-and-fulfillment/', label: 'Shipping' },
+  { href: '/prohibited-items/', label: 'Prohibited Items' },
 ];
+const organizationId = `${SITE_ORIGIN}/#organization`;
+const websiteId = `${SITE_ORIGIN}/#website`;
+const appId = `${SITE_ORIGIN}/#mobile-app`;
+const structuredDataGraph: Record<string, unknown>[] = [
+  {
+    '@type': 'Organization',
+    '@id': organizationId,
+    name: 'Crutchfield Interactive LLC',
+    url: SITE_ORIGIN,
+    email: 'contact@retailpetapp.com',
+    telephone: '+1-877-514-3697',
+    sameAs: [APP_STORE_URL, GOOGLE_PLAY_URL],
+    brand: {
+      '@type': 'Brand',
+      name: 'ReTail',
+    },
+  },
+  {
+    '@type': 'WebSite',
+    '@id': websiteId,
+    name: SITE_NAME,
+    url: SITE_ORIGIN,
+    description: 'The official website for ReTail, a public marketplace for buying, selling, giving away, and donating pet supplies.',
+    publisher: {
+      '@id': organizationId,
+    },
+  },
+  {
+    '@type': 'WebPage',
+    '@id': `${canonical}#webpage`,
+    name: title,
+    url: canonical,
+    description,
+    isPartOf: {
+      '@id': websiteId,
+    },
+    ...(includeAppSchema ? { about: { '@id': appId } } : {}),
+  },
+];
+
+if (includeAppSchema) {
+  structuredDataGraph.push({
+    '@type': 'MobileApplication',
+    '@id': appId,
+    name: 'ReTail - Pet Marketplace',
+    applicationCategory: 'ShoppingApplication',
+    operatingSystem: 'iOS, Android',
+    url: getCanonicalUrl('/download/'),
+    downloadUrl: [APP_STORE_URL, GOOGLE_PLAY_URL],
+    description: 'ReTail is a marketplace for buying, selling, giving away, and donating new and secondhand pet supplies.',
+    publisher: {
+      '@id': organizationId,
+    },
+  });
+}
+
 const structuredData = {
   '@context': 'https://schema.org',
-  '@graph': [
-    {
-      '@type': 'Organization',
-      name: 'Crutchfield Interactive LLC',
-      url: 'https://retailpetapp.com',
-      email: 'contact@retailpetapp.com',
-      telephone: '+1-877-514-3697',
-      brand: {
-        '@type': 'Brand',
-        name: 'ReTail',
-      },
-    },
-    {
-      '@type': 'WebSite',
-      name: 'ReTail',
-      url: 'https://retailpetapp.com',
-      description,
-      publisher: {
-        '@type': 'Organization',
-        name: 'Crutchfield Interactive LLC',
-      },
-    },
-  ],
+  '@graph': structuredDataGraph,
 };
 ---
 <!doctype html>
@@ -71,19 +116,27 @@ const structuredData = {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title}</title>
     <meta name="description" content={description} />
-    {noindex && <meta name="robots" content="noindex, nofollow" />}
+    <meta name="robots" content={noindex ? 'noindex, follow' : 'index, follow'} />
+    <meta name="application-name" content={SITE_NAME} />
+    <meta name="apple-itunes-app" content="app-id=6801206660" />
     <link rel="canonical" href={canonical} />
-    <link rel="icon" href="/assets/app-icon.png" type="image/png" />
+    <link rel="icon" href="/retail-site-assets/app-icon.png" type="image/png" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="ReTail" />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonical} />
-    <meta property="og:image" content="https://retailpetapp.com/og-image.svg" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:image" content={socialImage} />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="ReTail — Secondhand Pet Supplies Marketplace" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
-    <meta name="twitter:image" content="https://retailpetapp.com/og-image.svg" />
+    <meta name="twitter:image" content={socialImage} />
+    <meta name="twitter:image:alt" content="ReTail — Secondhand Pet Supplies Marketplace" />
     <script is:inline type="application/ld+json" set:html={JSON.stringify(structuredData)} />
   </head>
   <body>
@@ -94,7 +147,7 @@ const structuredData = {
       <header class="site-header">
         <div class="nav-shell">
           <a class="brand" href="/" aria-label="ReTail home">
-            <img src="/assets/retail-logo-header.png" alt="ReTail" width="991" height="443" />
+            <img src="/retail-site-assets/retail-logo-header.png" alt="ReTail" width="991" height="443" />
           </a>
           <nav class="desktop-nav" aria-label="Primary navigation">
             {navLinks.map((link) => <a href={link.href}>{link.label}</a>)}
@@ -116,7 +169,7 @@ const structuredData = {
     <footer class="site-footer">
       <div class="footer-inner">
         <div>
-          <img class="footer-logo" src="/assets/retail-logo-header.png" alt="ReTail" width="991" height="443" />
+          <img class="footer-logo" src="/retail-site-assets/retail-logo-header.png" alt="ReTail" width="991" height="443" loading="lazy" decoding="async" />
           <p>ReTail is owned and operated by Crutchfield Interactive LLC.</p>
         </div>
         <div>

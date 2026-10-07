@@ -3,7 +3,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import { getValidAlternateEntryFormUrl, promotion } from '../../config/promotion';
 
 const title = '100 Listings in 72 Hours Giveaway | ReTail';
-const description = `Join ReTail’s 100 Listings in 72 Hours Giveaway from ${promotion.startDisplay} through ${promotion.endDisplay}. Publish qualifying pet-supply listings for entries and a chance to win a $50 prize.`;
+const description = 'Join ReTail’s 100 Listings in 72 Hours Giveaway, October 9–12, 2026. Publish qualifying pet-supply listings for a chance to choose a $50 prize.';
 const alternateEntryFormUrl = getValidAlternateEntryFormUrl();
 const entryTiers = [
   { listings: '3–5', entries: '1 entry' },
@@ -33,12 +33,12 @@ const prizeOptions = [
           <strong><time datetime={promotion.endUtc}>{promotion.endDisplay}</time></strong>
         </div>
         <div class="actions">
-          <a class="button event-button" href="/download">Open or download ReTail</a>
+          <a class="button event-button" href="/download/">Open or download ReTail</a>
           <a class="button secondary" href="/100-listings/rules/">Read the Official Rules</a>
         </div>
       </div>
       <aside class="event-goal-card" aria-label="Community listing goal">
-        <img src="/assets/retail-logo-header.png" alt="ReTail" width="991" height="443" />
+        <img src="/retail-site-assets/retail-logo-header.png" alt="ReTail" width="991" height="443" />
         <span class="goal-number">{promotion.targetListingCount}</span>
         <strong>qualifying listings</strong>
         <p>One community. Three days. More pet supplies finding a useful second life.</p>
@@ -153,7 +153,7 @@ const prizeOptions = [
       <p>Open ReTail, publish qualifying sale listings during the Promotion Period, and help the community work toward 100.</p>
     </div>
     <div class="actions">
-      <a class="button event-button" href="/download">Open or download ReTail</a>
+      <a class="button event-button" href="/download/">Open or download ReTail</a>
       <a class="button secondary" href="/100-listings/rules/">Official Rules</a>
     </div>
   </section>

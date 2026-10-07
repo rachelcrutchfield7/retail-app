@@ -34,6 +34,38 @@
     {
       "pattern": "www.retailpetapp.com/api/100-listings/status",
       "zone_name": "retailpetapp.com"
+    },
+    {
+      "pattern": "retailpetapp.com/robots.txt",
+      "zone_name": "retailpetapp.com"
+    },
+    {
+      "pattern": "www.retailpetapp.com/robots.txt",
+      "zone_name": "retailpetapp.com"
+    },
+    {
+      "pattern": "retailpetapp.com/sitemap.xml",
+      "zone_name": "retailpetapp.com"
+    },
+    {
+      "pattern": "www.retailpetapp.com/sitemap.xml",
+      "zone_name": "retailpetapp.com"
+    },
+    {
+      "pattern": "retailpetapp.com/og-image.png",
+      "zone_name": "retailpetapp.com"
+    },
+    {
+      "pattern": "www.retailpetapp.com/og-image.png",
+      "zone_name": "retailpetapp.com"
+    },
+    {
+      "pattern": "retailpetapp.com/retail-site-assets/*",
+      "zone_name": "retailpetapp.com"
+    },
+    {
+      "pattern": "www.retailpetapp.com/retail-site-assets/*",
+      "zone_name": "retailpetapp.com"
     }
   ],
   "vars": {

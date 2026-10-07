@@ -1,12 +1,12 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 
-const title = 'ReTail | Secondhand Pet Supplies Marketplace';
-const description = 'ReTail is a secondhand pet-supply marketplace for buying, selling, giving away, and donating pet supplies to verified animal rescues.';
+const title = 'ReTail Pet App | Secondhand Pet Supplies Marketplace';
+const description = 'Buy, sell, give away, and donate new and secondhand pet supplies with ReTail, the public marketplace built for pet people and animal rescues.';
 const features = [
   {
     title: 'Shop pet supplies for less',
-    body: 'Discover crates, carriers, beds, toys, tanks, grooming supplies, and other pet items nearby while giving useful supplies another life.',
+    body: 'Discover dog and cat gear, aquariums, reptile habitats, bird supplies, small-animal items, equine gear, and other pet supplies nearby.',
   },
   {
     title: 'Clear out what you no longer use',
@@ -35,7 +35,7 @@ const safetyPoints = [
   'Rescue-only donations are intended for verified rescue organizations.',
 ];
 ---
-<BaseLayout title={title} description={description} path="/">
+<BaseLayout title={title} description={description} path="/" includeAppSchema>
   <section class="hero">
     <div class="section hero-grid">
       <div class="hero-copy">
@@ -45,7 +45,7 @@ const safetyPoints = [
         <p class="lead">ReTail is a pet-focused marketplace where people can buy, sell, give away, and donate supplies, with Rescue Hub built in for animal rescues and community support.</p>
         <div class="actions">
           <a class="button" href="/download/">Download ReTail</a>
-          <a class="button secondary" href="/how-it-works">See how ReTail works</a>
+          <a class="button secondary" href="/how-it-works/">See how ReTail works</a>
         </div>
         <p class="download-note">Download ReTail from the App Store or Google Play to browse, list, and connect with the pet-supply marketplace.</p>
         <div class="funnel-stat-row" aria-label="What ReTail helps users do">
@@ -58,7 +58,7 @@ const safetyPoints = [
         </div>
       </div>
       <aside class="brand-showcase" aria-label="ReTail marketplace overview">
-        <img src="/assets/retail-logo-header.png" alt="ReTail logo" width="991" height="443" />
+        <img src="/retail-site-assets/retail-logo-header.png" alt="ReTail logo" width="991" height="443" />
         <div class="showcase-panel">
           <span>Marketplace focus</span>
           <strong>Pet supplies only</strong>
@@ -107,7 +107,7 @@ const safetyPoints = [
 
   <section class="section">
     <div class="download-cta homepage-cta">
-      <img src="/assets/retail-logo-header.png" alt="ReTail" width="991" height="443" />
+      <img src="/retail-site-assets/retail-logo-header.png" alt="ReTail" width="991" height="443" loading="lazy" decoding="async" />
       <div>
         <span class="eyebrow">Company</span>
         <h2>Built from firsthand animal-rescue experience.</h2>

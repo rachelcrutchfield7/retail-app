@@ -527,7 +527,7 @@ test('account deletion page provides app and external deletion pathways', () => 
   assert.match(page, /Open Profile/);
   assert.match(page, /Open Settings/);
   assert.match(page, /Find Delete Account/);
-  assert.match(page, /href="\/privacy"/);
+  assert.match(page, /href="\/privacy\/"/);
 });
 
 test('consent migration is append-only, private by default, and opts out deleted accounts', () => {

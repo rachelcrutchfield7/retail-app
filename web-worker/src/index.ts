@@ -10,6 +10,8 @@ const ANDROID_PACKAGE = "com.raecrutchfield.retail";
 const PROMOTION_CAMPAIGN_KEY = "community_100_listings_72_hours_v1";
 const PROMOTION_SITE_ORIGIN = "https://retail-prelaunch.pages.dev";
 const PROMOTION_ASSET_PREFIX = "/100-listings-static";
+const RETAIL_SITE_ASSET_PREFIX = "/retail-site-assets";
+const PRIMARY_HOST = "www.retailpetapp.com";
 
 type CampaignLifecycle = "disabled" | "upcoming" | "active" | "ended" | "unavailable";
 
@@ -78,11 +80,17 @@ export default {
       }
     }
 
-    if (
-      url.pathname === "/100-listings" ||
-      url.pathname.startsWith("/100-listings/") ||
-      url.pathname.startsWith(`${PROMOTION_ASSET_PREFIX}/`)
-    ) {
+    if (isMarketingProxyPath(url.pathname)) {
+      if (url.hostname === "retailpetapp.com") {
+        url.hostname = PRIMARY_HOST;
+
+        if (url.pathname === "/100-listings") {
+          url.pathname = "/100-listings/";
+        }
+
+        return Response.redirect(url.toString(), 308);
+      }
+
       return proxyPromotionSite(request, url);
     }
 
@@ -183,7 +191,9 @@ async function proxyPromotionSite(request: Request, requestUrl: URL) {
 
   const upstreamPath = requestUrl.pathname.startsWith(`${PROMOTION_ASSET_PREFIX}/`)
     ? requestUrl.pathname.slice(PROMOTION_ASSET_PREFIX.length)
-    : requestUrl.pathname;
+    : requestUrl.pathname.startsWith(`${RETAIL_SITE_ASSET_PREFIX}/`)
+      ? requestUrl.pathname.replace(RETAIL_SITE_ASSET_PREFIX, "/assets")
+      : requestUrl.pathname;
   const upstreamUrl = new URL(upstreamPath + requestUrl.search, PROMOTION_SITE_ORIGIN);
   const upstreamResponse = await fetch(new Request(upstreamUrl, request));
   const headers = new Headers(upstreamResponse.headers);
@@ -204,13 +214,24 @@ async function proxyPromotionSite(request: Request, requestUrl: URL) {
     .replaceAll('href="/_astro/', `href="${PROMOTION_ASSET_PREFIX}/_astro/`)
     .replaceAll('src="/_astro/', `src="${PROMOTION_ASSET_PREFIX}/_astro/`)
     .replaceAll('href="/assets/', `href="${PROMOTION_ASSET_PREFIX}/assets/`)
-    .replaceAll('src="/assets/', `src="${PROMOTION_ASSET_PREFIX}/assets/`)
-    .replaceAll('content="https://retailpetapp.com/og-image.svg"', `content="https://retailpetapp.com${PROMOTION_ASSET_PREFIX}/og-image.svg"`);
+    .replaceAll('src="/assets/', `src="${PROMOTION_ASSET_PREFIX}/assets/`);
 
   return new Response(body, {
     status: upstreamResponse.status,
     headers
   });
+}
+
+function isMarketingProxyPath(pathname: string) {
+  return (
+    pathname === "/100-listings" ||
+    pathname.startsWith("/100-listings/") ||
+    pathname.startsWith(`${PROMOTION_ASSET_PREFIX}/`) ||
+    pathname === "/robots.txt" ||
+    pathname === "/sitemap.xml" ||
+    pathname === "/og-image.png" ||
+    pathname.startsWith(`${RETAIL_SITE_ASSET_PREFIX}/`)
+  );
 }
 
 async function getListing(env: Env, listingId: string) {

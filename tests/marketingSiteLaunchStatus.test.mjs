@@ -12,8 +12,9 @@ const publicLaunchSources = [
   'marketing-site/src/pages/download.astro',
   'marketing-site/src/pages/404.astro',
   'marketing-site/src/data/sitePages.ts',
-  'marketing-site/public/og-image.svg',
-  'marketing-site/public/sitemap.xml',
+  'marketing-site/public/og-image.png',
+  'marketing-site/src/config/seo.ts',
+  'marketing-site/src/pages/sitemap.xml.ts',
 ].map(read).join('\n');
 
 test('public marketing copy contains no stale private-beta or pre-launch status', () => {
@@ -44,9 +45,12 @@ test('shared marketing navigation and homepage present ReTail as publicly availa
 
 test('download page links to the official live iOS and Android store listings', () => {
   const download = read('marketing-site/src/pages/download.astro');
+  const seoConfig = read('marketing-site/src/config/seo.ts');
 
-  assert.match(download, /https:\/\/apps\.apple\.com\/us\/app\/retail-pet-marketplace\/id6801206660/);
-  assert.match(download, /https:\/\/play\.google\.com\/store\/apps\/details\?id=com\.raecrutchfield\.retail/);
+  assert.match(seoConfig, /https:\/\/apps\.apple\.com\/us\/app\/retail-pet-marketplace\/id6801206660/);
+  assert.match(seoConfig, /https:\/\/play\.google\.com\/store\/apps\/details\?id=com\.raecrutchfield\.retail/);
+  assert.match(download, /APP_STORE_URL/);
+  assert.match(download, /GOOGLE_PLAY_URL/);
   assert.match(download, /Download on the/);
   assert.match(download, /Get it on/);
   assert.doesNotMatch(download, /noindex|placeholder|aria-disabled/i);
@@ -54,11 +58,12 @@ test('download page links to the official live iOS and Android store listings', 
 
 test('the legacy private-beta URL presents current public availability and stays out of the sitemap', () => {
   const sitePages = read('marketing-site/src/data/sitePages.ts');
-  const sitemap = read('marketing-site/public/sitemap.xml');
+  const seoConfig = read('marketing-site/src/config/seo.ts');
 
   assert.match(sitePages, /slug: 'private-beta'/);
   assert.match(sitePages, /heading: 'ReTail is available on iOS and Android'/);
   assert.match(sitePages, /public pet-supply marketplace/);
-  assert.doesNotMatch(sitemap, /private-beta/);
-  assert.match(sitemap, /https:\/\/retailpetapp\.com\/download\//);
+  assert.match(sitePages, /noindex: true/);
+  assert.doesNotMatch(seoConfig, /['"]\/private-beta\/?['"]/);
+  assert.match(seoConfig, /'\/download\/'/);
 });

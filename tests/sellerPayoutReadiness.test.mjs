@@ -111,7 +111,7 @@ test('Stripe Connect callbacks have app-level handling and public website pages'
   const sprint4 = read('src/sprint4/Sprint4App.tsx');
   const returnPage = read('marketing-site/src/pages/stripe-connect-return.astro');
   const refreshPage = read('marketing-site/src/pages/stripe-connect-refresh.astro');
-  const sitemap = read('marketing-site/public/sitemap.xml');
+  const seoConfig = read('marketing-site/src/config/seo.ts');
 
   assert.match(sprint4, /shouldHandleStripeConnectCallback/);
   assert.match(sprint4, /setRoute\(\{ name: 'settings' \}\)/);
@@ -120,8 +120,10 @@ test('Stripe Connect callbacks have app-level handling and public website pages'
   assert.match(refreshPage, /retail:\/\/stripe-connect-refresh/);
   assert.match(returnPage, /Open ReTail/);
   assert.match(refreshPage, /Continue payout setup/);
-  assert.match(sitemap, /https:\/\/retailpetapp\.com\/stripe-connect-return/);
-  assert.match(sitemap, /https:\/\/retailpetapp\.com\/stripe-connect-refresh/);
+  assert.match(returnPage, /noindex/);
+  assert.match(refreshPage, /noindex/);
+  assert.doesNotMatch(seoConfig, /['"]\/stripe-connect-return\/?['"]/);
+  assert.doesNotMatch(seoConfig, /['"]\/stripe-connect-refresh\/?['"]/);
 });
 
 test('Stripe Connect onboarding uses canonical backend and opens only valid Stripe HTTPS URLs', () => {

@@ -3,10 +3,10 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import { getValidAlternateEntryFormUrl, promotion } from '../../config/promotion';
 
 const title = 'ReTail 100 Listings in 72 Hours Promotion — Official Rules';
-const description = `Official Rules for the ReTail 100 Listings in 72 Hours Promotion, running ${promotion.startDisplayLong} through ${promotion.endDisplayLong}.`;
+const description = 'Official Rules for the ReTail 100 Listings in 72 Hours Promotion running October 9–12, 2026, including eligibility, entry methods, and prize terms.';
 const alternateEntryFormUrl = getValidAlternateEntryFormUrl();
 ---
-<BaseLayout title={title} description={description} path="/100-listings/rules/" promotionHeader>
+<BaseLayout title={title} description={description} path="/100-listings/rules/" promotionHeader noindex>
   <section class="page-hero rules-hero">
     <div class="section narrow">
       <a class="back-link" href="/100-listings/">← Back to 100 Listings in 72 Hours</a>
@@ -48,7 +48,7 @@ const alternateEntryFormUrl = getValidAlternateEntryFormUrl();
         <li><strong>15 or more qualifying listings:</strong> 5 entries</li>
       </ul>
       <p>There is a maximum of five entries per eligible participant, regardless of entry method or number of listings submitted.</p>
-      <p>A qualifying listing must be a legitimate pet-supply sale listing published during the Promotion Period, remain active and not deleted when evaluated, be owned by a non-deleted eligible seller, and comply with ReTail’s <a href="/terms">Terms of Service</a>, <a href="/community-guidelines">Community Guidelines</a>, and listing requirements.</p>
+      <p>A qualifying listing must be a legitimate pet-supply sale listing published during the Promotion Period, remain active and not deleted when evaluated, be owned by a non-deleted eligible seller, and comply with ReTail’s <a href="/terms/">Terms of Service</a>, <a href="/community-guidelines/">Community Guidelines</a>, and listing requirements.</p>
       <p>Duplicate, fraudulent, misleading, placeholder, prohibited, spam, sham, or otherwise invalid listings do not qualify and may be removed from the Promotion.</p>
       <p>Creating additional ReTail accounts to obtain additional entries is prohibited.</p>
     </section>
@@ -120,7 +120,7 @@ const alternateEntryFormUrl = getValidAlternateEntryFormUrl();
 
     <section>
       <h2>12. Privacy</h2>
-      <p>Information collected in connection with the Promotion may be used for Promotion administration, eligibility verification, cross-method entry reconciliation, winner contact, prize fulfillment, fraud prevention, and as otherwise described in ReTail’s <a href="/privacy">Privacy Policy</a>.</p>
+      <p>Information collected in connection with the Promotion may be used for Promotion administration, eligibility verification, cross-method entry reconciliation, winner contact, prize fulfillment, fraud prevention, and as otherwise described in ReTail’s <a href="/privacy/">Privacy Policy</a>.</p>
       <p>Submitting an alternate entry does not automatically constitute consent to receive unrelated marketing communications.</p>
     </section>
 

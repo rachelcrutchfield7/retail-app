@@ -17,6 +17,7 @@ export type SitePage = {
   heading: string;
   intro: string;
   updated?: string;
+  noindex?: boolean;
   sections: Section[];
   contact?: 'general' | 'support' | 'both';
 };
@@ -28,8 +29,8 @@ const paymentNotice = 'ReTail support policies apply to ReTail-processed payment
 export const pages: SitePage[] = [
   {
     slug: 'how-it-works',
-    title: 'How ReTail Works | ReTail',
-    description: 'Learn how ReTail helps people browse, sell, give away, and donate secondhand pet supplies.',
+    title: 'How ReTail Works | Pet Supplies Marketplace',
+    description: 'Learn how to browse, buy, sell, give away, and donate pet supplies through the ReTail marketplace and Rescue Hub.',
     eyebrow: 'Marketplace basics',
     heading: 'How ReTail works',
     intro: 'ReTail is a focused marketplace for pet supplies, local coordination, and rescue support.',
@@ -44,8 +45,8 @@ export const pages: SitePage[] = [
   },
   {
     slug: 'rescue-hub',
-    title: 'Rescue Hub | ReTail',
-    description: 'Learn how ReTail Rescue Hub is designed to show verified rescue profiles, urgent needs, wishlists, and rescue donation listings.',
+    title: 'Rescue Hub | Animal Rescue Supplies | ReTail',
+    description: 'Explore how ReTail Rescue Hub connects pet people with verified animal rescues, urgent supply needs, wishlists, and donation listings.',
     eyebrow: 'Rescue support',
     heading: 'Rescue Hub',
     intro: 'Rescue Hub is designed to help community members understand what nearby animal rescues need most.',
@@ -62,8 +63,8 @@ export const pages: SitePage[] = [
   },
   {
     slug: 'safety',
-    title: 'Safety | ReTail',
-    description: 'Review ReTail safety principles for pet-supply listings, reporting, local exchanges, and rescue donations.',
+    title: 'Pet Marketplace Safety | ReTail',
+    description: 'Review ReTail safety guidance for pet-supply listings, reporting, location privacy, local exchanges, and animal rescue donations.',
     eyebrow: 'Trust and safety',
     heading: 'Safety at ReTail',
     intro: 'ReTail is a pet-supply marketplace, not a live-animal marketplace or general classifieds service.',
@@ -78,8 +79,8 @@ export const pages: SitePage[] = [
   },
   {
     slug: 'about',
-    title: 'About ReTail | ReTail',
-    description: 'Learn about ReTail, a public secondhand pet-supply marketplace owned and operated by Crutchfield Interactive LLC.',
+    title: 'About ReTail | Pet Supplies Marketplace',
+    description: 'Learn why ReTail created a public marketplace for reusing pet supplies, reducing waste, saving money, and supporting animal rescues.',
     eyebrow: 'About',
     heading: 'A marketplace built for pet supplies',
     intro: 'ReTail was created to help pet owners save money, reduce waste, and support animal rescues through a focused secondhand marketplace.',
@@ -93,7 +94,7 @@ export const pages: SitePage[] = [
   },
   {
     slug: 'contact',
-    title: 'Contact ReTail | ReTail',
+    title: 'Contact ReTail | Pet Marketplace Support',
     description: 'Contact ReTail for general questions, rescue participation, support, account issues, safety reports, and payment questions.',
     eyebrow: 'Contact',
     heading: 'Contact ReTail',
@@ -111,6 +112,7 @@ export const pages: SitePage[] = [
     eyebrow: 'Available now',
     heading: 'ReTail is available on iOS and Android',
     intro: 'Download ReTail from the App Store or Google Play to browse, list, and connect with the public pet-supply marketplace.',
+    noindex: true,
     sections: [
       { heading: 'Download ReTail', body: ['Visit the ReTail download page to open the official App Store or Google Play listing for your device.'] },
       { heading: 'Questions and support', body: ['Contact ReTail for general questions, rescue participation, account support, safety reports, or technical help.'] },
@@ -119,7 +121,7 @@ export const pages: SitePage[] = [
   },
   {
     slug: 'privacy',
-    title: 'Privacy Policy | ReTail',
+    title: 'Privacy Policy | ReTail Pet Marketplace',
     description: 'Read the ReTail privacy policy for account information, public listings, messaging, reports, notifications, and location privacy.',
     eyebrow: 'Policy',
     heading: 'Privacy Policy',
@@ -149,7 +151,7 @@ export const pages: SitePage[] = [
   },
   {
     slug: 'terms',
-    title: 'Terms of Service | ReTail',
+    title: 'Terms of Service | ReTail Pet Marketplace',
     description: 'Read the ReTail Terms of Service for marketplace use, prohibited listings, local exchanges, reports, moderation, and account deletion.',
     eyebrow: 'Policy',
     heading: 'Terms of Service',
@@ -169,7 +171,7 @@ export const pages: SitePage[] = [
   },
   {
     slug: 'community-guidelines',
-    title: 'Community Guidelines | ReTail',
+    title: 'Community Guidelines | ReTail Pet Marketplace',
     description: 'Review ReTail community guidelines for honest listings, respectful messaging, safe exchanges, rescue support, and reporting.',
     eyebrow: 'Guidelines',
     heading: 'Community Guidelines',
@@ -186,7 +188,7 @@ export const pages: SitePage[] = [
   },
   {
     slug: 'refunds-and-disputes',
-    title: 'Refunds and Disputes | ReTail',
+    title: 'Refunds and Disputes | ReTail Pet Marketplace',
     description: 'Understand ReTail payment language, transaction disputes, outside payments, free items, and rescue donations.',
     eyebrow: 'Policy',
     heading: 'Refunds and Disputes',
@@ -208,7 +210,7 @@ export const pages: SitePage[] = [
   },
   {
     slug: 'shipping-and-fulfillment',
-    title: 'Shipping and Fulfillment | ReTail',
+    title: 'Shipping and Fulfillment | ReTail Pet Marketplace',
     description: 'Review ReTail shipping and fulfillment guidance for pickup, meetup, shipping method, cost, packaging, address, timing, and condition.',
     eyebrow: 'Policy',
     heading: 'Shipping and Fulfillment',
@@ -234,7 +236,7 @@ export const pages: SitePage[] = [
   },
   {
     slug: 'prohibited-items',
-    title: 'Prohibited Items | ReTail',
+    title: 'Prohibited Items | ReTail Pet Marketplace',
     description: 'Review the ReTail prohibited-items policy, including live animals, rehoming listings, breeding services, medications, recalled products, and illegal items.',
     eyebrow: 'Policy',
     heading: 'Prohibited Items',

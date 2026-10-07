@@ -23,7 +23,7 @@ const contactLinks = {
   ],
 };
 ---
-<BaseLayout title={page.title} description={page.description} path={`/${page.slug}`}>
+<BaseLayout title={page.title} description={page.description} path={`/${page.slug}`} noindex={page.noindex}>
   <section class="section page-hero narrow">
     <span class="eyebrow">{page.eyebrow}</span>
     <h1>{page.heading}</h1>

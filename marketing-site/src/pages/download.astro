@@ -1,10 +1,9 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import { APP_STORE_URL, GOOGLE_PLAY_URL } from '../config/seo';
 
-const title = 'Download ReTail | Secondhand Pet Supplies App';
-const description = 'Download ReTail for iOS and Android. ReTail helps pet owners buy, sell, give away, and donate secondhand pet supplies.';
-const appStoreUrl = 'https://apps.apple.com/us/app/retail-pet-marketplace/id6801206660';
-const googlePlayUrl = 'https://play.google.com/store/apps/details?id=com.raecrutchfield.retail';
+const title = 'Download ReTail | Pet Supplies Marketplace App';
+const description = 'Download ReTail for iOS and Android to buy, sell, give away, and donate new and secondhand pet supplies across animal categories.';
 const highlights = [
   {
     title: 'Shop secondhand first',
@@ -31,7 +30,7 @@ const trustPoints = [
   'Messages, reporting, and safety tools are part of the app experience.',
 ];
 ---
-<BaseLayout title={title} description={description} path="/download/">
+<BaseLayout title={title} description={description} path="/download/" includeAppSchema>
   <section class="download-hero">
     <div class="section download-hero-grid">
       <div class="download-copy">
@@ -42,14 +41,14 @@ const trustPoints = [
           ReTail is the secondhand marketplace made just for pet supplies, with Rescue Hub built in so useful items can move from closets and garages to pets, families, and animal rescues that need them.
         </p>
         <div class="download-actions" aria-label="App download links">
-          <a class="store-badge" href={appStoreUrl} target="_blank" rel="noreferrer" aria-label="Download ReTail on the App Store">
+          <a class="store-badge" href={APP_STORE_URL} target="_blank" rel="noreferrer" aria-label="Download ReTail on the App Store">
             <span class="store-icon">A</span>
             <span>
               <small>Download on the</small>
               App Store
             </span>
           </a>
-          <a class="store-badge" href={googlePlayUrl} target="_blank" rel="noreferrer" aria-label="Get ReTail on Google Play">
+          <a class="store-badge" href={GOOGLE_PLAY_URL} target="_blank" rel="noreferrer" aria-label="Get ReTail on Google Play">
             <span class="store-icon play">G</span>
             <span>
               <small>Get it on</small>
@@ -74,7 +73,7 @@ const trustPoints = [
             <span></span>
           </div>
           <div class="phone-top">
-            <img src="/assets/app-icon.png" alt="ReTail app icon" width="1024" height="1024" />
+            <img src="/retail-site-assets/app-icon.png" alt="ReTail app icon" width="1024" height="1024" />
             <div>
               <strong>ReTail</strong>
               <span>Secondhand pet supplies, sorted</span>
@@ -130,14 +129,14 @@ const trustPoints = [
 
   <section class="section">
     <div class="download-cta">
-      <img src="/assets/retail-logo-header.png" alt="ReTail" width="991" height="443" />
+      <img src="/retail-site-assets/retail-logo-header.png" alt="ReTail" width="991" height="443" loading="lazy" decoding="async" />
       <div>
         <span class="eyebrow">Get the app</span>
         <h2>Download ReTail today.</h2>
         <p>Open the official store listing for your device and join the public ReTail marketplace.</p>
         <div class="download-actions compact" aria-label="App download links">
-          <a class="store-badge" href={appStoreUrl} target="_blank" rel="noreferrer" aria-label="Download ReTail on the App Store"><span class="store-icon">A</span><span><small>Download on the</small>App Store</span></a>
-          <a class="store-badge" href={googlePlayUrl} target="_blank" rel="noreferrer" aria-label="Get ReTail on Google Play"><span class="store-icon play">G</span><span><small>Get it on</small>Google Play</span></a>
+          <a class="store-badge" href={APP_STORE_URL} target="_blank" rel="noreferrer" aria-label="Download ReTail on the App Store"><span class="store-icon">A</span><span><small>Download on the</small>App Store</span></a>
+          <a class="store-badge" href={GOOGLE_PLAY_URL} target="_blank" rel="noreferrer" aria-label="Get ReTail on Google Play"><span class="store-icon play">G</span><span><small>Get it on</small>Google Play</span></a>
         </div>
       </div>
     </div>

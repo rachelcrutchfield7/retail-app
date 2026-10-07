@@ -101,14 +101,16 @@ test('landing page and Official Rules define the same five-entry AMOE structure'
   assert.doesNotMatch(`${landingPage}\n${rulesPage}`, /one valid (?:alternate|AMOE) (?:entry|submission) (?:receives|provides) one entry/i);
 });
 
-test('sitemap and shared navigation expose both 100 Listings routes', () => {
-  const sitemap = read('marketing-site/public/sitemap.xml');
+test('sitemap indexes the promotion landing page while Official Rules remain discoverable but noindex', () => {
+  const seoConfig = read('marketing-site/src/config/seo.ts');
   const layout = read('marketing-site/src/layouts/BaseLayout.astro');
+  const rulesPage = read('marketing-site/src/pages/100-listings/rules.astro');
 
-  assert.match(sitemap, /https:\/\/retailpetapp\.com\/100-listings\//);
-  assert.match(sitemap, /https:\/\/retailpetapp\.com\/100-listings\/rules\//);
+  assert.match(seoConfig, /'\/100-listings\/'/);
+  assert.doesNotMatch(seoConfig, /'\/100-listings\/rules\/'/);
   assert.match(layout, /href: '\/100-listings\/'/);
   assert.match(layout, /href: '\/100-listings\/rules\/'/);
+  assert.match(rulesPage, /promotionHeader noindex/);
 });
 
 test('promotion pages use a focused shared header with approved destinations only', () => {
@@ -117,7 +119,7 @@ test('promotion pages use a focused shared header with approved destinations onl
   const header = read('marketing-site/src/components/PromotionHeader.astro');
 
   assert.match(landingPage, /<BaseLayout[^>]+promotionHeader>/);
-  assert.match(rulesPage, /<BaseLayout[^>]+promotionHeader>/);
+  assert.match(rulesPage, /<BaseLayout[^>]+promotionHeader[^>]*>/);
   assert.match(landingPage, /<section class="section" id="how-it-works">/);
   assert.match(header, /href="\/100-listings\/" aria-label="ReTail promotion home"/);
   assert.match(header, /href: '\/100-listings\/#how-it-works'/);

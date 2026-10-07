@@ -66,7 +66,7 @@ test('promotion route safely proxies the existing Pages project with scoped asse
   context.after(() => { globalThis.fetch = originalFetch; });
   globalThis.fetch = async (request) => {
     assert.equal(request.url, 'https://retail-prelaunch.pages.dev/100-listings/');
-    return new Response('<link href="/_astro/site.css"><img src="/assets/retail-logo-header.png"><meta content="https://retailpetapp.com/og-image.svg">', {
+    return new Response('<link href="/_astro/site.css"><img src="/retail-site-assets/retail-logo-header.png"><meta content="https://www.retailpetapp.com/og-image.png">', {
       status: 200,
       headers: {
         'Content-Type': 'text/html; charset=utf-8',
@@ -75,12 +75,45 @@ test('promotion route safely proxies the existing Pages project with scoped asse
     });
   };
 
-  const response = await worker.fetch(new Request('https://retailpetapp.com/100-listings/'), env);
+  const response = await worker.fetch(new Request('https://www.retailpetapp.com/100-listings/'), env);
   const body = await response.text();
 
   assert.equal(response.status, 200);
   assert.equal(response.headers.get('x-robots-tag'), null);
   assert.match(body, /href="\/100-listings-static\/_astro\/site\.css"/);
-  assert.match(body, /src="\/100-listings-static\/assets\/retail-logo-header\.png"/);
-  assert.match(body, /content="https:\/\/retailpetapp\.com\/100-listings-static\/og-image\.svg"/);
+  assert.match(body, /src="\/retail-site-assets\/retail-logo-header\.png"/);
+  assert.match(body, /content="https:\/\/www\.retailpetapp\.com\/og-image\.png"/);
+});
+
+test('marketing SEO files and assets proxy from Pages while apex marketing URLs redirect to www', async (context) => {
+  const originalFetch = globalThis.fetch;
+  context.after(() => { globalThis.fetch = originalFetch; });
+  globalThis.fetch = async (request) => {
+    const isAsset = request.url.endsWith('/assets/app-icon.png');
+    assert.ok(
+      request.url === 'https://retail-prelaunch.pages.dev/sitemap.xml' || isAsset,
+      `unexpected Pages request: ${request.url}`,
+    );
+    return new Response(isAsset ? 'png' : '<?xml version="1.0"?><urlset></urlset>', {
+      status: 200,
+      headers: {
+        'Content-Type': isAsset ? 'image/png' : 'application/xml; charset=utf-8',
+        'X-Robots-Tag': 'noindex',
+      },
+    });
+  };
+
+  const proxied = await worker.fetch(new Request('https://www.retailpetapp.com/sitemap.xml'), env);
+  assert.equal(proxied.status, 200);
+  assert.equal(proxied.headers.get('content-type'), 'application/xml; charset=utf-8');
+  assert.equal(proxied.headers.get('x-robots-tag'), null);
+
+  const asset = await worker.fetch(new Request('https://www.retailpetapp.com/retail-site-assets/app-icon.png'), env);
+  assert.equal(asset.status, 200);
+  assert.equal(asset.headers.get('content-type'), 'image/png');
+  assert.equal(asset.headers.get('x-robots-tag'), null);
+
+  const redirected = await worker.fetch(new Request('https://retailpetapp.com/robots.txt'), env);
+  assert.equal(redirected.status, 308);
+  assert.equal(redirected.headers.get('location'), 'https://www.retailpetapp.com/robots.txt');
 });
