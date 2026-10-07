@@ -240,7 +240,11 @@ async function proxyAppHome(request: Request) {
     <script type="application/ld+json">${structuredData}</script>`;
   const body = (await upstreamResponse.text())
     .replace(/<title>[^<]*<\/title>/, `<title>${ROOT_TITLE}</title>`)
-    .replace("</head>", `${seoHead}\n  </head>`);
+    .replace("</head>", `${seoHead}\n  </head>`)
+    .replace(
+      /<noscript>[\s\S]*?<\/noscript>/,
+      `<noscript><main><h1>ReTail Pet App — Secondhand Pet Supplies Marketplace</h1><p>${ROOT_DESCRIPTION}</p><p><a href="/download/">Download ReTail for iOS or Android</a></p></main></noscript>`
+    );
 
   return new Response(body, {
     status: upstreamResponse.status,

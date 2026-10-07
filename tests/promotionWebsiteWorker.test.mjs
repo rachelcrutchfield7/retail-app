@@ -15,7 +15,7 @@ test('root app shell keeps application markup while receiving canonical SEO meta
   context.after(() => { globalThis.fetch = originalFetch; });
   globalThis.fetch = async (request) => {
     assert.equal(request.url, 'https://retail-web-app-ckv.pages.dev/');
-    return new Response('<html><head><title>ReTail</title></head><body><div id="root"></div><script src="./_expo/app.js"></script></body></html>', {
+    return new Response('<html><head><title>ReTail</title></head><body><noscript>You need JavaScript.</noscript><div id="root"></div><script src="./_expo/app.js"></script></body></html>', {
       status: 200,
       headers: {
         'Content-Type': 'text/html; charset=utf-8',
@@ -32,6 +32,8 @@ test('root app shell keeps application markup while receiving canonical SEO meta
   assert.match(body, /rel="canonical" href="https:\/\/www\.retailpetapp\.com\/"/);
   assert.match(body, /<meta name="robots" content="index, follow"/);
   assert.match(body, /<script type="application\/ld\+json">/);
+  assert.match(body, /<noscript><main><h1>ReTail Pet App — Secondhand Pet Supplies Marketplace<\/h1>/);
+  assert.match(body, /href="\/download\/">Download ReTail for iOS or Android/);
   assert.match(body, /<div id="root"><\/div><script src="\.\/_expo\/app\.js"><\/script>/);
 
   const apex = await worker.fetch(new Request('https://retailpetapp.com/'), env);
