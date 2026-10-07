@@ -10,6 +10,35 @@ const env = {
   ANDROID_SHA256_CERT_FINGERPRINT: 'AA:BB',
 };
 
+test('root app shell keeps application markup while receiving canonical SEO metadata', async (context) => {
+  const originalFetch = globalThis.fetch;
+  context.after(() => { globalThis.fetch = originalFetch; });
+  globalThis.fetch = async (request) => {
+    assert.equal(request.url, 'https://retail-web-app-ckv.pages.dev/');
+    return new Response('<html><head><title>ReTail</title></head><body><div id="root"></div><script src="./_expo/app.js"></script></body></html>', {
+      status: 200,
+      headers: {
+        'Content-Type': 'text/html; charset=utf-8',
+        'X-Robots-Tag': 'noindex',
+      },
+    });
+  };
+
+  const response = await worker.fetch(new Request('https://www.retailpetapp.com/'), env);
+  const body = await response.text();
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('x-robots-tag'), null);
+  assert.match(body, /<title>ReTail Pet App \| Secondhand Pet Supplies Marketplace<\/title>/);
+  assert.match(body, /rel="canonical" href="https:\/\/www\.retailpetapp\.com\/"/);
+  assert.match(body, /<meta name="robots" content="index, follow"/);
+  assert.match(body, /<script type="application\/ld\+json">/);
+  assert.match(body, /<div id="root"><\/div><script src="\.\/_expo\/app\.js"><\/script>/);
+
+  const apex = await worker.fetch(new Request('https://retailpetapp.com/'), env);
+  assert.equal(apex.status, 308);
+  assert.equal(apex.headers.get('location'), 'https://www.retailpetapp.com/');
+});
+
 test('public campaign status endpoint exposes aggregate campaign data only', async (context) => {
   const originalFetch = globalThis.fetch;
   const originalNow = Date.now;

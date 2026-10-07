@@ -4,6 +4,14 @@
   "compatibility_date": "2026-08-19",
   "routes": [
     {
+      "pattern": "retailpetapp.com/",
+      "zone_name": "retailpetapp.com"
+    },
+    {
+      "pattern": "www.retailpetapp.com/",
+      "zone_name": "retailpetapp.com"
+    },
+    {
       "pattern": "retailpetapp.com/listing/*",
       "zone_name": "retailpetapp.com"
     },

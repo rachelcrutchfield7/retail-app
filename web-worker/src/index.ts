@@ -9,6 +9,7 @@ const BUNDLE_ID = "com.raecrutchfield.retail";
 const ANDROID_PACKAGE = "com.raecrutchfield.retail";
 const PROMOTION_CAMPAIGN_KEY = "community_100_listings_72_hours_v1";
 const PROMOTION_SITE_ORIGIN = "https://retail-prelaunch.pages.dev";
+const WEB_APP_ORIGIN = "https://retail-web-app-ckv.pages.dev";
 const PROMOTION_ASSET_PREFIX = "/100-listings-static";
 const RETAIL_SITE_STATIC_PREFIX = "/retail-site-static";
 const RETAIL_SITE_ASSET_PREFIX = "/retail-site-assets";
@@ -30,6 +31,8 @@ const MARKETING_PAGE_PATHS = new Set([
   "/stripe-connect-refresh",
   "/stripe-connect-return"
 ]);
+const ROOT_TITLE = "ReTail Pet App | Secondhand Pet Supplies Marketplace";
+const ROOT_DESCRIPTION = "Buy, sell, give away, and donate new and secondhand pet supplies with ReTail, the public marketplace built for pet people and animal rescues.";
 
 type CampaignLifecycle = "disabled" | "upcoming" | "active" | "ended" | "unavailable";
 
@@ -98,6 +101,15 @@ export default {
       }
     }
 
+    if (url.pathname === "/") {
+      if (url.hostname === "retailpetapp.com") {
+        url.hostname = PRIMARY_HOST;
+        return Response.redirect(url.toString(), 308);
+      }
+
+      return proxyAppHome(request);
+    }
+
     if (isMarketingProxyPath(url.pathname)) {
       if (url.hostname === "retailpetapp.com") {
         url.hostname = PRIMARY_HOST;
@@ -144,6 +156,97 @@ export default {
     }
   }
 };
+
+async function proxyAppHome(request: Request) {
+  const upstreamResponse = await fetch(new Request(`${WEB_APP_ORIGIN}/`, request));
+  const headers = new Headers(upstreamResponse.headers);
+
+  headers.delete("content-length");
+  headers.delete("content-encoding");
+  headers.delete("x-robots-tag");
+  headers.set("X-Content-Type-Options", "nosniff");
+
+  if (!headers.get("content-type")?.includes("text/html")) {
+    return new Response(upstreamResponse.body, {
+      status: upstreamResponse.status,
+      headers
+    });
+  }
+
+  const structuredData = JSON.stringify({
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": "https://www.retailpetapp.com/#organization",
+        name: "Crutchfield Interactive LLC",
+        url: "https://www.retailpetapp.com",
+        brand: { "@type": "Brand", name: "ReTail" }
+      },
+      {
+        "@type": "WebSite",
+        "@id": "https://www.retailpetapp.com/#website",
+        name: "ReTail Pet App",
+        url: "https://www.retailpetapp.com",
+        description: "The official website for ReTail, a public marketplace for buying, selling, giving away, and donating pet supplies.",
+        publisher: { "@id": "https://www.retailpetapp.com/#organization" }
+      },
+      {
+        "@type": "WebPage",
+        "@id": "https://www.retailpetapp.com/#webpage",
+        name: ROOT_TITLE,
+        url: "https://www.retailpetapp.com/",
+        description: ROOT_DESCRIPTION,
+        isPartOf: { "@id": "https://www.retailpetapp.com/#website" },
+        about: { "@id": "https://www.retailpetapp.com/#mobile-app" }
+      },
+      {
+        "@type": "MobileApplication",
+        "@id": "https://www.retailpetapp.com/#mobile-app",
+        name: "ReTail - Pet Marketplace",
+        applicationCategory: "ShoppingApplication",
+        operatingSystem: "iOS, Android",
+        url: "https://www.retailpetapp.com/download/",
+        downloadUrl: [
+          "https://apps.apple.com/us/app/retail-pet-marketplace/id6801206660",
+          "https://play.google.com/store/apps/details?id=com.raecrutchfield.retail"
+        ],
+        publisher: { "@id": "https://www.retailpetapp.com/#organization" }
+      }
+    ]
+  });
+  const seoHead = `
+    <meta name="description" content="${ROOT_DESCRIPTION}" />
+    <meta name="robots" content="index, follow" />
+    <meta name="application-name" content="ReTail Pet App" />
+    <meta name="apple-itunes-app" content="app-id=6801206660" />
+    <link rel="canonical" href="https://www.retailpetapp.com/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="ReTail" />
+    <meta property="og:title" content="${ROOT_TITLE}" />
+    <meta property="og:description" content="${ROOT_DESCRIPTION}" />
+    <meta property="og:url" content="https://www.retailpetapp.com/" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:image" content="https://www.retailpetapp.com/og-image.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="ReTail — Secondhand Pet Supplies Marketplace" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="${ROOT_TITLE}" />
+    <meta name="twitter:description" content="${ROOT_DESCRIPTION}" />
+    <meta name="twitter:image" content="https://www.retailpetapp.com/og-image.png" />
+    <meta name="twitter:image:alt" content="ReTail — Secondhand Pet Supplies Marketplace" />
+    <script type="application/ld+json">${structuredData}</script>`;
+  const body = (await upstreamResponse.text())
+    .replace(/<title>[^<]*<\/title>/, `<title>${ROOT_TITLE}</title>`)
+    .replace("</head>", `${seoHead}\n  </head>`);
+
+  return new Response(body, {
+    status: upstreamResponse.status,
+    headers
+  });
+}
 
 async function getCampaignStatus(env: Env) {
   const endpoint =
