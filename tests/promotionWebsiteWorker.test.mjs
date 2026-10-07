@@ -149,7 +149,7 @@ test('marketing SEO files and assets proxy from Pages while apex marketing URLs 
   assert.equal(redirected.headers.get('location'), 'https://www.retailpetapp.com/robots.txt');
 });
 
-test('known marketing pages proxy on www and redirect apex URLs to their canonical host', async (context) => {
+test('known marketing pages proxy on www while apex remains compatible with cached redirects', async (context) => {
   const originalFetch = globalThis.fetch;
   context.after(() => { globalThis.fetch = originalFetch; });
   globalThis.fetch = async (request) => {
@@ -171,5 +171,8 @@ test('known marketing pages proxy on www and redirect apex URLs to their canonic
 
   const redirected = await worker.fetch(new Request('https://retailpetapp.com/about'), env);
   assert.equal(redirected.status, 308);
-  assert.equal(redirected.headers.get('location'), 'https://www.retailpetapp.com/about/');
+  assert.equal(redirected.headers.get('location'), 'https://retailpetapp.com/about/');
+
+  const apex = await worker.fetch(new Request('https://retailpetapp.com/about/'), env);
+  assert.equal(apex.status, 200);
 });

@@ -23,12 +23,15 @@ test('download worker keeps www canonical and proxies the existing Pages project
   assert.equal(response.status, 200);
   assert.equal(response.headers.get('x-robots-tag'), null);
   assert.match(body, /href="\/retail-site-static\/_astro\/site\.css"/);
+
+  const apexResponse = await worker.fetch(new Request('https://retailpetapp.com/download/'));
+  assert.equal(apexResponse.status, 200);
 });
 
-test('download worker redirects apex and slashless requests to the www canonical URL', async () => {
+test('download worker normalizes slashless requests without reversing a cached host redirect', async () => {
   const apex = await worker.fetch(new Request('https://retailpetapp.com/download?source=site'));
   assert.equal(apex.status, 308);
-  assert.equal(apex.headers.get('location'), 'https://www.retailpetapp.com/download/?source=site');
+  assert.equal(apex.headers.get('location'), 'https://retailpetapp.com/download/?source=site');
 
   const slashless = await worker.fetch(new Request('https://www.retailpetapp.com/download'));
   assert.equal(slashless.status, 308);

@@ -112,12 +112,18 @@ export default {
 
     if (isMarketingProxyPath(url.pathname)) {
       if (url.hostname === "retailpetapp.com") {
-        url.hostname = PRIMARY_HOST;
+        if (isStaticMarketingPagePath(url.pathname)) {
+          if (!url.pathname.endsWith("/")) {
+            url.pathname = `${url.pathname}/`;
+            return Response.redirect(url.toString(), 308);
+          }
 
+          return proxyPromotionSite(request, url);
+        }
+
+        url.hostname = PRIMARY_HOST;
         if (url.pathname === "/100-listings") {
           url.pathname = "/100-listings/";
-        } else if (isStaticMarketingPagePath(url.pathname)) {
-          url.pathname = `${url.pathname.replace(/\/+$/, "")}/`;
         }
 
         return Response.redirect(url.toString(), 308);

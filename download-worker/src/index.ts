@@ -1,16 +1,9 @@
 const PAGES_ORIGIN = "https://retail-prelaunch.pages.dev";
-const PRIMARY_HOST = "www.retailpetapp.com";
 const STATIC_ASSET_PREFIX = "/retail-site-static";
 
 export default {
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
-
-    if (url.hostname === "retailpetapp.com") {
-      url.hostname = PRIMARY_HOST;
-      url.pathname = "/download/";
-      return Response.redirect(url.toString(), 308);
-    }
 
     if (url.pathname === "/download") {
       url.pathname = "/download/";
