@@ -80,7 +80,7 @@ test('promotion route safely proxies the existing Pages project with scoped asse
 
   assert.equal(response.status, 200);
   assert.equal(response.headers.get('x-robots-tag'), null);
-  assert.match(body, /href="\/100-listings-static\/_astro\/site\.css"/);
+  assert.match(body, /href="\/retail-site-static\/_astro\/site\.css"/);
   assert.match(body, /src="\/retail-site-assets\/retail-logo-header\.png"/);
   assert.match(body, /content="https:\/\/www\.retailpetapp\.com\/og-image\.png"/);
 });
@@ -116,4 +116,29 @@ test('marketing SEO files and assets proxy from Pages while apex marketing URLs 
   const redirected = await worker.fetch(new Request('https://retailpetapp.com/robots.txt'), env);
   assert.equal(redirected.status, 308);
   assert.equal(redirected.headers.get('location'), 'https://www.retailpetapp.com/robots.txt');
+});
+
+test('known marketing pages proxy on www and redirect apex URLs to their canonical host', async (context) => {
+  const originalFetch = globalThis.fetch;
+  context.after(() => { globalThis.fetch = originalFetch; });
+  globalThis.fetch = async (request) => {
+    assert.equal(request.url, 'https://retail-prelaunch.pages.dev/download/');
+    return new Response('<link href="/_astro/site.css"><h1>Download ReTail</h1>', {
+      status: 200,
+      headers: {
+        'Content-Type': 'text/html; charset=utf-8',
+        'X-Robots-Tag': 'noindex',
+      },
+    });
+  };
+
+  const proxied = await worker.fetch(new Request('https://www.retailpetapp.com/download/'), env);
+  const body = await proxied.text();
+  assert.equal(proxied.status, 200);
+  assert.equal(proxied.headers.get('x-robots-tag'), null);
+  assert.match(body, /href="\/retail-site-static\/_astro\/site\.css"/);
+
+  const redirected = await worker.fetch(new Request('https://retailpetapp.com/download'), env);
+  assert.equal(redirected.status, 308);
+  assert.equal(redirected.headers.get('location'), 'https://www.retailpetapp.com/download/');
 });

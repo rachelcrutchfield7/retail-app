@@ -10,8 +10,27 @@ const ANDROID_PACKAGE = "com.raecrutchfield.retail";
 const PROMOTION_CAMPAIGN_KEY = "community_100_listings_72_hours_v1";
 const PROMOTION_SITE_ORIGIN = "https://retail-prelaunch.pages.dev";
 const PROMOTION_ASSET_PREFIX = "/100-listings-static";
+const RETAIL_SITE_STATIC_PREFIX = "/retail-site-static";
 const RETAIL_SITE_ASSET_PREFIX = "/retail-site-assets";
 const PRIMARY_HOST = "www.retailpetapp.com";
+const MARKETING_PAGE_PATHS = new Set([
+  "/download",
+  "/how-it-works",
+  "/rescue-hub",
+  "/safety",
+  "/about",
+  "/contact",
+  "/private-beta",
+  "/privacy",
+  "/terms",
+  "/community-guidelines",
+  "/account-deletion",
+  "/refunds-and-disputes",
+  "/shipping-and-fulfillment",
+  "/prohibited-items",
+  "/stripe-connect-refresh",
+  "/stripe-connect-return"
+]);
 
 type CampaignLifecycle = "disabled" | "upcoming" | "active" | "ended" | "unavailable";
 
@@ -86,6 +105,8 @@ export default {
 
         if (url.pathname === "/100-listings") {
           url.pathname = "/100-listings/";
+        } else if (isStaticMarketingPagePath(url.pathname)) {
+          url.pathname = `${url.pathname.replace(/\/+$/, "")}/`;
         }
 
         return Response.redirect(url.toString(), 308);
@@ -191,6 +212,8 @@ async function proxyPromotionSite(request: Request, requestUrl: URL) {
 
   const upstreamPath = requestUrl.pathname.startsWith(`${PROMOTION_ASSET_PREFIX}/`)
     ? requestUrl.pathname.slice(PROMOTION_ASSET_PREFIX.length)
+    : requestUrl.pathname.startsWith(`${RETAIL_SITE_STATIC_PREFIX}/`)
+      ? requestUrl.pathname.slice(RETAIL_SITE_STATIC_PREFIX.length)
     : requestUrl.pathname.startsWith(`${RETAIL_SITE_ASSET_PREFIX}/`)
       ? requestUrl.pathname.replace(RETAIL_SITE_ASSET_PREFIX, "/assets")
       : requestUrl.pathname;
@@ -211,8 +234,8 @@ async function proxyPromotionSite(request: Request, requestUrl: URL) {
   }
 
   const body = (await upstreamResponse.text())
-    .replaceAll('href="/_astro/', `href="${PROMOTION_ASSET_PREFIX}/_astro/`)
-    .replaceAll('src="/_astro/', `src="${PROMOTION_ASSET_PREFIX}/_astro/`)
+    .replaceAll('href="/_astro/', `href="${RETAIL_SITE_STATIC_PREFIX}/_astro/`)
+    .replaceAll('src="/_astro/', `src="${RETAIL_SITE_STATIC_PREFIX}/_astro/`)
     .replaceAll('href="/assets/', `href="${PROMOTION_ASSET_PREFIX}/assets/`)
     .replaceAll('src="/assets/', `src="${PROMOTION_ASSET_PREFIX}/assets/`);
 
@@ -227,11 +250,17 @@ function isMarketingProxyPath(pathname: string) {
     pathname === "/100-listings" ||
     pathname.startsWith("/100-listings/") ||
     pathname.startsWith(`${PROMOTION_ASSET_PREFIX}/`) ||
+    pathname.startsWith(`${RETAIL_SITE_STATIC_PREFIX}/`) ||
+    isStaticMarketingPagePath(pathname) ||
     pathname === "/robots.txt" ||
     pathname === "/sitemap.xml" ||
     pathname === "/og-image.png" ||
     pathname.startsWith(`${RETAIL_SITE_ASSET_PREFIX}/`)
   );
+}
+
+function isStaticMarketingPagePath(pathname: string) {
+  return MARKETING_PAGE_PATHS.has(pathname.replace(/\/+$/, ""));
 }
 
 async function getListing(env: Env, listingId: string) {

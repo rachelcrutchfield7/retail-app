@@ -28,6 +28,134 @@
       "zone_name": "retailpetapp.com"
     },
     {
+      "pattern": "retailpetapp.com/download*",
+      "zone_name": "retailpetapp.com"
+    },
+    {
+      "pattern": "www.retailpetapp.com/download*",
+      "zone_name": "retailpetapp.com"
+    },
+    {
+      "pattern": "retailpetapp.com/how-it-works*",
+      "zone_name": "retailpetapp.com"
+    },
+    {
+      "pattern": "www.retailpetapp.com/how-it-works*",
+      "zone_name": "retailpetapp.com"
+    },
+    {
+      "pattern": "retailpetapp.com/rescue-hub*",
+      "zone_name": "retailpetapp.com"
+    },
+    {
+      "pattern": "www.retailpetapp.com/rescue-hub*",
+      "zone_name": "retailpetapp.com"
+    },
+    {
+      "pattern": "retailpetapp.com/safety*",
+      "zone_name": "retailpetapp.com"
+    },
+    {
+      "pattern": "www.retailpetapp.com/safety*",
+      "zone_name": "retailpetapp.com"
+    },
+    {
+      "pattern": "retailpetapp.com/about*",
+      "zone_name": "retailpetapp.com"
+    },
+    {
+      "pattern": "www.retailpetapp.com/about*",
+      "zone_name": "retailpetapp.com"
+    },
+    {
+      "pattern": "retailpetapp.com/contact*",
+      "zone_name": "retailpetapp.com"
+    },
+    {
+      "pattern": "www.retailpetapp.com/contact*",
+      "zone_name": "retailpetapp.com"
+    },
+    {
+      "pattern": "retailpetapp.com/private-beta*",
+      "zone_name": "retailpetapp.com"
+    },
+    {
+      "pattern": "www.retailpetapp.com/private-beta*",
+      "zone_name": "retailpetapp.com"
+    },
+    {
+      "pattern": "retailpetapp.com/privacy*",
+      "zone_name": "retailpetapp.com"
+    },
+    {
+      "pattern": "www.retailpetapp.com/privacy*",
+      "zone_name": "retailpetapp.com"
+    },
+    {
+      "pattern": "retailpetapp.com/terms*",
+      "zone_name": "retailpetapp.com"
+    },
+    {
+      "pattern": "www.retailpetapp.com/terms*",
+      "zone_name": "retailpetapp.com"
+    },
+    {
+      "pattern": "retailpetapp.com/community-guidelines*",
+      "zone_name": "retailpetapp.com"
+    },
+    {
+      "pattern": "www.retailpetapp.com/community-guidelines*",
+      "zone_name": "retailpetapp.com"
+    },
+    {
+      "pattern": "retailpetapp.com/account-deletion*",
+      "zone_name": "retailpetapp.com"
+    },
+    {
+      "pattern": "www.retailpetapp.com/account-deletion*",
+      "zone_name": "retailpetapp.com"
+    },
+    {
+      "pattern": "retailpetapp.com/refunds-and-disputes*",
+      "zone_name": "retailpetapp.com"
+    },
+    {
+      "pattern": "www.retailpetapp.com/refunds-and-disputes*",
+      "zone_name": "retailpetapp.com"
+    },
+    {
+      "pattern": "retailpetapp.com/shipping-and-fulfillment*",
+      "zone_name": "retailpetapp.com"
+    },
+    {
+      "pattern": "www.retailpetapp.com/shipping-and-fulfillment*",
+      "zone_name": "retailpetapp.com"
+    },
+    {
+      "pattern": "retailpetapp.com/prohibited-items*",
+      "zone_name": "retailpetapp.com"
+    },
+    {
+      "pattern": "www.retailpetapp.com/prohibited-items*",
+      "zone_name": "retailpetapp.com"
+    },
+    {
+      "pattern": "retailpetapp.com/stripe-connect-refresh*",
+      "zone_name": "retailpetapp.com"
+    },
+    {
+      "pattern": "www.retailpetapp.com/stripe-connect-refresh*",
+      "zone_name": "retailpetapp.com"
+    },
+    {
+      "pattern": "retailpetapp.com/stripe-connect-return*",
+      "zone_name": "retailpetapp.com"
+    },
+    {
+      "pattern": "www.retailpetapp.com/stripe-connect-return*",
+      "zone_name": "retailpetapp.com"
+    },
+    {
       "pattern": "retailpetapp.com/api/100-listings/status",
       "zone_name": "retailpetapp.com"
     },
@@ -65,6 +193,14 @@
     },
     {
       "pattern": "www.retailpetapp.com/retail-site-assets/*",
+      "zone_name": "retailpetapp.com"
+    },
+    {
+      "pattern": "retailpetapp.com/retail-site-static/*",
+      "zone_name": "retailpetapp.com"
+    },
+    {
+      "pattern": "www.retailpetapp.com/retail-site-static/*",
       "zone_name": "retailpetapp.com"
     }
   ],
